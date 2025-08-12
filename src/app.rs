@@ -33,7 +33,7 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let path = PathBuf::from(".media/test1.mp4");
+        let path = PathBuf::from("assets/test1.mp4");
 
         App {
             video: None,
@@ -67,9 +67,7 @@ impl App {
 
                     let unit = (duration * fraction) / 100;
 
-                    (1..len)
-                        .map(|i| generator.generate(unit * i, &i.to_string()))
-                        .collect()
+                    (1..len).map(|i| generator.generate(unit * i)).collect()
                 };
 
                 let mut video = Video::new(

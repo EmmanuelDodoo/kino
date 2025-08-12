@@ -1,51 +1,53 @@
 //! Customised version of the [`iced::widget::Slider`] for video playback.
-#![allow(unused_imports, dead_code)]
 use iced::{
     Background, Border, Color, Element, Event, Length, Pixels, Point, Rectangle, Size, Theme,
     advanced::{
-        self, Clipboard, Shell,
+        self, Clipboard, Shell, image,
         layout::{self, Layout},
-        mouse, renderer,
+        mouse, renderer, text,
         widget::{
             self, Widget,
             tree::{self, Tree},
         },
     },
-    border,
+    alignment, border,
     keyboard::{self, Key, key},
     touch,
     widget::slider::{Catalog, Handle, HandleShape, Rail, Status, Style, StyleFn, default},
     window,
 };
 
-use std::ops::RangeInclusive;
+use std::{ops::RangeInclusive, time::Duration};
 
 /// A customised version of the [`iced::widget::Slider`] for video playback.
 /// This version includes detection for hovering on the rail. The cursor type
 /// for interactions is changed to an [`iced::mouse::Interaction::Pointer`].
-pub struct VideoSlider<'a, T, Message, Theme = iced::Theme>
+pub struct VideoSlider<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
 where
     Theme: Catalog,
+    Renderer: image::Renderer + text::Renderer,
 {
-    range: RangeInclusive<T>,
-    step: T,
-    shift_step: Option<T>,
-    value: T,
-    default: Option<T>,
-    on_change: Box<dyn Fn(T) -> Message + 'a>,
+    range: RangeInclusive<f64>,
+    step: f64,
+    shift_step: Option<f64>,
+    value: f64,
+    thumbnails: Vec<Renderer::Handle>,
+    thumbnail_font: <Renderer as text::Renderer>::Font,
+    duration: Duration,
+    default: Option<f64>,
+    on_change: Box<dyn Fn(f64) -> Message + 'a>,
     on_release: Option<Message>,
-    on_hover: Option<Box<dyn Fn(T) -> Message + 'a>>,
     width: Length,
     height: f32,
     class: Theme::Class<'a>,
     status: Option<Status>,
 }
 
-impl<'a, T, Message, Theme> VideoSlider<'a, T, Message, Theme>
+impl<'a, Message, Theme, Renderer> VideoSlider<'a, Message, Theme, Renderer>
 where
-    T: Copy + From<u8> + PartialOrd,
     Message: Clone,
     Theme: Catalog,
+    Renderer: image::Renderer + text::Renderer,
 {
     /// The default height of a [`Slider`].
     pub const DEFAULT_HEIGHT: f32 = 16.0;
@@ -58,9 +60,16 @@ where
     ///   * a function that will be called when the [`Slider`] is dragged.
     ///     It receives the new value of the [`Slider`] and must produce a
     ///     `Message`.
-    pub fn new<F>(range: RangeInclusive<T>, value: T, on_change: F) -> Self
+    pub fn new<F>(
+        range: RangeInclusive<f64>,
+        value: f64,
+        on_change: F,
+        thumbnails: Vec<Renderer::Handle>,
+        thumbnail_font: <Renderer as text::Renderer>::Font,
+        duration: Duration,
+    ) -> Self
     where
-        F: 'a + Fn(T) -> Message,
+        F: 'a + Fn(f64) -> Message,
     {
         let value = if value >= *range.start() {
             value
@@ -78,7 +87,10 @@ where
             value,
             default: None,
             range,
-            step: T::from(1),
+            step: 1.0,
+            thumbnails,
+            duration,
+            thumbnail_font,
             shift_step: None,
             on_change: Box::new(on_change),
             on_release: None,
@@ -86,14 +98,13 @@ where
             height: Self::DEFAULT_HEIGHT,
             class: Theme::default(),
             status: None,
-            on_hover: None,
         }
     }
 
     /// Sets the optional default value for the [`Slider`].
     ///
     /// If set, the [`Slider`] will reset to this value when ctrl-clicked or command-clicked.
-    pub fn default(mut self, default: impl Into<T>) -> Self {
+    pub fn default(mut self, default: impl Into<f64>) -> Self {
         self.default = Some(default.into());
         self
     }
@@ -106,14 +117,6 @@ where
     /// the default on_change message could create too many events.
     pub fn on_release(mut self, on_release: Message) -> Self {
         self.on_release = Some(on_release);
-        self
-    }
-
-    /// Sets the function called when the mouse is over a point on the Rail.
-    ///
-    /// The function is only called when the mouse is not being dragged.
-    pub fn on_hover(mut self, on_hover: impl Fn(T) -> Message + 'a) -> Self {
-        self.on_hover = Some(Box::new(on_hover));
         self
     }
 
@@ -130,7 +133,7 @@ where
     }
 
     /// Sets the step size of the [`Slider`].
-    pub fn step(mut self, step: impl Into<T>) -> Self {
+    pub fn step(mut self, step: impl Into<f64>) -> Self {
         self.step = step.into();
         self
     }
@@ -138,7 +141,7 @@ where
     /// Sets the optional "shift" step for the [`Slider`].
     ///
     /// If set, this value is used as the step while the shift key is pressed.
-    pub fn shift_step(mut self, shift_step: impl Into<T>) -> Self {
+    pub fn shift_step(mut self, shift_step: impl Into<f64>) -> Self {
         self.shift_step = Some(shift_step.into());
         self
     }
@@ -161,13 +164,12 @@ where
     }
 }
 
-impl<T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for VideoSlider<'_, T, Message, Theme>
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for VideoSlider<'_, Message, Theme, Renderer>
 where
-    T: Copy + Into<f64> + num_traits::FromPrimitive,
     Message: Clone,
     Theme: Catalog,
-    Renderer: iced::advanced::Renderer,
+    Renderer: advanced::Renderer + image::Renderer + text::Renderer,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
@@ -209,73 +211,52 @@ where
         let mut update = || {
             let current_value = self.value;
 
-            let locate = |cursor_position: Point| -> Option<T> {
+            let locate = |cursor_position: iced::Point| -> f64 {
                 let bounds = layout.bounds();
-
-                if cursor_position.x <= bounds.x {
-                    Some(*self.range.start())
+                let new_value = if cursor_position.x <= bounds.x {
+                    *self.range.start()
                 } else if cursor_position.x >= bounds.x + bounds.width {
-                    Some(*self.range.end())
+                    *self.range.end()
                 } else {
-                    let step = if state.keyboard_modifiers.shift() {
-                        self.shift_step.unwrap_or(self.step)
-                    } else {
-                        self.step
-                    }
-                    .into();
-
-                    let start = (*self.range.start()).into();
-                    let end = (*self.range.end()).into();
+                    let start = *self.range.start();
+                    let end = *self.range.end();
 
                     let percent = f64::from(cursor_position.x - bounds.x) / f64::from(bounds.width);
 
-                    let steps = (percent * (end - start) / step).round();
-                    let value = steps * step + start;
+                    let steps = (percent * (end - start) / self.step).round();
+                    let value = steps * self.step + start;
 
-                    T::from_f64(value.min(end))
-                }
+                    value.min(end)
+                };
+
+                new_value
             };
 
-            let increment = |value: T| -> Option<T> {
-                let step = if state.keyboard_modifiers.shift() {
-                    self.shift_step.unwrap_or(self.step)
-                } else {
-                    self.step
-                }
-                .into();
-
-                let steps = (value.into() / step).round();
-                let new_value = step * (steps + 1.0);
+            let increment = |value: f64| -> f64 {
+                let steps = (value / self.step).round();
+                let new_value = self.step * (steps + 1.0);
 
                 if new_value > (*self.range.end()).into() {
-                    return Some(*self.range.end());
+                    return *self.range.end();
                 }
 
-                T::from_f64(new_value)
+                new_value
             };
 
-            let decrement = |value: T| -> Option<T> {
-                let step = if state.keyboard_modifiers.shift() {
-                    self.shift_step.unwrap_or(self.step)
-                } else {
-                    self.step
-                }
-                .into();
-
-                let steps = (value.into() / step).round();
-                let new_value = step * (steps - 1.0);
+            let decrement = |value: f64| -> f64 {
+                let steps = (value / self.step).round();
+                let new_value = self.step * (steps - 1.0);
 
                 if new_value < (*self.range.start()).into() {
-                    return Some(*self.range.start());
+                    return *self.range.start();
                 }
 
-                T::from_f64(new_value)
+                new_value
             };
 
-            let change = |new_value: T| {
-                if (self.value.into() - new_value.into()).abs() > f64::EPSILON {
+            let mut change = |new_value: f64| {
+                if (self.value - new_value).abs() > f64::EPSILON {
                     shell.publish((self.on_change)(new_value));
-
                     self.value = new_value;
                 }
             };
@@ -288,7 +269,7 @@ where
                             let _ = self.default.map(change);
                             state.is_dragging = false;
                         } else {
-                            let _ = locate(cursor_position).map(change);
+                            let _ = change(locate(cursor_position));
                             state.is_dragging = true;
                         }
 
@@ -309,20 +290,14 @@ where
                 }
                 Event::Mouse(mouse::Event::CursorMoved { .. })
                 | Event::Touch(touch::Event::FingerMoved { .. }) => {
+                    state.is_hovering = cursor.is_over(layout.bounds());
+                    state.cursor_position = cursor.position().unwrap_or_default();
+                    state.cursor_location = cursor.position().map(locate).unwrap_or_default();
+
                     if state.is_dragging {
-                        let _ = cursor.position().and_then(locate).map(change);
+                        let _ = cursor.position().map(locate).map(change);
 
                         shell.capture_event();
-                    } else if let Some(cursor) = cursor.position_over(layout.bounds()) {
-                        if let Some(on_hover) = self.on_hover.as_ref() {
-                            let _ = locate(cursor).map(|new_value| {
-                                if (self.value.into() - new_value.into()).abs() > f64::EPSILON {
-                                    shell.publish((on_hover)(new_value));
-                                    self.value = new_value;
-                                    shell.capture_event();
-                                }
-                            });
-                        }
                     }
                 }
                 Event::Mouse(mouse::Event::WheelScrolled { delta })
@@ -335,9 +310,9 @@ where
                         };
 
                         if *delta < 0.0 {
-                            let _ = decrement(current_value).map(change);
+                            let _ = change(decrement(current_value));
                         } else {
-                            let _ = increment(current_value).map(change);
+                            let _ = change(increment(current_value));
                         }
 
                         shell.capture_event();
@@ -347,10 +322,10 @@ where
                     if cursor.is_over(layout.bounds()) {
                         match key {
                             Key::Named(key::Named::ArrowUp) => {
-                                let _ = increment(current_value).map(change);
+                                let _ = change(increment(current_value));
                             }
                             Key::Named(key::Named::ArrowDown) => {
-                                let _ = decrement(current_value).map(change);
+                                let _ = change(decrement(current_value));
                             }
                             _ => (),
                         }
@@ -404,11 +379,11 @@ where
             } => (f32::from(width), bounds.height, border_radius),
         };
 
-        let value = self.value.into() as f32;
+        let value = self.value as f32;
         let (range_start, range_end) = {
             let (start, end) = self.range.clone().into_inner();
 
-            (start.into() as f32, end.into() as f32)
+            (start as f32, end as f32)
         };
 
         let offset = if range_start >= range_end {
@@ -484,23 +459,211 @@ where
             mouse::Interaction::default()
         }
     }
+
+    fn overlay<'a>(
+        &'a mut self,
+        state: &'a mut Tree,
+        layout: Layout<'a>,
+        renderer: &Renderer,
+        _viewport: &Rectangle,
+        translation: iced::Vector,
+    ) -> Option<advanced::overlay::Element<'a, Message, Theme, Renderer>> {
+        let state = state.state.downcast_ref::<State>();
+
+        if !state.is_hovering && !state.is_dragging {
+            return None;
+        }
+
+        let cursor_percent =
+            (state.cursor_location - *self.range.start()) / (self.range.end() - self.range.start());
+        let image_size = self
+            .thumbnails
+            .first()
+            .map(|img| renderer.measure_image(img))
+            .unwrap_or_default();
+        let image_index = (cursor_percent * self.thumbnails.len() as f64) as usize;
+        let image_index = image_index.min(self.thumbnails.len().max(1) - 1);
+
+        let position = (cursor_percent * self.duration.as_secs_f64()) as u64;
+        let timestamp = format!(
+            "{:02}:{:02}:{:02}",
+            position as u64 / 3600,
+            position as u64 % 3600 / 60,
+            position as u64 % 60
+        );
+
+        let mut overlay = vec![];
+
+        if let Some(image) = self.thumbnails.get(image_index).cloned() {
+            overlay.push(advanced::overlay::Element::new(Box::new(
+                ThumbnailOverlay {
+                    position: layout.position() + translation,
+                    content_bounds: layout.bounds(),
+                    image,
+                    image_size: iced::Size::new(
+                        image_size.width as f32 / image_size.height as f32 * 100.0,
+                        100.0,
+                    ),
+                    cursor_position: state.cursor_position,
+                },
+            )));
+        }
+
+        overlay.push(advanced::overlay::Element::new(Box::new(
+            TimestampOverlay {
+                position: layout.position() + translation,
+                content_bounds: layout.bounds(),
+                timestamp,
+                size: iced::Size::new(80.0, 20.0),
+                cursor_position: state.cursor_position,
+                font: self.thumbnail_font,
+            },
+        )));
+
+        Some(advanced::overlay::Group::with_children(overlay).overlay())
+    }
 }
 
-impl<'a, T, Message, Theme, Renderer> From<VideoSlider<'a, T, Message, Theme>>
+impl<'a, Message, Theme, Renderer> From<VideoSlider<'a, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    T: Copy + Into<f64> + num_traits::FromPrimitive + 'a,
     Message: Clone + 'a,
     Theme: Catalog + 'a,
-    Renderer: advanced::Renderer + 'a,
+    Renderer: advanced::Renderer + image::Renderer + text::Renderer + 'a,
 {
-    fn from(slider: VideoSlider<'a, T, Message, Theme>) -> Element<'a, Message, Theme, Renderer> {
+    fn from(
+        slider: VideoSlider<'a, Message, Theme, Renderer>,
+    ) -> Element<'a, Message, Theme, Renderer> {
         Element::new(slider)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 struct State {
+    is_hovering: bool,
+    cursor_position: Point,
+    cursor_location: f64,
     is_dragging: bool,
     keyboard_modifiers: keyboard::Modifiers,
+}
+
+struct ThumbnailOverlay<Renderer: image::Renderer> {
+    position: iced::Point,
+    content_bounds: iced::Rectangle,
+    image: Renderer::Handle,
+    image_size: iced::Size,
+    cursor_position: iced::Point,
+}
+
+impl<Message, Theme, Renderer> advanced::Overlay<Message, Theme, Renderer>
+    for ThumbnailOverlay<Renderer>
+where
+    Renderer: image::Renderer + advanced::Renderer,
+{
+    fn layout(&mut self, _renderer: &Renderer, _bounds: iced::Size) -> layout::Node {
+        let translation = self.position - self.content_bounds.position();
+        let position = iced::Vector::new(
+            self.cursor_position.x - self.image_size.width / 2.0,
+            self.position.y - self.image_size.height - 30.0,
+        ) + translation;
+
+        layout::Node::new(self.image_size).translate(position)
+    }
+
+    fn draw(
+        &self,
+        renderer: &mut Renderer,
+        _theme: &Theme,
+        _style: &advanced::renderer::Style,
+        layout: layout::Layout<'_>,
+        _cursor: advanced::mouse::Cursor,
+    ) {
+        renderer.fill_quad(
+            advanced::renderer::Quad {
+                bounds: layout.bounds().expand(2.0),
+                border: iced::Border::default().rounded(3.0),
+                shadow: iced::Shadow {
+                    color: iced::Color::BLACK.scale_alpha(1.2),
+                    offset: iced::Vector::new(0.0, 1.0),
+                    blur_radius: 20.0,
+                },
+                snap: false,
+            },
+            iced::Background::Color(iced::Color::WHITE.scale_alpha(0.5)),
+        );
+
+        let image = image::Image {
+            handle: self.image.clone(),
+            filter_method: image::FilterMethod::default(),
+            rotation: iced::Radians(0.0),
+            opacity: 1.0,
+            snap: false,
+        };
+
+        renderer.draw_image(image, layout.bounds());
+    }
+}
+
+struct TimestampOverlay<Renderer>
+where
+    Renderer: text::Renderer,
+{
+    position: iced::Point,
+    content_bounds: iced::Rectangle,
+    size: iced::Size,
+    timestamp: String,
+    cursor_position: iced::Point,
+    font: Renderer::Font,
+}
+
+impl<Message, Theme, Renderer> advanced::Overlay<Message, Theme, Renderer>
+    for TimestampOverlay<Renderer>
+where
+    Renderer: text::Renderer,
+{
+    fn layout(&mut self, _renderer: &Renderer, _bounds: iced::Size) -> layout::Node {
+        let translation = self.position - self.content_bounds.position();
+        let position = iced::Vector::new(
+            self.cursor_position.x - self.size.width / 2.0,
+            self.position.y - self.size.height - 5.0,
+        ) + translation;
+
+        layout::Node::new(self.size).translate(position)
+    }
+
+    fn draw(
+        &self,
+        renderer: &mut Renderer,
+        _theme: &Theme,
+        _style: &advanced::renderer::Style,
+        layout: layout::Layout<'_>,
+        _cursor: advanced::mouse::Cursor,
+    ) {
+        renderer.fill_quad(
+            advanced::renderer::Quad {
+                bounds: layout.bounds(),
+                border: iced::Border::default().rounded(3.0),
+                shadow: Default::default(),
+                snap: false,
+            },
+            iced::Background::Color(iced::Color::BLACK.scale_alpha(0.9)),
+        );
+
+        renderer.fill_text(
+            text::Text {
+                content: self.timestamp.clone(),
+                bounds: self.size,
+                size: 13.into(),
+                line_height: Default::default(),
+                font: self.font,
+                align_x: iced::Alignment::Center.into(),
+                align_y: iced::Alignment::Center.into(),
+                shaping: text::Shaping::Basic,
+                wrapping: text::Wrapping::None,
+            },
+            layout.bounds().center() + iced::Vector::new(0.0, 1.5),
+            iced::Color::from_rgb8(210, 210, 210),
+            layout.bounds(),
+        );
+    }
 }
