@@ -1,11 +1,12 @@
 #![allow(dead_code, unused_imports)]
 use iced::{
-    Element, Font, Length, Point, Size, Subscription, Task,
+    Element, Font, Length, Padding, Point, Size, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
+    border::{Border, Radius},
     font,
     widget::{
-        Space, center, column, container, horizontal_space, image, mouse_area, row, slider, stack,
-        text, vertical_space,
+        button, center, column, container, horizontal_rule, horizontal_space, image, mouse_area,
+        pick_list, row, scrollable, slider, stack, text, text_input, vertical_rule, vertical_space,
     },
     window,
 };
@@ -18,10 +19,17 @@ use std::time::Duration;
 
 mod app;
 mod error;
+mod home;
 mod player;
-pub mod utils;
-pub mod widgets;
+mod utils;
+mod widgets;
+
+use player::{Player, PlayerMessage};
+use utils::empty;
+use utils::filter::*;
 use utils::icons::{self, text_button};
+use utils::typo;
+use utils::typo::*;
 
 fn _test_main() {
     // fn main() {
@@ -40,8 +48,11 @@ fn _test_main() {
 
 // fn test_main() -> iced::Result {
 fn main() -> iced::Result {
-    iced::run(app::App::update, app::App::view)
-    // iced::application(PlayGround::boot, PlayGround::update, PlayGround::view)
-    //     .subscription(PlayGround::subscriptions)
+    // iced::run(app::App::update, app::App::view)
+    // iced::application(Player::boot, Player::update, Player::view)
+    //     .subscription(Player::subscriptions)
     //     .run()
+    iced::application(home::Home::boot, home::Home::update, home::Home::view)
+        .subscription(home::Home::subscription)
+        .run()
 }

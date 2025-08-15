@@ -4,18 +4,38 @@ use iced::{
     widget::{Button, Text, text},
 };
 
+use super::typo::*;
+
 pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../assets/lucide.ttf");
 pub const NAME: &'static str = "lucide";
 pub const FONT: Font = Font::with_name(NAME);
 
+pub const LOGO: char = '\u{e527}';
+pub const SEARCH: char = '\u{e155}';
+
 pub const BACK: char = '\u{e45c}';
+pub const FORWARD: char = '\u{e45e}';
 
 pub const LOOP: char = '\u{e14a}';
-pub const UNLOOP: char = '\u{E800}';
+pub const UNLOOP: char = '\u{e800}';
+
+pub const CHEV_UP: char = '\u{e074}';
+pub const CHEV_DOWN: char = '\u{e071}';
+pub const CHEV_LEFT: char = '\u{e072}';
+pub const CHEV_RIGHT: char = '\u{e073}';
+pub const CANCEL: char = '\u{e1b2}';
+pub const EQUALS: char = '\u{e1bd}';
+
+pub const FILTER: char = '\u{e465}';
+pub const SORT: char = '\u{e04a}';
+pub const GRID: char = '\u{e105}';
+pub const LIST: char = '\u{e10c}';
+pub const RAND: char = '\u{e2c5}';
 
 pub const ADD_COLLECTION: char = '\u{e23d}';
 pub const REM_COLLECTION: char = '\u{e23c}';
 pub const IN_COLLECTION: char = '\u{e524}';
+pub const NEW_COLLECTION: char = '\u{e085}';
 
 pub const VIDEO_CONFIG: char = '\u{e29a}';
 
@@ -40,13 +60,18 @@ pub const COMMENT: char = '\u{e57a}';
 pub const MAXIMIZE: char = '\u{e116}';
 pub const MINIMIZE: char = '\u{e11e}';
 
+pub const HOME: char = '\u{e0f9}';
+pub const SHOW: char = '\u{e5f1}';
+pub const MOVIE: char = '\u{e29b}';
+pub const SETTINGS: char = '\u{e158}';
+
 fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
     let fnt: Font = Font::with_name(name);
     text(unicode.to_string())
         .font(fnt)
         .align_x(alignment::Horizontal::Center)
         .line_height(1.0)
-        .size(20.0)
+        .size(P)
 }
 
 pub fn icon<'a>(unicode: char) -> Text<'a> {
@@ -58,6 +83,15 @@ pub fn text_button<'a, Message>(unicode: char) -> Button<'a, Message> {
     use iced::widget::{button, button::text};
 
     button(icon(unicode)).style(text)
+}
+
+pub fn sized_button<'a, Message>(
+    unicode: char,
+    size: impl Into<iced::Pixels>,
+) -> Button<'a, Message> {
+    use iced::widget::{button, button::text};
+
+    button(icon(unicode).size(size)).style(text)
 }
 
 pub fn alt<'a>(unicode: u32) -> Text<'a> {

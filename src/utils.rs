@@ -10,6 +10,16 @@ use std::path::{Path, PathBuf};
 
 use crate::error::*;
 pub mod icons;
+pub use icons::*;
+pub mod typo;
+pub use typo::*;
+pub mod filter;
+pub use filter::*;
+
+/// Returns an empty [`iced::Element`].
+pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
+    iced::widget::Space::new(0.0, 0.0).into()
+}
 
 /// Returns a single thumbnail frame handle in rgba format.
 pub fn _generate_thumbnail(
