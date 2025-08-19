@@ -9,6 +9,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::*;
+use crate::home::HomeMessage;
 pub mod icons;
 pub use icons::*;
 pub mod typo;
@@ -322,4 +323,125 @@ fn yuv_to_rgba(yuv: &[u8], width: u32, height: u32, downscale: u32) -> Vec<u8> {
     }
 
     rgba
+}
+
+pub fn rand_u32() -> u32 {
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .subsec_millis();
+
+    nanos
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum ViewType {
+    #[default]
+    Grid,
+    List,
+}
+
+impl ViewType {
+    pub fn icon(&self) -> char {
+        match self {
+            Self::Grid => icons::LIST,
+            Self::List => icons::GRID,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Sort {
+    pub kinds: Vec<SortKind>,
+    pub reverse: bool,
+}
+
+impl Sort {
+    pub fn clear(&mut self) {
+        self.reverse = false;
+        self.kinds.clear();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SortKind {
+    Name,
+    Duration,
+    Progress,
+    Rating,
+    // Tags,
+    Release,
+    Comments,
+    Added,
+    Recent,
+}
+
+impl SortKind {
+    pub const ALL: [SortKind; 8] = [
+        Self::Name,
+        Self::Duration,
+        Self::Progress,
+        Self::Rating,
+        // Self::Tags,
+        Self::Release,
+        Self::Comments,
+        Self::Added,
+        Self::Recent,
+    ];
+
+    pub fn view(&self, order: Option<usize>) -> iced::Element<'_, HomeMessage> {
+        use iced::{
+            Border,
+            widget::{button, text},
+        };
+
+        let enable = order.is_none();
+        let msg = if enable {
+            HomeMessage::AddSort(*self)
+        } else {
+            HomeMessage::RemoveSort(*self)
+        };
+
+        let order = order
+            .map(|order| (order + 1).to_string())
+            .unwrap_or_default();
+        let content = text(format!("{self} {}", order)).size(H7);
+        // let content = row!(content).spacing(2.0).align_y(Vertical::Center);
+
+        button(content)
+            .on_press(msg)
+            .style(move |theme, status| {
+                let default = if enable {
+                    button::background(theme, status)
+                } else {
+                    button::secondary(theme, status)
+                };
+                let border = Border::default().width(2.0).rounded(5.0);
+
+                button::Style { border, ..default }
+            })
+            .into()
+    }
+}
+
+impl std::fmt::Display for SortKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Name => "Name",
+                Self::Duration => "Duration",
+                Self::Progress => "Progress",
+                Self::Rating => "Rating",
+                // Self::Tags => "Tags",
+                Self::Release => "Release",
+                Self::Comments => "Comments",
+                Self::Added => "Date Added",
+                Self::Recent => "Recent",
+            }
+        )
+    }
 }

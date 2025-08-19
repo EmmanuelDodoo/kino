@@ -1,35 +1,40 @@
 #![allow(dead_code, unused_imports)]
 use iced::{
-    Element, Font, Length, Padding, Point, Size, Subscription, Task, Theme,
+    Color, ContentFit, Element, Event, Font, Length, Padding, Point, Rectangle, Shadow, Size,
+    Subscription, Task, Theme, Vector,
+    advanced::{
+        self, Widget, layout, mouse, overlay,
+        widget::{operation, tree},
+    },
     alignment::{Horizontal, Vertical},
+    animation::{Animation, Easing},
     border::{Border, Radius},
-    font,
+    color, font,
+    time::Instant,
     widget::{
-        button, center, column, container, horizontal_rule, horizontal_space, image, mouse_area,
-        pick_list, row, scrollable, slider, stack, text, text_input, vertical_rule, vertical_space,
+        button, center, column, container, float, grid, horizontal_rule, horizontal_space, image,
+        mouse_area, pick_list, row, scrollable, slider, stack, text, text_input, vertical_rule,
+        vertical_space,
     },
     window,
 };
-use iced_video_player::{
-    Button, Icon, KeyPress, Kind, Modifiers, MouseClick, Position, Video, VideoPlayer, key,
-};
-use std::num::NonZeroU8;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 mod app;
 mod error;
 mod home;
 mod player;
-mod utils;
+pub mod utils;
+mod video;
 mod widgets;
 
 use player::{Player, PlayerMessage};
-use utils::empty;
+use utils::filter;
 use utils::filter::*;
-use utils::icons::{self, text_button};
+use utils::icons::*;
 use utils::typo;
 use utils::typo::*;
+use utils::{Sort, SortKind, empty};
+use widgets::*;
 
 fn _test_main() {
     // fn main() {
@@ -52,7 +57,64 @@ fn main() -> iced::Result {
     // iced::application(Player::boot, Player::update, Player::view)
     //     .subscription(Player::subscriptions)
     //     .run()
-    iced::application(home::Home::boot, home::Home::update, home::Home::view)
-        .subscription(home::Home::subscription)
-        .run()
+    // iced::application::timed(
+    //     home::Home::boot,
+    //     home::Home::update,
+    //     home::Home::subscription,
+    //     home::Home::view,
+    // )
+    // .run()
+
+    // iced::application::timed(
+    //     Movies::boot,
+    //     Movies::update,
+    //     Movies::subscription,
+    //     Movies::view,
+    // )
+    // .run()
+
+    iced::application::timed(
+        Playground::new,
+        Playground::update,
+        Playground::subscription,
+        Playground::view,
+    )
+    .run()
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    Animate,
+    None,
+}
+
+struct Playground {
+    now: Instant,
+}
+
+impl Playground {
+    fn new() -> Self {
+        Playground {
+            now: Instant::now(),
+        }
+    }
+
+    fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
+        self.now = now;
+
+        match message {
+            Message::None => Task::none(),
+            Message::Animate => Task::none(),
+        }
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        Subscription::none()
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        let content = center("Work in progress");
+
+        content.into()
+    }
 }

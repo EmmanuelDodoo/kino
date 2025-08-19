@@ -1,9 +1,11 @@
-use crate::utils;
+use crate::utils::{self, load_fonts};
 use iced::{
     Element, Length, Padding, Subscription, Task, Theme,
-    alignment::{Horizontal, Vertical},
+    alignment::Vertical,
+    animation::{Animation, Easing},
     border::{Border, Radius},
     font, keyboard,
+    time::Instant,
     widget::{
         button, center, column, container, horizontal_rule, horizontal_space, pick_list, row,
         scrollable, text, text_input, vertical_rule, vertical_space,
@@ -11,198 +13,17 @@ use iced::{
     window,
 };
 
+mod movies;
+mod pages;
+
+use movies::{Movies, MoviesMessage};
+use pages::{Page, PageKind, PageUpdate};
 use utils::empty;
 use utils::filter::*;
 use utils::icons;
 use utils::typo;
 use utils::typo::*;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Page {
-    Shows(()),
-    Movies(()),
-    Comments(()),
-    Search(()),
-    Custom(()),
-}
-
-impl Page {
-    fn goto_shows() -> Self {
-        Self::Shows(())
-    }
-
-    fn goto_movies() -> Self {
-        Self::Movies(())
-    }
-
-    fn goto_comments() -> Self {
-        Self::Comments(())
-    }
-
-    fn is_shows(&self) -> bool {
-        match self {
-            Self::Shows(_) => true,
-            _ => false,
-        }
-    }
-
-    fn is_movies(&self) -> bool {
-        match self {
-            Self::Movies(_) => true,
-            _ => false,
-        }
-    }
-
-    fn is_comments(&self) -> bool {
-        match self {
-            Self::Comments(_) => true,
-            _ => false,
-        }
-    }
-
-    fn is_custom(&self) -> bool {
-        match self {
-            Self::Custom(_) => true,
-            _ => false,
-        }
-    }
-
-    fn name(&self) -> &str {
-        "Dummy Collection"
-    }
-
-    /// Returns true if the collection can go to a previous page
-    fn can_back(&self) -> bool {
-        // todo
-        false
-    }
-
-    /// Returns true if the collection can go to a next page
-    fn can_forward(&self) -> bool {
-        // todo
-        false
-    }
-
-    /// Navigates to the previous page of the collection.
-    /// Returning `false` causes the entire collection to be navigated past.
-    fn back(&mut self) -> bool {
-        todo!()
-    }
-
-    /// Navigates to the next page of the collection.
-    /// Returning `false` causes the entire collection to be navigated past.
-    fn forward(&mut self) -> bool {
-        todo!()
-    }
-
-    fn view(&self) -> Element<'_, HomeMessage> {
-        let content = match self {
-            Self::Shows(_) => center(text("Shows"))
-                .width(Length::Fill)
-                .height(Length::Fill),
-            Self::Movies(_) => center(text("Movies"))
-                .width(Length::Fill)
-                .height(Length::Fill),
-            Self::Comments(_) => center(text("Comments"))
-                .width(Length::Fill)
-                .height(Length::Fill),
-            Self::Search(_) => center(text("Search"))
-                .width(Length::Fill)
-                .height(Length::Fill),
-            Self::Custom(_) => center(text("Custom"))
-                .width(Length::Fill)
-                .height(Length::Fill),
-        };
-
-        content.into()
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub enum ViewType {
-    #[default]
-    Grid,
-    List,
-}
-
-impl ViewType {
-    pub fn icon(&self) -> char {
-        match self {
-            Self::Grid => icons::GRID,
-            Self::List => icons::LIST,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Sort {
-    Name,
-    Duration,
-    Progress,
-    Rating,
-    Tags,
-    Release,
-    Comments,
-}
-
-impl Sort {
-    pub const ALL: [Sort; 7] = [
-        Self::Name,
-        Self::Duration,
-        Self::Progress,
-        Self::Rating,
-        Self::Tags,
-        Self::Release,
-        Self::Comments,
-    ];
-
-    pub fn view(&self, order: Option<usize>) -> Element<'_, HomeMessage> {
-        let enable = order.is_none();
-        let msg = if enable {
-            HomeMessage::AddSort(*self)
-        } else {
-            HomeMessage::RemoveSort(*self)
-        };
-
-        let order = order
-            .map(|order| (order + 1).to_string())
-            .unwrap_or_default();
-        let text = text(format!("{self} {}", order)).size(H7);
-        let content = row!(text).spacing(2.0).align_y(Vertical::Center);
-
-        button(content)
-            .on_press(msg)
-            .style(move |theme, status| {
-                let default = if enable {
-                    button::background(theme, status)
-                } else {
-                    button::secondary(theme, status)
-                };
-                let border = Border::default().width(2.0).rounded(5.0);
-
-                button::Style { border, ..default }
-            })
-            .into()
-    }
-}
-
-impl std::fmt::Display for Sort {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Name => "Name",
-                Self::Duration => "Duration",
-                Self::Progress => "Progress",
-                Self::Rating => "Rating",
-                Self::Tags => "Tags",
-                Self::Release => "Release",
-                Self::Comments => "Comments",
-            }
-        )
-    }
-}
+use utils::{Sort, SortKind, ViewType};
 
 #[derive(Debug, Clone)]
 pub enum FilterMessage {
@@ -225,19 +46,21 @@ pub enum FilterMessage {
 pub enum HomeMessage {
     FontLoad(Result<(), font::Error>),
     Search(String),
-    AddSort(Sort),
-    RemoveSort(Sort),
+    AddSort(SortKind),
+    RemoveSort(SortKind),
     ToggleSort,
     ToggleFilter,
     Filter(FilterMessage),
+    Movies(MoviesMessage),
     Settings,
     Randomize,
     Back,
     Forward,
     ToggleView,
     Home,
-    Goto(Page),
+    Goto(PageKind),
     NewCollection,
+    Animate,
     None,
 }
 
@@ -246,16 +69,16 @@ pub struct Home {
     backward: Vec<Page>,
     search: String,
     view: ViewType,
-    sorts: Vec<Sort>,
+    sort: Sort,
+    now: Instant,
     show_sorts: bool,
     show_filters: bool,
     filters: Filter,
-    filter_mode: FilterMode,
 }
 
 impl Home {
     pub fn boot() -> (Self, Task<HomeMessage>) {
-        let load_font = font::load(icons::LUCIDE_BYTES).map(HomeMessage::FontLoad);
+        let load_font = load_fonts().map(HomeMessage::FontLoad);
 
         (
             Self::new(ViewType::default(), FilterMode::default()),
@@ -269,17 +92,19 @@ impl Home {
             backward: vec![],
             search: String::default(),
             view,
-            sorts: vec![],
+            sort: Sort::default(),
             show_sorts: false,
             show_filters: false,
-            filter_mode,
-            filters: Filter::new(),
+            now: Instant::now(),
+            filters: Filter::new(filter_mode),
         }
     }
 
-    pub fn update(&mut self, message: HomeMessage) -> Task<HomeMessage> {
+    pub fn update(&mut self, message: HomeMessage, now: Instant) -> Task<HomeMessage> {
+        self.now = now;
         match message {
             HomeMessage::None => Task::none(),
+            HomeMessage::Animate => Task::none(),
             HomeMessage::FontLoad(Err(error)) => {
                 eprintln!("Font load error: \n{error:?}");
                 Task::none()
@@ -295,14 +120,38 @@ impl Home {
                 std::mem::swap(&mut self.forward, &mut self.backward);
                 Task::none()
             }
-            HomeMessage::Goto(collection) => {
-                self.forward.clear();
-                self.backward.push(collection);
-                Task::none()
+            HomeMessage::Goto(kind) => {
+                match kind {
+                    PageKind::Movies => {
+                        let (movies, task) = Movies::boot(
+                            self.sort.clone(),
+                            self.filters,
+                            matches!(self.view, ViewType::Grid),
+                        );
+                        self.forward.clear();
+                        self.backward.push(Page::Movies(movies));
+
+                        task.map(HomeMessage::Movies)
+                    }
+                    _ => {
+                        todo!()
+
+                        // self.forward.clear();
+                        // self.backward.push(kind);
+                        // Task::none()
+                    }
+                }
+            }
+            HomeMessage::Movies(message) => {
+                let Some(page) = self.current_page_mut() else {
+                    return Task::none();
+                };
+
+                page.movies_update(message, now).map(HomeMessage::Movies)
             }
             HomeMessage::Back => {
                 if self
-                    .current_view_mut()
+                    .current_page_mut()
                     .map(|collection| collection.back())
                     .unwrap_or_default()
                 {
@@ -319,7 +168,7 @@ impl Home {
             }
             HomeMessage::Forward => {
                 if self
-                    .current_view_mut()
+                    .current_page_mut()
                     .map(|collection| collection.forward())
                     .unwrap_or_default()
                 {
@@ -339,14 +188,32 @@ impl Home {
                 } else {
                     self.view = ViewType::Grid
                 }
-                Task::none()
+
+                let view = self.view;
+
+                if let Some(page) = self.current_page_mut() {
+                    page.page_update(PageUpdate::Layout(view), now);
+                };
+
+                return Task::none();
             }
             HomeMessage::AddSort(sort) => {
-                self.sorts.push(sort);
+                self.sort.kinds.push(sort);
+                let sort = self.sort.clone();
+
+                if let Some(page) = self.current_page_mut() {
+                    page.page_update(PageUpdate::Sort(sort), now);
+                };
                 Task::none()
             }
             HomeMessage::RemoveSort(remove) => {
-                self.sorts.retain(|sort| *sort != remove);
+                self.sort.kinds.retain(|sort| *sort != remove);
+                let sort = self.sort.clone();
+
+                if let Some(page) = self.current_page_mut() {
+                    page.page_update(PageUpdate::Sort(sort), now);
+                };
+
                 Task::none()
             }
             HomeMessage::ToggleSort => {
@@ -359,7 +226,7 @@ impl Home {
             }
             HomeMessage::Filter(fsg) => {
                 match fsg {
-                    FilterMessage::Mode => self.filter_mode.toggle(),
+                    FilterMessage::Mode => self.filters.mode.toggle(),
                     FilterMessage::ProgressKind(kind) => {
                         self.filters.progress.kind = kind;
                     }
@@ -500,9 +367,14 @@ impl Home {
                         }
                     }
                     FilterMessage::Clear => {
-                        self.filters = Filter::new();
+                        self.filters.clear();
                     }
                 }
+                let filters = self.filters;
+
+                if let Some(page) = self.current_page_mut() {
+                    page.page_update(PageUpdate::Filters(filters), now);
+                };
                 Task::none()
             }
             HomeMessage::NewCollection => Task::none(),
@@ -510,11 +382,11 @@ impl Home {
         }
     }
 
-    fn current_view(&self) -> Option<&Page> {
+    fn current_page(&self) -> Option<&Page> {
         self.backward.last()
     }
 
-    fn current_view_mut(&mut self) -> Option<&mut Page> {
+    fn current_page_mut(&mut self) -> Option<&mut Page> {
         self.backward.last_mut()
     }
 
@@ -534,19 +406,19 @@ impl Home {
                 icons::HOME,
                 "Home",
                 HomeMessage::Home,
-                self.current_view().is_none()
+                self.current_page().is_none()
             ),
             icon_button(
                 icons::SHOW,
                 "Shows",
                 HomeMessage::Goto(Page::goto_shows()),
-                self.current_view().map(Page::is_shows).unwrap_or_default()
+                self.current_page().map(Page::is_shows).unwrap_or_default()
             ),
             icon_button(
                 icons::MOVIE,
                 "Movies",
                 HomeMessage::Goto(Page::goto_movies()),
-                self.current_view().map(Page::is_movies).unwrap_or_default(),
+                self.current_page().map(Page::is_movies).unwrap_or_default(),
             ),
             icon_button(
                 icons::NEW_COLLECTION,
@@ -566,7 +438,7 @@ impl Home {
                 icons::COMMENT,
                 "Comments",
                 HomeMessage::Goto(Page::goto_comments()),
-                self.current_view()
+                self.current_page()
                     .map(Page::is_comments)
                     .unwrap_or_default()
             ),
@@ -586,7 +458,7 @@ impl Home {
     }
 
     fn inner(&self) -> Element<'_, HomeMessage> {
-        match self.current_view() {
+        match self.current_page() {
             None => center(text("Home Page"))
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -596,7 +468,7 @@ impl Home {
     }
 
     fn navigation(&self) -> Element<'_, HomeMessage> {
-        let current = self.current_view();
+        let current = self.current_page();
 
         let can_back = current
             .map(|collection| collection.can_back())
@@ -785,7 +657,7 @@ impl Home {
         };
 
         let mode = {
-            let mode = text(self.filter_mode.to_string()).size(size);
+            let mode = text(self.filters.mode.to_string()).size(size);
             let text = text("Combination mode:").size(size);
 
             let button = button(mode)
@@ -861,7 +733,7 @@ impl Home {
             let content = row!(text, icon).spacing(2.0).align_y(Vertical::Center);
 
             button(content)
-                .style(if self.sorts.is_empty() {
+                .style(if self.sort.kinds.is_empty() {
                     button::subtle
                 } else {
                     button::background
@@ -881,8 +753,8 @@ impl Home {
         } else {
             row!(
                 text("Sort by: ").size(H7),
-                row(Sort::ALL.iter().map(|sort| {
-                    let order = self.sorts.iter().position(|selected| sort == selected);
+                row(SortKind::ALL.iter().map(|sort| {
+                    let order = self.sort.kinds.iter().position(|selected| sort == selected);
                     sort.view(order)
                 }))
                 .spacing(5.0)
@@ -926,7 +798,7 @@ impl Home {
     }
 
     fn content_area(&self) -> Element<'_, HomeMessage> {
-        let title = self.current_view().map(Page::name).unwrap_or("Home");
+        let title = self.current_page().map(Page::name).unwrap_or("Home");
         let title = text(title).size(H5);
 
         let search = {
@@ -979,7 +851,12 @@ impl Home {
     }
 
     pub fn subscription(&self) -> Subscription<HomeMessage> {
-        keyboard::on_key_press(|key, modifiers| match key {
+        let page = self
+            .current_page()
+            .map(|page| page.subscription())
+            .unwrap_or(Subscription::none());
+
+        let keys = keyboard::on_key_press(|key, modifiers| match key {
             keyboard::Key::Named(keyboard::key::Named::ArrowLeft) if modifiers.alt() => {
                 Some(HomeMessage::Back)
             }
@@ -988,7 +865,9 @@ impl Home {
             }
 
             _ => None,
-        })
+        });
+
+        Subscription::batch([page, keys])
     }
 }
 

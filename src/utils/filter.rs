@@ -14,6 +14,23 @@ impl FilterMode {
             Self::Or => Self::And,
         }
     }
+
+    /// Compares two conditions using self.
+    pub fn compare(&self, x: bool, y: bool) -> bool {
+        match self {
+            Self::Or => x | y,
+            Self::And => x && y,
+        }
+    }
+
+    /// Like `compare` but with multiple values
+    pub fn compare_many(&self, conditions: &[bool]) -> bool {
+        let init = matches!(self, Self::And);
+
+        conditions
+            .iter()
+            .fold(init, |acc, curr| self.compare(acc, *curr))
+    }
 }
 
 impl Display for FilterMode {
@@ -55,6 +72,14 @@ impl Comp {
             Self::Less => Self::Equal,
             Self::Equal => Self::Greater,
             Self::Greater => Self::Less,
+        }
+    }
+
+    pub fn compare<T: PartialEq + PartialOrd>(&self, x: T, y: T) -> bool {
+        match self {
+            Self::Less => x > y,
+            Self::Equal => x == y,
+            Self::Greater => x < y,
         }
     }
 }
@@ -122,6 +147,19 @@ impl Progress {
     pub fn is_any(&self) -> bool {
         matches!(self.kind, ProgressKind::Any)
     }
+
+    pub fn compare(&self, value: f32) -> bool {
+        let comp = match self.kind {
+            ProgressKind::Any => return true,
+            ProgressKind::Zero => 0.,
+            ProgressKind::TwentyFive => 0.25,
+            ProgressKind::Fifty => 0.5,
+            ProgressKind::SeventyFive => 0.75,
+            ProgressKind::Complete => 1.0,
+        };
+
+        self.comp.compare(value, comp)
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -173,6 +211,19 @@ impl Rating {
     pub fn is_any(&self) -> bool {
         matches!(self.kind, RatingKind::Any)
     }
+
+    pub fn compare(&self, value: u8) -> bool {
+        let comp = match self.kind {
+            RatingKind::Any => return true,
+            RatingKind::One => 1,
+            RatingKind::Two => 2,
+            RatingKind::Three => 3,
+            RatingKind::Four => 4,
+            RatingKind::Five => 5,
+        };
+
+        self.comp.compare(value, comp)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -181,16 +232,34 @@ pub struct Comments {
     pub comp: Comp,
 }
 
+impl Comments {
+    pub fn compare(&self, value: u32) -> bool {
+        self.comp.compare(value, self.number)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Release {
     pub year: u16,
     pub comp: Comp,
 }
 
+impl Release {
+    pub fn compare(&self, value: u16) -> bool {
+        self.comp.compare(value, self.year)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Duration {
     pub secs: u64,
     pub comp: Comp,
+}
+
+impl Duration {
+    pub fn compare(&self, value: u64) -> bool {
+        self.comp.compare(value, self.secs)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -200,16 +269,18 @@ pub struct Filter {
     pub comments: Option<Comments>,
     pub release: Option<Release>,
     pub duration: Option<Duration>,
+    pub mode: FilterMode,
 }
 
 impl Filter {
-    pub fn new() -> Self {
+    pub fn new(mode: FilterMode) -> Self {
         Self {
             progress: Progress::default(),
             rating: Rating::default(),
             comments: None,
             release: None,
             duration: None,
+            mode,
         }
     }
 
@@ -219,5 +290,14 @@ impl Filter {
             && self.comments.is_none()
             && self.release.is_none()
             && self.duration.is_none()
+    }
+
+    /// Resets all filters keeping the mode intact
+    pub fn clear(&mut self) {
+        self.progress = Progress::default();
+        self.rating = Rating::default();
+        self.comments = None;
+        self.release = None;
+        self.duration = None;
     }
 }

@@ -15,6 +15,7 @@ use std::time::Duration;
 use crate::utils::{
     self,
     icons::{self, text_button},
+    load_fonts,
 };
 use crate::widgets;
 
@@ -102,7 +103,7 @@ impl Player {
             )
         };
         // todo: belongs in main app
-        let load_font = font::load(icons::LUCIDE_BYTES).map(PlayerMessage::FontLoad);
+        let load_font = load_fonts().map(PlayerMessage::FontLoad);
         let load_id = window::get_oldest().map(PlayerMessage::WindowId);
 
         let tasks = Task::batch(vec![thumbnails_task, load_font, load_id]);
