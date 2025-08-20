@@ -47,31 +47,19 @@ impl Page {
     }
 
     pub fn is_shows(&self) -> bool {
-        match self {
-            Self::Shows(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Shows(_))
     }
 
     pub fn is_movies(&self) -> bool {
-        match self {
-            Self::Movies(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Movies(_))
     }
 
     pub fn is_comments(&self) -> bool {
-        match self {
-            Self::Comments(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Comments(_))
     }
 
     pub fn is_custom(&self) -> bool {
-        match self {
-            Self::Custom(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Custom(_))
     }
 
     pub fn movies_update(&mut self, message: MoviesMessage, now: Instant) -> Task<MoviesMessage> {

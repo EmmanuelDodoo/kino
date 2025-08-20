@@ -8,7 +8,7 @@ use super::typo::*;
 
 static LUCIDE_BYTES: &[u8] = include_bytes!("../../assets/lucide.ttf");
 static ICONS: &[u8] = include_bytes!("../../assets/kino-icons.ttf");
-pub const NAME: &'static str = "kino-icons";
+pub const NAME: &str = "kino-icons";
 pub const FONT: Font = Font::with_name(NAME);
 
 pub const LOGO: char = '\u{e80b}';

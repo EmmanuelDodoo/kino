@@ -195,7 +195,7 @@ impl Home {
                     page.page_update(PageUpdate::Layout(view), now);
                 };
 
-                return Task::none();
+                Task::none()
             }
             HomeMessage::AddSort(sort) => {
                 self.sort.kinds.push(sort);

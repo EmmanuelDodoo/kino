@@ -438,9 +438,9 @@ impl Player {
             );
             let total = format!(
                 "{:02}:{:02}:{:02}",
-                duration.as_secs() as u64 / 3600,
-                duration.as_secs() as u64 / 60,
-                duration.as_secs() as u64 % 60,
+                duration.as_secs() / 3600,
+                duration.as_secs() / 60,
+                duration.as_secs() % 60,
             );
 
             let slider = widgets::slider::VideoSlider::new(

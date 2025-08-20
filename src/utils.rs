@@ -48,7 +48,7 @@ pub fn _generate_thumbnail(
 
     let pipeline = gst::Pipeline::with_name("Thumbnail");
     pipeline
-        .add_many(&[&src, &decodebin])
+        .add_many([&src, &decodebin])
         .map_err(GStreamerError::BoolError)?;
 
     src.link(&decodebin).map_err(GStreamerError::BoolError)?;
@@ -66,9 +66,9 @@ pub fn _generate_thumbnail(
             jpegenc.set_property("quality", 50);
 
             pipeline
-                .add_many(&[&convert, &scale, &jpegenc, &sink])
+                .add_many([&convert, &scale, &jpegenc, &sink])
                 .unwrap();
-            gst::Element::link_many(&[&convert, &scale, &jpegenc, &sink]).unwrap();
+            gst::Element::link_many([&convert, &scale, &jpegenc, &sink]).unwrap();
 
             for e in [&convert, &scale, &jpegenc, &sink] {
                 e.sync_state_with_parent().unwrap();
@@ -128,8 +128,8 @@ pub fn _generate_thumbnail(
         .map_err(GStreamerError::StateChangeError)?;
 
     Ok(image::Handle::from_rgba(
-        width as u32 / downscale,
-        height as u32 / downscale,
+        width / downscale,
+        height / downscale,
         yuv_to_rgba(frame.as_slice(), width as _, height as _, downscale),
     ))
 }
@@ -328,12 +328,10 @@ fn yuv_to_rgba(yuv: &[u8], width: u32, height: u32, downscale: u32) -> Vec<u8> {
 pub fn rand_u32() -> u32 {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    let nanos = SystemTime::now()
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .subsec_millis();
-
-    nanos
+        .subsec_millis()
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]

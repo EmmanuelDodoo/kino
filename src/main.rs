@@ -57,13 +57,13 @@ fn main() -> iced::Result {
     // iced::application(Player::boot, Player::update, Player::view)
     //     .subscription(Player::subscriptions)
     //     .run()
-    // iced::application::timed(
-    //     home::Home::boot,
-    //     home::Home::update,
-    //     home::Home::subscription,
-    //     home::Home::view,
-    // )
-    // .run()
+    iced::application::timed(
+        home::Home::boot,
+        home::Home::update,
+        home::Home::subscription,
+        home::Home::view,
+    )
+    .run()
 
     // iced::application::timed(
     //     Movies::boot,
@@ -73,13 +73,13 @@ fn main() -> iced::Result {
     // )
     // .run()
 
-    iced::application::timed(
-        Playground::new,
-        Playground::update,
-        Playground::subscription,
-        Playground::view,
-    )
-    .run()
+    // iced::application::timed(
+    //     Playground::new,
+    //     Playground::update,
+    //     Playground::subscription,
+    //     Playground::view,
+    // )
+    // .run()
 }
 
 #[derive(Debug, Clone)]

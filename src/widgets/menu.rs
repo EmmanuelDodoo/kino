@@ -301,7 +301,7 @@ where
         cursor: mouse::Cursor,
     ) {
         self.content.as_widget().draw(
-            &self.tree,
+            self.tree,
             renderer,
             theme,
             style,
@@ -321,7 +321,7 @@ where
         shell: &mut advanced::Shell<'_, Message>,
     ) {
         self.content.as_widget_mut().update(
-            &mut self.tree,
+            self.tree,
             event,
             layout,
             cursor,
@@ -339,9 +339,7 @@ where
             && matches!(event, Event::Mouse(mouse::Event::ButtonReleased(_)))
         {
             self.state.is_open = true;
-        } else if (shell.is_event_captured() && self.auto_close && cursor.is_over(layout.bounds()))
-            || false
-        {
+        } else if shell.is_event_captured() && self.auto_close && cursor.is_over(layout.bounds()) {
             self.state.is_open = false
         }
     }
@@ -354,7 +352,7 @@ where
     ) {
         self.content
             .as_widget_mut()
-            .operate(&mut self.tree, layout, renderer, operation);
+            .operate(self.tree, layout, renderer, operation);
     }
 
     fn mouse_interaction(
@@ -364,7 +362,7 @@ where
         renderer: &Renderer,
     ) -> mouse::Interaction {
         self.content.as_widget().mouse_interaction(
-            &self.tree,
+            self.tree,
             layout,
             cursor,
             &self.viewport,
@@ -378,7 +376,7 @@ where
         renderer: &Renderer,
     ) -> Option<overlay::Element<'c, Message, Theme, Renderer>> {
         self.content.as_widget_mut().overlay(
-            &mut self.tree,
+            self.tree,
             layout,
             renderer,
             &self.viewport,

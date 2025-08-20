@@ -213,7 +213,7 @@ where
 
             let locate = |cursor_position: iced::Point| -> f64 {
                 let bounds = layout.bounds();
-                let new_value = if cursor_position.x <= bounds.x {
+                if cursor_position.x <= bounds.x {
                     *self.range.start()
                 } else if cursor_position.x >= bounds.x + bounds.width {
                     *self.range.end()
@@ -227,16 +227,14 @@ where
                     let value = steps * self.step + start;
 
                     value.min(end)
-                };
-
-                new_value
+                }
             };
 
             let increment = |value: f64| -> f64 {
                 let steps = (value / self.step).round();
                 let new_value = self.step * (steps + 1.0);
 
-                if new_value > (*self.range.end()).into() {
+                if new_value > *self.range.end() {
                     return *self.range.end();
                 }
 
@@ -247,7 +245,7 @@ where
                 let steps = (value / self.step).round();
                 let new_value = self.step * (steps - 1.0);
 
-                if new_value < (*self.range.start()).into() {
+                if new_value < *self.range.start() {
                     return *self.range.start();
                 }
 
@@ -269,7 +267,7 @@ where
                             let _ = self.default.map(change);
                             state.is_dragging = false;
                         } else {
-                            let _ = change(locate(cursor_position));
+                            change(locate(cursor_position));
                             state.is_dragging = true;
                         }
 
@@ -310,9 +308,9 @@ where
                         };
 
                         if *delta < 0.0 {
-                            let _ = change(decrement(current_value));
+                            change(decrement(current_value));
                         } else {
-                            let _ = change(increment(current_value));
+                            change(increment(current_value));
                         }
 
                         shell.capture_event();
@@ -322,10 +320,10 @@ where
                     if cursor.is_over(layout.bounds()) {
                         match key {
                             Key::Named(key::Named::ArrowUp) => {
-                                let _ = change(increment(current_value));
+                                change(increment(current_value));
                             }
                             Key::Named(key::Named::ArrowDown) => {
-                                let _ = change(decrement(current_value));
+                                change(decrement(current_value));
                             }
                             _ => (),
                         }
@@ -487,9 +485,9 @@ where
         let position = (cursor_percent * self.duration.as_secs_f64()) as u64;
         let timestamp = format!(
             "{:02}:{:02}:{:02}",
-            position as u64 / 3600,
-            position as u64 % 3600 / 60,
-            position as u64 % 60
+            position / 3600,
+            position % 3600 / 60,
+            position % 60
         );
 
         let mut overlay = vec![];

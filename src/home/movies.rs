@@ -292,7 +292,7 @@ fn sort(x: &Video, y: &Video, sorts: &[SortKind]) -> std::cmp::Ordering {
         }
     }
 
-    return std::cmp::Ordering::Equal;
+    std::cmp::Ordering::Equal
 }
 
 fn filter(video: &Video, filter: Filter) -> bool {
@@ -341,11 +341,8 @@ impl Movies {
     pub fn boot(sort: Sort, filters: Filter, grid: bool) -> (Self, Task<MoviesMessage>) {
         let load_thumbnails = Task::perform(
             async {
-                let alt = (6..12).map(|i| Video::testing2(i));
-                (0..6)
-                    .map(|i| Video::testing(i))
-                    .chain(alt)
-                    .collect::<Vec<_>>()
+                let alt = (6..12).map(Video::testing2);
+                (0..6).map(Video::testing).chain(alt).collect::<Vec<_>>()
             },
             |videos| MoviesMessage::Thumbnails(videos.into_iter().map(Thumbnail::new).collect()),
         );
@@ -431,8 +428,7 @@ impl Movies {
     fn thumbnails(&self) -> impl Iterator<Item = &Thumbnail> {
         let mut temp = self
             .thumbnails
-            .iter()
-            .map(|(_, thumnail)| thumnail)
+            .values()
             .filter(|thumbnail| filter(&thumbnail.video, self.filter))
             .collect::<Vec<_>>();
 
@@ -472,9 +468,7 @@ impl Movies {
     }
 
     pub fn view(&self) -> Element<'_, MoviesMessage> {
-        let content = if self.grid { self.grid() } else { self.list() };
-
-        content.into()
+        if self.grid { self.grid() } else { self.list() }
     }
 
     fn is_animating(&self) -> bool {
