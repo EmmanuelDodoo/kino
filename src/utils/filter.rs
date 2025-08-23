@@ -1,3 +1,4 @@
+use crate::video::{Video, VideoId};
 use std::fmt::{self, Display};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -299,5 +300,25 @@ impl Filter {
         self.comments = None;
         self.release = None;
         self.duration = None;
+    }
+
+    pub fn filter(&self, video: &Video) -> bool {
+        let progress = self.progress.compare(video.progress);
+        let rating = self.rating.compare(video.rating);
+        let comments = self
+            .comments
+            .map(|comments| comments.compare(video.comments))
+            .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
+        let release = self
+            .release
+            .map(|release| release.compare(video.release))
+            .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
+        let duration = self
+            .duration
+            .map(|duration| duration.compare(video.duration))
+            .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
+
+        self.mode
+            .compare_many(&[progress, rating, comments, release, duration])
     }
 }

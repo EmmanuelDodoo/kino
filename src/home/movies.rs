@@ -143,7 +143,15 @@ impl Thumbnail {
             .align_y(Vertical::Center)
             .width(Length::Fill);
 
-        let details = column!(title, ratings, synapsis,vertical_space(), bottom).spacing(8);
+        let details = column!(
+            title,
+            ratings,
+            vertical_space(),
+            synapsis,
+            vertical_space(),
+            bottom
+        )
+        .spacing(8);
 
         let details = mouse_area(
             container(details)
@@ -293,48 +301,6 @@ impl Deref for Thumbnail {
     fn deref(&self) -> &Self::Target {
         &self.video
     }
-}
-
-fn sort(x: &Video, y: &Video, sorts: &[SortKind]) -> std::cmp::Ordering {
-    for kind in sorts.iter() {
-        let ord = match kind {
-            SortKind::Name => x.name.cmp(&y.name),
-            SortKind::Duration => x.duration.cmp(&y.duration),
-            SortKind::Added => x.added.cmp(&y.added),
-            SortKind::Rating => x.rating.cmp(&y.rating),
-            SortKind::Recent => x.recent.cmp(&y.recent),
-            SortKind::Release => x.release.cmp(&y.release),
-            SortKind::Progress => x.progress.total_cmp(&y.progress),
-            SortKind::Comments => x.comments.cmp(&y.comments),
-        };
-
-        if !matches!(ord, std::cmp::Ordering::Equal) {
-            return ord;
-        }
-    }
-
-    std::cmp::Ordering::Equal
-}
-
-fn filter(video: &Video, filter: Filter) -> bool {
-    let progress = filter.progress.compare(video.progress);
-    let rating = filter.rating.compare(video.rating);
-    let comments = filter
-        .comments
-        .map(|comments| comments.compare(video.comments))
-        .unwrap_or_else(|| matches!(filter.mode, FilterMode::And));
-    let release = filter
-        .release
-        .map(|release| release.compare(video.release))
-        .unwrap_or_else(|| matches!(filter.mode, FilterMode::And));
-    let duration = filter
-        .duration
-        .map(|duration| duration.compare(video.duration))
-        .unwrap_or_else(|| matches!(filter.mode, FilterMode::And));
-
-    filter
-        .mode
-        .compare_many(&[progress, rating, comments, release, duration])
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -561,7 +527,7 @@ impl Preview {
 
         let content = row!(img, content).spacing(20.0);
 
-        container(column!(content,  play))
+        container(column!(content, play))
             .padding([20, 28])
             .max_height(465.0)
             .align_x(Horizontal::Center)
@@ -758,10 +724,10 @@ impl Movies {
         let mut temp = self
             .thumbnails
             .values()
-            .filter(|thumbnail| filter(&thumbnail.video, self.filter))
+            .filter(|thumbnail| self.filter.filter(&thumbnail.video))
             .collect::<Vec<_>>();
 
-        temp.sort_by(|x, y| sort(&x.video, &y.video, &self.sort.kinds));
+        temp.sort_by(|x, y| Sort::sort(&x.video, &y.video, &self.sort.kinds));
 
         if self.sort.reverse {
             temp.reverse();
@@ -832,9 +798,9 @@ impl Movies {
         match self.preview_back.take() {
             Some(preview) => {
                 self.preview = Some(preview);
-                false
+                true
             }
-            None => true,
+            None => false,
         }
     }
 

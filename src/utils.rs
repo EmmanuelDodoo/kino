@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::*;
 use crate::home::HomeMessage;
+use crate::video::{Video, VideoId};
 pub mod icons;
 pub use icons::*;
 pub mod typo;
@@ -360,6 +361,27 @@ impl Sort {
     pub fn clear(&mut self) {
         self.reverse = false;
         self.kinds.clear();
+    }
+
+    pub fn sort(x: &Video, y: &Video, sorts: &[SortKind]) -> std::cmp::Ordering {
+        for kind in sorts.iter() {
+            let ord = match kind {
+                SortKind::Name => x.name.cmp(&y.name),
+                SortKind::Duration => x.duration.cmp(&y.duration),
+                SortKind::Added => x.added.cmp(&y.added),
+                SortKind::Rating => x.rating.cmp(&y.rating),
+                SortKind::Recent => x.recent.cmp(&y.recent),
+                SortKind::Release => x.release.cmp(&y.release),
+                SortKind::Progress => x.progress.total_cmp(&y.progress),
+                SortKind::Comments => x.comments.cmp(&y.comments),
+            };
+
+            if !matches!(ord, std::cmp::Ordering::Equal) {
+                return ord;
+            }
+        }
+
+        std::cmp::Ordering::Equal
     }
 }
 
