@@ -12,9 +12,9 @@ use iced::{
     color, font,
     time::Instant,
     widget::{
-        button, center, column, container, float, grid, horizontal_rule, horizontal_space, image,
-        mouse_area, pick_list, row, scrollable, slider, stack, text, text_input, vertical_rule,
-        vertical_space,
+        bottom, bottom_center, button, center, center_x, center_y, column, container, float, grid,
+        horizontal_rule, horizontal_space, image, mouse_area, pick_list, row, scrollable, slider,
+        stack, text, text_input, vertical_rule, vertical_space,
     },
     window,
 };
@@ -63,6 +63,7 @@ fn main() -> iced::Result {
         home::Home::subscription,
         home::Home::view,
     )
+    .window_size(Size::new(1200.0, 750.0))
     .run()
 
     // iced::application::timed(
@@ -72,49 +73,4 @@ fn main() -> iced::Result {
     //     Movies::view,
     // )
     // .run()
-
-    // iced::application::timed(
-    //     Playground::new,
-    //     Playground::update,
-    //     Playground::subscription,
-    //     Playground::view,
-    // )
-    // .run()
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-    Animate,
-    None,
-}
-
-struct Playground {
-    now: Instant,
-}
-
-impl Playground {
-    fn new() -> Self {
-        Playground {
-            now: Instant::now(),
-        }
-    }
-
-    fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
-        self.now = now;
-
-        match message {
-            Message::None => Task::none(),
-            Message::Animate => Task::none(),
-        }
-    }
-
-    fn subscription(&self) -> Subscription<Message> {
-        Subscription::none()
-    }
-
-    fn view(&self) -> Element<'_, Message> {
-        let content = center("Work in progress");
-
-        content.into()
-    }
 }

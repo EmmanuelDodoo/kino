@@ -76,6 +76,13 @@ impl Page {
         }
     }
 
+    pub fn show_tools(&self) -> bool {
+        match self {
+            Self::Movies(movies) => movies.show_tools(),
+            _ => todo!()
+        }
+    }
+
     /// Returns true if the collection can go to a previous page
     pub fn can_back(&self) -> bool {
         match self {
@@ -96,7 +103,7 @@ impl Page {
     /// Returning `false` causes the entire collection to be navigated past.
     pub fn back(&mut self) -> bool {
         match self {
-            Self::Movies(_) => false,
+            Self::Movies(movies) => movies.back(),
             _ => todo!(),
         }
     }
@@ -105,7 +112,7 @@ impl Page {
     /// Returning `false` causes the entire collection to be navigated past.
     pub fn forward(&mut self) -> bool {
         match self {
-            Self::Movies(_) => false,
+            Self::Movies(movies) => movies.forward(),
             _ => todo!(),
         }
     }

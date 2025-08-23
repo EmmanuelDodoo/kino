@@ -69,7 +69,7 @@ pub const MOVIE: char = '\u{e83f}';
 pub const SETTINGS: char = '\u{e840}';
 
 pub const STAR: char = '\u{e809}';
-pub const UNSTAR: char = '\u{e80a}';
+pub const UNSTAR: char = '\u{e841}';
 
 pub const PROGRESS_10: char = '\u{e803}';
 pub const PROGRESS_20: char = '\u{e801}';
@@ -78,6 +78,13 @@ pub const PROGRESS_60: char = '\u{e804}';
 pub const PROGRESS_80: char = '\u{e802}';
 pub const PROGRESS_90: char = '\u{e805}';
 pub const PROGRESS_100: char = '\u{f111}';
+
+pub const HOURGLASS: char = '\u{e834}';
+pub const ALARM: char = '\u{e835}';
+pub const CLOCK: char = '\u{e836}';
+pub const CALENDAR: char = '\u{e837}';
+pub const NUMBER: char = '\u{e838}';
+pub const EYE: char = '\u{e833}';
 
 pub fn load_fonts() -> iced::Task<Result<(), font::Error>> {
     font::load(ICONS)

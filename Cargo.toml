@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-iced = { git = "https://github.com/iced-rs/iced", rev = "9d56b48", features = ["image", "tokio", "advanced", "wgpu"] }
+iced = { git = "https://github.com/iced-rs/iced", rev = "9d56b48", features = ["image", "hot", "tokio", "advanced", "wgpu"] }
 # iced_video_player = { git = "https://github.com/EmmanuelDodoo/iced_video_player" }
 iced_video_player = { path = "../ivp_fork" }
 url = "2"
@@ -13,3 +13,4 @@ gstreamer-app = "0.23" # appsink
 gstreamer-base = "0.23" # basesrc
 glib = "0.20" # gobject traits and error type
 tokio = "1.47"
+chrono = { version = "0.4", features = ["std", "now"]}

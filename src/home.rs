@@ -799,7 +799,7 @@ impl Home {
 
     fn content_area(&self) -> Element<'_, HomeMessage> {
         let title = self.current_page().map(Page::name).unwrap_or("Home");
-        let title = text(title).size(H5);
+        let title = container(text(title).size(H6)).max_width(400.0);
 
         let search = {
             let size = H7;
@@ -814,6 +814,7 @@ impl Home {
             text_input("Search", &self.search)
                 .icon(icon)
                 .size(size)
+                .width(175.0)
                 .on_input(HomeMessage::Search)
         };
 
@@ -834,9 +835,18 @@ impl Home {
 
         let content_area = container(self.inner()).style(container_style);
 
-        let content = column!(top, self.toolbar(), content_area)
-            .height(Length::Fill)
-            .width(Length::Fill);
+        let show_tools = self
+            .current_page()
+            .map(|page| page.show_tools())
+            .unwrap_or(true);
+
+        let content = column!(
+            top,
+            if show_tools { self.toolbar() } else { empty() },
+            content_area
+        )
+        .height(Length::Fill)
+        .width(Length::Fill);
 
         content.into()
     }
@@ -896,6 +906,7 @@ fn icon_button<'a>(
                 let background = theme.extended_palette().background.weakest;
                 Style {
                     background: Some(background.color.into()),
+                    text_color: background.text,
                     ..default
                 }
             }

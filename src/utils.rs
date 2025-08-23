@@ -350,7 +350,7 @@ impl ViewType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Sort {
     pub kinds: Vec<SortKind>,
     pub reverse: bool,
@@ -360,6 +360,15 @@ impl Sort {
     pub fn clear(&mut self) {
         self.reverse = false;
         self.kinds.clear();
+    }
+}
+
+impl Default for Sort {
+    fn default() -> Self {
+        Sort {
+            kinds: vec![SortKind::Recent],
+            reverse: false,
+        }
     }
 }
 
