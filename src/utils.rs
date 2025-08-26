@@ -10,13 +10,15 @@ use std::path::{Path, PathBuf};
 
 use crate::error::*;
 use crate::home::HomeMessage;
-use crate::video::{Video, VideoId};
+use crate::media::{Movie, MovieId};
 pub mod icons;
 pub use icons::*;
 pub mod typo;
 pub use typo::*;
 pub mod filter;
 pub use filter::*;
+pub mod sort;
+pub use sort::*;
 
 /// Returns an empty [`iced::Element`].
 pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
@@ -336,141 +338,17 @@ pub fn rand_u32() -> u32 {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub enum ViewType {
+pub enum Layout {
     #[default]
     Grid,
     List,
 }
 
-impl ViewType {
+impl Layout {
     pub fn icon(&self) -> char {
         match self {
             Self::Grid => icons::LIST,
             Self::List => icons::GRID,
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Sort {
-    pub kinds: Vec<SortKind>,
-    pub reverse: bool,
-}
-
-impl Sort {
-    pub fn clear(&mut self) {
-        self.reverse = false;
-        self.kinds.clear();
-    }
-
-    pub fn sort(x: &Video, y: &Video, sorts: &[SortKind]) -> std::cmp::Ordering {
-        for kind in sorts.iter() {
-            let ord = match kind {
-                SortKind::Name => x.name.cmp(&y.name),
-                SortKind::Duration => x.duration.cmp(&y.duration),
-                SortKind::Added => x.added.cmp(&y.added),
-                SortKind::Rating => x.rating.cmp(&y.rating),
-                SortKind::Recent => x.recent.cmp(&y.recent),
-                SortKind::Release => x.release.cmp(&y.release),
-                SortKind::Progress => x.progress.total_cmp(&y.progress),
-                SortKind::Comments => x.comments.cmp(&y.comments),
-            };
-
-            if !matches!(ord, std::cmp::Ordering::Equal) {
-                return ord;
-            }
-        }
-
-        std::cmp::Ordering::Equal
-    }
-}
-
-impl Default for Sort {
-    fn default() -> Self {
-        Sort {
-            kinds: vec![SortKind::Recent],
-            reverse: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SortKind {
-    Name,
-    Duration,
-    Progress,
-    Rating,
-    // Tags,
-    Release,
-    Comments,
-    Added,
-    Recent,
-}
-
-impl SortKind {
-    pub const ALL: [SortKind; 8] = [
-        Self::Name,
-        Self::Duration,
-        Self::Progress,
-        Self::Rating,
-        // Self::Tags,
-        Self::Release,
-        Self::Comments,
-        Self::Added,
-        Self::Recent,
-    ];
-
-    pub fn view(&self, order: Option<usize>) -> iced::Element<'_, HomeMessage> {
-        use iced::{
-            Border,
-            widget::{button, text},
-        };
-
-        let enable = order.is_none();
-        let msg = if enable {
-            HomeMessage::AddSort(*self)
-        } else {
-            HomeMessage::RemoveSort(*self)
-        };
-
-        let order = order
-            .map(|order| (order + 1).to_string())
-            .unwrap_or_default();
-        let content = text(format!("{self} {}", order)).size(H7);
-        // let content = row!(content).spacing(2.0).align_y(Vertical::Center);
-
-        button(content)
-            .on_press(msg)
-            .style(move |theme, status| {
-                let default = if enable {
-                    button::background(theme, status)
-                } else {
-                    button::secondary(theme, status)
-                };
-                let border = Border::default().width(2.0).rounded(5.0);
-
-                button::Style { border, ..default }
-            })
-            .into()
-    }
-}
-
-impl std::fmt::Display for SortKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Name => "Name",
-                Self::Duration => "Duration",
-                Self::Progress => "Progress",
-                Self::Rating => "Rating",
-                // Self::Tags => "Tags",
-                Self::Release => "Release",
-                Self::Comments => "Comments",
-                Self::Added => "Date Added",
-                Self::Recent => "Recent",
-            }
-        )
     }
 }

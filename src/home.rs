@@ -15,15 +15,18 @@ use iced::{
 
 mod movies;
 mod pages;
+mod shared;
+mod shows;
 
 use movies::{Movies, MoviesMessage};
-use pages::{Page, PageKind, PageUpdate};
+pub use pages::{Page, PageKind, PageUpdate};
+use shows::{TvShows, TvShowsMessage};
 use utils::empty;
 use utils::filter::*;
 use utils::icons;
 use utils::typo;
 use utils::typo::*;
-use utils::{Sort, SortKind, ViewType};
+use utils::{Layout, Sort, SortKind};
 
 #[derive(Debug, Clone)]
 pub enum FilterMessage {
@@ -52,8 +55,9 @@ pub enum HomeMessage {
     ToggleFilter,
     Filter(FilterMessage),
     Movies(MoviesMessage),
+    Shows(TvShowsMessage),
     Settings,
-    Randomize,
+    Random,
     Back,
     Forward,
     ToggleView,
@@ -68,7 +72,7 @@ pub struct Home {
     forward: Vec<Page>,
     backward: Vec<Page>,
     search: String,
-    view: ViewType,
+    layout: Layout,
     sort: Sort,
     now: Instant,
     show_sorts: bool,
@@ -81,17 +85,17 @@ impl Home {
         let load_font = load_fonts().map(HomeMessage::FontLoad);
 
         (
-            Self::new(ViewType::default(), FilterMode::default()),
+            Self::new(Layout::default(), FilterMode::default()),
             load_font,
         )
     }
 
-    fn new(view: ViewType, filter_mode: FilterMode) -> Self {
+    fn new(view: Layout, filter_mode: FilterMode) -> Self {
         Self {
             forward: vec![],
             backward: vec![],
             search: String::default(),
-            view,
+            layout: view,
             sort: Sort::default(),
             show_sorts: false,
             show_filters: false,
@@ -126,12 +130,23 @@ impl Home {
                         let (movies, task) = Movies::boot(
                             self.sort.clone(),
                             self.filters,
-                            matches!(self.view, ViewType::Grid),
+                            matches!(self.layout, Layout::Grid),
                         );
                         self.forward.clear();
                         self.backward.push(Page::Movies(movies));
 
                         task.map(HomeMessage::Movies)
+                    }
+                    PageKind::Shows => {
+                        let (shows, tasks) = TvShows::boot(
+                            self.sort.clone(),
+                            self.filters,
+                            matches!(self.layout, Layout::Grid),
+                        );
+                        self.forward.clear();
+                        self.backward.push(Page::Shows(Box::new(shows)));
+
+                        tasks.map(HomeMessage::Shows)
                     }
                     _ => {
                         todo!()
@@ -148,6 +163,13 @@ impl Home {
                 };
 
                 page.movies_update(message, now).map(HomeMessage::Movies)
+            }
+            HomeMessage::Shows(message) => {
+                let Some(page) = self.current_page_mut() else {
+                    return Task::none();
+                };
+
+                page.shows_update(message, now).map(HomeMessage::Shows)
             }
             HomeMessage::Back => {
                 if self
@@ -183,13 +205,13 @@ impl Home {
                 Task::none()
             }
             HomeMessage::ToggleView => {
-                if self.view == ViewType::Grid {
-                    self.view = ViewType::List
+                if self.layout == Layout::Grid {
+                    self.layout = Layout::List
                 } else {
-                    self.view = ViewType::Grid
+                    self.layout = Layout::Grid
                 }
 
-                let view = self.view;
+                let view = self.layout;
 
                 if let Some(page) = self.current_page_mut() {
                     page.page_update(PageUpdate::Layout(view), now);
@@ -347,7 +369,7 @@ impl Home {
                             return Task::none();
                         }
 
-                        let Ok(year) = year.parse::<u16>() else {
+                        let Ok(year) = year.parse::<i32>() else {
                             todo!("Error handling for Home")
                         };
 
@@ -378,7 +400,13 @@ impl Home {
                 Task::none()
             }
             HomeMessage::NewCollection => Task::none(),
-            HomeMessage::Randomize => Task::none(),
+            HomeMessage::Random => {
+                if let Some(page) = self.current_page_mut() {
+                    page.rand();
+                }
+
+                Task::none()
+            }
         }
     }
 
@@ -755,7 +783,7 @@ impl Home {
                 text("Sort by: ").size(H7),
                 row(SortKind::ALL.iter().map(|sort| {
                     let order = self.sort.kinds.iter().position(|selected| sort == selected);
-                    sort.view(order)
+                    sort.view(HomeMessage::AddSort, HomeMessage::RemoveSort, order)
                 }))
                 .spacing(5.0)
                 .width(Length::Fill)
@@ -768,8 +796,8 @@ impl Home {
         let left = row!(filter, sort).align_y(Vertical::Center).spacing(10.0);
 
         let right = row!(
-            icons::sized_button(icons::RAND, size).on_press(HomeMessage::Randomize),
-            icons::sized_button(self.view.icon(), size).on_press(HomeMessage::ToggleView),
+            icons::sized_button(icons::RAND, size).on_press(HomeMessage::Random),
+            icons::sized_button(self.layout.icon(), size).on_press(HomeMessage::ToggleView),
         )
         .align_y(Vertical::Center)
         .spacing(5.0);
@@ -798,7 +826,10 @@ impl Home {
     }
 
     fn content_area(&self) -> Element<'_, HomeMessage> {
-        let title = self.current_page().map(Page::name).unwrap_or("Home");
+        let title = self
+            .current_page()
+            .map(Page::name)
+            .unwrap_or("Home".to_owned());
         let title = container(text(title).size(H6)).max_width(400.0);
 
         let search = {
@@ -833,7 +864,10 @@ impl Home {
         )
         .style(container_style);
 
-        let content_area = container(self.inner()).style(container_style);
+        let content_area = container(self.inner())
+            .style(container_style)
+            .height(Length::Fill)
+            .width(Length::Fill);
 
         let show_tools = self
             .current_page()
