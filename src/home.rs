@@ -1,4 +1,5 @@
-use crate::utils::{self, load_fonts};
+use crate::utils::{self, icons::*, load_fonts};
+use crate::widgets::menu::{Position, menu};
 use iced::{
     Element, Length, Padding, Subscription, Task, Theme,
     alignment::Vertical,
@@ -15,15 +16,18 @@ use iced::{
 
 mod movies;
 mod pages;
+mod shared;
+mod shows;
 
 use movies::{Movies, MoviesMessage};
-use pages::{Page, PageKind, PageUpdate};
+pub use pages::{Page, PageKind, PageUpdate};
+use shows::{TvShows, TvShowsMessage};
 use utils::empty;
 use utils::filter::*;
 use utils::icons;
 use utils::typo;
 use utils::typo::*;
-use utils::{Sort, SortKind, ViewType};
+use utils::{Layout, Sort, SortKind};
 
 #[derive(Debug, Clone)]
 pub enum FilterMessage {
@@ -42,18 +46,26 @@ pub enum FilterMessage {
     DurationComp,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum SortMessage {
+    AddSort(SortKind),
+    RemoveSort(SortKind),
+    Clear,
+    ToggleReverse,
+}
+
 #[derive(Debug, Clone)]
 pub enum HomeMessage {
     FontLoad(Result<(), font::Error>),
     Search(String),
-    AddSort(SortKind),
-    RemoveSort(SortKind),
     ToggleSort,
     ToggleFilter,
     Filter(FilterMessage),
+    Sort(SortMessage),
     Movies(MoviesMessage),
+    Shows(TvShowsMessage),
     Settings,
-    Randomize,
+    Random,
     Back,
     Forward,
     ToggleView,
@@ -68,7 +80,7 @@ pub struct Home {
     forward: Vec<Page>,
     backward: Vec<Page>,
     search: String,
-    view: ViewType,
+    layout: Layout,
     sort: Sort,
     now: Instant,
     show_sorts: bool,
@@ -81,17 +93,17 @@ impl Home {
         let load_font = load_fonts().map(HomeMessage::FontLoad);
 
         (
-            Self::new(ViewType::default(), FilterMode::default()),
+            Self::new(Layout::default(), FilterMode::default()),
             load_font,
         )
     }
 
-    fn new(view: ViewType, filter_mode: FilterMode) -> Self {
+    fn new(view: Layout, filter_mode: FilterMode) -> Self {
         Self {
             forward: vec![],
             backward: vec![],
             search: String::default(),
-            view,
+            layout: view,
             sort: Sort::default(),
             show_sorts: false,
             show_filters: false,
@@ -126,12 +138,23 @@ impl Home {
                         let (movies, task) = Movies::boot(
                             self.sort.clone(),
                             self.filters,
-                            matches!(self.view, ViewType::Grid),
+                            matches!(self.layout, Layout::Grid),
                         );
                         self.forward.clear();
                         self.backward.push(Page::Movies(movies));
 
                         task.map(HomeMessage::Movies)
+                    }
+                    PageKind::Shows => {
+                        let (shows, tasks) = TvShows::boot(
+                            self.sort.clone(),
+                            self.filters,
+                            matches!(self.layout, Layout::Grid),
+                        );
+                        self.forward.clear();
+                        self.backward.push(Page::Shows(Box::new(shows)));
+
+                        tasks.map(HomeMessage::Shows)
                     }
                     _ => {
                         todo!()
@@ -148,6 +171,13 @@ impl Home {
                 };
 
                 page.movies_update(message, now).map(HomeMessage::Movies)
+            }
+            HomeMessage::Shows(message) => {
+                let Some(page) = self.current_page_mut() else {
+                    return Task::none();
+                };
+
+                page.shows_update(message, now).map(HomeMessage::Shows)
             }
             HomeMessage::Back => {
                 if self
@@ -183,13 +213,13 @@ impl Home {
                 Task::none()
             }
             HomeMessage::ToggleView => {
-                if self.view == ViewType::Grid {
-                    self.view = ViewType::List
+                if self.layout == Layout::Grid {
+                    self.layout = Layout::List
                 } else {
-                    self.view = ViewType::Grid
+                    self.layout = Layout::Grid
                 }
 
-                let view = self.view;
+                let view = self.layout;
 
                 if let Some(page) = self.current_page_mut() {
                     page.page_update(PageUpdate::Layout(view), now);
@@ -197,21 +227,18 @@ impl Home {
 
                 Task::none()
             }
-            HomeMessage::AddSort(sort) => {
-                self.sort.kinds.push(sort);
-                let sort = self.sort.clone();
+            HomeMessage::Sort(ssg) => {
+                match ssg {
+                    SortMessage::AddSort(kind) => self.sort.push(kind),
+                    SortMessage::RemoveSort(kind) => self.sort.remove(kind),
+                    SortMessage::Clear => self.sort.clear(),
+                    SortMessage::ToggleReverse => self.sort.reverse(),
+                }
+
+                let update = PageUpdate::Sort(self.sort.clone());
 
                 if let Some(page) = self.current_page_mut() {
-                    page.page_update(PageUpdate::Sort(sort), now);
-                };
-                Task::none()
-            }
-            HomeMessage::RemoveSort(remove) => {
-                self.sort.kinds.retain(|sort| *sort != remove);
-                let sort = self.sort.clone();
-
-                if let Some(page) = self.current_page_mut() {
-                    page.page_update(PageUpdate::Sort(sort), now);
+                    page.page_update(update, now);
                 };
 
                 Task::none()
@@ -347,7 +374,7 @@ impl Home {
                             return Task::none();
                         }
 
-                        let Ok(year) = year.parse::<u16>() else {
+                        let Ok(year) = year.parse::<i32>() else {
                             todo!("Error handling for Home")
                         };
 
@@ -378,7 +405,13 @@ impl Home {
                 Task::none()
             }
             HomeMessage::NewCollection => Task::none(),
-            HomeMessage::Randomize => Task::none(),
+            HomeMessage::Random => {
+                if let Some(page) = self.current_page_mut() {
+                    page.rand();
+                }
+
+                Task::none()
+            }
         }
     }
 
@@ -668,7 +701,7 @@ impl Home {
             row!(text, button).spacing(5.0).align_y(Vertical::Center)
         };
 
-        let clear = button(text("Clear filters").size(size))
+        let clear = button(text("Clear").size(size))
             .padding(padding)
             .style(button::text)
             .on_press(HomeMessage::Filter(FilterMessage::Clear));
@@ -695,6 +728,68 @@ impl Home {
         let content = column!(text("Filters").size(size), content).spacing(5.0);
 
         content.into()
+    }
+
+    fn sort_view(&self) -> Element<'_, HomeMessage> {
+        let size = H7;
+        let vertical_rule = || container(vertical_rule(2.0)).height(20.0);
+
+        let clear = button(text("Clear").size(size))
+            .padding([2, 5])
+            .style(button::text)
+            .on_press(HomeMessage::Sort(SortMessage::Clear));
+
+        let reverse = button(text("Reverse").size(size))
+            .padding([2, 5])
+            .style(button::text)
+            .on_press(HomeMessage::Sort(SortMessage::ToggleReverse));
+
+        let base = row!(text("More").size(size), icon(ELLIPSIS_VER).size(size))
+            .spacing(2.0)
+            .align_y(Vertical::Center);
+
+        let hidden = {
+            container(
+                column(SortKind::HIDDEN.iter().map(|kind| {
+                    let order = self.sort.iter().position(|selected| kind == selected);
+
+                    kind.view(
+                        |kind| HomeMessage::Sort(SortMessage::AddSort(kind)),
+                        |kind| HomeMessage::Sort(SortMessage::RemoveSort(kind)),
+                        order,
+                    )
+                }))
+                .spacing(8),
+            )
+            .style(container::bordered_box)
+            .padding([3, 6])
+        };
+
+        let more = menu(base, hidden)
+            .auto_close(false)
+            .position(Position::Right)
+            .on_toggle(|_| HomeMessage::None);
+
+        row!(
+            text("Sort by: ").size(size),
+            row(SortKind::VISIBLE.iter().map(|sort| {
+                let order = self.sort.iter().position(|selected| sort == selected);
+                sort.view(
+                    |kind| HomeMessage::Sort(SortMessage::AddSort(kind)),
+                    |kind| HomeMessage::Sort(SortMessage::RemoveSort(kind)),
+                    order,
+                )
+            }))
+            .spacing(5.0),
+            vertical_rule(),
+            more,
+            vertical_rule(),
+            reverse,
+            clear,
+        )
+        .align_y(Vertical::Center)
+        .spacing(10.0)
+        .into()
     }
 
     fn toolbar(&self) -> Element<'_, HomeMessage> {
@@ -733,7 +828,7 @@ impl Home {
             let content = row!(text, icon).spacing(2.0).align_y(Vertical::Center);
 
             button(content)
-                .style(if self.sort.kinds.is_empty() {
+                .style(if self.sort.is_empty() {
                     button::subtle
                 } else {
                     button::background
@@ -751,25 +846,14 @@ impl Home {
         let curr_sorts: Element<'_, HomeMessage> = if !self.show_sorts {
             empty()
         } else {
-            row!(
-                text("Sort by: ").size(H7),
-                row(SortKind::ALL.iter().map(|sort| {
-                    let order = self.sort.kinds.iter().position(|selected| sort == selected);
-                    sort.view(order)
-                }))
-                .spacing(5.0)
-                .width(Length::Fill)
-            )
-            .align_y(Vertical::Center)
-            .spacing(10.0)
-            .into()
+            self.sort_view()
         };
 
         let left = row!(filter, sort).align_y(Vertical::Center).spacing(10.0);
 
         let right = row!(
-            icons::sized_button(icons::RAND, size).on_press(HomeMessage::Randomize),
-            icons::sized_button(self.view.icon(), size).on_press(HomeMessage::ToggleView),
+            icons::sized_button(icons::RAND, size).on_press(HomeMessage::Random),
+            icons::sized_button(self.layout.icon(), size).on_press(HomeMessage::ToggleView),
         )
         .align_y(Vertical::Center)
         .spacing(5.0);
@@ -781,6 +865,7 @@ impl Home {
         } else {
             empty()
         };
+
         let filters_rule = if self.show_filters {
             horizontal_rule(2.0).into()
         } else {
@@ -798,7 +883,10 @@ impl Home {
     }
 
     fn content_area(&self) -> Element<'_, HomeMessage> {
-        let title = self.current_page().map(Page::name).unwrap_or("Home");
+        let title = self
+            .current_page()
+            .map(Page::name)
+            .unwrap_or("Home".to_owned());
         let title = container(text(title).size(H6)).max_width(400.0);
 
         let search = {
@@ -833,7 +921,10 @@ impl Home {
         )
         .style(container_style);
 
-        let content_area = container(self.inner()).style(container_style);
+        let content_area = container(self.inner())
+            .style(container_style)
+            .height(Length::Fill)
+            .width(Length::Fill);
 
         let show_tools = self
             .current_page()

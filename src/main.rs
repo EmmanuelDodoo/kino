@@ -8,23 +8,24 @@ use iced::{
     },
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
-    border::{Border, Radius},
-    color, font,
+    border::{self, Border, Radius},
+    color, font, padding,
     time::Instant,
     widget::{
-        bottom, bottom_center, button, center, center_x, center_y, column, container, float, grid,
-        horizontal_rule, horizontal_space, image, mouse_area, pick_list, row, scrollable, slider,
-        stack, text, text_input, vertical_rule, vertical_space,
+        Space, bottom, bottom_center, button, center, center_x, center_y, column, container, float,
+        grid, horizontal_rule, horizontal_space, image, mouse_area, pick_list, row, scrollable,
+        slider, stack, text, text_input, vertical_rule, vertical_space,
     },
     window,
 };
+use std::{collections::HashMap, ops::Deref};
 
 mod app;
 mod error;
 mod home;
+mod media;
 mod player;
 pub mod utils;
-mod video;
 mod widgets;
 
 use player::{Player, PlayerMessage};
@@ -33,7 +34,7 @@ use utils::filter::*;
 use utils::icons::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Sort, SortKind, empty};
+use utils::{Layout, Sort, SortKind, empty};
 use widgets::*;
 
 fn _test_main() {
@@ -52,25 +53,20 @@ fn _test_main() {
 }
 
 // fn test_main() -> iced::Result {
+#[rustfmt::skip]
 fn main() -> iced::Result {
     // iced::run(app::App::update, app::App::view)
     // iced::application(Player::boot, Player::update, Player::view)
     //     .subscription(Player::subscriptions)
     //     .run()
+
     iced::application::timed(
         home::Home::boot,
         home::Home::update,
         home::Home::subscription,
         home::Home::view,
     )
+    
     .window_size(Size::new(1200.0, 750.0))
     .run()
-
-    // iced::application::timed(
-    //     Movies::boot,
-    //     Movies::update,
-    //     Movies::subscription,
-    //     Movies::view,
-    // )
-    // .run()
 }

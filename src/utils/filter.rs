@@ -1,4 +1,6 @@
-use crate::video::{Video, VideoId};
+use chrono::Datelike;
+
+use crate::media::{Media, Movie, MovieId};
 use std::fmt::{self, Display};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -241,12 +243,12 @@ impl Comments {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Release {
-    pub year: u16,
+    pub year: i32,
     pub comp: Comp,
 }
 
 impl Release {
-    pub fn compare(&self, value: u16) -> bool {
+    pub fn compare(&self, value: i32) -> bool {
         self.comp.compare(value, self.year)
     }
 }
@@ -302,20 +304,20 @@ impl Filter {
         self.duration = None;
     }
 
-    pub fn filter(&self, video: &Video) -> bool {
-        let progress = self.progress.compare(video.progress);
-        let rating = self.rating.compare(video.rating);
+    pub fn filter<T: Media>(&self, media: T) -> bool {
+        let progress = self.progress.compare(media.progress());
+        let rating = self.rating.compare(media.rating());
         let comments = self
             .comments
-            .map(|comments| comments.compare(video.comments))
+            .map(|comments| comments.compare(media.comments()))
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
         let release = self
             .release
-            .map(|release| release.compare(video.release))
+            .map(|release| release.compare(media.release().year()))
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
         let duration = self
             .duration
-            .map(|duration| duration.compare(video.duration))
+            .map(|duration| duration.compare(media.duration()))
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
 
         self.mode

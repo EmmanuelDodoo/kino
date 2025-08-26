@@ -6,7 +6,6 @@ use iced::{
 
 use super::typo::*;
 
-static LUCIDE_BYTES: &[u8] = include_bytes!("../../assets/lucide.ttf");
 static ICONS: &[u8] = include_bytes!("../../assets/kino-icons.ttf");
 pub const NAME: &str = "kino-icons";
 pub const FONT: Font = Font::with_name(NAME);
@@ -85,6 +84,9 @@ pub const CLOCK: char = '\u{e836}';
 pub const CALENDAR: char = '\u{e837}';
 pub const NUMBER: char = '\u{e838}';
 pub const EYE: char = '\u{e833}';
+
+pub const ELLIPSIS_VER: char = '\u{e800}';
+pub const ELLIPSIS_HOR: char = '\u{e839}';
 
 pub fn load_fonts() -> iced::Task<Result<(), font::Error>> {
     font::load(ICONS)

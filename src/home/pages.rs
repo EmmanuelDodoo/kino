@@ -6,11 +6,12 @@ use iced::{
 
 use super::HomeMessage;
 use super::movies::{Movies, MoviesMessage};
-use crate::utils::{Filter, Sort, ViewType};
+use super::shows::{TvShows, TvShowsMessage};
+use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PageUpdate {
-    Layout(ViewType),
+    Layout(Layout),
     Sort(Sort),
     Filters(Filter),
 }
@@ -26,7 +27,7 @@ pub enum PageKind {
 
 #[derive(Debug, Clone)]
 pub enum Page {
-    Shows(()),
+    Shows(Box<TvShows>),
     Movies(Movies),
     Comments(()),
     Search(()),
@@ -69,9 +70,17 @@ impl Page {
         }
     }
 
-    pub fn name(&self) -> &str {
+    pub fn shows_update(&mut self, message: TvShowsMessage, now: Instant) -> Task<TvShowsMessage> {
+        match self {
+            Self::Shows(shows) => shows.update(message, now),
+            _ => Task::none(),
+        }
+    }
+
+    pub fn name(&self) -> String {
         match self {
             Self::Movies(movies) => movies.name(),
+            Self::Shows(shows) => shows.name(),
             _ => todo!(),
         }
     }
@@ -79,7 +88,16 @@ impl Page {
     pub fn show_tools(&self) -> bool {
         match self {
             Self::Movies(movies) => movies.show_tools(),
-            _ => todo!()
+            Self::Shows(shows) => shows.show_tools(),
+            _ => todo!(),
+        }
+    }
+
+    pub fn rand(&mut self) {
+        match self {
+            Self::Movies(movies) => movies.rand(),
+            Self::Shows(shows) => shows.rand(),
+            _ => todo!(),
         }
     }
 
@@ -87,6 +105,7 @@ impl Page {
     pub fn can_back(&self) -> bool {
         match self {
             Self::Movies(movies) => movies.can_back(),
+            Self::Shows(shows) => shows.can_back(),
             _ => todo!(),
         }
     }
@@ -95,6 +114,7 @@ impl Page {
     pub fn can_forward(&self) -> bool {
         match self {
             Self::Movies(movies) => movies.can_forward(),
+            Self::Shows(shows) => shows.can_forward(),
             _ => todo!(),
         }
     }
@@ -104,6 +124,7 @@ impl Page {
     pub fn back(&mut self) -> bool {
         match self {
             Self::Movies(movies) => movies.back(),
+            Self::Shows(shows) => shows.back(),
             _ => todo!(),
         }
     }
@@ -113,6 +134,7 @@ impl Page {
     pub fn forward(&mut self) -> bool {
         match self {
             Self::Movies(movies) => movies.forward(),
+            Self::Shows(shows) => shows.forward(),
             _ => todo!(),
         }
     }
@@ -120,6 +142,7 @@ impl Page {
     pub fn page_update(&mut self, update: PageUpdate, now: Instant) {
         match self {
             Self::Movies(movies) => movies.page_update(update, now),
+            Self::Shows(shows) => shows.page_update(update, now),
             _ => todo!(),
         }
     }
@@ -127,16 +150,14 @@ impl Page {
     pub fn subscription(&self) -> Subscription<HomeMessage> {
         match self {
             Self::Movies(movies) => movies.subscription().map(HomeMessage::Movies),
+            Self::Shows(shows) => shows.subscription().map(HomeMessage::Shows),
             _ => todo!(),
         }
     }
 
     pub fn view(&self) -> Element<'_, HomeMessage> {
         match self {
-            Self::Shows(_) => center(text("Shows"))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
+            Self::Shows(shows) => shows.view().map(HomeMessage::Shows),
             Self::Movies(movies) => movies.view().map(HomeMessage::Movies),
             Self::Comments(_) => center(text("Comments"))
                 .width(Length::Fill)
