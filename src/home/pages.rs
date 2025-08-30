@@ -10,14 +10,15 @@ use super::shows::{TvShows, TvShowsMessage};
 use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum PageUpdate {
-    Layout(Layout),
-    Sort(Sort),
-    Filters(Filter),
+pub struct PageUpdate {
+    pub layout: Layout,
+    pub sort: Sort,
+    pub filters: Filter,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum PageKind {
+    Home,
     Shows,
     Movies,
     Comments,
@@ -101,6 +102,14 @@ impl Page {
         }
     }
 
+    pub fn refresh(&mut self) -> Task<HomeMessage> {
+        match self {
+            Self::Movies(movies) => movies.refresh().map(HomeMessage::Movies),
+            Self::Shows(shows) => shows.refresh().map(HomeMessage::Shows),
+            _ => todo!(),
+        }
+    }
+
     /// Returns true if the collection can go to a previous page
     pub fn can_back(&self) -> bool {
         match self {
@@ -120,8 +129,9 @@ impl Page {
     }
 
     /// Navigates to the previous page of the collection.
-    /// Returning `false` causes the entire collection to be navigated past.
-    pub fn back(&mut self) -> bool {
+    /// Returning `None` causes the entire collection to be navigated past.
+    pub fn back(&mut self, update: PageUpdate, now: Instant) -> Option<Task<()>> {
+        self.page_update(update, now);
         match self {
             Self::Movies(movies) => movies.back(),
             Self::Shows(shows) => shows.back(),
@@ -130,11 +140,21 @@ impl Page {
     }
 
     /// Navigates to the next page of the collection.
-    /// Returning `false` causes the entire collection to be navigated past.
-    pub fn forward(&mut self) -> bool {
+    /// Returning `None` causes the entire collection to be navigated past.
+    pub fn forward(&mut self, update: PageUpdate, now: Instant) -> Option<Task<()>> {
+        self.page_update(update, now);
+
         match self {
             Self::Movies(movies) => movies.forward(),
             Self::Shows(shows) => shows.forward(),
+            _ => todo!(),
+        }
+    }
+
+    pub fn update_scroll(&mut self) -> Task<()> {
+        match self {
+            Self::Movies(page) => page.update_scroll(),
+            Self::Shows(page) => page.update_scroll(),
             _ => todo!(),
         }
     }

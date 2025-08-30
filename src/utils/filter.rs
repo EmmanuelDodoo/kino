@@ -305,22 +305,29 @@ impl Filter {
     }
 
     pub fn filter<T: Media>(&self, media: T) -> bool {
-        let progress = self.progress.compare(media.progress());
-        let rating = self.rating.compare(media.rating());
-        let comments = self
-            .comments
+        // Compiler error when new field is added
+        let Filter {
+            progress,
+            rating,
+            comments,
+            release,
+            duration,
+            mode,
+        } = *self;
+
+        let progress = progress.compare(media.progress());
+        let rating = rating.compare(media.rating());
+        let comments = comments
             .map(|comments| comments.compare(media.comments()))
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
-        let release = self
-            .release
+        let release = release
             .map(|release| release.compare(media.release().year()))
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
-        let duration = self
-            .duration
+        let duration = duration
             .map(|duration| duration.compare(media.duration()))
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
 
-        self.mode
+        mode
             .compare_many(&[progress, rating, comments, release, duration])
     }
 }

@@ -88,13 +88,13 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut advanced::widget::Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         self.base
-            .as_widget()
+            .as_widget_mut()
             .layout(&mut tree.children[0], renderer, limits)
     }
 
@@ -143,7 +143,7 @@ where
     }
 
     fn operate(
-        &self,
+        &mut self,
         state: &mut tree::Tree,
         layout: layout::Layout<'_>,
         renderer: &Renderer,
@@ -151,7 +151,7 @@ where
     ) {
         operation.container(None, layout.bounds(), &mut |operation| {
             self.base
-                .as_widget()
+                .as_widget_mut()
                 .operate(&mut state.children[0], layout, renderer, operation);
         });
     }

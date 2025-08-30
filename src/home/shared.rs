@@ -10,6 +10,7 @@ use iced::{
     mouse,
     time::Instant,
     widget::{
+        scrollable,
         self, column, container, horizontal_space, image, mouse_area, row, stack, text,
         vertical_space,
     },
@@ -394,7 +395,9 @@ impl<T: Media> Thumbnail<T> {
 
         let content = stack![img, overlay].width(CARD_WIDTH);
 
-        let content = column!(content, details);
+        let content = column!(content, details)
+            .width(CARD_WIDTH)
+            .height(CARD_HEIGHT);
 
         let content = mouse_area(content)
             .interaction(mouse::Interaction::Pointer)
@@ -405,3 +408,19 @@ impl<T: Media> Thumbnail<T> {
         float(content, &self.zoom, now)
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Scroll {
+    pub id: scrollable::Id,
+    pub offset: scrollable::AbsoluteOffset,
+}
+
+impl Scroll {
+    pub fn new() -> Self {
+        Self {
+            id: scrollable::Id::unique(),
+            offset: scrollable::AbsoluteOffset::default(),
+        }
+    }
+}
+

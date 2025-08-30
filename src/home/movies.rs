@@ -264,6 +264,7 @@ pub enum MoviesMessage {
     Play(MovieId),
     AddCollection(MovieId),
     Details(MovieId),
+    Scroll(scrollable::Viewport),
     Tab(Tab),
     Animate,
     None,
@@ -279,10 +280,15 @@ pub struct Movies {
     filter: Filter,
     preview: Option<MoviePreview>,
     preview_back: Option<MoviePreview>,
+    scroll: Scroll,
 }
 
 impl Movies {
-    pub fn boot(sort: Sort, filters: Filter, grid: bool) -> (Self, Task<MoviesMessage>) {
+    pub fn boot(
+        sort: Sort,
+        filters: Filter,
+        grid: bool,
+    ) -> (Self, scrollable::Id, Task<MoviesMessage>) {
         let load_thumbnails = Task::perform(
             async {
                 let alt = (6..12).map(Movie::testing2);
@@ -291,24 +297,43 @@ impl Movies {
             |videos| MoviesMessage::Thumbnails(videos.into_iter().map(Thumbnail::new).collect()),
         );
 
+        let (new, id) = Self::new(sort, grid, filters);
+
+        (new, id, Task::batch([load_thumbnails]))
+    }
+
+    fn new(sort: Sort, grid: bool, filter: Filter) -> (Self, scrollable::Id) {
+        let now = Instant::now();
+        let scroll = Scroll::new();
+        let id = scroll.id.clone();
+
         (
-            Self::new(sort, grid, filters),
-            Task::batch([load_thumbnails]),
+            Self {
+                now,
+                thumbnails: HashMap::default(),
+                focused: None,
+                grid,
+                sort,
+                filter,
+                preview: None,
+                preview_back: None,
+                scroll,
+            },
+            id,
         )
     }
 
-    fn new(sort: Sort, grid: bool, filter: Filter) -> Self {
-        let now = Instant::now();
-        Self {
-            now,
-            thumbnails: HashMap::default(),
-            focused: None,
-            grid,
-            sort,
-            filter,
-            preview: None,
-            preview_back: None,
+    pub fn preview(&mut self, id: MovieId) {
+        self.preview = Some(MoviePreview::new(id));
+        self.preview_back = None;
+        if let Some(thumbnail) = self.thumbnails.get_mut(&id) {
+            thumbnail.zoom.go_mut(false, self.now);
         }
+        self.focused = None;
+    }
+
+    pub fn contains(&self, id: &MovieId) -> bool {
+        self.thumbnails.contains_key(id)
     }
 
     pub fn update(&mut self, message: MoviesMessage, now: Instant) -> Task<MoviesMessage> {
@@ -331,12 +356,7 @@ impl Movies {
                 Task::none()
             }
             MoviesMessage::Details(id) => {
-                self.preview = Some(MoviePreview::new(id));
-                self.preview_back = None;
-                if let Some(thumbnail) = self.thumbnails.get_mut(&id) {
-                    thumbnail.zoom.go_mut(false, now);
-                }
-                self.focused = None;
+                self.preview(id);
                 Task::none()
             }
             MoviesMessage::AddCollection(id) => {
@@ -356,17 +376,25 @@ impl Movies {
                 }
                 Task::none()
             }
+            MoviesMessage::Scroll(viewport) => {
+                self.scroll.offset = viewport.absolute_offset();
+                Task::none()
+            }
         }
     }
 
     pub fn page_update(&mut self, update: PageUpdate, now: Instant) {
         self.now = now;
 
-        match update {
-            PageUpdate::Sort(sort) => self.sort = sort,
-            PageUpdate::Layout(kind) => self.grid = matches!(kind, Layout::Grid),
-            PageUpdate::Filters(filters) => self.filter = filters,
-        }
+        let PageUpdate {
+            layout,
+            sort,
+            filters,
+        } = update;
+
+        self.sort = sort;
+        self.grid = matches!(layout, Layout::Grid);
+        self.filter = filters;
     }
 
     pub fn name(&self) -> String {
@@ -405,6 +433,10 @@ impl Movies {
         // self.focused = None;
     }
 
+    pub fn refresh(&mut self) -> Task<MoviesMessage> {
+        todo!()
+    }
+
     fn grid(&self) -> Element<'_, MoviesMessage> {
         let content =
             filter_sort(self.thumbnails.values(), &self.filter, &self.sort).map(|thumbnail| {
@@ -422,7 +454,13 @@ impl Movies {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(scrollable(content).spacing(20.0)).padding(10);
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(MoviesMessage::Scroll),
+        )
+        .padding(10);
 
         content.into()
     }
@@ -436,21 +474,19 @@ impl Movies {
                     MoviesMessage::Details,
                     MoviesMessage::Hovered,
                     MoviesMessage::Play,
-                    |movie| {
-                        let release = text(movie.release_year()).size(H7);
-                        let icon = icon(CALENDAR).size(H7);
-
-                        row!(icon, release)
-                            .align_y(Vertical::Center)
-                            .spacing(3.0)
-                            .into()
-                    },
+                    unique,
                 )
             });
 
         let content = column(content).spacing(16);
 
-        let content = container(scrollable(content).spacing(20.0)).padding(10);
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(MoviesMessage::Scroll),
+        )
+        .padding(10);
 
         content.into()
     }
@@ -478,22 +514,27 @@ impl Movies {
             .unwrap_or_default()
     }
 
-    pub fn back(&mut self) -> bool {
+    pub fn update_scroll(&mut self) -> Task<()> {
+        scrollable::scroll_to(self.scroll.id.clone(), self.scroll.offset)
+    }
+
+    pub fn back(&mut self) -> Option<Task<()>> {
         let Some(preview) = self.preview.take() else {
-            return false;
+            return None;
         };
 
         self.preview_back = Some(preview);
-        true
+
+        Some(self.update_scroll())
     }
 
-    pub fn forward(&mut self) -> bool {
+    pub fn forward(&mut self) -> Option<Task<()>> {
         match self.preview_back.take() {
             Some(preview) => {
                 self.preview = Some(preview);
-                true
+                Some(Task::none())
             }
-            None => false,
+            None => None,
         }
     }
 
@@ -504,4 +545,14 @@ impl Movies {
             Subscription::none()
         }
     }
+}
+
+pub fn unique<'a, Message: 'a>(movie: &Movie) -> Element<'a, Message> {
+    let release = text(movie.release_year()).size(H7);
+    let icon = icon(CALENDAR).size(H7);
+
+    row!(icon, release)
+        .align_y(Vertical::Center)
+        .spacing(3.0)
+        .into()
 }

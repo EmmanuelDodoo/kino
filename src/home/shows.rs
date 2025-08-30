@@ -273,6 +273,7 @@ pub enum TvSeasonMessage {
     Play(EpisodeId),
     EpisodeMessage(TvEpisodeMessage),
     Tab(Tab),
+    Scroll(scrollable::Viewport),
 }
 
 #[derive(Debug, Clone)]
@@ -289,6 +290,7 @@ struct TvSeason {
     tab: Tab,
     selected: Option<TvEpisode>,
     selected_prev: Option<TvEpisode>,
+    scroll: Scroll,
 }
 
 impl TvSeason {
@@ -297,7 +299,7 @@ impl TvSeason {
         sort: Sort,
         filters: Filter,
         grid: bool,
-    ) -> (Self, Task<TvSeasonMessage>) {
+    ) -> (Self, scrollable::Id, Task<TvSeasonMessage>) {
         let thumbnails = Task::perform(
             async {
                 let alt = (0..6).map(Episode::testing2);
@@ -310,28 +312,35 @@ impl TvSeason {
             TvSeasonMessage::Thumbnails,
         );
         let tasks = Task::batch([thumbnails]);
+        let (new, id) = Self::new(season, sort, filters, grid);
 
-        (Self::new(season, sort, filters, grid), tasks)
+        (new, id, tasks)
     }
 
-    fn new(season: Season, sort: Sort, filters: Filter, grid: bool) -> Self {
+    fn new(season: Season, sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
         let poster = season.poster.as_ref().map(image::Handle::from_path);
         let backdrop = season.backdrop.as_ref().map(image::Handle::from_path);
+        let scroll = Scroll::new();
+        let id = scroll.id.clone();
 
-        Self {
-            now: Instant::now(),
-            poster,
-            backdrop,
-            season,
-            grid,
-            sort,
-            filters,
-            focused: None,
-            thumbnails: HashMap::default(),
-            tab: Tab::Items,
-            selected: None,
-            selected_prev: None,
-        }
+        (
+            Self {
+                now: Instant::now(),
+                poster,
+                backdrop,
+                season,
+                grid,
+                sort,
+                filters,
+                focused: None,
+                thumbnails: HashMap::default(),
+                tab: Tab::Items,
+                selected: None,
+                selected_prev: None,
+                scroll,
+            },
+            id,
+        )
     }
 
     fn update(&mut self, message: TvSeasonMessage, now: Instant) -> Task<TvSeasonMessage> {
@@ -393,6 +402,10 @@ impl TvSeason {
 
                 episode.update(message).map(TvSeasonMessage::EpisodeMessage)
             }
+            TvSeasonMessage::Scroll(view) => {
+                self.scroll.offset = view.absolute_offset();
+                Task::none()
+            }
         }
     }
 
@@ -409,11 +422,15 @@ impl TvSeason {
     fn page_update(&mut self, update: PageUpdate, now: Instant) {
         self.now = now;
 
-        match update {
-            PageUpdate::Sort(sort) => self.sort = sort,
-            PageUpdate::Layout(kind) => self.grid = matches!(kind, Layout::Grid),
-            PageUpdate::Filters(filters) => self.filters = filters,
-        }
+        let PageUpdate {
+            layout,
+            sort,
+            filters,
+        } = update;
+
+        self.sort = sort;
+        self.grid = matches!(layout, Layout::Grid);
+        self.filters = filters;
     }
 
     fn name(&self) -> String {
@@ -439,14 +456,19 @@ impl TvSeason {
         todo!()
     }
 
-    fn back(&mut self) -> bool {
+    pub fn update_scroll(&mut self) -> Task<()> {
+        scrollable::scroll_to(self.scroll.id.clone(), self.scroll.offset)
+    }
+
+    fn back(&mut self) -> Option<Task<()>> {
         self.unfocus();
         let Some(selected) = self.selected.take() else {
-            return false;
+            return None;
         };
 
         self.selected_prev = Some(selected);
-        true
+
+        Some(self.update_scroll())
     }
 
     fn forward(&mut self) -> bool {
@@ -475,7 +497,12 @@ impl TvSeason {
 
         let content = column(content).spacing(16);
 
-        let content = container(scrollable(content).spacing(20.0));
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(TvSeasonMessage::Scroll),
+        );
 
         content.into()
     }
@@ -497,7 +524,12 @@ impl TvSeason {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(scrollable(content).spacing(20.0));
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(TvSeasonMessage::Scroll),
+        );
 
         content.into()
     }
@@ -737,6 +769,7 @@ pub enum SeriesMessage {
     SeasonMessage(TvSeasonMessage),
     ResumeSeason(SeasonId),
     Tab(Tab),
+    Scroll(scrollable::Viewport),
 }
 
 #[derive(Debug, Clone)]
@@ -753,10 +786,16 @@ struct Series {
     tab: Tab,
     selected: Option<TvSeason>,
     selected_prev: Option<TvSeason>,
+    scroll: Scroll,
 }
 
 impl Series {
-    fn boot(show: Show, sort: Sort, filters: Filter, grid: bool) -> (Self, Task<SeriesMessage>) {
+    fn boot(
+        show: Show,
+        sort: Sort,
+        filters: Filter,
+        grid: bool,
+    ) -> (Self, scrollable::Id, Task<SeriesMessage>) {
         let thumbnails = Task::perform(
             async {
                 let alt = (0..6).map(Season::testing2);
@@ -769,28 +808,35 @@ impl Series {
             SeriesMessage::Thumbnails,
         );
         let tasks = Task::batch([thumbnails]);
+        let (new, id) = Self::new(show, sort, filters, grid);
 
-        (Self::new(show, sort, filters, grid), tasks)
+        (new, id, tasks)
     }
 
-    fn new(show: Show, sort: Sort, filters: Filter, grid: bool) -> Self {
+    fn new(show: Show, sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
         let poster = show.poster.as_ref().map(image::Handle::from_path);
         let backdrop = show.backdrop.as_ref().map(image::Handle::from_path);
+        let scroll = Scroll::new();
+        let id = scroll.id.clone();
 
-        Self {
-            now: Instant::now(),
-            poster,
-            backdrop,
-            show,
-            grid,
-            sort,
-            filters,
-            focused: None,
-            thumbnails: HashMap::default(),
-            tab: Tab::Items,
-            selected: None,
-            selected_prev: None,
-        }
+        (
+            Self {
+                now: Instant::now(),
+                poster,
+                backdrop,
+                show,
+                grid,
+                sort,
+                filters,
+                focused: None,
+                thumbnails: HashMap::default(),
+                tab: Tab::Items,
+                selected: None,
+                selected_prev: None,
+                scroll,
+            },
+            id,
+        )
     }
 
     fn update(&mut self, message: SeriesMessage, now: Instant) -> Task<SeriesMessage> {
@@ -828,7 +874,7 @@ impl Series {
 
                 season.zoom.go_mut(false, now);
 
-                let (season, tasks) = TvSeason::boot(
+                let (season, id, tasks) = TvSeason::boot(
                     season.media.clone(),
                     self.sort.clone(),
                     self.filters,
@@ -839,7 +885,8 @@ impl Series {
                 self.selected_prev = None;
                 self.focused = None;
 
-                tasks.map(SeriesMessage::SeasonMessage)
+                let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
+                Task::batch([tasks.map(SeriesMessage::SeasonMessage), scroll])
             }
             SeriesMessage::Resume => {
                 println!("Resume series playback");
@@ -862,6 +909,10 @@ impl Series {
                     .update(message, now)
                     .map(SeriesMessage::SeasonMessage)
             }
+            SeriesMessage::Scroll(view) => {
+                self.scroll.offset = view.absolute_offset();
+                Task::none()
+            }
         }
     }
 
@@ -880,11 +931,15 @@ impl Series {
     fn page_update(&mut self, update: PageUpdate, now: Instant) {
         self.now = now;
 
-        match update.clone() {
-            PageUpdate::Sort(sort) => self.sort = sort,
-            PageUpdate::Layout(kind) => self.grid = matches!(kind, Layout::Grid),
-            PageUpdate::Filters(filters) => self.filters = filters,
-        }
+        let PageUpdate {
+            layout,
+            sort,
+            filters,
+        } = update.clone();
+
+        self.sort = sort;
+        self.grid = matches!(layout, Layout::Grid);
+        self.filters = filters;
 
         if let Some(season) = self.selected.as_mut() {
             season.page_update(update, now);
@@ -925,34 +980,45 @@ impl Series {
         }
     }
 
-    fn back(&mut self) -> bool {
+    pub fn update_scroll(&mut self) -> Task<()> {
+        match self.selected.as_mut() {
+            Some(selected) => selected.update_scroll(),
+            None => scrollable::scroll_to(self.scroll.id.clone(), self.scroll.offset),
+        }
+    }
+
+    fn back(&mut self) -> Option<Task<()>> {
         self.unfocus();
         let Some(mut season) = self.selected.take() else {
-            return false;
+            return None;
         };
 
         if season.can_back() {
-            season.back();
+            let task = season.back();
             self.selected = Some(season);
+            task
         } else {
             self.selected_prev = Some(season);
+            Some(self.update_scroll())
         }
-
-        true
     }
 
-    fn forward(&mut self) -> bool {
+    fn forward(&mut self) -> Option<Task<()>> {
         self.unfocus();
         match self.selected.as_mut() {
-            Some(season) if season.can_forward() => season.forward(),
-            Some(_) => false,
+            Some(season) if season.can_forward() => {
+                season.forward();
+                Some(season.update_scroll())
+            }
+            Some(_) => None,
             None => {
-                let Some(prev) = self.selected_prev.take() else {
-                    return false;
+                let Some(mut prev) = self.selected_prev.take() else {
+                    return None;
                 };
 
+                let task = prev.update_scroll();
                 self.selected = Some(prev);
-                true
+                Some(task)
             }
         }
     }
@@ -980,7 +1046,12 @@ impl Series {
 
         let content = column(content).spacing(16);
 
-        let content = container(scrollable(content).spacing(20.0));
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(SeriesMessage::Scroll),
+        );
 
         content.into()
     }
@@ -1002,7 +1073,12 @@ impl Series {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(scrollable(content).spacing(20.0));
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(SeriesMessage::Scroll),
+        );
 
         content.into()
     }
@@ -1256,6 +1332,7 @@ pub enum TvShowsMessage {
     Selected(ShowId),
     ResumeShow(ShowId),
     SeriesMessage(SeriesMessage),
+    Scroll(scrollable::Viewport),
     Animate,
 }
 
@@ -1269,10 +1346,15 @@ pub struct TvShows {
     filters: Filter,
     selected: Option<Series>,
     selected_prev: Option<Series>,
+    scroll: Scroll,
 }
 
 impl TvShows {
-    pub fn boot(sort: Sort, filters: Filter, grid: bool) -> (Self, Task<TvShowsMessage>) {
+    pub fn boot(
+        sort: Sort,
+        filters: Filter,
+        grid: bool,
+    ) -> (Self, scrollable::Id, Task<TvShowsMessage>) {
         let thumbnails = Task::perform(
             async {
                 let alt = (0..6).map(Show::testing2);
@@ -1286,21 +1368,29 @@ impl TvShows {
         );
 
         let tasks = Task::batch([thumbnails]);
+        let (new, id) = Self::new(sort, filters, grid);
 
-        (Self::new(sort, filters, grid), tasks)
+        (new, id, tasks)
     }
 
-    fn new(sort: Sort, filters: Filter, grid: bool) -> Self {
-        Self {
-            now: Instant::now(),
-            sort,
-            filters,
-            grid,
-            thumbnails: HashMap::default(),
-            focused: None,
-            selected: None,
-            selected_prev: None,
-        }
+    fn new(sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
+        let scroll = Scroll::new();
+        let id = scroll.id.clone();
+
+        (
+            Self {
+                now: Instant::now(),
+                sort,
+                filters,
+                grid,
+                thumbnails: HashMap::default(),
+                focused: None,
+                selected: None,
+                selected_prev: None,
+                scroll,
+            },
+            id,
+        )
     }
 
     pub fn update(&mut self, message: TvShowsMessage, now: Instant) -> Task<TvShowsMessage> {
@@ -1328,26 +1418,7 @@ impl TvShows {
                 println!("Add {id:?} to collection pressed");
                 Task::none()
             }
-            TvShowsMessage::Selected(id) => {
-                let Some(show) = self.thumbnails.get_mut(&id) else {
-                    return Task::none();
-                };
-
-                show.zoom.go_mut(false, now);
-
-                let (show, tasks) = Series::boot(
-                    show.media.clone(),
-                    self.sort.clone(),
-                    self.filters,
-                    self.grid,
-                );
-
-                self.selected = Some(show);
-                self.selected_prev = None;
-                self.focused = None;
-
-                tasks.map(TvShowsMessage::SeriesMessage)
-            }
+            TvShowsMessage::Selected(id) => self.preview(id),
             TvShowsMessage::ResumeShow(show) => {
                 println!("Resume show {show:?} playback");
                 Task::none()
@@ -1361,7 +1432,35 @@ impl TvShows {
                     .update(message, now)
                     .map(TvShowsMessage::SeriesMessage)
             }
+            TvShowsMessage::Scroll(view) => {
+                self.scroll.offset = view.absolute_offset();
+                Task::none()
+            }
         }
+    }
+
+    pub fn preview(&mut self, id: ShowId) -> Task<TvShowsMessage> {
+        let Some(show) = self.thumbnails.get_mut(&id) else {
+            return Task::none();
+        };
+
+        let (show, id, tasks) = Series::boot(
+            show.media.clone(),
+            self.sort.clone(),
+            self.filters,
+            self.grid,
+        );
+
+        self.selected = Some(show);
+        self.selected_prev = None;
+        self.focused = None;
+
+        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
+        Task::batch([tasks.map(TvShowsMessage::SeriesMessage), scroll])
+    }
+
+    pub fn contains(&self, id: &ShowId) -> bool {
+        self.thumbnails.contains_key(id)
     }
 
     fn unfocus(&mut self) {
@@ -1377,11 +1476,15 @@ impl TvShows {
     pub fn page_update(&mut self, update: PageUpdate, now: Instant) {
         self.now = now;
 
-        match update.clone() {
-            PageUpdate::Sort(sort) => self.sort = sort,
-            PageUpdate::Layout(kind) => self.grid = matches!(kind, Layout::Grid),
-            PageUpdate::Filters(filters) => self.filters = filters,
-        }
+        let PageUpdate {
+            layout,
+            sort,
+            filters,
+        } = update.clone();
+
+        self.sort = sort;
+        self.grid = matches!(layout, Layout::Grid);
+        self.filters = filters;
 
         if let Some(show) = self.selected.as_mut() {
             show.page_update(update, now);
@@ -1422,34 +1525,48 @@ impl TvShows {
         }
     }
 
-    pub fn back(&mut self) -> bool {
+    pub fn refresh(&mut self) -> Task<TvShowsMessage> {
+        todo!()
+    }
+
+    pub fn update_scroll(&mut self) -> Task<()> {
+        match self.selected.as_mut() {
+            Some(series) => series.update_scroll(),
+            None => scrollable::scroll_to(self.scroll.id.clone(), self.scroll.offset),
+        }
+    }
+
+    pub fn back(&mut self) -> Option<Task<()>> {
         self.unfocus();
         let Some(mut show) = self.selected.take() else {
-            return false;
+            return None;
         };
 
         if show.can_back() {
-            show.back();
+            let task = show.back();
             self.selected = Some(show);
+            return task;
         } else {
             self.selected_prev = Some(show);
+            Some(self.update_scroll())
         }
-
-        true
     }
 
-    pub fn forward(&mut self) -> bool {
+    pub fn forward(&mut self) -> Option<Task<()>> {
         self.unfocus();
         match self.selected.as_mut() {
+            // Some(show) if show.can_forward() => show.forward(),
             Some(show) if show.can_forward() => show.forward(),
-            Some(_) => false,
+            // Some(_) => false,
+            Some(_) => None,
             None => {
-                let Some(prev) = self.selected_prev.take() else {
-                    return false;
+                let Some(mut prev) = self.selected_prev.take() else {
+                    return None;
                 };
 
+                let task = prev.update_scroll();
                 self.selected = Some(prev);
-                true
+                Some(task)
             }
         }
     }
@@ -1463,20 +1580,19 @@ impl TvShows {
                     TvShowsMessage::Selected,
                     TvShowsMessage::Hovered,
                     TvShowsMessage::ResumeShow,
-                    |show| {
-                        let seasons = show.seasons;
-
-                        let seasons =
-                            format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" });
-
-                        text(seasons).size(H7).into()
-                    },
+                    unique,
                 )
             });
 
         let content = column(content).spacing(16);
 
-        let content = container(scrollable(content).spacing(20.0)).padding(10);
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(TvShowsMessage::Scroll),
+        )
+        .padding(10);
 
         content.into()
     }
@@ -1498,7 +1614,13 @@ impl TvShows {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(scrollable(content).spacing(20.0)).padding(10);
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(TvShowsMessage::Scroll),
+        )
+        .padding(10);
 
         content.into()
     }
@@ -1534,4 +1656,12 @@ impl TvShows {
             }
         }
     }
+}
+
+pub fn unique<'a, Message: 'a>(show: &Show) -> Element<'a, Message> {
+    let seasons = show.seasons;
+
+    let seasons = format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" });
+
+    text(seasons).size(H7).into()
 }

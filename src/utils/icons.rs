@@ -55,6 +55,8 @@ pub const SEEK_FRONT: char = '\u{e81e}';
 pub const PLAY: char = '\u{e808}';
 pub const PAUSE: char = '\u{e820}';
 pub const REPLAY: char = '\u{e81a}';
+pub const REFRESH: char = '\u{e827}';
+
 
 pub const FAVORITE: char = '\u{e821}';
 pub const UNFAVORITE: char = '\u{e81b}';
