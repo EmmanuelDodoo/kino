@@ -94,10 +94,10 @@ impl Page {
         }
     }
 
-    pub fn rand(&mut self) {
+    pub fn rand(&mut self) -> Task<HomeMessage> {
         match self {
-            Self::Movies(movies) => movies.rand(),
-            Self::Shows(shows) => shows.rand(),
+            Self::Movies(movies) => movies.rand().map(|_| HomeMessage::None),
+            Self::Shows(shows) => shows.rand().map(HomeMessage::Shows),
             _ => todo!(),
         }
     }

@@ -2242,6 +2242,7 @@ dependencies = [
  "gstreamer-base",
  "iced",
  "iced_video_player",
+ "rand",
  "tokio",
  "url",
 ]

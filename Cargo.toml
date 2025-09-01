@@ -15,3 +15,4 @@ glib = "0.20" # gobject traits and error type
 tokio = "1.47"
 chrono = { version = "0.4", features = ["std", "now"]}
 alphanumeric-sort = "1.5"
+rand = "0.8"

@@ -13,6 +13,7 @@ use iced::{
     },
     window,
 };
+use rand::seq::SliceRandom;
 use std::collections::HashMap;
 
 mod movies;
@@ -575,13 +576,32 @@ impl Home {
                 Task::none()
             }
             HomeMessage::NewCollection => Task::none(),
-            HomeMessage::Random => {
-                if let Some(page) = self.current_page_mut() {
-                    page.rand();
-                }
+            HomeMessage::Random => match self.current_page_mut().map(|page| page.rand()) {
+                Some(task) => task,
+                None => {
+                    let choices = [0, 1];
+                    let mut rng = rand::thread_rng();
+                    let choice = choices
+                        .choose(&mut rng)
+                        .expect("choices as defined above is not empty");
 
-                Task::none()
-            }
+                    let msg = if *choice == 0 {
+                        let recents = self.recent_movies.keys().collect::<Vec<_>>();
+                        let Some(choice) = recents.choose(&mut rng).copied() else {
+                            return Task::none();
+                        };
+                        HomeMessage::Recent(RecentMessage::DetailsMovie(*choice))
+                    } else {
+                        let recents = self.recent_shows.keys().collect::<Vec<_>>();
+                        let Some(choice) = recents.choose(&mut rng).copied() else {
+                            return Task::none();
+                        };
+                        HomeMessage::Recent(RecentMessage::DetailsShow(*choice))
+                    };
+
+                    Task::done(msg)
+                }
+            },
             HomeMessage::Refresh => match self.current_page_mut() {
                 Some(page) => page.refresh(),
                 None => todo!("Refresh recents"),

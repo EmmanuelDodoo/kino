@@ -417,18 +417,17 @@ impl Movies {
         self.preview.is_none()
     }
 
-    pub fn rand(&mut self) {
-        todo!()
-        // let Some(rand) = self.thumbnails.keys().next() else {
-        //     return;
-        // };
-        //
-        // self.preview = Some(Preview {
-        //     view: Tab::Info,
-        //     id: *rand,
-        // });
-        // self.preview_back = None;
-        // self.focused = None;
+    pub fn rand(&mut self) -> Task<()> {
+        use rand::seq::SliceRandom;
+
+        let mut rng = rand::thread_rng();
+        let temp = self.thumbnails.keys().collect::<Vec<_>>();
+
+        if let Some(rand) = temp.choose(&mut rng).copied() {
+            self.preview(*rand);
+        }
+
+        Task::none()
     }
 
     pub fn refresh(&mut self) -> Task<MoviesMessage> {

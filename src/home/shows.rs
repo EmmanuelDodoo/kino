@@ -407,6 +407,17 @@ impl TvSeason {
         }
     }
 
+    fn preview(&mut self, id: EpisodeId) {
+        let Some(episode) = self.thumbnails.get_mut(&id) else {
+            return;
+        };
+        episode.zoom.go_mut(false, self.now);
+        self.focused = None;
+
+        self.selected = Some(TvEpisode::new(episode.media.clone()));
+        self.selected_prev = None;
+    }
+
     fn unfocus(&mut self) {
         let Some(id) = self.focused.take() else {
             return;
@@ -451,7 +462,16 @@ impl TvSeason {
     }
 
     fn rand(&mut self) {
-        todo!()
+        use rand::seq::SliceRandom;
+
+        let mut rng = rand::thread_rng();
+        let temp = self.thumbnails.keys().collect::<Vec<_>>();
+
+        let Some(rand) = temp.choose(&mut rng).copied().copied() else {
+            return;
+        };
+
+        self.preview(rand)
     }
 
     pub fn update_scroll(&mut self) -> Task<()> {
@@ -766,6 +786,7 @@ pub enum SeriesMessage {
     ResumeSeason(SeasonId),
     Tab(Tab),
     Scroll(scrollable::Viewport),
+    Random,
 }
 
 #[derive(Debug, Clone)]
@@ -863,27 +884,7 @@ impl Series {
                 println!("Add {id:?} to collection pressed");
                 Task::none()
             }
-            SeriesMessage::Selected(id) => {
-                let Some(season) = self.thumbnails.get_mut(&id) else {
-                    return Task::none();
-                };
-
-                season.zoom.go_mut(false, now);
-
-                let (season, id, tasks) = TvSeason::boot(
-                    season.media.clone(),
-                    self.sort.clone(),
-                    self.filters,
-                    self.grid,
-                );
-
-                self.selected = Some(season);
-                self.selected_prev = None;
-                self.focused = None;
-
-                let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
-                Task::batch([tasks.map(SeriesMessage::SeasonMessage), scroll])
-            }
+            SeriesMessage::Selected(id) => self.preview(id),
             SeriesMessage::Resume => {
                 println!("Resume series playback");
                 Task::none()
@@ -909,7 +910,33 @@ impl Series {
                 self.scroll.offset = view.absolute_offset();
                 Task::none()
             }
+            SeriesMessage::Random => {
+                self.selected.as_mut().map(|season| season.rand());
+                Task::none()
+            }
         }
+    }
+
+    fn preview(&mut self, id: SeasonId) -> Task<SeriesMessage> {
+        let Some(season) = self.thumbnails.get_mut(&id) else {
+            return Task::none();
+        };
+
+        season.zoom.go_mut(false, self.now);
+
+        let (season, id, tasks) = TvSeason::boot(
+            season.media.clone(),
+            self.sort.clone(),
+            self.filters,
+            self.grid,
+        );
+
+        self.selected = Some(season);
+        self.selected_prev = None;
+        self.focused = None;
+
+        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
+        Task::batch([tasks.map(SeriesMessage::SeasonMessage), scroll])
     }
 
     fn unfocus(&mut self) {
@@ -969,10 +996,24 @@ impl Series {
         season.show_tools()
     }
 
-    fn rand(&mut self) {
+    fn rand(&mut self) -> Task<SeriesMessage> {
         match self.selected.as_mut() {
-            Some(season) => season.rand(),
-            None => todo!(),
+            Some(season) => {
+                season.rand();
+                Task::none()
+            }
+            None => {
+                use rand::seq::SliceRandom;
+
+                let mut rng = rand::thread_rng();
+                let temp = self.thumbnails.keys().collect::<Vec<_>>();
+
+                let Some(rand) = temp.choose(&mut rng).copied().copied() else {
+                    return Task::none();
+                };
+
+                self.preview(rand).chain(Task::done(SeriesMessage::Random))
+            }
         }
     }
 
@@ -1325,6 +1366,7 @@ pub enum TvShowsMessage {
     ResumeShow(ShowId),
     SeriesMessage(SeriesMessage),
     Scroll(scrollable::Viewport),
+    Random,
     Animate,
 }
 
@@ -1428,6 +1470,11 @@ impl TvShows {
                 self.scroll.offset = view.absolute_offset();
                 Task::none()
             }
+            TvShowsMessage::Random => self
+                .selected
+                .as_mut()
+                .map(|series| series.rand().map(TvShowsMessage::SeriesMessage))
+                .unwrap_or_default(),
         }
     }
 
@@ -1510,10 +1557,21 @@ impl TvShows {
         show.show_tools()
     }
 
-    pub fn rand(&mut self) {
+    pub fn rand(&mut self) -> Task<TvShowsMessage> {
         match self.selected.as_mut() {
-            Some(show) => show.rand(),
-            None => todo!(),
+            Some(show) => show.rand().map(TvShowsMessage::SeriesMessage),
+            None => {
+                use rand::seq::SliceRandom;
+
+                let mut rng = rand::thread_rng();
+                let temp = self.thumbnails.keys().collect::<Vec<_>>();
+
+                let Some(rand) = temp.choose(&mut rng).copied().copied() else {
+                    return Task::none();
+                };
+
+                self.preview(rand).chain(Task::done(TvShowsMessage::Random))
+            }
         }
     }
 
