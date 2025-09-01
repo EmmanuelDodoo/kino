@@ -222,7 +222,13 @@ impl Home {
                 self.forward.clear();
                 self.focused = None;
 
-                if self.pages.contains_key(&kind) {
+                if let Some(page) = self.pages.get_mut(&kind) {
+                    let update = PageUpdate {
+                        filters: self.filters,
+                        sort: self.sort.clone(),
+                        layout: self.layout,
+                    };
+                    page.page_update(update, now);
                     return Task::none();
                 }
 
