@@ -20,7 +20,7 @@ mod pages;
 mod shared;
 mod shows;
 
-use crate::media::{Media, Movie, MovieId, Show, ShowId};
+use crate::media::{Movie, MovieId, Show, ShowId};
 use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind, PageUpdate};
 use shared::{Scroll, Thumbnail, filter_sort};
@@ -215,7 +215,7 @@ impl Home {
                 self.update_scroll()
             }
             HomeMessage::Goto(kind) => {
-                if let Some(old) = self.current_page.replace(kind.clone()) {
+                if let Some(old) = self.current_page.replace(kind) {
                     self.backward.push(old)
                 };
                 self.forward.clear();
@@ -233,7 +233,7 @@ impl Home {
                             matches!(self.layout, Layout::Grid),
                         );
 
-                        self.pages.insert(kind, Page::Movies(movies));
+                        self.pages.insert(kind, Page::Movies(Box::new(movies)));
 
                         let scroll =
                             scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());

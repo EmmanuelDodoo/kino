@@ -1,19 +1,18 @@
 //! Customised version of the [`iced::widget::Slider`] for video playback.
 use iced::{
-    Background, Border, Color, Element, Event, Length, Pixels, Point, Rectangle, Size, Theme,
+    Border, Element, Event, Length, Pixels, Point, Rectangle, Size,
     advanced::{
         self, Clipboard, Shell, image,
         layout::{self, Layout},
         mouse, renderer, text,
         widget::{
-            self, Widget,
+            Widget,
             tree::{self, Tree},
         },
     },
-    alignment, border,
     keyboard::{self, Key, key},
     touch,
-    widget::slider::{Catalog, Handle, HandleShape, Rail, Status, Style, StyleFn, default},
+    widget::slider::{Catalog, HandleShape, Status, Style, StyleFn},
     window,
 };
 

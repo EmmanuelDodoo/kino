@@ -3,21 +3,19 @@ use crate::media::{Media, show::*};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, SortKind, empty};
+use crate::utils::{Layout, Sort, empty};
 use iced::widget::Space;
 use iced::{
-    Color, ContentFit, Element, Length, Shadow, Subscription, Task,
+    ContentFit, Element, Length, Subscription, Task,
     alignment::{Horizontal, Vertical},
-    animation::{Animation, Easing},
-    mouse,
     time::Instant,
     widget::{
-        bottom_center, button, center_x, column, container, grid, horizontal_rule,
-        horizontal_space, image, mouse_area, row, scrollable, stack, text, vertical_space,
+        button, column, container, grid, horizontal_rule, image, row, scrollable, stack, text,
+        vertical_space,
     },
     window,
 };
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum TvEpisodeMessage {
@@ -462,9 +460,7 @@ impl TvSeason {
 
     fn back(&mut self) -> Option<Task<()>> {
         self.unfocus();
-        let Some(selected) = self.selected.take() else {
-            return None;
-        };
+        let selected = self.selected.take()?;
 
         self.selected_prev = Some(selected);
 
@@ -989,9 +985,7 @@ impl Series {
 
     fn back(&mut self) -> Option<Task<()>> {
         self.unfocus();
-        let Some(mut season) = self.selected.take() else {
-            return None;
-        };
+        let mut season = self.selected.take()?;
 
         if season.can_back() {
             let task = season.back();
@@ -1012,9 +1006,7 @@ impl Series {
             }
             Some(_) => None,
             None => {
-                let Some(mut prev) = self.selected_prev.take() else {
-                    return None;
-                };
+                let mut prev = self.selected_prev.take()?;
 
                 let task = prev.update_scroll();
                 self.selected = Some(prev);
@@ -1538,14 +1530,12 @@ impl TvShows {
 
     pub fn back(&mut self) -> Option<Task<()>> {
         self.unfocus();
-        let Some(mut show) = self.selected.take() else {
-            return None;
-        };
+        let mut show = self.selected.take()?;
 
         if show.can_back() {
             let task = show.back();
             self.selected = Some(show);
-            return task;
+            task
         } else {
             self.selected_prev = Some(show);
             Some(self.update_scroll())
@@ -1560,9 +1550,7 @@ impl TvShows {
             // Some(_) => false,
             Some(_) => None,
             None => {
-                let Some(mut prev) = self.selected_prev.take() else {
-                    return None;
-                };
+                let mut prev = self.selected_prev.take()?;
 
                 let task = prev.update_scroll();
                 self.selected = Some(prev);

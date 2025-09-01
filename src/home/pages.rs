@@ -29,7 +29,7 @@ pub enum PageKind {
 #[derive(Debug, Clone)]
 pub enum Page {
     Shows(Box<TvShows>),
-    Movies(Movies),
+    Movies(Box<Movies>),
     Comments(()),
     Search(()),
     Custom(()),

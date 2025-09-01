@@ -4,20 +4,18 @@ use crate::media::{Media, Movie, MovieId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, SortKind, empty};
+use crate::utils::{Layout, Sort, empty};
 use iced::widget::Space;
 use iced::{
     Color, ContentFit, Element, Length, Shadow, Subscription, Task,
     alignment::{Horizontal, Vertical},
-    animation::{Animation, Easing},
-    mouse,
     time::Instant,
     widget::{
-        bottom_center, button, center_x, column, container, grid, horizontal_space, image,
-        mouse_area, row, scrollable, stack, text, vertical_space,
+        bottom_center, button, center_x, column, container, grid, image, row, scrollable, stack,
+        text,
     },
 };
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct MoviePreview {
@@ -519,9 +517,7 @@ impl Movies {
     }
 
     pub fn back(&mut self) -> Option<Task<()>> {
-        let Some(preview) = self.preview.take() else {
-            return None;
-        };
+        let preview = self.preview.take()?;
 
         self.preview_back = Some(preview);
 

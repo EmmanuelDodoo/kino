@@ -1,6 +1,6 @@
 use chrono::Datelike;
 
-use crate::media::{Media, Movie, MovieId};
+use crate::media::Media;
 use std::fmt::{self, Display};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -327,7 +327,6 @@ impl Filter {
             .map(|duration| duration.compare(media.duration()))
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
 
-        mode
-            .compare_many(&[progress, rating, comments, release, duration])
+        mode.compare_many(&[progress, rating, comments, release, duration])
     }
 }

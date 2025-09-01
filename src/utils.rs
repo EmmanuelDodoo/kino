@@ -9,8 +9,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::*;
-use crate::home::HomeMessage;
-use crate::media::{Movie, MovieId};
 pub mod icons;
 pub use icons::*;
 pub mod typo;
@@ -329,7 +327,7 @@ fn yuv_to_rgba(yuv: &[u8], width: u32, height: u32, downscale: u32) -> Vec<u8> {
 }
 
 pub fn rand_u32() -> u32 {
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
