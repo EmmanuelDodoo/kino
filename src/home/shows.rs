@@ -924,12 +924,8 @@ impl Series {
 
         season.zoom.go_mut(false, self.now);
 
-        let (season, id, tasks) = TvSeason::boot(
-            season.media.clone(),
-            self.sort.clone(),
-            self.filters,
-            self.grid,
-        );
+        let (season, id, tasks) =
+            TvSeason::boot(season.media.clone(), self.sort, self.filters, self.grid);
 
         self.selected = Some(season);
         self.selected_prev = None;
@@ -1483,12 +1479,8 @@ impl TvShows {
             return Task::none();
         };
 
-        let (show, id, tasks) = Series::boot(
-            show.media.clone(),
-            self.sort.clone(),
-            self.filters,
-            self.grid,
-        );
+        let (show, id, tasks) =
+            Series::boot(show.media.clone(), self.sort, self.filters, self.grid);
 
         self.selected = Some(show);
         self.selected_prev = None;

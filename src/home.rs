@@ -225,7 +225,7 @@ impl Home {
                 if let Some(page) = self.pages.get_mut(&kind) {
                     let update = PageUpdate {
                         filters: self.filters,
-                        sort: self.sort.clone(),
+                        sort: self.sort,
                         layout: self.layout,
                     };
                     page.page_update(update, now);
@@ -235,7 +235,7 @@ impl Home {
                 match kind {
                     PageKind::Movies => {
                         let (movies, id, task) = Movies::boot(
-                            self.sort.clone(),
+                            self.sort,
                             self.filters,
                             matches!(self.layout, Layout::Grid),
                         );
@@ -249,7 +249,7 @@ impl Home {
                     }
                     PageKind::Shows => {
                         let (shows, id, tasks) = TvShows::boot(
-                            self.sort.clone(),
+                            self.sort,
                             self.filters,
                             matches!(self.layout, Layout::Grid),
                         );
@@ -284,7 +284,7 @@ impl Home {
                 self.focused = None;
                 let update = PageUpdate {
                     layout: self.layout,
-                    sort: self.sort.clone(),
+                    sort: self.sort,
                     filters: self.filters,
                 };
 
@@ -331,7 +331,7 @@ impl Home {
             HomeMessage::Forward => {
                 let update = PageUpdate {
                     layout: self.layout,
-                    sort: self.sort.clone(),
+                    sort: self.sort,
                     filters: self.filters,
                 };
 
@@ -385,7 +385,7 @@ impl Home {
 
                 let update = PageUpdate {
                     layout: self.layout,
-                    sort: self.sort.clone(),
+                    sort: self.sort,
                     filters: self.filters,
                 };
 
@@ -405,7 +405,7 @@ impl Home {
 
                 let update = PageUpdate {
                     layout: self.layout,
-                    sort: self.sort.clone(),
+                    sort: self.sort,
                     filters: self.filters,
                 };
 
@@ -572,7 +572,7 @@ impl Home {
 
                 let update = PageUpdate {
                     layout: self.layout,
-                    sort: self.sort.clone(),
+                    sort: self.sort,
                     filters: self.filters,
                 };
 
@@ -1203,7 +1203,7 @@ impl Home {
         let hidden = {
             container(
                 column(SortKind::HIDDEN.iter().map(|kind| {
-                    let order = self.sort.iter().position(|selected| kind == selected);
+                    let order = self.sort.position(*kind);
 
                     kind.view(
                         |kind| HomeMessage::Sort(SortMessage::AddSort(kind)),
@@ -1225,7 +1225,8 @@ impl Home {
         row!(
             text("Sort by: ").size(size),
             row(SortKind::VISIBLE.iter().map(|sort| {
-                let order = self.sort.iter().position(|selected| sort == selected);
+                let order = self.sort.position(*sort);
+
                 sort.view(
                     |kind| HomeMessage::Sort(SortMessage::AddSort(kind)),
                     |kind| HomeMessage::Sort(SortMessage::RemoveSort(kind)),
