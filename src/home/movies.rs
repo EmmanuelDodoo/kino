@@ -300,7 +300,22 @@ impl Movies {
 
         let (new, id) = Self::new(sort, grid, filters);
 
-        (new, id, Task::batch([load_thumbnails]))
+        (new, id, load_thumbnails)
+    }
+
+    pub fn dummies(
+        sort: Sort,
+        filters: Filter,
+        grid: bool,
+        movies: Vec<Movie>,
+    ) -> (Self, scrollable::Id, Task<MoviesMessage>) {
+        let task = Task::perform(async move { movies }, |movies| {
+            MoviesMessage::Thumbnails(movies.into_iter().map(Thumbnail::new).collect())
+        });
+
+        let (new, id) = Self::new(sort, grid, filters);
+
+        (new, id, task)
     }
 
     fn new(sort: Sort, grid: bool, filter: Filter) -> (Self, scrollable::Id) {
@@ -324,13 +339,20 @@ impl Movies {
         )
     }
 
-    pub fn preview(&mut self, id: MovieId) {
+    pub fn preview(&mut self, id: MovieId) -> Option<Task<MoviesMessage>> {
         self.preview = Some(MoviePreview::new(id));
         self.preview_back = None;
-        if let Some(thumbnail) = self.thumbnails.get_mut(&id) {
-            thumbnail.zoom.go_mut(false, self.now);
-        }
         self.focused = None;
+
+        match self.thumbnails.get_mut(&id) {
+            Some(thumbnail) => {
+                thumbnail.zoom.go_mut(false, self.now);
+                None
+            }
+            None => {
+                todo!("Should fetch movie if not already present.")
+            }
+        }
     }
 
     pub fn contains(&self, id: &MovieId) -> bool {

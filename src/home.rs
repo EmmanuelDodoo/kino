@@ -125,6 +125,7 @@ pub enum HomeMessage {
     Recent(RecentMessage),
     HomeScroll(HomeScrollMessage),
     Refresh,
+    PerformPending,
 }
 
 pub struct Home {
@@ -143,6 +144,7 @@ pub struct Home {
     home_scroll: HomeScroll,
     pages: HashMap<PageKind, Page>,
     current_page: Option<PageKind>,
+    pending: Vec<Task<HomeMessage>>,
 }
 
 impl Home {
@@ -189,6 +191,7 @@ impl Home {
             home_scroll: HomeScroll::new(),
             pages: HashMap::default(),
             current_page: None,
+            pending: vec![],
         }
     }
 
@@ -234,10 +237,16 @@ impl Home {
 
                 match kind {
                     PageKind::Movies => {
-                        let (movies, id, task) = Movies::boot(
+                        let movies = self
+                            .recent_movies
+                            .values()
+                            .map(|thumbnail| thumbnail.media.clone())
+                            .collect();
+                        let (movies, id, task) = Movies::dummies(
                             self.sort,
                             self.filters,
                             matches!(self.layout, Layout::Grid),
+                            movies,
                         );
 
                         self.pages.insert(kind, Page::Movies(Box::new(movies)));
@@ -245,13 +254,21 @@ impl Home {
                         let scroll =
                             scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
 
-                        Task::batch([task.map(HomeMessage::Movies), scroll])
+                        task.map(HomeMessage::Movies)
+                            .chain(scroll)
+                            .chain(Task::done(HomeMessage::PerformPending))
                     }
                     PageKind::Shows => {
-                        let (shows, id, tasks) = TvShows::boot(
+                        let shows = self
+                            .recent_shows
+                            .values()
+                            .map(|thumbnail| thumbnail.media.clone())
+                            .collect();
+                        let (shows, id, tasks) = TvShows::dummies(
                             self.sort,
                             self.filters,
                             matches!(self.layout, Layout::Grid),
+                            shows,
                         );
 
                         self.pages.insert(kind, Page::Shows(Box::new(shows)));
@@ -259,7 +276,10 @@ impl Home {
                         let scroll =
                             scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
 
-                        Task::batch([tasks.map(HomeMessage::Shows), scroll])
+                        tasks
+                            .map(HomeMessage::Shows)
+                            .chain(scroll)
+                            .chain(Task::done(HomeMessage::PerformPending))
                     }
                     _ => {
                         todo!()
@@ -653,22 +673,23 @@ impl Home {
                 }
                 RecentMessage::DetailsMovie(id) => {
                     let Some(movie) = self.pages.get_mut(&PageKind::Movies) else {
-                        return Task::done(HomeMessage::Goto(PageKind::Movies)).chain(Task::done(
-                            HomeMessage::Recent(RecentMessage::DetailsMovie(id)),
-                        ));
+                        // todo!("need any task from creating the media to be completed first")
+                        let pending =
+                            Task::done(HomeMessage::Recent(RecentMessage::DetailsMovie(id)));
+                        self.pending.push(pending);
+                        return Task::done(HomeMessage::Goto(PageKind::Movies));
                     };
 
                     let Page::Movies(movie) = movie else {
+                        eprintln!("Somehow accessed a recent movie which wasn't shown?");
                         return Task::none();
                     };
 
-                    if !movie.contains(&id) {
-                        return Task::perform(async {}, move |_| {
-                            HomeMessage::Recent(RecentMessage::DetailsMovie(id))
-                        });
-                    }
-
-                    movie.preview(id);
+                    if let Some(task) = movie.preview(id) {
+                        return task.map(HomeMessage::Movies).chain(Task::done(
+                            HomeMessage::Recent(RecentMessage::DetailsMovie(id)),
+                        ));
+                    };
 
                     match self.current_page.take() {
                         Some(old) => {
@@ -688,20 +709,17 @@ impl Home {
                 }
                 RecentMessage::DetailsShow(id) => {
                     let Some(show) = self.pages.get_mut(&PageKind::Shows) else {
-                        return Task::done(HomeMessage::Goto(PageKind::Shows)).chain(Task::done(
-                            HomeMessage::Recent(RecentMessage::DetailsShow(id)),
-                        ));
+                        let pending =
+                            Task::done(HomeMessage::Recent(RecentMessage::DetailsShow(id)));
+                        self.pending.push(pending);
+
+                        // todo!("need any task from creating the media to be completed first")
+                        return Task::done(HomeMessage::Goto(PageKind::Shows));
                     };
 
                     let Page::Shows(show) = show else {
                         return Task::none();
                     };
-
-                    if !show.contains(&id) {
-                        return Task::perform(async {}, move |_| {
-                            HomeMessage::Recent(RecentMessage::DetailsShow(id))
-                        });
-                    }
 
                     match self.current_page.take() {
                         Some(old) => {
@@ -717,7 +735,16 @@ impl Home {
 
                     self.forward.clear();
                     self.focused = None;
-                    show.preview(id).map(HomeMessage::Shows)
+
+                    match show.preview(id) {
+                        Ok(task) => task.map(HomeMessage::Shows),
+                        Err(task) => {
+                            task.map(HomeMessage::Shows)
+                                .chain(Task::done(HomeMessage::Recent(RecentMessage::DetailsShow(
+                                    id,
+                                ))))
+                        }
+                    }
                 }
                 RecentMessage::AddCollectionShow(id) => {
                     println!("Add {id:?} to collection pressed");
@@ -742,6 +769,11 @@ impl Home {
                     Task::none()
                 }
             },
+            HomeMessage::PerformPending => {
+                let mut pending = vec![];
+                std::mem::swap(&mut pending, &mut self.pending);
+                Task::batch(pending)
+            }
         }
     }
 

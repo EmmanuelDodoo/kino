@@ -409,7 +409,7 @@ impl TvSeason {
 
     fn preview(&mut self, id: EpisodeId) {
         let Some(episode) = self.thumbnails.get_mut(&id) else {
-            return;
+            todo!("Episode not found");
         };
         episode.zoom.go_mut(false, self.now);
         self.focused = None;
@@ -920,7 +920,7 @@ impl Series {
 
     fn preview(&mut self, id: SeasonId) -> Task<SeriesMessage> {
         let Some(season) = self.thumbnails.get_mut(&id) else {
-            return Task::none();
+            todo!("Season not found");
         };
 
         season.zoom.go_mut(false, self.now);
@@ -1405,6 +1405,21 @@ impl TvShows {
         (new, id, tasks)
     }
 
+    pub fn dummies(
+        sort: Sort,
+        filters: Filter,
+        grid: bool,
+        shows: Vec<Show>,
+    ) -> (Self, scrollable::Id, Task<TvShowsMessage>) {
+        let task = Task::perform(async move { shows }, |shows| {
+            TvShowsMessage::Thumbnails(shows.into_iter().map(Thumbnail::new).collect())
+        });
+
+        let (new, id) = Self::new(sort, filters, grid);
+
+        (new, id, task)
+    }
+
     fn new(sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
@@ -1450,7 +1465,10 @@ impl TvShows {
                 println!("Add {id:?} to collection pressed");
                 Task::none()
             }
-            TvShowsMessage::Selected(id) => self.preview(id),
+            TvShowsMessage::Selected(id) => match self.preview(id) {
+                Ok(task) => task,
+                Err(task) => task,
+            },
             TvShowsMessage::ResumeShow(show) => {
                 println!("Resume show {show:?} playback");
                 Task::none()
@@ -1476,9 +1494,9 @@ impl TvShows {
         }
     }
 
-    pub fn preview(&mut self, id: ShowId) -> Task<TvShowsMessage> {
+    pub fn preview(&mut self, id: ShowId) -> Result<Task<TvShowsMessage>, Task<TvShowsMessage>> {
         let Some(show) = self.thumbnails.get_mut(&id) else {
-            return Task::none();
+            todo!("Should fetch missing show")
         };
 
         let (show, id, tasks) =
@@ -1489,7 +1507,10 @@ impl TvShows {
         self.focused = None;
 
         let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
-        Task::batch([tasks.map(TvShowsMessage::SeriesMessage), scroll])
+        Ok(Task::batch([
+            tasks.map(TvShowsMessage::SeriesMessage),
+            scroll,
+        ]))
     }
 
     pub fn contains(&self, id: &ShowId) -> bool {
@@ -1555,16 +1576,17 @@ impl TvShows {
         match self.selected.as_mut() {
             Some(show) => show.rand().map(TvShowsMessage::SeriesMessage),
             None => {
-                use rand::seq::SliceRandom;
-
-                let mut rng = rand::thread_rng();
-                let temp = self.thumbnails.keys().collect::<Vec<_>>();
-
-                let Some(rand) = temp.choose(&mut rng).copied().copied() else {
-                    return Task::none();
-                };
-
-                self.preview(rand).chain(Task::done(TvShowsMessage::Random))
+                todo!()
+                // use rand::seq::SliceRandom;
+                //
+                // let mut rng = rand::thread_rng();
+                // let temp = self.thumbnails.keys().collect::<Vec<_>>();
+                //
+                // let Some(rand) = temp.choose(&mut rng).copied().copied() else {
+                //     return Task::none();
+                // };
+                //
+                // self.preview(rand).chain(Task::done(TvShowsMessage::Random))
             }
         }
     }
