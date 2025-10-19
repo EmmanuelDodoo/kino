@@ -1,6 +1,6 @@
 use chrono::Datelike;
 
-use crate::media::Media;
+use crate::models::Media;
 use std::fmt::{self, Display};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -163,6 +163,19 @@ impl Progress {
 
         self.comp.compare(value, comp)
     }
+
+    pub fn f32(&self) -> Option<f32> {
+        use ProgressKind::*;
+
+        match self.kind {
+            Any => None,
+            Zero => Some(0.0),
+            TwentyFive => Some(0.25),
+            Fifty => Some(0.5),
+            SeventyFive => Some(0.75),
+            Complete => Some(1.0),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -215,17 +228,30 @@ impl Rating {
         matches!(self.kind, RatingKind::Any)
     }
 
-    pub fn compare(&self, value: u8) -> bool {
+    pub fn compare(&self, value: f32) -> bool {
         let comp = match self.kind {
             RatingKind::Any => return true,
-            RatingKind::One => 1,
-            RatingKind::Two => 2,
-            RatingKind::Three => 3,
-            RatingKind::Four => 4,
-            RatingKind::Five => 5,
+            RatingKind::One => 1.0,
+            RatingKind::Two => 2.0,
+            RatingKind::Three => 3.0,
+            RatingKind::Four => 4.0,
+            RatingKind::Five => 5.0,
         };
 
         self.comp.compare(value, comp)
+    }
+
+    pub fn u8(&self) -> Option<u8> {
+        use RatingKind::*;
+
+        match self.kind {
+            Any => None,
+            One => Some(1),
+            Two => Some(2),
+            Three => Some(3),
+            Four => Some(4),
+            Five => Some(5),
+        }
     }
 }
 
@@ -304,7 +330,50 @@ impl Filter {
         self.duration = None;
     }
 
-    pub fn filter<T: Media>(&self, media: T) -> bool {
+    pub fn query(&self, prefix: Option<&str>) -> Option<String> {
+        if self.is_any() {
+            return None;
+        }
+
+        let Self {
+            progress,
+            rating,
+            comments,
+            release,
+            duration,
+            mode,
+        } = *self;
+
+        let prefix = prefix
+            .map(|prefix| format!("{prefix}."))
+            .unwrap_or_default();
+
+        let progress = progress
+            .f32()
+            .map(|value| format!("{prefix}progress {} {value:.02}", progress.comp));
+        let rating = rating
+            .u8()
+            .map(|value| format!("{prefix}rating {} {value:.02}", rating.comp));
+        let comments = comments.map(|comments| {
+            format!(
+                "{prefix}comment_count {} {}",
+                comments.comp, comments.number
+            )
+        });
+        let release =
+            release.map(|release| format!("{prefix}release {} {}", release.comp, release.year));
+        let duration = duration
+            .map(|duration| format!("{prefix}duration {} {}", duration.comp, duration.secs));
+
+        let query = [progress, rating, comments, release, duration]
+            .into_iter()
+            .filter_map(|value| value)
+            .collect::<Vec<_>>();
+
+        Some(query.join(&format!(" {} ", mode)))
+    }
+
+    pub fn filter<T: Media>(&self, media: &T) -> bool {
         // Compiler error when new field is added
         let Filter {
             progress,
@@ -316,7 +385,7 @@ impl Filter {
         } = *self;
 
         let progress = progress.compare(media.progress());
-        let rating = rating.compare(media.rating());
+        let rating = rating.compare(media.rating().unwrap_or_default());
         let comments = comments
             .map(|comments| comments.compare(media.comments()))
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
@@ -328,5 +397,84 @@ impl Filter {
             .unwrap_or_else(|| matches!(self.mode, FilterMode::And));
 
         mode.compare_many(&[progress, rating, comments, release, duration])
+    }
+}
+
+pub mod comments {
+    use super::{Comp, Duration, FilterMode};
+    use chrono::{DateTime, Local};
+
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct Added {
+        pub time: DateTime<Local>,
+        pub comp: Comp,
+    }
+
+    pub type Timestamp = Duration;
+
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct Filter {
+        pub added: Option<Added>,
+        pub timestamp: Option<Timestamp>,
+        pub mode: FilterMode,
+    }
+
+    impl Filter {
+        pub fn new(mode: FilterMode) -> Self {
+            Self {
+                added: None,
+                timestamp: None,
+                mode,
+            }
+        }
+
+        pub fn is_any(&self) -> bool {
+            self.added.is_none() && self.timestamp.is_none()
+        }
+
+        pub fn clear(&mut self) {
+            self.added = None;
+            self.timestamp = None;
+        }
+
+        pub fn query(&self, prefix: Option<&str>) -> Option<String> {
+            if self.is_any() {
+                return None;
+            }
+
+            let Self {
+                added,
+                timestamp,
+                mode,
+            } = *self;
+
+            let prefix = prefix
+                .map(|prefix| format!("{prefix}."))
+                .unwrap_or_default();
+
+            let added = added.map(|added| {
+                let str_date = added
+                    .time
+                    .with_timezone(&chrono::Utc)
+                    .format("%F %T%.f%:z")
+                    .to_string();
+
+                format!("{prefix}created_at {} \"{}\"", added.comp, str_date)
+            });
+
+            let timestamp = timestamp.map(|timestamp| {
+                format!(
+                    "{prefix}episode_timestamp {} {}",
+                    timestamp.comp, timestamp.secs
+                )
+            });
+
+            let query = [added, timestamp]
+                .into_iter()
+                .filter_map(|value| value)
+                .collect::<Vec<_>>();
+
+            Some(query.join(&format!(" {mode} ")))
+        }
     }
 }

@@ -14,9 +14,9 @@ pub use icons::*;
 pub mod typo;
 pub use typo::*;
 pub mod filter;
-pub use filter::*;
+pub use filter::{Comments, Comp, Duration, Filter, FilterMode, Progress, ProgressKind, Release};
 pub mod sort;
-pub use sort::*;
+pub use sort::{Sort, SortKind};
 
 /// Returns an empty [`iced::Element`].
 pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {

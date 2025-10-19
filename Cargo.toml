@@ -14,7 +14,9 @@ gstreamer-base = "0.23" # basesrc
 glib = "0.20" # gobject traits and error type
 tokio = "1.47"
 chrono = { version = "0.4", features = ["std", "now"]}
+uuid = {version = "1.18", features = ["v7", "std"]}
 alphanumeric-sort = "1.5"
 rand = "0.8"
 image = "0.25"
 bytes = "1"
+rusqlite = {version = "0.37", features = ["bundled", "uuid", "chrono"]}

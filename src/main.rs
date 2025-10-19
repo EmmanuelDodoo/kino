@@ -21,9 +21,10 @@ use iced::{
 use std::{collections::HashMap, ops::Deref};
 
 mod app;
+mod db;
 mod error;
 mod home;
-mod media;
+mod models;
 mod player;
 pub mod utils;
 mod widgets;
@@ -32,6 +33,8 @@ use player::{Player, PlayerMessage};
 use utils::filter;
 use utils::filter::*;
 use utils::icons::*;
+use utils::sort;
+use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
 use utils::{Layout, Sort, SortKind, empty};
@@ -66,7 +69,7 @@ fn main() -> iced::Result {
         home::Home::subscription,
         home::Home::view,
     )
-    
+
     .window_size(Size::new(1200.0, 750.0))
     .run()
 }

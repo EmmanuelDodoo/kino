@@ -1,5 +1,5 @@
 use super::{PageUpdate, shared::*};
-use crate::media::{Media, show::*};
+use crate::models::{Media, shows::*};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
@@ -34,8 +34,8 @@ struct TvEpisode {
 
 impl TvEpisode {
     fn new(episode: Episode) -> Self {
-        let poster = episode.poster.as_ref().map(image::Handle::from_path);
-        let backdrop = episode.backdrop.as_ref().map(image::Handle::from_path);
+        let poster = episode.poster().and_then(round_image);
+        let backdrop = episode.backdrop().as_ref().map(image::Handle::from_path);
 
         Self {
             episode,
@@ -96,7 +96,7 @@ impl TvEpisode {
                 .spacing(6)
                 .align_y(Vertical::Center);
 
-            let synapsis = container(text(&self.episode.synapsis))
+            let synapsis = container(text(self.episode.synapsis()))
                 .max_width(750)
                 .height(Length::Fill);
 
@@ -300,9 +300,9 @@ impl TvSeason {
     ) -> (Self, scrollable::Id, Task<TvSeasonMessage>) {
         let thumbnails = Task::perform(
             async {
-                let alt = (0..6).map(Episode::testing2);
+                let alt = (0..6).map(|_| Episode::testing());
                 (6..12)
-                    .map(Episode::testing)
+                    .map(|_| Episode::testing())
                     .chain(alt)
                     .map(Thumbnail::new)
                     .collect::<Vec<_>>()
@@ -316,8 +316,8 @@ impl TvSeason {
     }
 
     fn new(season: Season, sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
-        let poster = season.poster.as_ref().map(image::Handle::from_path);
-        let backdrop = season.backdrop.as_ref().map(image::Handle::from_path);
+        let poster = season.poster().and_then(round_image);
+        let backdrop = season.backdrop().map(image::Handle::from_path);
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
@@ -572,7 +572,7 @@ impl TvSeason {
         let header = {
             let separator = || Element::from(text("•").line_height(0.9).size(H4));
 
-            let title = text(&self.season.name).size(H2);
+            let title = text(self.season.name()).size(H2);
             let duration = duration(&self.season);
             let rating = ratings(&self.season);
             let release = text(self.season.release_year()).size(H7);
@@ -581,7 +581,7 @@ impl TvSeason {
                 .spacing(6)
                 .align_y(Vertical::Center);
 
-            let synapsis = container(text(&self.season.synapsis))
+            let synapsis = container(text(self.season.synapsis()))
                 .max_width(750)
                 .height(Length::Fill);
 
@@ -816,9 +816,9 @@ impl Series {
     ) -> (Self, scrollable::Id, Task<SeriesMessage>) {
         let thumbnails = Task::perform(
             async {
-                let alt = (0..6).map(Season::testing2);
+                let alt = (0..6).map(|_| Season::testing2());
                 (6..12)
-                    .map(Season::testing)
+                    .map(|_| Season::testing())
                     .chain(alt)
                     .map(Thumbnail::new)
                     .collect::<Vec<_>>()
@@ -832,8 +832,8 @@ impl Series {
     }
 
     fn new(show: Show, sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
-        let poster = show.poster.as_ref().map(image::Handle::from_path);
-        let backdrop = show.backdrop.as_ref().map(image::Handle::from_path);
+        let poster = show.poster().and_then(round_image);
+        let backdrop = show.backdrop().map(image::Handle::from_path);
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
@@ -969,7 +969,7 @@ impl Series {
     fn name(&self) -> String {
         match self.selected.as_ref().map(|season| season.name()) {
             Some(selected) => format!("{}: {selected}", self.show.name()),
-            None => self.show.name.to_owned(),
+            None => self.show.name().to_owned(),
         }
     }
 
@@ -1135,7 +1135,7 @@ impl Series {
         let header = {
             let separator = || Element::from(text("•").line_height(0.9).size(H4));
 
-            let title = text(&self.show.name).size(H2);
+            let title = text(self.show.name()).size(H2);
             let duration = duration(&self.show);
             let rating = ratings(&self.show);
             let release = text(self.show.release_year()).size(H7);
@@ -1159,7 +1159,7 @@ impl Series {
                 row(tags).spacing(6).align_y(Vertical::Center)
             };
 
-            let synapsis = container(text(&self.show.synapsis))
+            let synapsis = container(text(self.show.synapsis()))
                 .max_width(750)
                 .height(Length::Fill);
 
@@ -1389,9 +1389,9 @@ impl TvShows {
     ) -> (Self, scrollable::Id, Task<TvShowsMessage>) {
         let thumbnails = Task::perform(
             async {
-                let alt = (0..6).map(Show::testing2);
+                let alt = (0..6).map(|_| Show::testing());
                 (6..12)
-                    .map(Show::testing)
+                    .map(|_| Show::testing())
                     .chain(alt)
                     .map(Thumbnail::new)
                     .collect::<Vec<_>>()

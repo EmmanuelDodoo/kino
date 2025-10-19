@@ -1,4 +1,4 @@
-use crate::media::Media;
+use crate::models::Media;
 use crate::utils::empty;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
@@ -55,7 +55,10 @@ pub fn duration<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
 }
 
 pub fn ratings<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
-    let rating = media.rating();
+    let rating = media
+        .rating()
+        .map(|rating| rating.round() as u8)
+        .unwrap_or_default();
 
     let unstars = (5 - rating).clamp(0, 5);
     let stars = (0..rating).map(|_| Element::from(icon(STAR).size(H7)));
@@ -135,7 +138,11 @@ pub fn filter_sort<'a, T: 'a + Media>(
 pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a, Message> {
     let duration = data("Duration", media.duration_short(), CLOCK);
 
-    let rating = data("Rating", format!("{}/5", media.rating()), STAR);
+    let rating = data(
+        "Rating",
+        format!("{}/5", media.rating().unwrap_or_default()),
+        STAR,
+    );
 
     let comments = data("Comments", media.comments(), NUMBER);
 
@@ -151,7 +158,11 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
         HOURGLASS,
     );
 
-    let recent = data("Recent Watch", media.recent_short(), CALENDAR);
+    let recent = data(
+        "Recent Watch",
+        media.recent_short().unwrap_or(String::from(" --:--:--")),
+        CALENDAR,
+    );
 
     let r1 = row!(
         duration,
@@ -227,7 +238,7 @@ fn round_corners(rgba: &mut image::RgbaImage) {
     }
 }
 
-fn round_image(path: &str) -> Option<Handle> {
+pub fn round_image(path: &str) -> Option<Handle> {
     let mut image = image::ImageReader::open(path)
         .inspect_err(|err| eprintln!("{err:?}"))
         .ok()

@@ -21,7 +21,7 @@ mod pages;
 mod shared;
 mod shows;
 
-use crate::media::{Movie, MovieId, Show, ShowId};
+use crate::models::{Movie, MovieId, Show, ShowId};
 use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind, PageUpdate};
 use shared::{Scroll, Thumbnail, filter_sort};
@@ -150,7 +150,7 @@ impl Home {
         let load_font = load_fonts().map(HomeMessage::FontLoad);
 
         let recent_movies = Task::perform(
-            async { (0..6).map(Movie::testing).collect::<Vec<_>>() },
+            async { (0..6).map(|_| Movie::testing()).collect::<Vec<_>>() },
             |videos| {
                 HomeMessage::Recent(RecentMessage::Movies(
                     videos.into_iter().map(Thumbnail::new).collect(),
@@ -159,7 +159,7 @@ impl Home {
         );
 
         let recent_shows = Task::perform(
-            async { (0..6).map(Show::testing).collect::<Vec<_>>() },
+            async { (0..6).map(|_| Show::testing()).collect::<Vec<_>>() },
             |shows| {
                 HomeMessage::Recent(RecentMessage::Shows(
                     shows.into_iter().map(Thumbnail::new).collect(),

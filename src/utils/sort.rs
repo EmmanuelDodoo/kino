@@ -1,5 +1,5 @@
 use super::H7;
-use crate::media::Media;
+use crate::models::Media;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sort {
@@ -20,7 +20,51 @@ impl Sort {
         self.sorts = [None; SORTS];
     }
 
+    pub fn query(&self, prefix: Option<&str>) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+
+        let prefix = prefix
+            .map(|prefix| format!("{prefix}."))
+            .unwrap_or_default();
+
+        let column = |kind: SortKind| {
+            let name = match kind {
+                SortKind::Name => "name",
+                SortKind::Watch => "watch_count",
+                SortKind::Added => "created_at",
+                SortKind::Rating => "rating",
+                SortKind::Recent => "last_watched",
+                SortKind::Release => "release",
+                SortKind::Duration => "duration",
+                SortKind::Progress => "progress",
+                SortKind::Comments => "comment_count",
+            };
+
+            format!("{prefix}{name}")
+        };
+
+        let sorts = self.prepare().map(column).collect::<Vec<_>>();
+
+        Some(sorts.join(", "))
+    }
+
     pub fn sort<T: Media>(&self, x: &T, y: &T) -> std::cmp::Ordering {
+        let sorts = self.prepare();
+
+        for kind in sorts {
+            let ord = kind.cmp(x, y);
+
+            if !matches!(ord, std::cmp::Ordering::Equal) {
+                return ord;
+            }
+        }
+
+        std::cmp::Ordering::Equal
+    }
+
+    fn prepare(&self) -> impl Iterator<Item = SortKind> {
         let mut sorts = self
             .sorts
             .into_iter()
@@ -32,15 +76,7 @@ impl Sort {
 
         sorts.sort_by(|(_, x), (_, y)| x.cmp(y));
 
-        for (kind, _) in sorts {
-            let ord = kind.cmp(x, y);
-
-            if !matches!(ord, std::cmp::Ordering::Equal) {
-                return ord;
-            }
-        }
-
-        std::cmp::Ordering::Equal
+        sorts.into_iter().map(|(kind, _)| kind)
     }
 
     pub fn push(&mut self, kind: SortKind) {
@@ -170,7 +206,12 @@ impl SortKind {
             Self::Name => alphanumeric_sort::compare_str(x.name(), y.name()),
             Self::Duration => x.duration().cmp(&y.duration()),
             Self::Added => x.added().cmp(&y.added()),
-            Self::Rating => x.rating().cmp(&y.rating()),
+            Self::Rating => match (x.rating(), y.rating()) {
+                (Some(x), Some(y)) => x.total_cmp(&y),
+                (Some(_), None) => std::cmp::Ordering::Greater,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            },
             Self::Recent => x.recent().cmp(&y.recent()),
             Self::Release => x.release().cmp(&y.release()),
             Self::Progress => x.progress().total_cmp(&y.progress()),
@@ -213,5 +254,126 @@ impl std::fmt::Display for SortKind {
                 Self::Watch => "Watch Count",
             }
         )
+    }
+}
+
+pub mod comments {
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum Kind {
+        Added = 0,
+        Episode = 1,
+        Timestamp = 2,
+    }
+
+    const KINDS: usize = 3;
+
+    impl Kind {
+        fn from_usize(idx: usize) -> Self {
+            match idx {
+                0 => Self::Added,
+                1 => Self::Episode,
+                2 => Self::Timestamp,
+                _ => unreachable!("Invalid Comment sort idx"),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct Sort {
+        count: usize,
+        sorts: [Option<usize>; KINDS],
+    }
+
+    impl Sort {
+        pub fn new() -> Self {
+            Self {
+                count: 0,
+                sorts: [None; KINDS],
+            }
+        }
+
+        pub fn query(&self, prefix: Option<&str>) -> Option<String> {
+            if self.is_empty() {
+                return None;
+            }
+
+            let prefix = prefix
+                .map(|prefix| format!("{prefix}."))
+                .unwrap_or_default();
+
+            let column = |kind: Kind| {
+                let name = match kind {
+                    Kind::Added => "created_at",
+                    Kind::Timestamp => "episode_timestamp",
+                    Kind::Episode => "episode_id",
+                };
+
+                format!("{prefix}{name}")
+            };
+
+            let sort = self.prepare().map(column).collect::<Vec<_>>();
+
+            Some(sort.join(", "))
+        }
+
+        fn prepare(&self) -> impl Iterator<Item = Kind> {
+            let mut sorts = self
+                .sorts
+                .into_iter()
+                .enumerate()
+                .filter_map(|(idx, position)| {
+                    position.map(|position| (Kind::from_usize(idx), position))
+                })
+                .collect::<Vec<_>>();
+
+            sorts.sort_by(|(_, x), (_, y)| x.cmp(y));
+
+            sorts.into_iter().map(|(kind, _)| kind)
+        }
+
+        pub fn clear(&mut self) {
+            self.count = 0;
+            self.sorts = [None; KINDS];
+        }
+
+        pub fn push(&mut self, kind: Kind) {
+            self.sorts[kind as usize] = Some(self.count);
+            self.count += 1;
+        }
+
+        pub fn remove(&mut self, kind: Kind) {
+            let Some(old) = self.sorts[kind as usize].take() else {
+                return;
+            };
+
+            self.count = self.count.saturating_sub(1);
+            for kind in &mut self.sorts {
+                let Some(idx) = kind else {
+                    continue;
+                };
+
+                if *idx > old {
+                    *idx = *idx - 1
+                }
+            }
+        }
+
+        pub fn reverse(&mut self) {
+            let max = self.count.saturating_sub(1);
+
+            for kind in &mut self.sorts {
+                let Some(idx) = kind else { continue };
+
+                *idx = max - *idx;
+            }
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.count == 0
+        }
+
+        pub fn position(&self, kind: Kind) -> Option<usize> {
+            self.sorts[kind as usize]
+        }
     }
 }

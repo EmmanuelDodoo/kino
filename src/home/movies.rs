@@ -1,6 +1,6 @@
 // #![allow(dead_code)]
 use super::{PageUpdate, shared::*};
-use crate::media::{Media, Movie, MovieId};
+use crate::models::{Media, Movie, MovieId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
@@ -289,8 +289,11 @@ impl Movies {
     ) -> (Self, scrollable::Id, Task<MoviesMessage>) {
         let load_thumbnails = Task::perform(
             async {
-                let alt = (6..12).map(Movie::testing2);
-                (0..6).map(Movie::testing).chain(alt).collect::<Vec<_>>()
+                let alt = (6..12).map(|_| Movie::testing2());
+                (0..6)
+                    .map(|_| Movie::testing())
+                    .chain(alt)
+                    .collect::<Vec<_>>()
             },
             |videos| MoviesMessage::Thumbnails(videos.into_iter().map(Thumbnail::new).collect()),
         );
