@@ -1897,6 +1897,7 @@ dependencies = [
 [[package]]
 name = "iced_video_player"
 version = "0.6.0"
+source = "git+https://github.com/EmmanuelDodoo/iced_video_player#4e7177ae04375ef9724a9140c1520458823928fb"
 dependencies = [
  "glib",
  "gstreamer",
@@ -2235,6 +2236,7 @@ name = "kino"
 version = "0.1.0"
 dependencies = [
  "alphanumeric-sort",
+ "bytes",
  "chrono",
  "glib",
  "gstreamer",
@@ -2242,6 +2244,7 @@ dependencies = [
  "gstreamer-base",
  "iced",
  "iced_video_player",
+ "image",
  "rand",
  "tokio",
  "url",

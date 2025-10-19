@@ -545,7 +545,8 @@ impl TvSeason {
                 .spacing(20.0)
                 .id(self.scroll.id.clone())
                 .on_scroll(TvSeasonMessage::Scroll),
-        );
+        )
+        .padding(10);
 
         content.into()
     }
@@ -1107,7 +1108,8 @@ impl Series {
                 .spacing(20.0)
                 .id(self.scroll.id.clone())
                 .on_scroll(SeriesMessage::Scroll),
-        );
+        )
+        .padding(10);
 
         content.into()
     }

@@ -10,16 +10,15 @@ use iced::{
     mouse,
     time::Instant,
     widget::{
-        scrollable,
-        self, column, container, horizontal_space, image, mouse_area, row, stack, text,
-        vertical_space,
+        self, center, column, container, horizontal_space, image::Handle, mouse_area, row,
+        scrollable, stack, text, vertical_space,
     },
 };
 
 pub const CARD_HEIGHT: f32 = 350.0;
-pub const CARD_WIDTH: f32 = CARD_HEIGHT * 1.0 / 1.0;
+pub const CARD_WIDTH: f32 = CARD_HEIGHT * 7.5 / 10.0;
 pub const LIST_HEIGHT: f32 = 200.0;
-pub const LIST_WIDTH: f32 = LIST_HEIGHT * 2.0 / 3.0;
+pub const LIST_WIDTH: f32 = LIST_HEIGHT * 5.5 / 10.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Tab {
@@ -99,41 +98,6 @@ pub fn add_labelled<'a, T: Media, Message: 'a + Clone>(
 pub fn synapsis<'a, T: Media, Message: 'a>(media: &'a T) -> Element<'a, Message> {
     container(text(media.synapsis()).size(H7))
         .max_height(52.0)
-        .into()
-}
-
-pub fn poster<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
-    match media.poster() {
-        Some(handle) => container(
-            image(handle)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .content_fit(ContentFit::Contain),
-        )
-        .style(container::dark)
-        .into(),
-        None => container(empty()).style(container::dark).into(),
-    }
-}
-
-pub fn float<'a, Message: 'a>(
-    content: impl Into<Element<'a, Message>>,
-    zoom: &'a Animation<bool>,
-    now: Instant,
-) -> Element<'a, Message> {
-    widget::float(content)
-        .scale(zoom.interpolate(1.0, 1.025, now))
-        .translate(move |bounds, viewport| {
-            bounds.zoom(1.025).offset(&viewport.shrink(5)) * zoom.interpolate(0.0, 1.0, now)
-        })
-        .style(move |_theme| widget::float::Style {
-            shadow: Shadow {
-                color: Color::BLACK.scale_alpha(zoom.interpolate(0.0, 1.0, now)),
-                blur_radius: zoom.interpolate(0.0, 20.0, now),
-                ..Shadow::default()
-            },
-            ..widget::float::Style::default()
-        })
         .into()
 }
 
@@ -218,21 +182,92 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
     content.width(width).into()
 }
 
+fn round_corners(rgba: &mut image::RgbaImage) {
+    let (width, height) = rgba.dimensions();
+
+    let radius = (width as f32 * 0.025) as u32;
+    let radius_sq = radius * radius;
+    let aa_span = radius / 4;
+
+    for y in 0..height {
+        for x in 0..width {
+            let dist_x = if x < radius {
+                radius - x
+            } else if x >= width - radius {
+                x - (width - radius - 1)
+            } else {
+                0
+            };
+
+            let dist_y = if y < radius {
+                radius - y
+            } else if y >= height - radius {
+                y - (height - radius - 1)
+            } else {
+                0
+            };
+
+            let dist_sq = dist_x * dist_x + dist_y * dist_y;
+
+            if dist_sq > radius_sq {
+                let dist = (dist_sq as f32).sqrt();
+
+                if dist <= (radius + aa_span) as f32 {
+                    let alpha_scale =
+                        1.0 - (dist_sq - radius_sq) as f32 / (aa_span * aa_span) as f32;
+
+                    let pixel = rgba.get_pixel_mut(x, y);
+                    pixel.0[3] = (pixel.0[3] as f32 * alpha_scale) as u8;
+                } else {
+                    let pixel = rgba.get_pixel_mut(x, y);
+                    pixel.0 = [0; 4];
+                }
+            }
+        }
+    }
+}
+
+fn round_image(path: &str) -> Option<Handle> {
+    let mut image = image::ImageReader::open(path)
+        .inspect_err(|err| eprintln!("{err:?}"))
+        .ok()
+        .and_then(|image| {
+            image
+                .with_guessed_format()
+                .inspect_err(|err| eprintln!("{err:?}"))
+                .ok()
+        })
+        .and_then(|image| image.decode().inspect_err(|err| eprintln!("{err:?}")).ok())
+        .map(|image| image.to_rgba8());
+
+    image.as_mut().map(|image| round_corners(image));
+
+    image.map(|image| {
+        Handle::from_rgba(
+            image.width(),
+            image.height(),
+            bytes::Bytes::from(image.into_raw()),
+        )
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct Thumbnail<T: Media> {
-    pub poster: Option<image::Handle>,
-    pub backdrop: Option<image::Handle>,
+    pub poster: Option<Handle>,
+    pub backdrop: Option<Handle>,
     pub zoom: Animation<bool>,
     pub media: T,
 }
 
 impl<T: Media> Thumbnail<T> {
     pub fn new(media: T) -> Self {
-        let poster = media.poster().map(image::Handle::from_path);
-        let backdrop = media.backdrop().map(image::Handle::from_path);
+        let poster = media.poster().and_then(round_image);
+        let backdrop = media.backdrop().map(Handle::from_path);
 
         Self {
-            zoom: Animation::new(false).very_quick().easing(Easing::EaseInOut),
+            zoom: Animation::new(false)
+                .duration(iced::time::Duration::from_millis(50))
+                .easing(Easing::EaseInOut),
             poster,
             backdrop,
             media,
@@ -245,6 +280,21 @@ impl<T: Media> Thumbnail<T> {
 
     pub fn id(&self) -> T::Id {
         self.media.id()
+    }
+
+    fn poster<'a, Message: 'a>(&self) -> Element<'a, Message> {
+        match &self.poster {
+            Some(handle) => container(
+                widget::image(handle)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .content_fit(ContentFit::Fill),
+            )
+            .style(container::dark)
+            .into(),
+
+            None => container(empty()).style(container::dark).into(),
+        }
     }
 
     pub fn list<'a, Message: 'a + Clone>(
@@ -280,20 +330,35 @@ impl<T: Media> Thumbnail<T> {
             .align_y(Vertical::Center);
 
         let details = container(details)
-            .style(container::dark)
             .width(Length::Fill)
             .height(Length::Fill)
             .padding([5, 10]);
 
-        let img = container(poster(&self.media)).width(LIST_WIDTH);
+        let img = container(self.poster()).width(LIST_WIDTH * 1.75);
 
         let overlay = {
-            let size = H1 * 1.95;
+            let size = H1 * 1.75;
+            let play = icon(PLAY)
+                .size(size)
+                .align_x(Horizontal::Center)
+                .height(size * self.zoom.interpolate(0.0, 1.0, now));
             let play = mouse_area(
-                icon(PLAY)
-                    .size(size)
-                    .align_x(Horizontal::Center)
-                    .height(size * self.zoom.interpolate(0.0, 1.0, now)),
+                center(play)
+                    .width(1.00 * size * self.zoom.interpolate(0.0, 1.0, now))
+                    .height(1.0 * size * self.zoom.interpolate(0.0, 1.0, now))
+                    .style(|theme| {
+                        let default = container::dark(theme);
+                        let background = default
+                            .background
+                            .map(|background| background.scale_alpha(0.8));
+                        let border = default.border.rounded(10.0);
+
+                        container::Style {
+                            border,
+                            background,
+                            ..default
+                        }
+                    }),
             )
             .interaction(iced::mouse::Interaction::Pointer)
             .on_press((on_play)(self.media.id()));
@@ -306,17 +371,32 @@ impl<T: Media> Thumbnail<T> {
 
         let img = stack![img, overlay];
 
-        let content = mouse_area(
-            row!(img, details)
-                .align_y(Vertical::Center)
-                .height(LIST_HEIGHT),
-        )
-        .interaction(mouse::Interaction::Pointer)
-        .on_press((on_select)(self.media.id()))
-        .on_exit((on_hover)(self.media.id(), false))
-        .on_enter((on_hover)(self.media.id(), true));
+        let content = row!(img, details)
+            .align_y(Vertical::Center)
+            .height(LIST_HEIGHT);
 
-        float(content, &self.zoom, now)
+        let background_factor = 1.0 * self.zoom.interpolate(0.25, 1.0, now);
+        let content = container(content).padding(8).style(move |theme| {
+            let default = container::dark(theme);
+            let border = default.border.rounded(10.0);
+            let background = default
+                .background
+                .map(|background| background.scale_alpha(background_factor));
+
+            container::Style {
+                border,
+                background,
+                ..default
+            }
+        });
+
+        let content = mouse_area(content)
+            .interaction(mouse::Interaction::Pointer)
+            .on_press((on_select)(self.media.id()))
+            .on_exit((on_hover)(self.media.id(), false))
+            .on_enter((on_hover)(self.media.id(), true));
+
+        content.into()
     }
 
     pub fn card<'a, Message: 'a + Clone>(
@@ -357,9 +437,7 @@ impl<T: Media> Thumbnail<T> {
                 .width(Length::Fill)
                 .align_y(Vertical::Center);
 
-            container(column!(title, details).width(Length::Fill).spacing(10.0))
-                .padding(padding)
-                .style(container::dark)
+            container(column!(title, details).width(Length::Fill).spacing(10.0)).padding(padding)
         };
 
         let bottom = {
@@ -370,12 +448,29 @@ impl<T: Media> Thumbnail<T> {
         };
 
         let play = {
-            let size = CARD_HEIGHT * 0.18;
+            let size = CARD_HEIGHT * 0.15;
 
             let play = icon(PLAY)
                 .size(size)
                 .align_x(Horizontal::Center)
                 .height(size * self.zoom.interpolate(0.0, 1.0, now));
+
+            let play = center(play)
+                .width(1.25 * size * self.zoom.interpolate(0.0, 1.0, now))
+                .height(1.1 * size * self.zoom.interpolate(0.0, 1.0, now))
+                .style(|theme| {
+                    let default = container::dark(theme);
+                    let background = default
+                        .background
+                        .map(|background| background.scale_alpha(0.8));
+                    let border = default.border.rounded(10.0);
+
+                    container::Style {
+                        border,
+                        background,
+                        ..default
+                    }
+                });
 
             row!(horizontal_space(), play, horizontal_space())
                 .height(Length::Fill)
@@ -391,7 +486,7 @@ impl<T: Media> Thumbnail<T> {
         .interaction(iced::mouse::Interaction::Pointer)
         .on_press((on_play)(self.media.id()));
 
-        let img = poster(&self.media);
+        let img = self.poster();
 
         let content = stack![img, overlay].width(CARD_WIDTH);
 
@@ -399,13 +494,29 @@ impl<T: Media> Thumbnail<T> {
             .width(CARD_WIDTH)
             .height(CARD_HEIGHT);
 
+        let background_factor = 1.0 * self.zoom.interpolate(0.25, 1.0, now);
+        let content = container(content).padding(8).style(move |theme| {
+            let default = container::dark(theme);
+            let border = default.border.rounded(10.0);
+            let background = default
+                .background
+                .map(|background| background.scale_alpha(background_factor));
+
+            container::Style {
+                border,
+                background,
+                ..default
+            }
+        });
+
         let content = mouse_area(content)
             .interaction(mouse::Interaction::Pointer)
             .on_press((on_select)(self.media.id()))
             .on_exit((on_hover)(self.media.id(), false))
             .on_enter((on_hover)(self.media.id(), true));
 
-        float(content, &self.zoom, now)
+        content.into()
+        // float(content, &self.zoom, now)
     }
 }
 
@@ -423,4 +534,3 @@ impl Scroll {
         }
     }
 }
-
