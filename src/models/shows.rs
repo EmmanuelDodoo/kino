@@ -1,11 +1,12 @@
+#![allow(dead_code)]
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef};
+use rusqlite::types::{ToSqlOutput, Value};
 use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::{DirectoryId, Media, datetime_to_sql, naivedate_to_sql};
-use crate::db::{Database, Operation, Query, Table};
+use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ShowId(pub(super) Uuid);
@@ -69,7 +70,7 @@ pub struct Show {
     rating: Option<f32>,
     progress: f32,
     last_watched: Option<DateTime<Local>>,
-    recent_season: Option<SeasonId>,
+    pub recent_season: Option<SeasonId>,
     duration: u64,
     comments: u32,
 }
@@ -475,7 +476,7 @@ pub struct Season {
     progress: f32,
     rating: Option<f32>,
     last_watched: Option<DateTime<Local>>,
-    recent_episode: Option<EpisodeId>,
+    pub recent_episode: Option<EpisodeId>,
     duration: u64,
     comments: u32,
 }
@@ -1342,10 +1343,10 @@ impl Media for Episode {
 #[derive(Debug, Clone)]
 pub struct EComment {
     pub id: ECommentId,
-    added: DateTime<Local>,
-    content: String,
-    episode: EpisodeId,
-    timestamp: Option<u64>,
+    pub added: DateTime<Local>,
+    pub content: String,
+    pub episode: EpisodeId,
+    pub timestamp: Option<u64>,
 }
 
 impl EComment {

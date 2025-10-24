@@ -6,7 +6,7 @@ CREATE TABLE directory (
 	active		BOOLEAN NOT NULL,
 	media_type	TEXT NOT NULL,
 	last_scan       DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	CHECK ( media_type IN ("movies", "shows"))
+	CHECK ( media_type IN ('movies', 'shows'))
 );
 
 CREATE TABLE tv_show ( 
@@ -17,7 +17,7 @@ CREATE TABLE tv_show (
     	path                 TEXT NOT NULL,
 	poster               TEXT     ,
 	tags                 TEXT     ,
-	synapsis             TEXT  DEFAULT "<empty synapsis>"   ,
+	synapsis             TEXT  DEFAULT '<empty synapsis>'   ,
 	release              TEXT NOT NULL    ,
 	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
 	backdrop             TEXT     ,
@@ -40,7 +40,7 @@ CREATE TABLE season (
 	original_name	     TEXT NOT NULL,
 	path        	     TEXT NOT NULL,
 	poster               TEXT     ,
-	synapsis             TEXT  DEFAULT "<empty synapsis>"   ,
+	synapsis             TEXT  DEFAULT '<empty synapsis>'   ,
 	release              TEXT NOT NULL    ,
 	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
 	show_id              TEXT NOT NULL    ,
@@ -64,7 +64,7 @@ CREATE TABLE episode (
 	original_name	     TEXT NOT NULL,
     path                 TEXT NOT NULL,
 	progress             FLOAT(2,1) NOT NULL DEFAULT 0.0   ,
-	synapsis             TEXT  DEFAULT "<empy synapsis>"   ,
+	synapsis             TEXT  DEFAULT '<empy synapsis>'   ,
 	rating               FLOAT(2, 1)     ,
 	poster               TEXT     ,
 	season_id            TEXT NOT NULL    ,
@@ -102,7 +102,7 @@ CREATE TABLE movie (
 	poster		        TEXT,
 	backdrop	        TEXT,
 	tags		        TEXT,
-	synapsis	        TEXT DEFAULT "<empty synapsis>",
+	synapsis	        TEXT DEFAULT '<empty synapsis>',
 	release		        TEXT NOT NULL,
 	created_at	        DATETIME DEFAULT CURRENT_TIMESTAMP,
 	watch_count	        INTEGER NOT NULL DEFAULT 0,
@@ -138,15 +138,16 @@ CREATE TABLE collection (
     custom          TEXT,
     theme           INT,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    CHECK (view IN ("shown", "hidden", "pinned"))
+    CHECK (view IN ('shown', 'hidden', 'pinned'))
 );
 
 CREATE TABLE collection_item (
 	collection_id		TEXT NOT NULL,
 	media_type		TEXT NOT NULL,
 	media_id		TEXT NOT NULL,
-	CHECK ( media_type IN ("movie", "show", "season", "episode")),
-	PRIMARY KEY ( collection_id, media_type, media_id)
+	CHECK ( media_type IN ('movie', 'show', 'season', 'episode')),
+	PRIMARY KEY ( collection_id, media_type, media_id),
+    FOREIGN KEY ( collection_id ) REFERENCES collection( id ) ON DELETE CASCADE
 );
 
 CREATE VIEW get_episode_data AS SELECT
@@ -160,6 +161,86 @@ CREATE VIEW get_episode_data AS SELECT
         INNER JOIN season ON episode.season_id = season.id
         INNER JOIN tv_show ON season.show_id = tv_show.id
         INNER JOIN directory ON tv_show.directory = directory.id;
+
+CREATE VIEW get_collection_posters AS SELECT collection_id, poster 
+FROM (
+    SELECT movie.poster, item.collection_id
+    FROM collection_item item
+    JOIN movie ON movie.id = item.media_id
+    WHERE item.media_type = 'movie' AND movie.poster IS NOT NULL
+
+    UNION ALL
+
+    SELECT tv_show.poster, item.collection_id
+    FROM collection_item item
+    JOIN tv_show ON tv_show.id = item.media_id
+    WHERE item.media_type = 'show' AND tv_show.poster IS NOT NULL
+
+
+    UNION ALL
+
+    SELECT season.poster, item.collection_id
+    FROM collection_item item
+    JOIN season ON season.id = item.media_id
+    WHERE item.media_type = 'season' AND season.poster IS NOT NULL
+
+    UNION ALL
+
+    SELECT episode.poster, item.collection_id
+    FROM collection_item item
+    JOIN episode ON episode.id = item.media_id
+    WHERE item.media_type = 'episode' AND episode.poster IS NOT NULL
+) 
+ORDER BY collection_id
+LIMIT 4;
+
+CREATE VIEW get_collection AS SELECT collection.*,
+(
+    SELECT posters.poster 
+    FROM get_collection_posters posters
+    WHERE posters.collection_id = collection.id
+    LIMIT 1 OFFSET 0
+) AS poster1,
+(
+    SELECT posters.poster 
+    FROM get_collection_posters posters
+    WHERE posters.collection_id = collection.id
+    LIMIT 1 OFFSET 1
+) AS poster2,
+(
+    SELECT posters.poster  
+    FROM get_collection_posters posters
+    WHERE posters.collection_id = collection.id
+    LIMIT 1 OFFSET 2
+) AS poster3,
+(
+    SELECT posters.poster 
+    FROM get_collection_posters posters
+    WHERE posters.collection_id = collection.id
+    LIMIT 1 OFFSET 3
+) AS poster4
+FROM collection;
+
+
+CREATE TRIGGER item_movie_delete_tr AFTER DELETE ON movie
+BEGIN
+    DELETE FROM collection_item WHERE media_type = 'movie' AND media_id = OLD.id;
+END;
+
+CREATE TRIGGER item_show_delete_tr AFTER DELETE ON tv_show
+BEGIN
+    DELETE FROM collection_item WHERE media_type = 'show' AND media_id = OLD.id;
+END;
+
+CREATE TRIGGER item_season_delete_tr AFTER DELETE ON season
+BEGIN
+    DELETE FROM collection_item WHERE media_type = 'season' AND media_id = OLD.id;
+END;
+
+CREATE TRIGGER item_episode_delete_tr AFTER DELETE ON episode
+BEGIN
+    DELETE FROM collection_item WHERE media_type = 'episode' AND media_id = OLD.id;
+END;
 
 CREATE TRIGGER mcomment_delete_tr AFTER DELETE ON movie_comment
 BEGIN

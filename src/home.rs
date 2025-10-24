@@ -3,19 +3,19 @@ use crate::widgets::menu::{Position, menu};
 use iced::{
     Element, Length, Padding, Subscription, Task, Theme,
     alignment::Vertical,
-    animation::{Animation, Easing},
     border::{Border, Radius},
     font, keyboard,
     time::Instant,
     widget::{
-        button, center, column, container, horizontal_rule, horizontal_space, pick_list, row,
-        scrollable, text, text_input, vertical_rule, vertical_space,
+        button, column, container, horizontal_rule, horizontal_space, pick_list, row, scrollable,
+        text, text_input, vertical_rule, vertical_space,
     },
     window,
 };
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 
+mod collections;
 mod movies;
 mod pages;
 mod shared;
@@ -219,6 +219,8 @@ impl Home {
                 self.update_scroll()
             }
             HomeMessage::Goto(kind) => {
+                self.backward.retain(|back| *back != kind);
+
                 if let Some(old) = self.current_page.replace(kind) {
                     self.backward.push(old)
                 };
@@ -232,7 +234,7 @@ impl Home {
                         layout: self.layout,
                     };
                     page.page_update(update, now);
-                    return Task::none();
+                    return page.update_scroll().map(|_| HomeMessage::None);
                 }
 
                 match kind {
@@ -242,7 +244,7 @@ impl Home {
                             .values()
                             .map(|thumbnail| thumbnail.media.clone())
                             .collect();
-                        let (movies, id, task) = Movies::dummies(
+                        let (movies, task) = Movies::dummies(
                             self.sort,
                             self.filters,
                             matches!(self.layout, Layout::Grid),
@@ -251,11 +253,7 @@ impl Home {
 
                         self.pages.insert(kind, Page::Movies(Box::new(movies)));
 
-                        let scroll =
-                            scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
-
                         task.map(HomeMessage::Movies)
-                            .chain(scroll)
                             .chain(Task::done(HomeMessage::PerformPending))
                     }
                     PageKind::Shows => {
@@ -264,7 +262,7 @@ impl Home {
                             .values()
                             .map(|thumbnail| thumbnail.media.clone())
                             .collect();
-                        let (shows, id, tasks) = TvShows::dummies(
+                        let (shows, tasks) = TvShows::dummies(
                             self.sort,
                             self.filters,
                             matches!(self.layout, Layout::Grid),
@@ -273,12 +271,8 @@ impl Home {
 
                         self.pages.insert(kind, Page::Shows(Box::new(shows)));
 
-                        let scroll =
-                            scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
-
                         tasks
                             .map(HomeMessage::Shows)
-                            .chain(scroll)
                             .chain(Task::done(HomeMessage::PerformPending))
                     }
                     _ => {
@@ -686,6 +680,8 @@ impl Home {
                     };
 
                     if let Some(task) = movie.preview(id) {
+                        //todo might have to wait untill task is complete before chainned is
+                        //executed
                         return task.map(HomeMessage::Movies).chain(Task::done(
                             HomeMessage::Recent(RecentMessage::DetailsMovie(id)),
                         ));

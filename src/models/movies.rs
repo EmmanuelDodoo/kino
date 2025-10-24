@@ -1,11 +1,11 @@
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef};
+use rusqlite::types::{ToSqlOutput, Value};
 use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::{DirectoryId, Media, datetime_to_sql, naivedate_to_sql};
-use crate::db::{Database, Operation, Query, Table};
+use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MovieId(pub(super) Uuid);

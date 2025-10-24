@@ -1,13 +1,18 @@
 #![allow(unused_imports, dead_code)]
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef};
-use std::path::PathBuf;
+use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef};
 use uuid::Uuid;
 
 pub mod collection;
 pub mod movies;
 pub mod shows;
+
+pub use collection::{Collection, CollectionId, CollectionView};
+pub use movies::*;
+pub use shows::*;
+
+use crate::db::{Operation, Query, Table};
 
 pub trait Media {
     type Id: Copy + Clone + std::hash::Hash + PartialEq + Eq;
@@ -122,12 +127,6 @@ pub trait Media {
         todo!()
     }
 }
-
-pub use collection::{Collection, CollectionId, CollectionView};
-pub use movies::*;
-pub use shows::*;
-
-use crate::db::{Database, Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
 pub enum MediaType {

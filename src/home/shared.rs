@@ -196,7 +196,7 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
 fn round_corners(rgba: &mut image::RgbaImage) {
     let (width, height) = rgba.dimensions();
 
-    let radius = (width as f32 * 0.025) as u32;
+    let radius = (width as f32 * 0.05) as u32;
     let radius_sq = radius * radius;
     let aa_span = radius / 4;
 
@@ -295,14 +295,11 @@ impl<T: Media> Thumbnail<T> {
 
     fn poster<'a, Message: 'a>(&self) -> Element<'a, Message> {
         match &self.poster {
-            Some(handle) => container(
-                widget::image(handle)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .content_fit(ContentFit::Fill),
-            )
-            .style(container::dark)
-            .into(),
+            Some(handle) => widget::image(handle)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .content_fit(ContentFit::Fill)
+                .into(),
 
             None => container(empty()).style(container::dark).into(),
         }

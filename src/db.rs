@@ -1,4 +1,4 @@
-#![allow(unused_imports, dead_code)]
+// #![allow(unused_imports, dead_code)]
 use crate::models::{
     Collection, CollectionId, Directory, DirectoryId, EComment, ECommentId, Episode, EpisodeId,
     MComment, MCommentId, Movie, MovieId, Season, SeasonId, Show, ShowId,
@@ -42,6 +42,8 @@ impl Database {
     const SEASON_QUERY: &str = "SELECT season.*, tv_show.backdrop FROM season INNER JOIN tv_show ON season.show_id=tv_show.id";
 
     const EPISODE_QUERY: &str = "SELECT * FROM get_episode_data";
+
+    const COLLECTION_QUERY: &str = "SELECT * FROM get_collection";
 
     pub fn get_directories(&self) -> rusqlite::Result<Vec<Directory>> {
         let sql = "SELECT * FROM directory ORDER BY active";
@@ -413,7 +415,7 @@ impl Database {
     }
 
     pub fn get_collections(&self, sort: collection::Sort) -> rusqlite::Result<Vec<Collection>> {
-        let sql = format!("SELECT * FROM collection ORDER BY {}", sort.query());
+        let sql = format!("{} ORDER BY {}", Self::COLLECTION_QUERY, sort.query());
 
         let mut statement = self.prepare_cached(&sql)?;
 
@@ -421,7 +423,7 @@ impl Database {
     }
 
     pub fn get_collection(&self, id: CollectionId) -> rusqlite::Result<Collection> {
-        let sql = "SELECT * FROM collection WHERE id=:id";
+        let sql = format!("{} WHERE id=:id", Self::COLLECTION_QUERY);
 
         let mut statement = self.prepare_cached(&sql)?;
 

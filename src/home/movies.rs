@@ -265,7 +265,6 @@ pub enum MoviesMessage {
     Scroll(scrollable::Viewport),
     Tab(Tab),
     Animate,
-    None,
 }
 
 #[derive(Debug, Clone)]
@@ -282,11 +281,7 @@ pub struct Movies {
 }
 
 impl Movies {
-    pub fn boot(
-        sort: Sort,
-        filters: Filter,
-        grid: bool,
-    ) -> (Self, scrollable::Id, Task<MoviesMessage>) {
+    pub fn boot(sort: Sort, filters: Filter, grid: bool) -> (Self, Task<MoviesMessage>) {
         let load_thumbnails = Task::perform(
             async {
                 let alt = (6..12).map(|_| Movie::testing2());
@@ -299,8 +294,9 @@ impl Movies {
         );
 
         let (new, id) = Self::new(sort, grid, filters);
+        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
 
-        (new, id, load_thumbnails)
+        (new, load_thumbnails.chain(scroll))
     }
 
     pub fn dummies(
@@ -308,14 +304,15 @@ impl Movies {
         filters: Filter,
         grid: bool,
         movies: Vec<Movie>,
-    ) -> (Self, scrollable::Id, Task<MoviesMessage>) {
+    ) -> (Self, Task<MoviesMessage>) {
         let task = Task::perform(async move { movies }, |movies| {
             MoviesMessage::Thumbnails(movies.into_iter().map(Thumbnail::new).collect())
         });
 
         let (new, id) = Self::new(sort, grid, filters);
+        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
 
-        (new, id, task)
+        (new, task.chain(scroll))
     }
 
     fn new(sort: Sort, grid: bool, filter: Filter) -> (Self, scrollable::Id) {
@@ -355,15 +352,10 @@ impl Movies {
         }
     }
 
-    pub fn contains(&self, id: &MovieId) -> bool {
-        self.thumbnails.contains_key(id)
-    }
-
     pub fn update(&mut self, message: MoviesMessage, now: Instant) -> Task<MoviesMessage> {
         self.now = now;
 
         match message {
-            MoviesMessage::None => Task::none(),
             MoviesMessage::Animate => Task::none(),
             MoviesMessage::Hovered(id, is_hovered) => {
                 let Some(thumbnail) = self.thumbnails.get_mut(&id) else {

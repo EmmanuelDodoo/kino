@@ -297,7 +297,7 @@ impl TvSeason {
         sort: Sort,
         filters: Filter,
         grid: bool,
-    ) -> (Self, scrollable::Id, Task<TvSeasonMessage>) {
+    ) -> (Self, Task<TvSeasonMessage>) {
         let thumbnails = Task::perform(
             async {
                 let alt = (0..6).map(|_| Episode::testing());
@@ -309,10 +309,11 @@ impl TvSeason {
             },
             TvSeasonMessage::Thumbnails,
         );
-        let tasks = Task::batch([thumbnails]);
         let (new, id) = Self::new(season, sort, filters, grid);
+        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
+        let tasks = thumbnails.chain(scroll);
 
-        (new, id, tasks)
+        (new, tasks)
     }
 
     fn new(season: Season, sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
@@ -808,13 +809,8 @@ struct Series {
 }
 
 impl Series {
-    fn boot(
-        show: Show,
-        sort: Sort,
-        filters: Filter,
-        grid: bool,
-    ) -> (Self, scrollable::Id, Task<SeriesMessage>) {
-        let thumbnails = Task::perform(
+    fn boot(show: Show, sort: Sort, filters: Filter, grid: bool) -> (Self, Task<SeriesMessage>) {
+        let task = Task::perform(
             async {
                 let alt = (0..6).map(|_| Season::testing2());
                 (6..12)
@@ -825,10 +821,11 @@ impl Series {
             },
             SeriesMessage::Thumbnails,
         );
-        let tasks = Task::batch([thumbnails]);
         let (new, id) = Self::new(show, sort, filters, grid);
+        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
+        let tasks = task.chain(scroll);
 
-        (new, id, tasks)
+        (new, tasks)
     }
 
     fn new(show: Show, sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
@@ -925,15 +922,14 @@ impl Series {
 
         season.zoom.go_mut(false, self.now);
 
-        let (season, id, tasks) =
+        let (season, tasks) =
             TvSeason::boot(season.media.clone(), self.sort, self.filters, self.grid);
 
         self.selected = Some(season);
         self.selected_prev = None;
         self.focused = None;
 
-        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
-        Task::batch([tasks.map(SeriesMessage::SeasonMessage), scroll])
+        tasks.map(SeriesMessage::SeasonMessage)
     }
 
     fn unfocus(&mut self) {
@@ -1382,11 +1378,7 @@ pub struct TvShows {
 }
 
 impl TvShows {
-    pub fn boot(
-        sort: Sort,
-        filters: Filter,
-        grid: bool,
-    ) -> (Self, scrollable::Id, Task<TvShowsMessage>) {
+    pub fn boot(sort: Sort, filters: Filter, grid: bool) -> (Self, Task<TvShowsMessage>) {
         let thumbnails = Task::perform(
             async {
                 let alt = (0..6).map(|_| Show::testing());
@@ -1401,8 +1393,9 @@ impl TvShows {
 
         let tasks = Task::batch([thumbnails]);
         let (new, id) = Self::new(sort, filters, grid);
+        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
 
-        (new, id, tasks)
+        (new, tasks.chain(scroll))
     }
 
     pub fn dummies(
@@ -1410,14 +1403,15 @@ impl TvShows {
         filters: Filter,
         grid: bool,
         shows: Vec<Show>,
-    ) -> (Self, scrollable::Id, Task<TvShowsMessage>) {
+    ) -> (Self, Task<TvShowsMessage>) {
         let task = Task::perform(async move { shows }, |shows| {
             TvShowsMessage::Thumbnails(shows.into_iter().map(Thumbnail::new).collect())
         });
 
         let (new, id) = Self::new(sort, filters, grid);
+        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
 
-        (new, id, task)
+        (new, task.chain(scroll))
     }
 
     fn new(sort: Sort, filters: Filter, grid: bool) -> (Self, scrollable::Id) {
@@ -1496,25 +1490,17 @@ impl TvShows {
 
     pub fn preview(&mut self, id: ShowId) -> Result<Task<TvShowsMessage>, Task<TvShowsMessage>> {
         let Some(show) = self.thumbnails.get_mut(&id) else {
+            // Err variant
             todo!("Should fetch missing show")
         };
 
-        let (show, id, tasks) =
-            Series::boot(show.media.clone(), self.sort, self.filters, self.grid);
+        let (show, tasks) = Series::boot(show.media.clone(), self.sort, self.filters, self.grid);
 
         self.selected = Some(show);
         self.selected_prev = None;
         self.focused = None;
 
-        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
-        Ok(Task::batch([
-            tasks.map(TvShowsMessage::SeriesMessage),
-            scroll,
-        ]))
-    }
-
-    pub fn contains(&self, id: &ShowId) -> bool {
-        self.thumbnails.contains_key(id)
+        Ok(tasks.map(TvShowsMessage::SeriesMessage))
     }
 
     fn unfocus(&mut self) {

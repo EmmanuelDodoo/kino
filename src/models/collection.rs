@@ -72,6 +72,7 @@ pub struct Collection {
     pub id: CollectionId,
     name: String,
     description: Option<String>,
+    posters: Vec<Option<String>>,
     view: CollectionView,
     icon: Option<u32>,
     theme: Option<u32>,
@@ -95,10 +96,20 @@ impl Collection {
 
         let added = row.get::<_, DateTime<Local>>("created_at")?;
 
+        let posters = {
+            let one = row.get::<_, Option<String>>("poster1")?;
+            let two = row.get::<_, Option<String>>("poster2")?;
+            let three = row.get::<_, Option<String>>("poster3")?;
+            let four = row.get::<_, Option<String>>("poster4")?;
+
+            vec![one, two, three, four]
+        };
+
         Ok(Self {
             id,
             name,
             description,
+            posters,
             view,
             icon,
             theme,
@@ -111,6 +122,7 @@ impl Collection {
         let Self {
             id,
             name,
+            posters: _posters,
             description,
             view,
             icon,
@@ -317,6 +329,7 @@ impl Collection {
         let new = Self {
             id: CollectionId(Uuid::now_v7()),
             name,
+            posters: vec![],
             description,
             view: CollectionView::Shown,
             icon,
