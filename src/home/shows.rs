@@ -305,7 +305,7 @@ impl TvSeason {
     }
 
     fn new(season: Season, sort: Sort, filters: Filter, layout: Layout) -> (Self, widget::Id) {
-        let poster = season.poster().and_then(round_image);
+        let poster = season.poster().map(image::Handle::from_path);
         let backdrop = season.backdrop().map(image::Handle::from_path);
         let scroll = Scroll::new();
         let id = scroll.id.clone();
@@ -826,7 +826,7 @@ impl Series {
     }
 
     fn new(show: Show, sort: Sort, filters: Filter, layout: Layout) -> (Self, widget::Id) {
-        let poster = show.poster().and_then(round_image);
+        let poster = show.poster().map(image::Handle::from_path);
         let backdrop = show.backdrop().map(image::Handle::from_path);
         let scroll = Scroll::new();
         let id = scroll.id.clone();

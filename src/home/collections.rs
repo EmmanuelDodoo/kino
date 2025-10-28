@@ -765,6 +765,7 @@ impl CollectionPage {
         let img: Element<'_, CollectionMessage> = {
             match &self.collage {
                 Some(handle) => image(handle)
+                    .border_radius(10)
                     .height(img_height)
                     .width(img_width)
                     .content_fit(ContentFit::Contain)

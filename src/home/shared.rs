@@ -196,77 +196,6 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
     content.width(width).into()
 }
 
-fn round_corners(rgba: &mut image::RgbaImage) {
-    let (width, height) = rgba.dimensions();
-
-    let radius = (width as f32 * 0.05) as u32;
-    let radius_sq = radius * radius;
-    let aa_span = radius / 4;
-
-    for y in 0..height {
-        for x in 0..width {
-            let dist_x = if x < radius {
-                radius - x
-            } else if x >= width - radius {
-                x - (width - radius - 1)
-            } else {
-                0
-            };
-
-            let dist_y = if y < radius {
-                radius - y
-            } else if y >= height - radius {
-                y - (height - radius - 1)
-            } else {
-                0
-            };
-
-            let dist_sq = dist_x * dist_x + dist_y * dist_y;
-
-            if dist_sq > radius_sq {
-                let dist = (dist_sq as f32).sqrt();
-
-                if dist <= (radius + aa_span) as f32 {
-                    let alpha_scale =
-                        1.0 - (dist_sq - radius_sq) as f32 / (aa_span * aa_span) as f32;
-
-                    let pixel = rgba.get_pixel_mut(x, y);
-                    pixel.0[3] = (pixel.0[3] as f32 * alpha_scale) as u8;
-                } else {
-                    let pixel = rgba.get_pixel_mut(x, y);
-                    pixel.0 = [0; 4];
-                }
-            }
-        }
-    }
-}
-
-pub fn round_image(path: &str) -> Option<Handle> {
-    let mut image = image::ImageReader::open(path)
-        .inspect_err(|err| eprintln!("{err:?}"))
-        .ok()
-        .and_then(|image| {
-            image
-                .with_guessed_format()
-                .inspect_err(|err| eprintln!("{err:?}"))
-                .ok()
-        })
-        .and_then(|image| image.decode().inspect_err(|err| eprintln!("{err:?}")).ok())
-        .map(|image| image.to_rgba8());
-
-    if let Some(image) = image.as_mut() {
-        round_corners(image);
-    }
-
-    image.map(|image| {
-        Handle::from_rgba(
-            image.width(),
-            image.height(),
-            bytes::Bytes::from(image.into_raw()),
-        )
-    })
-}
-
 pub fn collection_collage<'a>(
     paths: impl Iterator<Item = &'a String>,
     width: u32,
@@ -340,8 +269,6 @@ pub fn collection_collage<'a>(
         flip = !flip;
     }
 
-    round_corners(&mut canvas);
-
     Some(Handle::from_rgba(
         canvas.width(),
         canvas.height(),
@@ -359,7 +286,7 @@ pub struct Thumbnail<T: Media> {
 
 impl<T: Media> Thumbnail<T> {
     pub fn new(media: T) -> Self {
-        let poster = media.poster().and_then(round_image);
+        let poster = media.poster().map(Handle::from_path);
         let backdrop = media.backdrop().map(Handle::from_path);
 
         Self {
@@ -383,6 +310,7 @@ impl<T: Media> Thumbnail<T> {
     fn poster<'a, Message: 'a>(&self) -> Element<'a, Message> {
         match &self.poster {
             Some(handle) => widget::image(handle)
+                .border_radius(10)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .content_fit(ContentFit::Fill)

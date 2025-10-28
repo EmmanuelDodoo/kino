@@ -10,6 +10,7 @@ use iced::{
             tree::{self, Tree},
         },
     },
+    border::Radius,
     keyboard::{self, Key, key},
     touch,
     widget::slider::{Catalog, HandleShape, Status, Style, StyleFn},
@@ -473,10 +474,11 @@ where
 
         let cursor_percent =
             (state.cursor_location - *self.range.start()) / (self.range.end() - self.range.start());
+
         let image_size = self
             .thumbnails
             .first()
-            .map(|img| renderer.measure_image(img))
+            .and_then(|img| renderer.measure_image(img))
             .unwrap_or_default();
         let image_index = (cursor_percent * self.thumbnails.len() as f64) as usize;
         let image_index = image_index.min(self.thumbnails.len().max(1) - 1);
@@ -594,10 +596,11 @@ where
             filter_method: image::FilterMethod::default(),
             rotation: iced::Radians(0.0),
             opacity: 1.0,
+            border_radius: Radius::from(5),
             snap: false,
         };
 
-        renderer.draw_image(image, layout.bounds());
+        renderer.draw_image(image, layout.bounds(), layout.bounds());
     }
 }
 
