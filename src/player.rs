@@ -2,10 +2,7 @@ use iced::{
     Element, Font, Length, Size, Subscription, Task,
     alignment::{Horizontal, Vertical},
     font,
-    widget::{
-        column, container, horizontal_space, image, mouse_area, row, slider, stack, text,
-        vertical_space,
-    },
+    widget::{column, container, image, mouse_area, row, slider, space, stack, text},
     window,
 };
 use iced_video_player::{Button, Icon, KeyPress, Kind, MouseClick, Video, VideoPlayer, key};
@@ -14,8 +11,9 @@ use std::time::Duration;
 
 use crate::utils::{
     self,
-    icons::{self, text_button},
+    icons::{self, sized_button, text_button},
     load_fonts,
+    typo::*,
 };
 use crate::widgets;
 
@@ -104,7 +102,7 @@ impl Player {
         };
         // todo: belongs in main app
         let load_font = load_fonts().map(PlayerMessage::FontLoad);
-        let load_id = window::get_oldest().map(PlayerMessage::WindowId);
+        let load_id = window::oldest().map(PlayerMessage::WindowId);
 
         let tasks = Task::batch(vec![thumbnails_task, load_font, load_id]);
 
@@ -260,7 +258,7 @@ impl Player {
                 self.show_controls = self.is_fullscreen;
                 self.is_fullscreen = !self.is_fullscreen;
                 let fullscreen = self.is_fullscreen;
-                iced::window::get_latest()
+                iced::window::latest()
                     .and_then(move |id| {
                         iced::window::set_mode::<()>(
                             id,
@@ -277,7 +275,7 @@ impl Player {
                 self.show_controls = true;
                 self.is_fullscreen = false;
                 let fullscreen = self.is_fullscreen;
-                iced::window::get_latest()
+                iced::window::latest()
                     .and_then(move |id| {
                         iced::window::set_mode::<()>(
                             id,
@@ -295,7 +293,10 @@ impl Player {
             }
             PlayerMessage::AddCollection => Task::none(),
             PlayerMessage::Config => Task::none(),
-            PlayerMessage::ToggleSubtitles => Task::none(),
+            PlayerMessage::ToggleSubtitles => {
+                self.video.toggle_subtitle();
+                Task::none()
+            }
             PlayerMessage::PlayNext => Task::none(),
             PlayerMessage::PlayPrevious => Task::none(),
             PlayerMessage::Favorite => Task::none(),
@@ -337,30 +338,39 @@ impl Player {
     }
 
     fn top(&self) -> Element<'_, PlayerMessage> {
-        let title = text(self.name());
+        let title = text(self.name()).size(H6);
+        let icon_size = if self.is_fullscreen { H4 } else { H5 };
         let options = column!(
             row!(
-                text_button(icons::ADD_COLLECTION).on_press(PlayerMessage::AddCollection),
-                text_button(icons::VIDEO_CONFIG).on_press(PlayerMessage::Config)
+                sized_button(icons::ADD_COLLECTION, icon_size)
+                    .on_press(PlayerMessage::AddCollection),
+                sized_button(icons::ELLIPSIS_VER, icon_size).on_press(PlayerMessage::Config)
             )
             .spacing(6.0)
             .align_y(Vertical::Center)
         )
         .align_x(Horizontal::Right)
         .width(Self::WIDTH);
-        let back = container(text_button(icons::BACK).on_press(PlayerMessage::PreviousScreen))
-            .align_x(Horizontal::Left)
-            .align_y(Vertical::Center)
-            .width(Self::WIDTH);
+        let back =
+            container(sized_button(icons::BACK, icon_size).on_press(PlayerMessage::PreviousScreen))
+                .align_x(Horizontal::Left)
+                .align_y(Vertical::Center)
+                .width(Self::WIDTH);
 
-        let content = row!(back, horizontal_space(), title, horizontal_space(), options)
-            .width(Length::Fill)
-            .align_y(Vertical::Center);
+        let content = row!(
+            back,
+            space::horizontal(),
+            title,
+            space::horizontal(),
+            options
+        )
+        .width(Length::Fill)
+        .align_y(Vertical::Center);
 
         let content: Element<'_, PlayerMessage> = if self.show_controls {
             content.into()
         } else {
-            horizontal_space().height(35).into()
+            space::horizontal().height(35).into()
         };
 
         let content = mouse_area(content)
@@ -371,18 +381,30 @@ impl Player {
     }
 
     fn media_controls(&self) -> Element<'_, PlayerMessage> {
+        let icon_size = if self.is_fullscreen { H4 } else { H5 };
         let left = {
             let volume = slider(0.0..=1.0, self.volume, PlayerMessage::ChangeVolume)
                 .step(0.05)
                 .shift_step(0.1)
                 .width(125.0);
             row!(
-                text_button(icons::SUBTITLES).on_press(PlayerMessage::ToggleSubtitles),
-                text_button(if self.video.muted() {
-                    icons::MUTE
-                } else {
-                    icons::VOLUME
-                })
+                sized_button(
+                    if self.video.subtitles() {
+                        icons::SUBTITLES_OFF
+                    } else {
+                        icons::SUBTITLES_ON
+                    },
+                    icon_size
+                )
+                .on_press(PlayerMessage::ToggleSubtitles),
+                sized_button(
+                    if self.video.muted() {
+                        icons::MUTE
+                    } else {
+                        icons::VOLUME
+                    },
+                    icon_size
+                )
                 .on_press(PlayerMessage::ToggleMute),
                 volume
             )
@@ -393,14 +415,15 @@ impl Player {
 
         let middle = {
             let (play, message) = self.play_btn();
+            let size = if self.is_fullscreen { H1 * 1.125 } else { H1 };
 
             row!(
-                text_button(icons::PREVIOUS_VIDEO)
+                sized_button(icons::PREVIOUS_VIDEO, size)
                     .on_press_maybe(self.has_previous.then_some(PlayerMessage::PlayPrevious)),
-                text_button(icons::SEEK_BACK).on_press(PlayerMessage::SeekBack(false)),
-                text_button(play).on_press(message),
-                text_button(icons::SEEK_FRONT).on_press(PlayerMessage::SeekFront(false)),
-                text_button(icons::NEXT_VIDEO)
+                sized_button(icons::SEEK_BACK, size).on_press(PlayerMessage::SeekBack(false)),
+                sized_button(play, size).on_press(message),
+                sized_button(icons::SEEK_FRONT, size).on_press(PlayerMessage::SeekFront(false)),
+                sized_button(icons::NEXT_VIDEO, size)
                     .on_press_maybe(self.has_next.then_some(PlayerMessage::PlayNext))
             )
             .spacing(2.0)
@@ -409,13 +432,16 @@ impl Player {
 
         let right = column!(
             row!(
-                text_button(icons::FAVORITE).on_press(PlayerMessage::Favorite),
-                text_button(icons::COMMENT).on_press(PlayerMessage::Comment),
-                text_button(if self.is_fullscreen {
-                    icons::MINIMIZE
-                } else {
-                    icons::MAXIMIZE
-                })
+                sized_button(icons::FAVORITE, icon_size).on_press(PlayerMessage::Favorite),
+                sized_button(icons::COMMENT, icon_size).on_press(PlayerMessage::Comment),
+                sized_button(
+                    if self.is_fullscreen {
+                        icons::MINIMIZE
+                    } else {
+                        icons::MAXIMIZE
+                    },
+                    icon_size
+                )
                 .on_press(PlayerMessage::ToggleFullscreen)
             )
             .spacing(2.0)
@@ -424,9 +450,15 @@ impl Player {
         .align_x(Horizontal::Right)
         .width(Self::WIDTH);
 
-        let content = row!(left, horizontal_space(), middle, horizontal_space(), right)
-            .width(Length::Fill)
-            .align_y(Vertical::Center);
+        let content = row!(
+            left,
+            space::horizontal(),
+            middle,
+            space::horizontal(),
+            right
+        )
+        .width(Length::Fill)
+        .align_y(Vertical::Center);
 
         let timeline = {
             let duration = self.video.duration();
@@ -436,11 +468,13 @@ impl Player {
                 self.position as u64 / 60,
                 self.position as u64 % 60,
             );
+
+            let remaining = duration.as_secs() - (self.position as u64);
             let total = format!(
                 "{:02}:{:02}:{:02}",
-                duration.as_secs() / 3600,
-                duration.as_secs() / 60,
-                duration.as_secs() % 60,
+                remaining / 3600,
+                remaining / 60,
+                remaining % 60,
             );
 
             let slider = widgets::slider::VideoSlider::new(
@@ -460,14 +494,14 @@ impl Player {
                 .width(Length::Fill)
         };
 
-        let content = column!(timeline, content, vertical_space().height(8.0))
+        let content = column!(timeline, content, space::vertical().height(8.0))
             .spacing(8)
             .width(Length::Fill);
 
         let content: Element<'_, PlayerMessage> = if self.show_controls {
             content.into()
         } else {
-            horizontal_space().height(75).into()
+            space::horizontal().height(75).into()
         };
 
         let content = mouse_area(content)
@@ -517,7 +551,7 @@ impl Player {
     pub fn view(&self) -> Element<'_, PlayerMessage> {
         let content = stack!(
             self.video_elem(),
-            column!(self.top(), vertical_space(), self.media_controls())
+            column!(self.top(), space::vertical(), self.media_controls())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding([3, 6])

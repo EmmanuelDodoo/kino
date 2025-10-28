@@ -20,7 +20,7 @@ pub use sort::{Sort, SortKind};
 
 /// Returns an empty [`iced::Element`].
 pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
-    iced::widget::Space::new(0.0, 0.0).into()
+    iced::widget::Space::new().width(0).height(0).into()
 }
 
 /// Returns a single thumbnail frame handle in rgba format.

@@ -13,8 +13,8 @@ use iced::{
     time::Instant,
     widget::{
         Space, bottom, bottom_center, button, center, center_x, center_y, column, container, float,
-        grid, horizontal_rule, horizontal_space, image, mouse_area, pick_list, row, scrollable,
-        slider, stack, text, text_input, vertical_rule, vertical_space,
+        grid, image, mouse_area, pick_list, row, scrollable, slider, stack, text, text_input,
+        tooltip,
     },
     window,
 };
@@ -70,6 +70,68 @@ fn main() -> iced::Result {
         home::Home::view,
     )
 
+    // iced::application::timed(
+    //     Playground::boot,
+    //     Playground::update,
+    //     Playground::subscription,
+    //     Playground::view,
+    // )
+
     .window_size(Size::new(1200.0, 750.0))
+    // .theme(|_| Theme::TokyoNightLight)
     .run()
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    Toggle(bool),
+    None,
+}
+
+struct Playground {
+    now: Instant,
+    show: bool,
+}
+
+impl Playground {
+    fn boot() -> (Self, Task<Message>) {
+        let new = Self {
+            now: Instant::now(),
+            show: false,
+        };
+
+        (new, Task::none())
+    }
+
+    fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
+        self.now = now;
+
+        match message {
+            Message::None => Task::none(),
+            Message::Toggle(show) => {
+                self.show = show;
+                Task::none()
+            }
+        }
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        // let base = container("Base content").style(container::secondary);
+        let base = button("Base button")
+            .style(button::primary)
+            .on_press(Message::None);
+        let overlay = container("Overlaying content").style(container::dark);
+
+        let content = menu(base, overlay)
+            .on_toggle(Message::Toggle)
+            .position(menu::Position::Bottom);
+
+        let content = center(content);
+
+        content.into()
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        Subscription::none()
+    }
 }

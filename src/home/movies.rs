@@ -11,22 +11,24 @@ use iced::{
     alignment::{Horizontal, Vertical},
     time::Instant,
     widget::{
-        bottom_center, button, center_x, column, container, grid, image, row, scrollable, stack,
-        text,
+        self, bottom_center, button, center_x, column, container, grid, image, operation, row,
+        scrollable, stack, text,
     },
 };
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct MoviePreview {
-    tab: Tab,
-    id: MovieId,
+#[derive(Debug, Clone, PartialEq)]
+pub struct MoviePreview {
+    pub tab: Tab,
+    pub name: String,
+    pub id: MovieId,
 }
 
 impl MoviePreview {
-    pub fn new(id: MovieId) -> Self {
+    pub fn new(id: MovieId, name: String) -> Self {
         Self {
             tab: Tab::Items,
+            name,
             id,
         }
     }
@@ -35,7 +37,8 @@ impl MoviePreview {
         &self,
         thumbnail: &'a Thumbnail<Movie>,
         on_play: impl Fn(MovieId) -> Message,
-        on_view: impl Fn(Tab) -> Message,
+        on_tab: impl Fn(Tab) -> Message,
+        on_collection: impl Fn(MovieId) -> Message,
     ) -> Element<'a, Message>
     where
         Message: 'a + Clone,
@@ -91,7 +94,7 @@ impl MoviePreview {
             Element::from(
                 column!(
                     button(text(view.to_str(item)).size(H7))
-                        .on_press((on_view)(view))
+                        .on_press((on_tab)(view))
                         .style(|theme, status| {
                             let default = button::text(theme, status);
 
@@ -100,7 +103,7 @@ impl MoviePreview {
                                 ..default
                             }
                         }),
-                    container(Space::new(68, 4)).style(if is_selected {
+                    container(Space::new().width(68).height(4)).style(if is_selected {
                         container::primary
                     } else {
                         container::transparent
@@ -178,7 +181,7 @@ impl MoviePreview {
                     .align_y(Vertical::Center),
                 )
                 .padding([6, 12])
-                .on_press((on_play)(self.id))
+                .on_press((on_collection)(self.id))
                 .style(|theme, status| {
                     let default = button::subtle(theme, status);
                     let border = default.border.rounded(5);
@@ -223,16 +226,17 @@ impl MoviePreview {
             .into()
     }
 
-    fn view<'a, Message>(
+    pub fn view<'a, Message>(
         &self,
         thumbnail: &'a Thumbnail<Movie>,
         on_play: impl Fn(MovieId) -> Message,
-        on_view: impl Fn(Tab) -> Message,
+        on_tab: impl Fn(Tab) -> Message,
+        on_collection: impl Fn(MovieId) -> Message,
     ) -> Element<'a, Message>
     where
         Message: 'a + Clone,
     {
-        let overlay = bottom_center(self.overlay(thumbnail, on_play, on_view));
+        let overlay = bottom_center(self.overlay(thumbnail, on_play, on_tab, on_collection));
 
         let img: Element<'_, Message> = match &thumbnail.backdrop {
             Some(handle) => image(handle)
@@ -271,7 +275,7 @@ pub enum MoviesMessage {
 pub struct Movies {
     now: Instant,
     thumbnails: HashMap<MovieId, Thumbnail<Movie>>,
-    grid: bool,
+    layout: Layout,
     focused: Option<MovieId>,
     sort: Sort,
     filter: Filter,
@@ -281,7 +285,7 @@ pub struct Movies {
 }
 
 impl Movies {
-    pub fn boot(sort: Sort, filters: Filter, grid: bool) -> (Self, Task<MoviesMessage>) {
+    pub fn boot(sort: Sort, filters: Filter, grid: Layout) -> (Self, Task<MoviesMessage>) {
         let load_thumbnails = Task::perform(
             async {
                 let alt = (6..12).map(|_| Movie::testing2());
@@ -294,7 +298,7 @@ impl Movies {
         );
 
         let (new, id) = Self::new(sort, grid, filters);
-        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
+        let scroll = operation::scroll_to(id, operation::AbsoluteOffset::default());
 
         (new, load_thumbnails.chain(scroll))
     }
@@ -302,7 +306,7 @@ impl Movies {
     pub fn dummies(
         sort: Sort,
         filters: Filter,
-        grid: bool,
+        grid: Layout,
         movies: Vec<Movie>,
     ) -> (Self, Task<MoviesMessage>) {
         let task = Task::perform(async move { movies }, |movies| {
@@ -310,12 +314,12 @@ impl Movies {
         });
 
         let (new, id) = Self::new(sort, grid, filters);
-        let scroll = scrollable::scroll_to(id, scrollable::AbsoluteOffset::default());
+        let scroll = operation::scroll_to(id, operation::AbsoluteOffset::default());
 
         (new, task.chain(scroll))
     }
 
-    fn new(sort: Sort, grid: bool, filter: Filter) -> (Self, scrollable::Id) {
+    fn new(sort: Sort, grid: Layout, filter: Filter) -> (Self, widget::Id) {
         let now = Instant::now();
         let scroll = Scroll::new();
         let id = scroll.id.clone();
@@ -325,7 +329,7 @@ impl Movies {
                 now,
                 thumbnails: HashMap::default(),
                 focused: None,
-                grid,
+                layout: grid,
                 sort,
                 filter,
                 preview: None,
@@ -337,13 +341,13 @@ impl Movies {
     }
 
     pub fn preview(&mut self, id: MovieId) -> Option<Task<MoviesMessage>> {
-        self.preview = Some(MoviePreview::new(id));
-        self.preview_back = None;
         self.focused = None;
 
         match self.thumbnails.get_mut(&id) {
             Some(thumbnail) => {
                 thumbnail.zoom.go_mut(false, self.now);
+                self.preview = Some(MoviePreview::new(id, thumbnail.media.name().to_owned()));
+                self.preview_back = None;
                 None
             }
             None => {
@@ -370,10 +374,7 @@ impl Movies {
                 println!("Play {id:?} pressed");
                 Task::none()
             }
-            MoviesMessage::Details(id) => {
-                self.preview(id);
-                Task::none()
-            }
+            MoviesMessage::Details(id) => self.preview(id).unwrap_or(Task::none()),
             MoviesMessage::AddCollection(id) => {
                 println!("Add {id:?} to collection pressed");
                 Task::none()
@@ -385,9 +386,9 @@ impl Movies {
 
                 Task::none()
             }
-            MoviesMessage::Tab(view) => {
+            MoviesMessage::Tab(tab) => {
                 if let Some(preview) = self.preview.as_mut() {
-                    preview.tab = view;
+                    preview.tab = tab;
                 }
                 Task::none()
             }
@@ -408,17 +409,14 @@ impl Movies {
         } = update;
 
         self.sort = sort;
-        self.grid = matches!(layout, Layout::Grid);
+        self.layout = layout;
         self.filter = filters;
     }
 
     pub fn name(&self) -> String {
         self.preview
-            .and_then(|preview| {
-                self.thumbnails
-                    .get(&preview.id)
-                    .map(|thumbnail| thumbnail.media.name().to_owned())
-            })
+            .as_ref()
+            .map(|thumbnail| thumbnail.name.clone())
             .unwrap_or(String::from("Movies"))
     }
 
@@ -506,17 +504,24 @@ impl Movies {
     }
 
     pub fn view(&self) -> Element<'_, MoviesMessage> {
-        match self.preview {
+        match &self.preview {
             Some(preview) => {
                 let thumbnail = self
                     .thumbnails
                     .get(&preview.id)
                     .expect("Preview Id missing");
 
-                preview.view(thumbnail, MoviesMessage::Play, MoviesMessage::Tab)
+                preview.view(
+                    thumbnail,
+                    MoviesMessage::Play,
+                    MoviesMessage::Tab,
+                    MoviesMessage::AddCollection,
+                )
             }
-            None if self.grid => self.grid(),
-            None => self.list(),
+            None => match self.layout {
+                Layout::Grid => self.grid(),
+                Layout::List => self.list(),
+            },
         }
     }
 
@@ -529,7 +534,7 @@ impl Movies {
     }
 
     pub fn update_scroll(&mut self) -> Task<()> {
-        scrollable::scroll_to(self.scroll.id.clone(), self.scroll.offset)
+        operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
     }
 
     pub fn back(&mut self) -> Option<Task<()>> {

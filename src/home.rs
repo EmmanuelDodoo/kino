@@ -7,13 +7,14 @@ use iced::{
     font, keyboard,
     time::Instant,
     widget::{
-        button, column, container, horizontal_rule, horizontal_space, pick_list, row, scrollable,
-        text, text_input, vertical_rule, vertical_space,
+        button, column, container,
+        operation::{self, scroll_to},
+        pick_list, row, rule, scrollable, space, text, text_input,
     },
     window,
 };
 use rand::seq::SliceRandom;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 mod collections;
 mod movies;
@@ -21,7 +22,8 @@ mod pages;
 mod shared;
 mod shows;
 
-use crate::models::{Movie, MovieId, Show, ShowId};
+use crate::models::{Collection, CollectionId, CollectionView, Movie, MovieId, Show, ShowId};
+use collections::{CollectionMessage, CollectionPage, Icon, view_unicode};
 use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind, PageUpdate};
 use shared::{Scroll, Thumbnail, filter_sort};
@@ -90,8 +92,6 @@ pub enum HomeScrollMessage {
 
 #[derive(Debug, Clone)]
 pub enum RecentMessage {
-    Movies(Vec<Thumbnail<Movie>>),
-    Shows(Vec<Thumbnail<Show>>),
     AddCollectionMovie(MovieId),
     AddCollectionShow(ShowId),
     HoveredMovie(MovieId, bool),
@@ -100,6 +100,13 @@ pub enum RecentMessage {
     PlayShow(ShowId),
     DetailsMovie(MovieId),
     DetailsShow(ShowId),
+}
+
+#[derive(Debug, Clone)]
+pub enum Fetch {
+    Collections(Vec<Collection>),
+    Shows(Vec<Thumbnail<Show>>),
+    Movies(Vec<Thumbnail<Movie>>),
 }
 
 #[derive(Debug, Clone)]
@@ -112,9 +119,15 @@ pub enum HomeMessage {
     Sort(SortMessage),
     Movies(MoviesMessage),
     Shows(TvShowsMessage),
+    Collection(CollectionMessage),
     Settings,
     Random,
     Back,
+    UpdateCollection {
+        id: CollectionId,
+        view: CollectionView,
+        update: collections::Config,
+    },
     Forward,
     ToggleLayout,
     Home,
@@ -123,6 +136,7 @@ pub enum HomeMessage {
     Animate,
     None,
     Recent(RecentMessage),
+    Fetch(Fetch),
     HomeScroll(HomeScrollMessage),
     Refresh,
     PerformPending,
@@ -145,6 +159,7 @@ pub struct Home {
     pages: HashMap<PageKind, Page>,
     current_page: Option<PageKind>,
     pending: Vec<Task<HomeMessage>>,
+    collections: BTreeMap<(CollectionView, CollectionId), Collection>,
 }
 
 impl Home {
@@ -154,7 +169,7 @@ impl Home {
         let recent_movies = Task::perform(
             async { (0..6).map(|_| Movie::testing()).collect::<Vec<_>>() },
             |videos| {
-                HomeMessage::Recent(RecentMessage::Movies(
+                HomeMessage::Fetch(Fetch::Movies(
                     videos.into_iter().map(Thumbnail::new).collect(),
                 ))
             },
@@ -163,13 +178,21 @@ impl Home {
         let recent_shows = Task::perform(
             async { (0..6).map(|_| Show::testing()).collect::<Vec<_>>() },
             |shows| {
-                HomeMessage::Recent(RecentMessage::Shows(
+                HomeMessage::Fetch(Fetch::Shows(
                     shows.into_iter().map(Thumbnail::new).collect(),
                 ))
             },
         );
 
-        let tasks = Task::batch([load_font, recent_movies, recent_shows]);
+        let collections = Task::perform(
+            async {
+                let (collection, _) = Collection::dummy();
+                vec![collection]
+            },
+            |collections| HomeMessage::Fetch(Fetch::Collections(collections)),
+        );
+
+        let tasks = Task::batch([load_font, recent_movies, recent_shows, collections]);
 
         (Self::new(Layout::default(), FilterMode::default()), tasks)
     }
@@ -192,6 +215,7 @@ impl Home {
             pages: HashMap::default(),
             current_page: None,
             pending: vec![],
+            collections: BTreeMap::default(),
         }
     }
 
@@ -244,12 +268,8 @@ impl Home {
                             .values()
                             .map(|thumbnail| thumbnail.media.clone())
                             .collect();
-                        let (movies, task) = Movies::dummies(
-                            self.sort,
-                            self.filters,
-                            matches!(self.layout, Layout::Grid),
-                            movies,
-                        );
+                        let (movies, task) =
+                            Movies::dummies(self.sort, self.filters, self.layout, movies);
 
                         self.pages.insert(kind, Page::Movies(Box::new(movies)));
 
@@ -262,12 +282,8 @@ impl Home {
                             .values()
                             .map(|thumbnail| thumbnail.media.clone())
                             .collect();
-                        let (shows, tasks) = TvShows::dummies(
-                            self.sort,
-                            self.filters,
-                            matches!(self.layout, Layout::Grid),
-                            shows,
-                        );
+                        let (shows, tasks) =
+                            TvShows::dummies(self.sort, self.filters, self.layout, shows);
 
                         self.pages.insert(kind, Page::Shows(Box::new(shows)));
 
@@ -275,6 +291,35 @@ impl Home {
                             .map(HomeMessage::Shows)
                             .chain(Task::done(HomeMessage::PerformPending))
                     }
+                    PageKind::Collection(id) => match self
+                        .collections
+                        .iter()
+                        .find(|((_, collection), _)| *collection == id)
+                    {
+                        Some((_, collection)) => {
+                            let (collection, tasks) = CollectionPage::boot(
+                                collection.clone(),
+                                self.sort,
+                                self.filters,
+                                self.layout,
+                            );
+
+                            self.pages.insert(
+                                kind,
+                                Page::Collection {
+                                    collection: Box::new(collection),
+                                    id,
+                                },
+                            );
+
+                            tasks
+                                .map(HomeMessage::Collection)
+                                .chain(Task::done(HomeMessage::PerformPending))
+                        }
+                        None => {
+                            todo!("fetch collection if not present")
+                        }
+                    },
                     _ => {
                         todo!()
                     }
@@ -293,6 +338,60 @@ impl Home {
                 };
 
                 page.shows_update(message, now).map(HomeMessage::Shows)
+            }
+            HomeMessage::Collection(message) => {
+                let Some(page) = self.current_page_mut() else {
+                    return Task::none();
+                };
+
+                use collections::{ConfigMessage, Message};
+
+                let save_config = matches!(message.message, Message::Config(ConfigMessage::Save));
+
+                let update = match &page {
+                    Page::Collection { collection, id } if save_config && message.id == *id => {
+                        let update = collection
+                            .config
+                            .clone()
+                            .expect("Cannot save a none config");
+                        Task::done(HomeMessage::UpdateCollection {
+                            id: *id,
+                            update,
+                            view: collection.collection.view,
+                        })
+                    }
+                    _ => Task::none(),
+                };
+
+                page.collection_update(message, now)
+                    .map(HomeMessage::Collection)
+                    .chain(update)
+            }
+            HomeMessage::UpdateCollection { id, update, view } => {
+                let Some(mut collection) = self.collections.remove(&(view, id)) else {
+                    return Task::none();
+                };
+
+                let collections::Config {
+                    name, icon, view, ..
+                } = update;
+
+                if name != collection.name {
+                    collection.name = name;
+                }
+
+                if Some(icon.to_u32()) != collection.icon {
+                    collection.icon = Some(icon.to_u32());
+                }
+
+                if view != collection.view {
+                    collection.view = view;
+                }
+
+                self.collections
+                    .insert((collection.view, collection.id), collection);
+
+                Task::none()
             }
             HomeMessage::Back => {
                 self.focused = None;
@@ -626,19 +725,28 @@ impl Home {
                 Some(page) => page.refresh(),
                 None => todo!("Refresh recents"),
             },
+            HomeMessage::Fetch(fsg) => {
+                match fsg {
+                    Fetch::Shows(shows) => {
+                        for show in shows {
+                            self.recent_shows.insert(show.id(), show);
+                        }
+                    }
+                    Fetch::Movies(movies) => {
+                        for movie in movies {
+                            self.recent_movies.insert(movie.id(), movie);
+                        }
+                    }
+                    Fetch::Collections(collections) => {
+                        for collection in collections {
+                            self.collections
+                                .insert((collection.view, collection.id), collection);
+                        }
+                    }
+                }
+                Task::none()
+            }
             HomeMessage::Recent(rsg) => match rsg {
-                RecentMessage::Shows(shows) => {
-                    for show in shows {
-                        self.recent_shows.insert(show.id(), show);
-                    }
-                    Task::none()
-                }
-                RecentMessage::Movies(movies) => {
-                    for movie in movies {
-                        self.recent_movies.insert(movie.id(), movie);
-                    }
-                    Task::none()
-                }
                 RecentMessage::PlayShow(id) => {
                     println!("Play show {id:?}");
                     Task::none()
@@ -774,7 +882,6 @@ impl Home {
     }
 
     fn update_scroll(&mut self) -> Task<HomeMessage> {
-        use scrollable::scroll_to;
         let HomeScroll {
             home,
             shows,
@@ -811,6 +918,40 @@ impl Home {
                 .spacing(12.0)
         };
 
+        let collections =
+            self.collections
+                .iter()
+                .filter_map(|((view, id), collection)| match view {
+                    CollectionView::Pinned => {
+                        let unicode = Icon::new(collection.icon).unicode();
+                        let content = collection_button(
+                            unicode,
+                            &collection.name,
+                            view_unicode(collection.view),
+                            HomeMessage::Goto(PageKind::Collection(*id)),
+                            self.current_page()
+                                .map(|page| page.is_collection(id))
+                                .unwrap_or_default(),
+                        );
+
+                        Some(content)
+                    }
+                    CollectionView::Shown => {
+                        let unicode = Icon::new(collection.icon).unicode();
+                        let content = icon_button(
+                            unicode,
+                            &collection.name,
+                            HomeMessage::Goto(PageKind::Collection(*id)),
+                            self.current_page()
+                                .map(|page| page.is_collection(id))
+                                .unwrap_or_default(),
+                        );
+
+                        Some(content)
+                    }
+                    CollectionView::Hidden => None,
+                });
+
         let collections = column!(
             icon_button(
                 icons::HOME,
@@ -830,13 +971,14 @@ impl Home {
                 HomeMessage::Goto(Page::goto_movies()),
                 self.current_page().map(Page::is_movies).unwrap_or_default(),
             ),
-            icon_button(
-                icons::NEW_COLLECTION,
-                "New collection",
-                HomeMessage::NewCollection,
-                false
-            ),
         )
+        .extend(collections)
+        .push(icon_button(
+            icons::ADD,
+            "New collection",
+            HomeMessage::NewCollection,
+            false,
+        ))
         .spacing(16.0)
         .width(Length::Fill);
         let collections = scrollable(collections)
@@ -856,11 +998,11 @@ impl Home {
         )
         .spacing(16.0);
 
-        let content = column!(collections, vertical_space(), bottom,)
+        let content = column!(collections, space::vertical(), bottom,)
             .padding([0, 5])
             .height(Length::Fill);
 
-        let content = column!(header, vertical_space().height(24.0), content,)
+        let content = column!(header, space::vertical().height(24.0), content,)
             .width(240.0)
             .height(Length::Fill);
 
@@ -870,7 +1012,7 @@ impl Home {
     fn recents(&self) -> Element<'_, HomeMessage> {
         let movies = {
             let label = text("Recent Movies").size(H4);
-            let label = column!(label, horizontal_rule(2.0)).spacing(4.0);
+            let label = column!(label, rule::horizontal(2.0)).spacing(4.0);
             let movies = filter_sort(self.recent_movies.values(), &self.filters, &self.sort);
 
             let movies: Element<'_, HomeMessage> = match self.layout {
@@ -918,7 +1060,7 @@ impl Home {
 
         let shows = {
             let label = text("Recent Shows").size(H4);
-            let label = column!(label, horizontal_rule(2.0)).spacing(4.0);
+            let label = column!(label, rule::horizontal(2.0)).spacing(4.0);
             let shows = filter_sort(self.recent_shows.values(), &self.filters, &self.sort);
 
             let shows: Element<'_, HomeMessage> = match self.layout {
@@ -975,7 +1117,7 @@ impl Home {
     fn inner(&self) -> Element<'_, HomeMessage> {
         match self.current_page() {
             None => self.recents(),
-            Some(collection) => collection.view(),
+            Some(page) => page.view(),
         }
     }
 
@@ -1007,7 +1149,7 @@ impl Home {
         let size = typo::H7;
         let padding = Padding::new(2.0).left(5.0).right(5.0);
 
-        let vertical_rule = || container(vertical_rule(2.0)).height(20.0);
+        let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
         let comp = |icon: char, msg: FilterMessage| {
             icons::sized_button(icon, size)
                 .padding([5, 5])
@@ -1212,7 +1354,7 @@ impl Home {
 
     fn sort_view(&self) -> Element<'_, HomeMessage> {
         let size = H7;
-        let vertical_rule = || container(vertical_rule(2.0)).height(20.0);
+        let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
 
         let clear = button(text("Clear").size(size))
             .padding([2, 5])
@@ -1340,16 +1482,16 @@ impl Home {
         .align_y(Vertical::Center)
         .spacing(5.0);
 
-        let tools = row!(left, horizontal_space(), right).width(Length::Fill);
+        let tools = row!(left, space::horizontal(), right).width(Length::Fill);
 
         let sorts_rule = if self.show_sorts {
-            horizontal_rule(2.0).into()
+            rule::horizontal(2.0).into()
         } else {
             empty()
         };
 
         let filters_rule = if self.show_filters {
-            horizontal_rule(2.0).into()
+            rule::horizontal(2.0).into()
         } else {
             empty()
         };
@@ -1391,9 +1533,9 @@ impl Home {
         let top = container(
             row!(
                 self.navigation(),
-                horizontal_space(),
+                space::horizontal(),
                 title,
-                horizontal_space(),
+                space::horizontal(),
                 search,
             )
             .padding(Padding::ZERO.right(5))
@@ -1486,8 +1628,51 @@ fn icon_button<'a>(
     let icon = icons::icon(unicode).size(size);
     let text = text(value).size(size);
 
+    container(
+        button(
+            row!(icon, text)
+                .align_y(Vertical::Center)
+                .width(Length::Fill)
+                .spacing(16.0),
+        )
+        .style(move |theme, status| {
+            use button::{Status, Style, background};
+            let default = background(theme, status);
+
+            match status {
+                Status::Active if current => {
+                    let background = theme.extended_palette().background.weakest;
+                    Style {
+                        background: Some(background.color.into()),
+                        text_color: background.text,
+                        ..default
+                    }
+                }
+                _ => default,
+            }
+        })
+        .on_press(message),
+    )
+    .max_height(40.0)
+    .into()
+}
+
+fn collection_button<'a>(
+    icon: char,
+    value: &'a str,
+    view: char,
+    message: HomeMessage,
+    current: bool,
+) -> Element<'a, HomeMessage> {
+    let size = H6;
+    let icon = icons::icon(icon).size(size);
+    let text = container(text(value).size(size))
+        .max_height(40.0)
+        .max_width(200.0);
+    let view = icons::icon(view).size(size);
+
     button(
-        row!(icon, text)
+        row!(icon, text, view)
             .align_y(Vertical::Center)
             .width(Length::Fill)
             .spacing(16.0),

@@ -35,8 +35,21 @@ pub const RAND: char = '\u{e826}';
 pub const ADD_COLLECTION: char = '\u{e807}';
 // pub const REM_COLLECTION: char = '\u{e23c}';
 // pub const IN_COLLECTION: char = '\u{e524}';
-pub const NEW_COLLECTION: char = '\u{e819}';
+pub const ADD: char = '\u{e819}';
 pub const BOOKMARK: char = '\u{e807}';
+pub const LIBRARY: char = '\u{e828}';
+// pub const LIBRARY: char = '\u{e83d}';
+
+pub const COLLECTION_ICON: char = '\u{e82d}';
+pub const POPCORN: char = '\u{e829}';
+pub const FILM: char = '\u{e82a}';
+pub const TODO: char = '\u{e842}';
+pub const SWORD: char = '\u{e843}';
+pub const HISTORY: char = '\u{e847}';
+pub const GHOST: char = '\u{e84a}';
+pub const ALIEN: char = '\u{e84b}';
+pub const CROWN: char = '\u{e84c}';
+pub const MASKS: char = '\u{e84d}';
 
 pub const VIDEO_CONFIG: char = '\u{e82c}';
 
@@ -71,6 +84,7 @@ pub const SETTINGS: char = '\u{e840}';
 
 pub const STAR: char = '\u{e809}';
 pub const UNSTAR: char = '\u{e841}';
+pub const HALF_STAR: char = '\u{e82b}';
 
 pub const PROGRESS_10: char = '\u{e803}';
 pub const PROGRESS_20: char = '\u{e801}';
@@ -86,9 +100,14 @@ pub const CLOCK: char = '\u{e836}';
 pub const CALENDAR: char = '\u{e837}';
 pub const NUMBER: char = '\u{e838}';
 pub const EYE: char = '\u{e833}';
+pub const HIDE: char = '\u{e832}';
 
 pub const ELLIPSIS_VER: char = '\u{e800}';
 pub const ELLIPSIS_HOR: char = '\u{e839}';
+
+pub const PIN: char = '\u{e844}';
+pub const UNPIN: char = '\u{e845}';
+pub const EDIT: char = '\u{e846}';
 
 pub fn load_fonts() -> iced::Task<Result<(), font::Error>> {
     font::load(ICONS)

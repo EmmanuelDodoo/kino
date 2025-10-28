@@ -70,14 +70,14 @@ impl<'a> From<ItemId> for ToSqlOutput<'_> {
 #[derive(Debug, Clone)]
 pub struct Collection {
     pub id: CollectionId,
-    name: String,
-    description: Option<String>,
-    posters: Vec<Option<String>>,
-    view: CollectionView,
-    icon: Option<u32>,
-    theme: Option<u32>,
-    custom: Option<String>,
-    added: DateTime<Local>,
+    pub name: String,
+    pub description: Option<String>,
+    pub posters: Vec<Option<String>>,
+    pub view: CollectionView,
+    pub icon: Option<u32>,
+    pub theme: Option<u32>,
+    pub custom: Option<String>,
+    pub added: DateTime<Local>,
 }
 
 impl Collection {
@@ -354,12 +354,12 @@ impl Collection {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
 pub enum CollectionView {
-    Pinned,
+    Pinned = 0,
     #[default]
-    Shown,
-    Hidden,
+    Shown = 1,
+    Hidden = 2,
 }
 
 impl CollectionView {

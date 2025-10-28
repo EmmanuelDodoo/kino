@@ -10,9 +10,12 @@ use iced::{
     mouse,
     time::Instant,
     widget::{
-        self, center, column, container, horizontal_space, image::Handle, mouse_area, row,
-        scrollable, stack, text, vertical_space,
+        self, center, column, container, image::Handle, mouse_area, operation, row, scrollable,
+        space, stack, text,
     },
+};
+use image::{
+    DynamicImage, GenericImage, ImageBuffer, ImageReader, ImageResult, Rgba, imageops::FilterType,
 };
 
 pub const CARD_HEIGHT: f32 = 350.0;
@@ -166,11 +169,11 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
 
     let r1 = row!(
         duration,
-        horizontal_space(),
+        space::horizontal(),
         release,
-        horizontal_space(),
+        space::horizontal(),
         count,
-        horizontal_space(),
+        space::horizontal(),
         progress
     )
     .align_y(Vertical::Center)
@@ -178,11 +181,11 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
 
     let r2 = row!(
         rating,
-        horizontal_space(),
+        space::horizontal(),
         added,
-        horizontal_space(),
+        space::horizontal(),
         comments,
-        horizontal_space(),
+        space::horizontal(),
         recent,
     )
     .align_y(Vertical::Center)
@@ -251,7 +254,9 @@ pub fn round_image(path: &str) -> Option<Handle> {
         .and_then(|image| image.decode().inspect_err(|err| eprintln!("{err:?}")).ok())
         .map(|image| image.to_rgba8());
 
-    image.as_mut().map(|image| round_corners(image));
+    if let Some(image) = image.as_mut() {
+        round_corners(image);
+    }
 
     image.map(|image| {
         Handle::from_rgba(
@@ -260,6 +265,88 @@ pub fn round_image(path: &str) -> Option<Handle> {
             bytes::Bytes::from(image.into_raw()),
         )
     })
+}
+
+pub fn collection_collage<'a>(
+    paths: impl Iterator<Item = &'a String>,
+    width: u32,
+    height: u32,
+) -> Option<Handle> {
+    let imgs: Vec<DynamicImage> = paths
+        .filter_map(|p| {
+            ImageReader::open(p)
+                .and_then(|reader| reader.with_guessed_format())
+                .inspect_err(|error| eprintln!("Collage generation error on {p}. Error \n{error}"))
+                .ok()
+                .and_then(|reader| {
+                    reader
+                        .decode()
+                        .inspect_err(|error| {
+                            eprintln!("Collage error decoding {p}. Error \n{error}")
+                        })
+                        .ok()
+                })
+        })
+        .collect();
+
+    if imgs.is_empty() {
+        return None;
+    }
+
+    let len = imgs.len();
+    let mut canvas: ImageBuffer<Rgba<u8>, Vec<_>> = ImageBuffer::new(width, height);
+
+    let mut flip = false;
+    let mut img_width = 0;
+    let mut img_height = 0;
+
+    for (i, img) in imgs.into_iter().enumerate() {
+        let remaining_height = height.saturating_sub(img_height);
+        let remaining_width = width.saturating_sub(img_width);
+        let last = i == len - 1;
+
+        if flip {
+            let width = if last {
+                remaining_width
+            } else {
+                remaining_width / 2
+            };
+            let height = remaining_height;
+            let img = img.resize_to_fill(width, height, FilterType::Triangle);
+
+            if let Err(error) = canvas.copy_from(&img, img_width, img_height) {
+                eprintln!("Collection collage error: Error\n{error}");
+                continue;
+            };
+
+            img_width += width;
+        } else {
+            let width = remaining_width;
+            let height = if last {
+                remaining_height
+            } else {
+                remaining_height / 2
+            };
+            let img = img.resize_to_fill(width, height, FilterType::Triangle);
+
+            if let Err(error) = canvas.copy_from(&img, img_width, img_height) {
+                eprintln!("Collection collage error: Error\n{error}");
+                continue;
+            };
+
+            img_height += height;
+        }
+
+        flip = !flip;
+    }
+
+    round_corners(&mut canvas);
+
+    Some(Handle::from_rgba(
+        canvas.width(),
+        canvas.height(),
+        bytes::Bytes::from(canvas.into_raw()),
+    ))
 }
 
 #[derive(Debug, Clone)]
@@ -326,7 +413,7 @@ impl<T: Media> Thumbnail<T> {
             progress(&self.media),
             duration(&self.media),
             unique,
-            horizontal_space(),
+            space::horizontal(),
             add_labelled(&self.media, on_add)
         )
         .spacing(24.0)
@@ -371,7 +458,7 @@ impl<T: Media> Thumbnail<T> {
             .interaction(iced::mouse::Interaction::Pointer)
             .on_press((on_play)(self.media.id()));
 
-            row!(horizontal_space(), play, horizontal_space())
+            row!(space::horizontal(), play, space::horizontal())
                 .height(Length::Fill)
                 .width(Length::Fill)
                 .align_y(Vertical::Center)
@@ -424,7 +511,7 @@ impl<T: Media> Thumbnail<T> {
                 .on_press((on_add)(self.media.id()));
 
             container(
-                row!(progress, horizontal_space(), add)
+                row!(progress, space::horizontal(), add)
                     .padding(padding)
                     .width(Length::Fill)
                     .align_y(Vertical::Center),
@@ -441,7 +528,7 @@ impl<T: Media> Thumbnail<T> {
                 row!(icon, release).align_y(Vertical::Center).spacing(3.0)
             };
 
-            let details = row!(ratings, horizontal_space(), release)
+            let details = row!(ratings, space::horizontal(), release)
                 .width(Length::Fill)
                 .align_y(Vertical::Center);
 
@@ -450,7 +537,7 @@ impl<T: Media> Thumbnail<T> {
 
         let bottom = {
             let duration = text(self.media.duration_full()).size(H7);
-            row!(horizontal_space(), duration)
+            row!(space::horizontal(), duration)
                 .align_y(Vertical::Center)
                 .padding(padding)
         };
@@ -480,14 +567,14 @@ impl<T: Media> Thumbnail<T> {
                     }
                 });
 
-            row!(horizontal_space(), play, horizontal_space())
+            row!(space::horizontal(), play, space::horizontal())
                 .height(Length::Fill)
                 .width(Length::Fill)
                 .align_y(Vertical::Center)
         };
 
         let overlay = mouse_area(
-            column!(top, vertical_space(), play, vertical_space(), bottom)
+            column!(top, space::vertical(), play, space::vertical(), bottom)
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
@@ -530,15 +617,15 @@ impl<T: Media> Thumbnail<T> {
 
 #[derive(Debug, Clone)]
 pub struct Scroll {
-    pub id: scrollable::Id,
-    pub offset: scrollable::AbsoluteOffset,
+    pub id: widget::Id,
+    pub offset: operation::AbsoluteOffset,
 }
 
 impl Scroll {
     pub fn new() -> Self {
         Self {
-            id: scrollable::Id::unique(),
-            offset: scrollable::AbsoluteOffset::default(),
+            id: widget::Id::unique(),
+            offset: operation::AbsoluteOffset::default(),
         }
     }
 }

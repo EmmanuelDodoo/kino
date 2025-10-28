@@ -144,16 +144,12 @@ where
 
     fn operate(
         &mut self,
-        state: &mut tree::Tree,
+        _state: &mut tree::Tree,
         layout: layout::Layout<'_>,
-        renderer: &Renderer,
+        _renderer: &Renderer,
         operation: &mut dyn operation::Operation,
     ) {
-        operation.container(None, layout.bounds(), &mut |operation| {
-            self.base
-                .as_widget_mut()
-                .operate(&mut state.children[0], layout, renderer, operation);
-        });
+        operation.container(None, layout.bounds());
     }
 
     fn update(
@@ -177,10 +173,6 @@ where
             shell,
             viewport,
         );
-
-        if shell.is_event_captured() {
-            return;
-        }
 
         let state = state.state.downcast_mut::<State>();
 
@@ -342,6 +334,10 @@ where
         } else if shell.is_event_captured() && self.auto_close && cursor.is_over(layout.bounds()) {
             self.state.is_open = false
         }
+
+        if cursor.is_over(layout.bounds()) && matches!(event, Event::Mouse(_)) {
+            shell.capture_event();
+        }
     }
 
     fn operate(
@@ -361,13 +357,19 @@ where
         cursor: mouse::Cursor,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
+        let interaction = self.content.as_widget().mouse_interaction(
             self.tree,
             layout,
             cursor,
             &self.viewport,
             renderer,
-        )
+        );
+
+        if matches!(interaction, mouse::Interaction::None) && cursor.is_over(layout.bounds()) {
+            mouse::Interaction::Idle
+        } else {
+            interaction
+        }
     }
 
     fn overlay<'c>(

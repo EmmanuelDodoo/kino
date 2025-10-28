@@ -184,7 +184,6 @@ impl SortKind {
             .map(|order| (order + 1).to_string())
             .unwrap_or_default();
         let content = text(format!("{self} {}", order)).size(H7);
-        // let content = row!(content).spacing(2.0).align_y(Vertical::Center);
 
         button(content)
             .on_press(msg)
