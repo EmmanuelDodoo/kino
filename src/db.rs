@@ -613,30 +613,11 @@ pub enum Table {
     WatchList,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Operation {
-    Insert,
-    Update,
-    Delete,
-}
-
-impl PartialOrd for Operation {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        use Operation::*;
-        use std::cmp::Ordering::*;
-
-        match (self, other) {
-            (Insert, Insert) => Some(Equal),
-            (Insert, _) => Some(Less),
-
-            (Update, Update) => Some(Equal),
-            (Update, Insert) => Some(Greater),
-            (Update, Delete) => Some(Less),
-
-            (Delete, Delete) => Some(Equal),
-            (Delete, _) => Some(Greater),
-        }
-    }
+    Insert = 0,
+    Update = 1,
+    Delete = 2,
 }
 
 #[derive(Debug, PartialEq)]
@@ -669,21 +650,19 @@ impl<'a> Query<'a> {
                         params,
                         op,
                     },
-                    error,
+                    error: Box::new(error),
                 }),
             },
-            Err(error) => {
-                return Err(Failure {
-                    query: Query {
-                        id,
-                        table,
-                        sql,
-                        params,
-                        op,
-                    },
-                    error,
-                });
-            }
+            Err(error) => Err(Failure {
+                query: Query {
+                    id,
+                    table,
+                    sql,
+                    params,
+                    op,
+                },
+                error: Box::new(error),
+            }),
         }
     }
 }
@@ -698,7 +677,7 @@ pub struct Success {
 #[derive(Debug, PartialEq)]
 pub struct Failure<'a> {
     pub query: Query<'a>,
-    pub error: rusqlite::Error,
+    pub error: Box<rusqlite::Error>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -801,7 +780,7 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    residue: Batch {
+                    residue: Box::new(Batch {
                         directories,
                         movies,
                         shows,
@@ -812,10 +791,10 @@ impl<'a> Batch<'a> {
                         collections,
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
-                    error,
+                    error: Box::new(error),
                 });
             }
         };
@@ -829,7 +808,7 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = directories_tx.commit() {
             return Err(BatchError {
-                residue: Batch {
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies,
                     shows,
@@ -840,10 +819,10 @@ impl<'a> Batch<'a> {
                     collections,
                     collection_items,
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
-                error,
+                error: Box::new(error),
             });
         }
 
@@ -851,7 +830,7 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    residue: Batch {
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies,
                         shows,
@@ -862,10 +841,10 @@ impl<'a> Batch<'a> {
                         collections,
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
-                    error,
+                    error: Box::new(error),
                 });
             }
         };
@@ -879,7 +858,7 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = movies_tx.commit() {
             return Err(BatchError {
-                residue: Batch {
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows,
@@ -890,10 +869,10 @@ impl<'a> Batch<'a> {
                     collections,
                     collection_items,
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
-                error,
+                error: Box::new(error),
             });
         }
 
@@ -901,8 +880,8 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    error,
-                    residue: Batch {
+                    error: Box::new(error),
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies: vec![],
                         shows,
@@ -913,7 +892,7 @@ impl<'a> Batch<'a> {
                         collections,
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
                 });
@@ -929,8 +908,8 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = shows_tx.commit() {
             return Err(BatchError {
-                error,
-                residue: Batch {
+                error: Box::new(error),
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows: vec![],
@@ -941,7 +920,7 @@ impl<'a> Batch<'a> {
                     collections,
                     collection_items,
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
             });
@@ -951,8 +930,8 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    error,
-                    residue: Batch {
+                    error: Box::new(error),
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies: vec![],
                         shows: vec![],
@@ -963,7 +942,7 @@ impl<'a> Batch<'a> {
                         collections,
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
                 });
@@ -979,8 +958,8 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = seasons_tx.commit() {
             return Err(BatchError {
-                error,
-                residue: Batch {
+                error: Box::new(error),
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows: vec![],
@@ -991,7 +970,7 @@ impl<'a> Batch<'a> {
                     collections,
                     collection_items,
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
             });
@@ -1001,8 +980,8 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    error,
-                    residue: Batch {
+                    error: Box::new(error),
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies: vec![],
                         shows: vec![],
@@ -1013,7 +992,7 @@ impl<'a> Batch<'a> {
                         collections,
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
                 });
@@ -1029,8 +1008,8 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = episodes_tx.commit() {
             return Err(BatchError {
-                error,
-                residue: Batch {
+                error: Box::new(error),
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows: vec![],
@@ -1041,7 +1020,7 @@ impl<'a> Batch<'a> {
                     collections,
                     collection_items,
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
             });
@@ -1051,8 +1030,8 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    error,
-                    residue: Batch {
+                    error: Box::new(error),
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies: vec![],
                         shows: vec![],
@@ -1063,7 +1042,7 @@ impl<'a> Batch<'a> {
                         collections,
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
                 });
@@ -1079,8 +1058,8 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = ecomments_tx.commit() {
             return Err(BatchError {
-                error,
-                residue: Batch {
+                error: Box::new(error),
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows: vec![],
@@ -1091,7 +1070,7 @@ impl<'a> Batch<'a> {
                     collections,
                     collection_items,
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
             });
@@ -1101,8 +1080,8 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    error,
-                    residue: Batch {
+                    error: Box::new(error),
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies: vec![],
                         shows: vec![],
@@ -1113,7 +1092,7 @@ impl<'a> Batch<'a> {
                         collections,
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
                 });
@@ -1129,8 +1108,8 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = mcomments_tx.commit() {
             return Err(BatchError {
-                error,
-                residue: Batch {
+                error: Box::new(error),
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows: vec![],
@@ -1141,7 +1120,7 @@ impl<'a> Batch<'a> {
                     collections,
                     collection_items,
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
             });
@@ -1151,8 +1130,8 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    error,
-                    residue: Batch {
+                    error: Box::new(error),
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies: vec![],
                         shows: vec![],
@@ -1163,7 +1142,7 @@ impl<'a> Batch<'a> {
                         collections,
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
                 });
@@ -1179,8 +1158,8 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = collections_tx.commit() {
             return Err(BatchError {
-                error,
-                residue: Batch {
+                error: Box::new(error),
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows: vec![],
@@ -1191,7 +1170,7 @@ impl<'a> Batch<'a> {
                     collections: vec![],
                     collection_items,
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
             });
@@ -1201,8 +1180,8 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    error,
-                    residue: Batch {
+                    error: Box::new(error),
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies: vec![],
                         shows: vec![],
@@ -1213,7 +1192,7 @@ impl<'a> Batch<'a> {
                         collections: vec![],
                         collection_items,
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
                 });
@@ -1229,8 +1208,8 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = citem_tx.commit() {
             return Err(BatchError {
-                error,
-                residue: Batch {
+                error: Box::new(error),
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows: vec![],
@@ -1241,7 +1220,7 @@ impl<'a> Batch<'a> {
                     collections: vec![],
                     collection_items: vec![],
                     watch_list,
-                },
+                }),
                 successes,
                 failures,
             });
@@ -1251,8 +1230,8 @@ impl<'a> Batch<'a> {
             Ok(trans) => trans,
             Err(error) => {
                 return Err(BatchError {
-                    error,
-                    residue: Batch {
+                    error: Box::new(error),
+                    residue: Box::new(Batch {
                         directories: vec![],
                         movies: vec![],
                         shows: vec![],
@@ -1263,7 +1242,7 @@ impl<'a> Batch<'a> {
                         collections: vec![],
                         collection_items: vec![],
                         watch_list,
-                    },
+                    }),
                     successes,
                     failures,
                 });
@@ -1279,8 +1258,8 @@ impl<'a> Batch<'a> {
 
         if let Err(error) = watch_list_tx.commit() {
             return Err(BatchError {
-                error,
-                residue: Batch {
+                error: Box::new(error),
+                residue: Box::new(Batch {
                     directories: vec![],
                     movies: vec![],
                     shows: vec![],
@@ -1291,7 +1270,7 @@ impl<'a> Batch<'a> {
                     collections: vec![],
                     collection_items: vec![],
                     watch_list: vec![],
-                },
+                }),
                 successes,
                 failures,
             });
@@ -1311,7 +1290,7 @@ pub struct BatchResult<'a> {
     pub failures: Vec<Failure<'a>>,
 }
 
-impl<'a> BatchResult<'_> {
+impl BatchResult<'_> {
     pub fn has_failures(&self) -> bool {
         !self.failures.is_empty()
     }
@@ -1323,8 +1302,8 @@ impl<'a> BatchResult<'_> {
 
 #[derive(Debug)]
 pub struct BatchError<'a> {
-    pub residue: Batch<'a>,
+    pub residue: Box<Batch<'a>>,
     pub successes: Vec<Success>,
     pub failures: Vec<Failure<'a>>,
-    pub error: rusqlite::Error,
+    pub error: Box<rusqlite::Error>,
 }

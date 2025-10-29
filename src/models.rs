@@ -174,7 +174,7 @@ impl std::fmt::Display for MediaType {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DirectoryId(Uuid);
 
-impl<'a> From<DirectoryId> for ToSqlOutput<'_> {
+impl From<DirectoryId> for ToSqlOutput<'_> {
     fn from(value: DirectoryId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.

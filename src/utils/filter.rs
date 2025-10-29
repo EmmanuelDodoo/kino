@@ -367,7 +367,7 @@ impl Filter {
 
         let query = [progress, rating, comments, release, duration]
             .into_iter()
-            .filter_map(|value| value)
+            .flatten()
             .collect::<Vec<_>>();
 
         Some(query.join(&format!(" {} ", mode)))
@@ -469,10 +469,7 @@ pub mod comments {
                 )
             });
 
-            let query = [added, timestamp]
-                .into_iter()
-                .filter_map(|value| value)
-                .collect::<Vec<_>>();
+            let query = [added, timestamp].into_iter().flatten().collect::<Vec<_>>();
 
             Some(query.join(&format!(" {mode} ")))
         }

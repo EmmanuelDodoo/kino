@@ -13,7 +13,7 @@ use crate::db::{Database, Operation, Query, Table};
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CollectionId(Uuid);
 
-impl<'a> From<CollectionId> for ToSqlOutput<'_> {
+impl From<CollectionId> for ToSqlOutput<'_> {
     fn from(value: CollectionId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.
@@ -56,7 +56,7 @@ impl ItemId {
     }
 }
 
-impl<'a> From<ItemId> for ToSqlOutput<'_> {
+impl From<ItemId> for ToSqlOutput<'_> {
     fn from(value: ItemId) -> Self {
         match value {
             ItemId::Movie(id) => id.into(),
@@ -152,7 +152,7 @@ impl Collection {
             None => ToSqlOutput::Owned(Value::Null),
         };
 
-        let added = datetime_to_sql(&added);
+        let added = datetime_to_sql(added);
 
         vec![
             (":id", id),
@@ -381,7 +381,7 @@ impl FromSql for CollectionView {
     }
 }
 
-impl<'a> From<CollectionView> for ToSqlOutput<'a> {
+impl From<CollectionView> for ToSqlOutput<'_> {
     fn from(value: CollectionView) -> Self {
         ToSqlOutput::from(value.to_string())
     }

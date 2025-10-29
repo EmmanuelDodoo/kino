@@ -473,9 +473,7 @@ impl TvSeason {
 
     pub fn forward(&mut self) -> Option<Task<()>> {
         self.unfocus();
-        let Some(prev) = self.selected_prev.take() else {
-            return None;
-        };
+        let prev = self.selected_prev.take()?;
 
         self.selected = Some(prev);
 

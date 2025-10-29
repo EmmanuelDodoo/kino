@@ -10,7 +10,7 @@ use crate::db::{Operation, Query, Table};
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MovieId(pub(super) Uuid);
 
-impl<'a> From<MovieId> for ToSqlOutput<'_> {
+impl From<MovieId> for ToSqlOutput<'_> {
     fn from(value: MovieId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.
@@ -21,7 +21,7 @@ impl<'a> From<MovieId> for ToSqlOutput<'_> {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MCommentId(Uuid);
 
-impl<'a> From<MCommentId> for ToSqlOutput<'_> {
+impl From<MCommentId> for ToSqlOutput<'_> {
     fn from(value: MCommentId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.
@@ -270,7 +270,7 @@ impl Movie {
     #[must_use]
     pub fn set_progress<'a>(&mut self, progress: f32) -> Query<'a> {
         assert!(
-            0.0 <= progress && progress <= 1.0,
+            (0.0..1.0).contains(&progress),
             "Episode progress out of range",
         );
         self.progress = progress;
@@ -309,6 +309,7 @@ impl Movie {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,
@@ -394,8 +395,8 @@ impl Movie {
         Self {
             id,
             directory: DirectoryId(Uuid::now_v7()),
-            name: format!("Fantastic Beasts And Where To Find Them"),
-            original_name: format!("Fantastic Beasts And Where To Find Them"),
+            name: "Fantastic Beasts And Where To Find Them".to_owned(),
+            original_name: "Fantastic Beasts And Where To Find Them".to_owned(),
             duration,
             path: path.to_owned(), full_path,
             rating: Some(3.85),
@@ -428,8 +429,8 @@ impl Movie {
         Self {
             id: MovieId(Uuid::now_v7()),
             directory: DirectoryId(Uuid::now_v7()),
-            name: format!("Ready Player One"),
-            original_name: format!("Ready Player One"),
+            name: "Ready Player One".to_owned(),
+            original_name: "Ready Player One".to_owned(),
             path: path.to_owned(), full_path,
             duration,
             rating: Some(1.24),
@@ -476,11 +477,11 @@ impl Media for Movie {
     }
 
     fn poster(&self) -> Option<&str> {
-        self.poster.as_ref().map(|poster| poster.as_str())
+        self.poster.as_deref()
     }
 
     fn backdrop(&self) -> Option<&str> {
-        self.backdrop.as_ref().map(|backdrop| backdrop.as_str())
+        self.backdrop.as_deref()
     }
 
     fn release(&self) -> NaiveDate {

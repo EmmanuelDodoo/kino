@@ -11,7 +11,7 @@ use crate::db::{Operation, Query, Table};
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ShowId(pub(super) Uuid);
 
-impl<'a> From<ShowId> for ToSqlOutput<'_> {
+impl From<ShowId> for ToSqlOutput<'_> {
     fn from(value: ShowId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.
@@ -22,7 +22,7 @@ impl<'a> From<ShowId> for ToSqlOutput<'_> {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SeasonId(pub(super) Uuid);
 
-impl<'a> From<SeasonId> for ToSqlOutput<'_> {
+impl From<SeasonId> for ToSqlOutput<'_> {
     fn from(value: SeasonId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.
@@ -33,7 +33,7 @@ impl<'a> From<SeasonId> for ToSqlOutput<'_> {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EpisodeId(pub(super) Uuid);
 
-impl<'a> From<EpisodeId> for ToSqlOutput<'_> {
+impl From<EpisodeId> for ToSqlOutput<'_> {
     fn from(value: EpisodeId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.
@@ -44,7 +44,7 @@ impl<'a> From<EpisodeId> for ToSqlOutput<'_> {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ECommentId(Uuid);
 
-impl<'a> From<ECommentId> for ToSqlOutput<'_> {
+impl From<ECommentId> for ToSqlOutput<'_> {
     fn from(value: ECommentId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.
@@ -280,6 +280,7 @@ impl Show {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,
@@ -425,11 +426,11 @@ impl Media for Show {
     }
 
     fn poster(&self) -> Option<&str> {
-        self.poster.as_ref().map(|poster| poster.as_str())
+        self.poster.as_deref()
     }
 
     fn backdrop(&self) -> Option<&str> {
-        self.backdrop.as_ref().map(|backdrop| backdrop.as_str())
+        self.backdrop.as_deref()
     }
 
     fn release(&self) -> NaiveDate {
@@ -599,7 +600,7 @@ impl Season {
         let comments = ToSqlOutput::from(*comments);
 
         let recent_episode =
-            recent_episode.map_or(ToSqlOutput::Owned(Value::Null), |id| ToSqlOutput::from(id));
+            recent_episode.map_or(ToSqlOutput::Owned(Value::Null), ToSqlOutput::from);
 
         vec![
             (":id", id),
@@ -672,6 +673,7 @@ impl Season {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
         show: &Show,
         name: String,
@@ -741,8 +743,8 @@ impl Season {
             show: ShowId(Uuid::now_v7()),
             path: "Dummy 1".into(),
             id: SeasonId(Uuid::now_v7()),
-            name: format!("1 Season"),
-            original_name: format!("1 Season"),
+            name: "1 Season".into(),
+            original_name: "1 Season".into(),
             number: 6,
             episodes: 20,
             recent_episode: Some(EpisodeId(Uuid::now_v7())),
@@ -774,8 +776,8 @@ impl Season {
             recent_episode: None,
             path: "Someting".into(),
             id: SeasonId(Uuid::now_v7()),
-            name: format!("2 Season"),
-            original_name: format!("2 Season"),
+            name: "2 Season".into(),
+            original_name: "2 Season".into(),
             number: 1,
             episodes: 20,
             last_watched,
@@ -822,11 +824,11 @@ impl Media for Season {
     }
 
     fn poster(&self) -> Option<&str> {
-        self.poster.as_ref().map(|poster| poster.as_str())
+        self.poster.as_deref()
     }
 
     fn backdrop(&self) -> Option<&str> {
-        self.backdrop.as_ref().map(|backdrop| backdrop.as_str())
+        self.backdrop.as_deref()
     }
 
     fn release(&self) -> NaiveDate {
@@ -1105,7 +1107,7 @@ impl Episode {
     #[must_use]
     pub fn set_progress<'a>(&mut self, progress: f32) -> Query<'a> {
         assert!(
-            0.0 <= progress && progress <= 1.0,
+            (0.0..1.0).contains(&progress),
             "Episode progress out of range",
         );
         self.progress = progress;
@@ -1144,6 +1146,7 @@ impl Episode {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
         season: &Season,
         name: String,
@@ -1226,8 +1229,8 @@ impl Episode {
             season: SeasonId(Uuid::now_v7()),
             last_watched: None,
             id: EpisodeId(Uuid::now_v7()),
-            name: format!("Episode 33"),
-            original_name: format!("The Big Bang Theory"),
+            name: "Episode 33".into(),
+            original_name: "The Big Bang Theory".into(),
             path: path.into(),
             full_path,
             number: 1,
@@ -1259,8 +1262,8 @@ impl Episode {
             show: ShowId(Uuid::now_v7()),
             id: EpisodeId(Uuid::now_v7()),
             season: SeasonId(Uuid::now_v7()),
-            original_name: format!("Supernatural"),
-            name: format!("4 Episode"),
+            original_name: "Supernatural".into(),
+            name: "4 Episode".into(),
             path: path.into(),
             last_watched,
             full_path,
@@ -1308,11 +1311,11 @@ impl Media for Episode {
     }
 
     fn poster(&self) -> Option<&str> {
-        self.poster.as_ref().map(|poster| poster.as_str())
+        self.poster.as_deref()
     }
 
     fn backdrop(&self) -> Option<&str> {
-        self.backdrop.as_ref().map(|backdrop| backdrop.as_str())
+        self.backdrop.as_deref()
     }
 
     fn release(&self) -> NaiveDate {

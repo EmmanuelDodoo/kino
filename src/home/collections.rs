@@ -323,6 +323,7 @@ impl CollectionPage {
         (new, tasks)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn dummies(
         collection: Collection,
         sort: Sort,
@@ -506,10 +507,10 @@ impl CollectionPage {
                 };
 
                 let id = self.collection.id;
-                return show.update(ssg, now).map(move |msg| CollectionMessage {
+                show.update(ssg, now).map(move |msg| CollectionMessage {
                     id,
                     message: Message::Show(msg),
-                });
+                })
             }
             Message::Season(ssg) => {
                 let Some(Preview::Season(season)) = self.selected.as_mut() else {
@@ -517,10 +518,10 @@ impl CollectionPage {
                 };
 
                 let id = self.collection.id;
-                return season.update(ssg, now).map(move |msg| CollectionMessage {
+                season.update(ssg, now).map(move |msg| CollectionMessage {
                     id,
                     message: Message::Season(msg),
-                });
+                })
             }
             Message::Tab(tab) => match self.selected.as_mut() {
                 Some(Preview::Movie(movie)) => {
@@ -533,9 +534,7 @@ impl CollectionPage {
                 }
                 _ => Task::none(),
             },
-            Message::Play(psg) => match psg {
-                _ => todo!(),
-            },
+            Message::Play(_) => todo!(),
             Message::OpenConfig => {
                 let description = text_editor::Content::with_text(
                     self.collection.description.as_deref().unwrap_or_default(),
@@ -543,8 +542,8 @@ impl CollectionPage {
 
                 let config = Config {
                     name: self.collection.name.clone(),
-                    description: description,
-                    view: self.collection.view.clone(),
+                    description,
+                    view: self.collection.view,
                     icon: Icon::new(self.collection.icon),
                     theme: self.collection.theme,
                     custom: self.collection.custom.clone(),
@@ -1032,7 +1031,7 @@ impl CollectionPage {
             View::Config => modal(content, self.config())
                 .on_blur(CollectionMessage {
                     id: collection,
-                    message: Message::CloseModal,
+                    message: Message::Config(ConfigMessage::Cancel),
                 })
                 .into(),
         }
@@ -1323,7 +1322,7 @@ impl CollectionPage {
                         message: Message::Show(message),
                     });
 
-                    return Some(tasks);
+                    Some(tasks)
                 }
                 None => todo!("Fetch missing media?"),
             },
@@ -1340,7 +1339,7 @@ impl CollectionPage {
                         message: Message::Season(message),
                     });
 
-                    return Some(tasks);
+                    Some(tasks)
                 }
                 None => todo!("Fetch missing media?"),
             },

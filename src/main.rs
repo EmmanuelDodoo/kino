@@ -78,7 +78,7 @@ fn main() -> iced::Result {
     // )
 
     .window_size(Size::new(1200.0, 750.0))
-    // .theme(|_| Theme::TokyoNightLight)
+    .theme(home::Home::theme)
     .run()
 }
 

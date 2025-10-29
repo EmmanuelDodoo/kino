@@ -7,7 +7,7 @@ use iced::{
     font, keyboard,
     time::Instant,
     widget::{
-        button, column, container,
+        button, column, container, grid,
         operation::{self, scroll_to},
         pick_list, row, rule, scrollable, space, text, text_input,
     },
@@ -26,7 +26,7 @@ use crate::models::{Collection, CollectionId, CollectionView, Movie, MovieId, Sh
 use collections::{CollectionMessage, CollectionPage, Icon, view_unicode};
 use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind, PageUpdate};
-use shared::{Scroll, Thumbnail, filter_sort};
+use shared::{CARD_HEIGHT, CARD_WIDTH, Scroll, Thumbnail, filter_sort};
 use shows::{TvShows, TvShowsMessage};
 use utils::empty;
 use utils::filter::*;
@@ -64,30 +64,6 @@ pub enum SortMessage {
 enum Focused {
     Movie(MovieId),
     Show(ShowId),
-}
-
-#[derive(Debug, Clone)]
-struct HomeScroll {
-    home: Scroll,
-    movies: Scroll,
-    shows: Scroll,
-}
-
-impl HomeScroll {
-    fn new() -> Self {
-        Self {
-            home: Scroll::new(),
-            movies: Scroll::new(),
-            shows: Scroll::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum HomeScrollMessage {
-    Home(scrollable::Viewport),
-    Movies(scrollable::Viewport),
-    Shows(scrollable::Viewport),
 }
 
 #[derive(Debug, Clone)]
@@ -137,7 +113,7 @@ pub enum HomeMessage {
     None,
     Recent(RecentMessage),
     Fetch(Fetch),
-    HomeScroll(HomeScrollMessage),
+    Scroll(scrollable::Viewport),
     Refresh,
     PerformPending,
 }
@@ -155,7 +131,7 @@ pub struct Home {
     recent_movies: HashMap<MovieId, Thumbnail<Movie>>,
     recent_shows: HashMap<ShowId, Thumbnail<Show>>,
     focused: Option<Focused>,
-    home_scroll: HomeScroll,
+    scroll: Scroll,
     pages: HashMap<PageKind, Page>,
     current_page: Option<PageKind>,
     pending: Vec<Task<HomeMessage>>,
@@ -203,7 +179,7 @@ impl Home {
             backward: vec![],
             search: String::default(),
             layout: view,
-            sort: Sort::default(),
+            sort: Sort::new_with_name(),
             show_sorts: false,
             show_filters: false,
             now: Instant::now(),
@@ -211,7 +187,7 @@ impl Home {
             recent_shows: HashMap::default(),
             recent_movies: HashMap::default(),
             focused: None,
-            home_scroll: HomeScroll::new(),
+            scroll: Scroll::new(),
             pages: HashMap::default(),
             current_page: None,
             pending: vec![],
@@ -859,20 +835,10 @@ impl Home {
                     Task::none()
                 }
             },
-            HomeMessage::HomeScroll(hsg) => match hsg {
-                HomeScrollMessage::Home(viewport) => {
-                    self.home_scroll.home.offset = viewport.absolute_offset();
-                    Task::none()
-                }
-                HomeScrollMessage::Movies(viewport) => {
-                    self.home_scroll.movies.offset = viewport.absolute_offset();
-                    Task::none()
-                }
-                HomeScrollMessage::Shows(viewport) => {
-                    self.home_scroll.shows.offset = viewport.absolute_offset();
-                    Task::none()
-                }
-            },
+            HomeMessage::Scroll(viewport) => {
+                self.scroll.offset = viewport.absolute_offset();
+                Task::none()
+            }
             HomeMessage::PerformPending => {
                 let mut pending = vec![];
                 std::mem::swap(&mut pending, &mut self.pending);
@@ -882,17 +848,9 @@ impl Home {
     }
 
     fn update_scroll(&mut self) -> Task<HomeMessage> {
-        let HomeScroll {
-            home,
-            shows,
-            movies,
-        } = self.home_scroll.clone();
+        let home: Task<()> = scroll_to(self.scroll.id.clone(), self.scroll.offset);
 
-        let home: Task<()> = scroll_to(home.id, home.offset);
-        let movies = scroll_to(movies.id, movies.offset);
-        let shows = scroll_to(shows.id, shows.offset);
-
-        Task::batch([home, movies, shows]).map(|_| HomeMessage::None)
+        home.map(|_| HomeMessage::None)
     }
 
     fn current_page(&self) -> Option<&Page> {
@@ -1029,12 +987,10 @@ impl Home {
                         )
                     });
 
-                    scrollable(row(content).spacing(16.0).align_y(Vertical::Center))
-                        .id(self.home_scroll.movies.id.clone())
-                        .on_scroll(|view| HomeMessage::HomeScroll(HomeScrollMessage::Movies(view)))
-                        .direction(scrollable::Direction::Horizontal(
-                            scrollable::Scrollbar::default().spacing(16.0),
-                        ))
+                    grid(content)
+                        .spacing(16)
+                        .fluid(CARD_WIDTH)
+                        .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT))
                         .into()
                 }
                 Layout::List => {
@@ -1077,12 +1033,10 @@ impl Home {
                         )
                     });
 
-                    scrollable(row(shows).spacing(16.0).align_y(Vertical::Center))
-                        .id(self.home_scroll.shows.id.clone())
-                        .on_scroll(|view| HomeMessage::HomeScroll(HomeScrollMessage::Shows(view)))
-                        .direction(scrollable::Direction::Horizontal(
-                            scrollable::Scrollbar::default().spacing(16.0),
-                        ))
+                    grid(shows)
+                        .spacing(16)
+                        .fluid(CARD_WIDTH)
+                        .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT))
                         .into()
                 }
                 Layout::List => {
@@ -1108,8 +1062,8 @@ impl Home {
 
         let content = scrollable(column!(movies, shows).spacing(40.0).padding(10))
             .spacing(16.0)
-            .id(self.home_scroll.home.id.clone())
-            .on_scroll(|view| HomeMessage::HomeScroll(HomeScrollMessage::Home(view)));
+            .id(self.scroll.id.clone())
+            .on_scroll(HomeMessage::Scroll);
 
         content.into()
     }
@@ -1615,6 +1569,10 @@ impl Home {
         };
 
         Subscription::batch([page, keys, animating])
+    }
+
+    pub fn theme(&self) -> Option<Theme> {
+        Some(Theme::TokyoNight)
     }
 }
 

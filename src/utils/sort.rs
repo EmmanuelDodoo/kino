@@ -15,6 +15,13 @@ impl Sort {
         }
     }
 
+    pub fn new_with_name() -> Self {
+        let mut new = Self::new();
+        new.push(SortKind::Name);
+
+        new
+    }
+
     pub fn clear(&mut self) {
         self.count = 0;
         self.sorts = [None; SORTS];
@@ -96,7 +103,7 @@ impl Sort {
             };
 
             if *idx > old {
-                *idx = *idx - 1
+                *idx -= 1
             }
         }
     }
@@ -122,10 +129,7 @@ impl Sort {
 
 impl Default for Sort {
     fn default() -> Self {
-        let mut new = Self::new();
-        new.push(SortKind::Name);
-
-        new
+        Self::new()
     }
 }
 
@@ -283,6 +287,12 @@ pub mod comments {
         sorts: [Option<usize>; KINDS],
     }
 
+    impl Default for Sort {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl Sort {
         pub fn new() -> Self {
             Self {
@@ -352,7 +362,7 @@ pub mod comments {
                 };
 
                 if *idx > old {
-                    *idx = *idx - 1
+                    *idx -= 1
                 }
             }
         }

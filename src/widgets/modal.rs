@@ -209,14 +209,13 @@ where
     ) {
         let content_bounds = layout.children().next().unwrap().bounds();
 
-        if let Some(message) = self.on_blur.as_ref() {
-            if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = &event {
-                if !cursor.is_over(content_bounds) {
-                    shell.publish(message.clone());
-                    shell.capture_event();
-                    return;
-                }
-            }
+        if let Some(message) = self.on_blur.as_ref()
+            && let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = &event
+            && !cursor.is_over(content_bounds)
+        {
+            shell.publish(message.clone());
+            shell.capture_event();
+            return;
         }
 
         self.content.as_widget_mut().update(
