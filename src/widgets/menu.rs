@@ -75,7 +75,9 @@ where
     fn state(&self) -> tree::State {
         tree::State::new(State {
             is_open: false,
-            overlay: false,
+            overlay_click: false,
+            overlay_captured: false,
+            // overlay_in_bounds: false,
         })
     }
 
@@ -177,12 +179,14 @@ where
         let state = state.state.downcast_mut::<State>();
 
         if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
-            if state.is_open && !state.overlay {
+            if (state.is_open && !state.overlay_click)
+                || (state.overlay_captured && self.auto_close)
+            {
                 state.is_open = false;
                 if let Some(on_toggle) = &self.on_toggle {
                     shell.publish((on_toggle)(false));
                 }
-            } else if cursor.is_over(layout.bounds()) {
+            } else if !state.is_open && cursor.is_over(layout.bounds()) {
                 state.is_open = true;
                 if let Some(on_toggle) = &self.on_toggle {
                     shell.publish((on_toggle)(true));
@@ -240,7 +244,9 @@ where
 
 struct State {
     is_open: bool,
-    overlay: bool,
+    overlay_click: bool,
+    overlay_captured: bool,
+    // overlay_in_bounds: bool,
 }
 
 struct Overlay<'a, 'b, Message, Theme, Renderer> {
@@ -323,21 +329,27 @@ where
             &self.viewport,
         );
 
-        self.state.overlay = cursor.is_over(layout.bounds())
+        self.state.overlay_click = cursor.is_over(layout.bounds())
             && matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_)));
 
-        if !shell.is_event_captured()
-            && cursor.is_over(layout.bounds())
-            && matches!(event, Event::Mouse(mouse::Event::ButtonReleased(_)))
-        {
-            self.state.is_open = true;
-        } else if shell.is_event_captured() && self.auto_close && cursor.is_over(layout.bounds()) {
-            self.state.is_open = false
-        }
+        self.state.overlay_captured = shell.is_event_captured();
+        // self.state.overlay_in_bounds = cursor.is_over(layout.bounds());
 
-        if cursor.is_over(layout.bounds()) && matches!(event, Event::Mouse(_)) {
-            shell.capture_event();
-        }
+        // if !shell.is_event_captured()
+        //     && cursor.is_over(layout.bounds())
+        //     && matches!(event, Event::Mouse(mouse::Event::ButtonReleased(_)))
+        // {
+        //     self.state.is_open = true;
+        // } else if shell.is_event_captured() && self.auto_close && cursor.is_over(layout.bounds()) {
+        //     // self.state.is_open = false
+        // }
+        //
+        // if cursor.is_over(layout.bounds())
+        //     && matches!(event, Event::Mouse(_))
+        //     && !shell.is_event_captured()
+        // {
+        //     shell.capture_event();
+        // }
     }
 
     fn operate(

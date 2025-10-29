@@ -534,7 +534,7 @@ impl CollectionPage {
                 }
                 _ => Task::none(),
             },
-            Message::Play(_) => todo!(),
+            Message::Play(_) => todo!("Play collection"),
             Message::OpenConfig => {
                 let description = text_editor::Content::with_text(
                     self.collection.description.as_deref().unwrap_or_default(),
