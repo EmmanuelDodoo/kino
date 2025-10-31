@@ -6,9 +6,13 @@ use iced::{
 
 use super::HomeMessage;
 use super::collections::{CollectionMessage, CollectionPage};
+use super::episode::{EpisodePage, EpisodePageMessage};
+use super::movie::{MoviePage, MoviePageMessage};
 use super::movies::{Movies, MoviesMessage};
+use super::season::{SeasonPage, SeasonPageMessage};
+use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
-use crate::models::CollectionId;
+use crate::models::{CollectionId, EpisodeId, MovieId, SeasonId, ShowId};
 use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -25,6 +29,10 @@ pub enum PageKind {
     Movies,
     Comments,
     Search,
+    Episode(EpisodeId),
+    Movie(MovieId),
+    Show(ShowId),
+    Season(SeasonId),
     Collection(CollectionId),
 }
 
@@ -37,6 +45,22 @@ pub enum Page {
     Collection {
         collection: Box<CollectionPage>,
         id: CollectionId,
+    },
+    Episode {
+        page: EpisodePage,
+        id: EpisodeId,
+    },
+    Movie {
+        page: MoviePage,
+        id: MovieId,
+    },
+    Season {
+        page: Box<SeasonPage>,
+        id: SeasonId,
+    },
+    Show {
+        page: Box<ShowPage>,
+        id: ShowId,
     },
 }
 
@@ -76,38 +100,64 @@ impl Page {
         }
     }
 
-    pub fn movies_update(&mut self, message: MoviesMessage, now: Instant) -> Task<MoviesMessage> {
+    pub fn movies_update(&mut self, message: MoviesMessage) -> Option<HomeMessage> {
         match self {
-            Self::Movies(movies) => movies.update(message, now),
-            _ => Task::none(),
+            Self::Movies(movies) => movies.update(message),
+            _ => None,
         }
     }
 
-    pub fn shows_update(&mut self, message: TvShowsMessage, now: Instant) -> Task<TvShowsMessage> {
+    pub fn shows_update(&mut self, message: TvShowsMessage) -> Option<HomeMessage> {
         match self {
-            Self::Shows(shows) => shows.update(message, now),
-            _ => Task::none(),
+            Self::Shows(shows) => shows.update(message),
+            _ => None,
         }
     }
 
-    pub fn collection_update(
-        &mut self,
-        message: CollectionMessage,
-        now: Instant,
-    ) -> Task<CollectionMessage> {
+    pub fn collection_update(&mut self, message: CollectionMessage) -> Option<HomeMessage> {
         match self {
-            Self::Collection { id, collection } if message.id == *id => {
-                collection.update(message, now)
-            }
-            _ => Task::none(),
+            Self::Collection { id, collection } if message.id == *id => collection.update(message),
+            _ => None,
         }
     }
 
-    pub fn name(&self) -> String {
+    pub fn movie_update(&mut self, message: MoviePageMessage) -> Option<HomeMessage> {
+        match self {
+            Self::Movie { page, id } if message.id == *id => page.update(message),
+            _ => None,
+        }
+    }
+
+    pub fn episode_update(&mut self, message: EpisodePageMessage) -> Option<HomeMessage> {
+        match self {
+            Self::Episode { page, id } if message.id == *id => page.update(message),
+            _ => None,
+        }
+    }
+
+    pub fn season_update(&mut self, message: SeasonPageMessage) -> Option<HomeMessage> {
+        match self {
+            Self::Season { page, id } if message.id == *id => page.update(message),
+            _ => None,
+        }
+    }
+
+    pub fn show_update(&mut self, message: ShowPageMessage) -> Option<HomeMessage> {
+        match self {
+            Self::Show { page, id } if message.id == *id => page.update(message),
+            _ => None,
+        }
+    }
+
+    pub fn name(&self) -> &str {
         match self {
             Self::Movies(movies) => movies.name(),
             Self::Shows(shows) => shows.name(),
             Self::Collection { collection, .. } => collection.name(),
+            Self::Movie { page, .. } => page.name(),
+            Self::Episode { page, .. } => page.name(),
+            Self::Season { page, .. } => page.name(),
+            Self::Show { page, .. } => page.name(),
             _ => todo!(),
         }
     }
@@ -117,71 +167,10 @@ impl Page {
             Self::Movies(movies) => movies.show_tools(),
             Self::Shows(shows) => shows.show_tools(),
             Self::Collection { collection, .. } => collection.show_tools(),
-            _ => todo!(),
-        }
-    }
-
-    pub fn rand(&mut self) -> Task<HomeMessage> {
-        match self {
-            Self::Movies(movies) => movies.rand().map(|_| HomeMessage::None),
-            Self::Shows(shows) => shows.rand().map(HomeMessage::Shows),
-            Self::Collection { collection, .. } => collection.rand().map(HomeMessage::Collection),
-            _ => todo!(),
-        }
-    }
-
-    pub fn refresh(&mut self) -> Task<HomeMessage> {
-        match self {
-            Self::Movies(movies) => movies.refresh().map(HomeMessage::Movies),
-            Self::Shows(shows) => shows.refresh().map(HomeMessage::Shows),
-            Self::Collection { collection, .. } => {
-                collection.refresh().map(HomeMessage::Collection)
-            }
-            _ => todo!(),
-        }
-    }
-
-    /// Returns true if the collection can go to a previous page
-    pub fn can_back(&self) -> bool {
-        match self {
-            Self::Movies(movies) => movies.can_back(),
-            Self::Shows(shows) => shows.can_back(),
-            Self::Collection { collection, .. } => collection.can_back(),
-            _ => todo!(),
-        }
-    }
-
-    /// Returns true if the collection can go to a next page
-    pub fn can_forward(&self) -> bool {
-        match self {
-            Self::Movies(movies) => movies.can_forward(),
-            Self::Shows(shows) => shows.can_forward(),
-            Self::Collection { collection, .. } => collection.can_forward(),
-            _ => todo!(),
-        }
-    }
-
-    /// Navigates to the previous page of the collection.
-    /// Returning `None` causes the entire collection to be navigated past.
-    pub fn back(&mut self, update: PageUpdate, now: Instant) -> Option<Task<()>> {
-        self.page_update(update, now);
-        match self {
-            Self::Movies(movies) => movies.back(),
-            Self::Shows(shows) => shows.back(),
-            Self::Collection { collection, .. } => collection.back(),
-            _ => todo!(),
-        }
-    }
-
-    /// Navigates to the next page of the collection.
-    /// Returning `None` causes the entire collection to be navigated past.
-    pub fn forward(&mut self, update: PageUpdate, now: Instant) -> Option<Task<()>> {
-        self.page_update(update, now);
-
-        match self {
-            Self::Movies(movies) => movies.forward(),
-            Self::Shows(shows) => shows.forward(),
-            Self::Collection { collection, .. } => collection.forward(),
+            Self::Episode { page, .. } => page.show_tools(),
+            Self::Movie { page, .. } => page.show_tools(),
+            Self::Season { page, .. } => page.show_tools(),
+            Self::Show { page, .. } => page.show_tools(),
             _ => todo!(),
         }
     }
@@ -191,43 +180,22 @@ impl Page {
             Self::Movies(page) => page.update_scroll(),
             Self::Shows(page) => page.update_scroll(),
             Self::Collection { collection, .. } => collection.update_scroll(),
+            Self::Show { page, .. } => page.update_scroll(),
+            Self::Season { page, .. } => page.update_scroll(),
+            Self::Movie { .. } | Self::Episode { .. } => Task::none(),
             _ => todo!(),
         }
     }
 
-    pub fn page_update(&mut self, update: PageUpdate, now: Instant) {
+    pub fn page_update(&mut self, update: PageUpdate) {
         match self {
-            Self::Movies(movies) => movies.page_update(update, now),
-            Self::Shows(shows) => shows.page_update(update, now),
-            Self::Collection { collection, .. } => collection.page_update(update, now),
+            Self::Movies(movies) => movies.page_update(update),
+            Self::Shows(shows) => shows.page_update(update),
+            Self::Collection { collection, .. } => collection.page_update(update),
+            Self::Show { page, .. } => page.page_update(update),
+            Self::Season { page, .. } => page.page_update(update),
+            Self::Episode { .. } | Self::Movie { .. } => {}
             _ => todo!(),
-        }
-    }
-
-    pub fn subscription(&self) -> Subscription<HomeMessage> {
-        match self {
-            Self::Movies(movies) => movies.subscription().map(HomeMessage::Movies),
-            Self::Shows(shows) => shows.subscription().map(HomeMessage::Shows),
-            Self::Collection { collection, .. } => {
-                collection.subscription().map(HomeMessage::Collection)
-            }
-            _ => todo!(),
-        }
-    }
-
-    pub fn view(&self) -> Element<'_, HomeMessage> {
-        match self {
-            Self::Shows(shows) => shows.view().map(HomeMessage::Shows),
-            Self::Movies(movies) => movies.view().map(HomeMessage::Movies),
-            Self::Collection { collection, .. } => collection.view().map(HomeMessage::Collection),
-            Self::Comments(_) => center(text("Comments"))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
-            Self::Search(_) => center(text("Search"))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
         }
     }
 }

@@ -197,7 +197,7 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
 }
 
 pub fn collection_collage<'a>(
-    paths: impl Iterator<Item = &'a String>,
+    paths: impl Iterator<Item = &'a str>,
     width: u32,
     height: u32,
 ) -> Option<Handle> {
@@ -278,8 +278,8 @@ pub fn collection_collage<'a>(
 
 #[derive(Debug, Clone)]
 pub struct Thumbnail<T: Media> {
-    pub poster: Option<Handle>,
-    pub backdrop: Option<Handle>,
+    poster: Option<Handle>,
+    backdrop: Option<Handle>,
     pub zoom: Animation<bool>,
     pub media: T,
 }
@@ -307,7 +307,61 @@ impl<T: Media> Thumbnail<T> {
         self.media.id()
     }
 
-    fn poster<'a, Message: 'a>(&self) -> Element<'a, Message> {
+    pub fn poster<'a, Message: 'a>(
+        &'a self,
+        width: impl Into<Length>,
+        height: impl Into<Length>,
+    ) -> Element<'a, Message> {
+        let radius = 10;
+
+        match &self.poster {
+            Some(handle) => widget::image(handle)
+                .border_radius(radius)
+                .height(height)
+                .width(width)
+                .content_fit(ContentFit::Contain)
+                .into(),
+            None => container(empty())
+                .height(height)
+                .width(width)
+                .style(move |theme| {
+                    let default = container::dark(theme);
+                    let border = default.border.rounded(radius);
+
+                    container::Style { border, ..default }
+                })
+                .into(),
+        }
+    }
+
+    pub fn backdrop<'a, Message: 'a>(
+        &'a self,
+        width: impl Into<Length>,
+        height: impl Into<Length>,
+    ) -> Element<'a, Message> {
+        let radius = 10;
+
+        match &self.backdrop {
+            Some(handle) => widget::image(handle)
+                .border_radius(radius)
+                .height(height)
+                .width(width)
+                .content_fit(ContentFit::Cover)
+                .into(),
+            None => container(empty())
+                .height(height)
+                .width(width)
+                .style(move |theme| {
+                    let default = container::dark(theme);
+                    let border = default.border.rounded(radius);
+
+                    container::Style { border, ..default }
+                })
+                .into(),
+        }
+    }
+
+    fn poster_helper<'a, Message: 'a>(&self) -> Element<'a, Message> {
         match &self.poster {
             Some(handle) => widget::image(handle)
                 .border_radius(10)
@@ -357,7 +411,7 @@ impl<T: Media> Thumbnail<T> {
             .height(Length::Fill)
             .padding([5, 10]);
 
-        let img = container(self.poster()).width(LIST_WIDTH * 1.75);
+        let img = container(self.poster_helper()).width(LIST_WIDTH * 1.75);
 
         let overlay = {
             let size = H1 * 1.75;
@@ -509,7 +563,7 @@ impl<T: Media> Thumbnail<T> {
         .interaction(iced::mouse::Interaction::Pointer)
         .on_press((on_play)(self.media.id()));
 
-        let img = self.poster();
+        let img = self.poster_helper();
 
         let content = stack![img, overlay].width(CARD_WIDTH);
 

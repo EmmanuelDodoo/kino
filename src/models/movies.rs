@@ -28,6 +28,7 @@ impl From<MCommentId> for ToSqlOutput<'_> {
         ToSqlOutput::from(value.0.to_string())
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct Movie {
     pub id: MovieId,

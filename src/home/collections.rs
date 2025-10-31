@@ -1,9 +1,4 @@
-use super::{
-    PageUpdate,
-    movies::{self, MoviePreview},
-    shared::*,
-    shows::{self, EpisodePreview, Series, SeriesMessage, TvSeason, TvSeasonMessage},
-};
+use super::{HomeMessage, MoviePage, PageKind, PageUpdate, SeasonPage, movies, shared::*, shows};
 use crate::models::{
     Collection, CollectionId, CollectionView, Episode, EpisodeId, Media, Movie, MovieId, Season,
     SeasonId, Show, ShowId, collection::ItemId,
@@ -28,17 +23,10 @@ use iced::{
     window,
 };
 use std::collections::{HashMap, hash_map};
+use std::iter::Peekable;
 
 const COLLAGE_HEIGHT: u32 = 200;
 const COLLAGE_WIDTH: u32 = 200;
-
-#[derive(Debug, Clone)]
-enum Preview {
-    Movie(MoviePreview),
-    Show(Box<Series>),
-    Season(Box<TvSeason>),
-    Episode(EpisodePreview),
-}
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -165,22 +153,6 @@ pub enum View {
 }
 
 #[derive(Debug, Clone)]
-pub enum ThumbnailMessage {
-    Movies(Vec<Thumbnail<Movie>>),
-    Shows(Vec<Thumbnail<Show>>),
-    Seasons(Vec<Thumbnail<Season>>),
-    Episodes(Vec<Thumbnail<Episode>>),
-}
-
-#[derive(Debug, Clone)]
-pub enum ItemMessage {
-    PlayItem(ItemId),
-    HoveredItem(bool, ItemId),
-    DetailsItem(ItemId),
-    AddCollection(ItemId),
-}
-
-#[derive(Debug, Clone)]
 pub enum ConfigMessage {
     Name(String),
     Description(text_editor::Action),
@@ -201,20 +173,18 @@ pub enum PlayMessage {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    Thumbnails(ThumbnailMessage),
     Scroll(scrollable::Viewport),
-    Item(ItemMessage),
-    Show(SeriesMessage),
-    Season(TvSeasonMessage),
-    Tab(Tab),
+    PlayItem(ItemId),
+    HoveredItem(bool, ItemId),
+    DetailsItem(ItemId),
+    Add(ItemId),
     OpenConfig,
     CloseConfig,
     Config(ConfigMessage),
     Play(PlayMessage),
-    AddItem,
+    AddNewItem,
     CloseModal,
-    Animate,
-    Toggle(bool),
+    MenuToggle(bool),
     None,
 }
 
@@ -226,20 +196,12 @@ pub struct CollectionMessage {
 
 #[derive(Debug, Clone)]
 pub struct CollectionPage {
-    now: Instant,
     pub collection: Collection,
     collage: Option<image::Handle>,
-    movies: HashMap<MovieId, Thumbnail<Movie>>,
-    shows: HashMap<ShowId, Thumbnail<Show>>,
-    seasons: HashMap<SeasonId, Thumbnail<Season>>,
-    episodes: HashMap<EpisodeId, Thumbnail<Episode>>,
     layout: Layout,
     sort: Sort,
     filters: Filter,
     scroll: Scroll,
-    focused: Option<ItemId>,
-    selected: Option<Preview>,
-    selected_prev: Option<Preview>,
     pub config: Option<Config>,
     view: View,
 }
@@ -252,65 +214,6 @@ impl CollectionPage {
         layout: Layout,
     ) -> (Self, Task<CollectionMessage>) {
         let id = collection.id;
-        let movies = Task::perform(
-            async {
-                (0..3)
-                    .map(|_| Movie::testing())
-                    .chain((0..3).map(|_| Movie::testing2()))
-                    .collect::<Vec<_>>()
-            },
-            |videos| {
-                Message::Thumbnails(ThumbnailMessage::Movies(
-                    videos.into_iter().map(Thumbnail::new).collect(),
-                ))
-            },
-        )
-        .map(move |message| CollectionMessage { id, message });
-
-        let shows = Task::perform(
-            async {
-                (0..3)
-                    .map(|_| Show::testing())
-                    .chain((0..3).map(|_| Show::testing1()))
-                    .collect::<Vec<_>>()
-            },
-            |shows| {
-                Message::Thumbnails(ThumbnailMessage::Shows(
-                    shows.into_iter().map(Thumbnail::new).collect(),
-                ))
-            },
-        )
-        .map(move |message| CollectionMessage { id, message });
-
-        let seasons = Task::perform(
-            async {
-                (0..3)
-                    .map(|_| Season::testing())
-                    .chain((0..3).map(|_| Season::testing2()))
-                    .collect::<Vec<_>>()
-            },
-            |season| {
-                Message::Thumbnails(ThumbnailMessage::Seasons(
-                    season.into_iter().map(Thumbnail::new).collect(),
-                ))
-            },
-        )
-        .map(move |message| CollectionMessage { id, message });
-
-        let episodes = Task::perform(
-            async {
-                (0..3)
-                    .map(|_| Episode::testing())
-                    .chain((0..3).map(|_| Episode::testing2()))
-                    .collect::<Vec<_>>()
-            },
-            |episodes| {
-                Message::Thumbnails(ThumbnailMessage::Episodes(
-                    episodes.into_iter().map(Thumbnail::new).collect(),
-                ))
-            },
-        )
-        .map(move |message| CollectionMessage { id, message });
 
         let new = Self::new(collection, sort, filter, layout);
 
@@ -318,222 +221,81 @@ impl CollectionPage {
             operation::scroll_to(new.scroll.id.clone(), operation::AbsoluteOffset::default())
                 .map(move |message| CollectionMessage { id, message });
 
-        let tasks = Task::batch([movies, shows, seasons, episodes, scroll]);
-
-        (new, tasks)
+        (new, scroll)
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn dummies(
         collection: Collection,
         sort: Sort,
-        filter: Filter,
+        filters: Filter,
         layout: Layout,
-        movies: Vec<Movie>,
-        shows: Vec<Show>,
-        seasons: Vec<Season>,
-        episodes: Vec<Episode>,
     ) -> (Self, Task<CollectionMessage>) {
         let id = collection.id;
 
-        let movies = Task::perform(async move { movies }, |videos| {
-            Message::Thumbnails(ThumbnailMessage::Movies(
-                videos.into_iter().map(Thumbnail::new).collect(),
-            ))
-        })
-        .map(move |message| CollectionMessage { id, message });
-
-        let shows = Task::perform(async move { shows }, |shows| {
-            Message::Thumbnails(ThumbnailMessage::Shows(
-                shows.into_iter().map(Thumbnail::new).collect(),
-            ))
-        })
-        .map(move |message| CollectionMessage { id, message });
-
-        let seasons = Task::perform(async move { seasons }, |season| {
-            Message::Thumbnails(ThumbnailMessage::Seasons(
-                season.into_iter().map(Thumbnail::new).collect(),
-            ))
-        })
-        .map(move |message| CollectionMessage { id, message });
-
-        let episodes = Task::perform(async move { episodes }, |episodes| {
-            Message::Thumbnails(ThumbnailMessage::Episodes(
-                episodes.into_iter().map(Thumbnail::new).collect(),
-            ))
-        })
-        .map(move |message| CollectionMessage { id, message });
-
-        let new = Self::new(collection, sort, filter, layout);
+        let new = Self::new(collection, sort, filters, layout);
 
         let scroll =
             operation::scroll_to(new.scroll.id.clone(), operation::AbsoluteOffset::default())
                 .map(move |message| CollectionMessage { id, message });
 
-        let tasks = Task::batch([movies, shows, seasons, episodes, scroll]);
-
-        (new, tasks)
+        (new, scroll)
     }
 
-    fn new(collection: Collection, sort: Sort, filter: Filter, layout: Layout) -> Self {
+    fn new(collection: Collection, sort: Sort, filters: Filter, layout: Layout) -> Self {
         let paths = collection
             .posters
             .iter()
-            .filter_map(|poster| poster.as_ref());
+            .filter_map(|poster| poster.as_deref());
 
         let collage = collection_collage(paths, COLLAGE_WIDTH, COLLAGE_HEIGHT);
 
         Self {
-            now: Instant::now(),
             collection,
             collage,
-            movies: HashMap::default(),
-            shows: HashMap::default(),
-            seasons: HashMap::default(),
-            episodes: HashMap::default(),
             layout,
             sort,
-            filters: filter,
+            filters,
             scroll: Scroll::new(),
-            focused: None,
-            selected: None,
-            selected_prev: None,
             config: None,
             view: View::None,
         }
     }
 
-    pub fn update(&mut self, message: CollectionMessage, now: Instant) -> Task<CollectionMessage> {
-        self.now = now;
+    pub fn update(&mut self, message: CollectionMessage) -> Option<HomeMessage> {
         if message.id != self.collection.id {
-            return Task::none();
+            return None;
         }
 
         match message.message {
-            Message::None => Task::none(),
-            Message::Toggle(_) => Task::none(),
-            Message::Animate => Task::none(),
+            Message::None => None,
+            Message::MenuToggle(_) => None,
             Message::Scroll(viewport) => {
                 self.scroll.offset = viewport.absolute_offset();
-                Task::none()
+                None
             }
-            Message::Thumbnails(tsg) => {
-                match tsg {
-                    ThumbnailMessage::Movies(movies) => {
-                        for movie in movies {
-                            self.movies.insert(movie.id(), movie);
-                        }
-                    }
-                    ThumbnailMessage::Shows(shows) => {
-                        for show in shows {
-                            self.shows.insert(show.id(), show);
-                        }
-                    }
-                    ThumbnailMessage::Seasons(seasons) => {
-                        for season in seasons {
-                            self.seasons.insert(season.id(), season);
-                        }
-                    }
-                    ThumbnailMessage::Episodes(episodes) => {
-                        for episode in episodes {
-                            self.episodes.insert(episode.id(), episode);
-                        }
-                    }
-                }
-                Task::none()
+            Message::PlayItem(item) => {
+                let msg = HomeMessage::Play(item);
+                Some(msg)
             }
-            Message::Item(isg) => match isg {
-                ItemMessage::PlayItem(ItemId::Movie(id)) => {
-                    println!("Play Movie {id:?}");
-                    Task::none()
-                }
-                ItemMessage::PlayItem(ItemId::Show(id)) => {
-                    println!("Play Show {id:?}");
-                    Task::none()
-                }
-                ItemMessage::PlayItem(ItemId::Season(id)) => {
-                    println!("Play Season {id:?}");
-                    Task::none()
-                }
-                ItemMessage::PlayItem(ItemId::Episode(id)) => {
-                    println!("Play Episode {id:?}");
-                    Task::none()
-                }
-                ItemMessage::HoveredItem(is_hovered, ItemId::Movie(id)) => {
-                    let Some(movie) = self.movies.get_mut(&id) else {
-                        return Task::none();
-                    };
-
-                    movie.zoom.go_mut(is_hovered, now);
-                    self.focused = Some(ItemId::Movie(id));
-                    Task::none()
-                }
-                ItemMessage::HoveredItem(is_hovered, ItemId::Show(id)) => {
-                    let Some(show) = self.shows.get_mut(&id) else {
-                        return Task::none();
-                    };
-
-                    show.zoom.go_mut(is_hovered, now);
-                    self.focused = Some(ItemId::Show(id));
-                    Task::none()
-                }
-                ItemMessage::HoveredItem(is_hovered, ItemId::Season(id)) => {
-                    let Some(season) = self.seasons.get_mut(&id) else {
-                        return Task::none();
-                    };
-
-                    season.zoom.go_mut(is_hovered, now);
-                    self.focused = Some(ItemId::Season(id));
-                    Task::none()
-                }
-                ItemMessage::HoveredItem(is_hovered, ItemId::Episode(id)) => {
-                    let Some(episode) = self.episodes.get_mut(&id) else {
-                        return Task::none();
-                    };
-
-                    episode.zoom.go_mut(is_hovered, now);
-                    self.focused = Some(ItemId::Episode(id));
-                    Task::none()
-                }
-                ItemMessage::DetailsItem(id) => self.preview(id).unwrap_or(Task::none()),
-                ItemMessage::AddCollection(id) => {
-                    println!("Add {id:?} to collection");
-                    Task::none()
-                }
-            },
-            Message::Show(ssg) => {
-                let Some(Preview::Show(show)) = self.selected.as_mut() else {
-                    return Task::none();
+            Message::HoveredItem(hovered, item) => {
+                let msg = HomeMessage::Hovered(item, hovered);
+                Some(msg)
+            }
+            Message::DetailsItem(item) => {
+                let kind = match item {
+                    ItemId::Movie(id) => PageKind::Movie(id),
+                    ItemId::Show(id) => PageKind::Show(id),
+                    ItemId::Season(id) => PageKind::Season(id),
+                    ItemId::Episode(id) => PageKind::Episode(id),
                 };
-
-                let id = self.collection.id;
-                show.update(ssg, now).map(move |msg| CollectionMessage {
-                    id,
-                    message: Message::Show(msg),
-                })
+                let msg = HomeMessage::Goto(kind);
+                Some(msg)
             }
-            Message::Season(ssg) => {
-                let Some(Preview::Season(season)) = self.selected.as_mut() else {
-                    return Task::none();
-                };
-
-                let id = self.collection.id;
-                season.update(ssg, now).map(move |msg| CollectionMessage {
-                    id,
-                    message: Message::Season(msg),
-                })
+            Message::Add(item) => {
+                let msg = HomeMessage::Add(item);
+                Some(msg)
             }
-            Message::Tab(tab) => match self.selected.as_mut() {
-                Some(Preview::Movie(movie)) => {
-                    movie.tab = tab;
-                    Task::none()
-                }
-                Some(Preview::Episode(episode)) => {
-                    episode.tab = tab;
-                    Task::none()
-                }
-                _ => Task::none(),
-            },
             Message::Play(_) => todo!("Play collection"),
             Message::OpenConfig => {
                 let description = text_editor::Content::with_text(
@@ -550,16 +312,16 @@ impl CollectionPage {
                 };
                 self.config = Some(config);
                 self.view = View::Config;
-                Task::none()
+                None
             }
             Message::CloseConfig => {
                 self.config.take();
                 self.view = View::None;
-                Task::none()
+                None
             }
             Message::Config(csg) => {
                 let Some(mut config) = self.config.take() else {
-                    return Task::none();
+                    return None;
                 };
 
                 match csg {
@@ -584,175 +346,71 @@ impl CollectionPage {
                     }
                     ConfigMessage::Cancel => {
                         self.view = View::None;
-                        return Task::none();
+                        return None;
                     }
                     ConfigMessage::Save => {
                         config.update(&mut self.collection);
                         self.view = View::None;
-                        return Task::none();
+                        return None;
                     }
                 }
 
                 self.config = Some(config);
-                Task::none()
+                None
             }
-            Message::AddItem => {
+            Message::AddNewItem => {
                 self.view = View::Add;
-                Task::none()
+                None
             }
             Message::CloseModal => {
                 self.view = View::None;
-                Task::none()
+                None
             }
         }
     }
 
-    pub fn view(&self) -> Element<'_, CollectionMessage> {
+    pub fn view<'a>(
+        &'a self,
+        now: Instant,
+        movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
+        shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
+        seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
+    ) -> Element<'a, CollectionMessage> {
         let collection = self.collection.id;
+        let content = match self.layout {
+            Layout::List => self.list(now, movies, shows, seasons, episodes),
+            Layout::Grid => self.grid(now, movies, shows, seasons, episodes),
+        };
 
-        match &self.selected {
-            Some(Preview::Movie(movie)) => {
-                let thumbnail = self
-                    .movies
-                    .get(&movie.id)
-                    .expect("Collection missing movie preview id");
-
-                movie.view(
-                    thumbnail,
-                    |id| CollectionMessage {
-                        id: collection,
-                        message: Message::Item(ItemMessage::PlayItem(ItemId::Movie(id))),
-                    },
-                    |tab| CollectionMessage {
-                        id: collection,
-                        message: Message::Tab(tab),
-                    },
-                    |id| CollectionMessage {
-                        id: collection,
-                        message: Message::Item(ItemMessage::AddCollection(ItemId::Movie(id))),
-                    },
-                )
-            }
-            Some(Preview::Episode(episode)) => {
-                let thumbnail = self
-                    .episodes
-                    .get(&episode.id)
-                    .expect("Collection missing episode preview id");
-
-                episode.view(
-                    thumbnail,
-                    |id| CollectionMessage {
-                        id: collection,
-                        message: Message::Item(ItemMessage::PlayItem(ItemId::Episode(id))),
-                    },
-                    |tab| CollectionMessage {
-                        id: collection,
-                        message: Message::Tab(tab),
-                    },
-                    |id| CollectionMessage {
-                        id: collection,
-                        message: Message::Item(ItemMessage::AddCollection(ItemId::Episode(id))),
-                    },
-                )
-            }
-            Some(Preview::Show(show)) => show.view().map(move |message| CollectionMessage {
+        let content = scrollable(content)
+            .spacing(16.0)
+            .id(self.scroll.id.clone())
+            .on_scroll(move |view| CollectionMessage {
                 id: collection,
-                message: Message::Show(message),
-            }),
-            Some(Preview::Season(season)) => season.view().map(move |message| CollectionMessage {
-                id: collection,
-                message: Message::Season(message),
-            }),
-            None => self.content(),
-        }
-    }
+                message: Message::Scroll(view),
+            });
 
-    pub fn subscription(&self) -> Subscription<CollectionMessage> {
-        let id = self.collection.id;
+        let content = column!(self.top(), content).spacing(10).padding(10);
 
-        match &self.selected {
-            Some(preview) => match preview {
-                Preview::Show(show) => {
-                    show.subscription()
-                        .with(id)
-                        .map(|(id, msg)| CollectionMessage {
-                            id,
-                            message: Message::Show(msg),
-                        })
-                }
-                Preview::Season(season) => {
-                    season
-                        .subscription()
-                        .with(id)
-                        .map(|(id, msg)| CollectionMessage {
-                            id,
-                            message: Message::Season(msg),
-                        })
-                }
-                Preview::Movie(_) | Preview::Episode(_) => Subscription::none(),
-            },
-            None => {
-                let animating = match &self.focused {
-                    Some(ItemId::Movie(id)) => self
-                        .movies
-                        .get(id)
-                        .map(|media| media.is_animating(self.now))
-                        .unwrap_or_default(),
-                    Some(ItemId::Show(id)) => self
-                        .shows
-                        .get(id)
-                        .map(|media| media.is_animating(self.now))
-                        .unwrap_or_default(),
-                    Some(ItemId::Season(id)) => self
-                        .seasons
-                        .get(id)
-                        .map(|media| media.is_animating(self.now))
-                        .unwrap_or_default(),
-                    Some(ItemId::Episode(id)) => self
-                        .episodes
-                        .get(id)
-                        .map(|media| media.is_animating(self.now))
-                        .unwrap_or_default(),
-                    None => false,
-                };
+        match self.view {
+            View::None => content.into(),
+            View::Add => {
+                let overlay = container("work in progress");
 
-                if animating {
-                    window::frames().with(id).map(|(id, _)| CollectionMessage {
-                        id,
-                        message: Message::Animate,
+                modal(content, overlay)
+                    .on_blur(CollectionMessage {
+                        id: collection,
+                        message: Message::CloseConfig,
                     })
-                } else {
-                    Subscription::none()
-                }
+                    .into()
             }
-        }
-    }
-
-    fn add(&self, item: ItemId) -> CollectionMessage {
-        CollectionMessage {
-            id: self.collection.id,
-            message: Message::Item(ItemMessage::AddCollection(item)),
-        }
-    }
-
-    fn select(&self, item: ItemId) -> CollectionMessage {
-        CollectionMessage {
-            id: self.collection.id,
-            message: Message::Item(ItemMessage::DetailsItem(item)),
-        }
-    }
-
-    fn hover(&self, hovered: bool, item: ItemId) -> CollectionMessage {
-        CollectionMessage {
-            id: self.collection.id,
-            message: Message::Item(ItemMessage::HoveredItem(hovered, item)),
-        }
-    }
-
-    fn play(&self, item: ItemId) -> CollectionMessage {
-        CollectionMessage {
-            id: self.collection.id,
-            message: Message::Item(ItemMessage::PlayItem(item)),
+            View::Config => modal(content, self.config())
+                .on_blur(CollectionMessage {
+                    id: collection,
+                    message: Message::Config(ConfigMessage::Cancel),
+                })
+                .into(),
         }
     }
 
@@ -857,14 +515,14 @@ impl CollectionPage {
                 menu(base, overlay)
                     .on_toggle(move |toggle| CollectionMessage {
                         id: collection,
-                        message: Message::Toggle(toggle),
+                        message: Message::MenuToggle(toggle),
                     })
                     .position(menu::Position::Bottom)
             };
 
             let actions = row!(
                 play,
-                btn(collection, ADD, "Add", Message::AddItem),
+                btn(collection, ADD, "Add", Message::AddNewItem),
                 btn(collection, EDIT, "Edit", Message::OpenConfig)
             )
             .align_y(Vertical::Center)
@@ -999,67 +657,37 @@ impl CollectionPage {
         content.into()
     }
 
-    fn content(&self) -> Element<'_, CollectionMessage> {
-        let collection = self.collection.id;
-        let content = match self.layout {
-            Layout::List => self.list(),
-            Layout::Grid => self.grid(),
-        };
-
-        let content = scrollable(content)
-            .spacing(16.0)
-            .id(self.scroll.id.clone())
-            .on_scroll(move |view| CollectionMessage {
-                id: collection,
-                message: Message::Scroll(view),
-            });
-
-        let content = column!(self.top(), content).spacing(10).padding(10);
-
-        match self.view {
-            View::None => content.into(),
-            View::Add => {
-                let overlay = container("work in progress");
-
-                modal(content, overlay)
-                    .on_blur(CollectionMessage {
-                        id: collection,
-                        message: Message::CloseConfig,
-                    })
-                    .into()
-            }
-            View::Config => modal(content, self.config())
-                .on_blur(CollectionMessage {
-                    id: collection,
-                    message: Message::Config(ConfigMessage::Cancel),
-                })
-                .into(),
-        }
-    }
-
-    fn list(&self) -> Element<'_, CollectionMessage> {
-        let label = |label: &'static str| -> Element<'_, CollectionMessage> {
+    fn list<'a>(
+        &self,
+        now: Instant,
+        mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
+        mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
+        mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
+    ) -> Element<'a, CollectionMessage> {
+        let label = |label: &'a str| -> Element<'a, CollectionMessage> {
             let label = text(label).size(H4);
             column!(label, rule::horizontal(2.0)).spacing(4.0).into()
         };
+        let collection = self.collection.id;
 
         let content = Column::new().spacing(40);
 
-        let content = if self.movies.is_empty() {
+        let content = if movies.peek().is_none() {
             content
         } else {
             let movies = {
                 let label = label("Movies");
-                let movies = filter_sort(self.movies.values(), &self.filters, &self.sort);
+                let movies = filter_sort(movies, &self.filters, &self.sort);
 
                 let movies: Element<'_, CollectionMessage> = {
                     let content = movies.map(|thumbnail| {
                         thumbnail.list(
-                            self.now,
-                            |id| self.add(ItemId::Movie(id)),
-                            |id| self.select(ItemId::Movie(id)),
-                            |id, hovered| self.hover(hovered, ItemId::Movie(id)),
-                            |id| self.play(ItemId::Movie(id)),
+                            now,
+                            move |id| add(collection, ItemId::Movie(id)),
+                            move |id| select(collection, ItemId::Movie(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Movie(id)),
+                            move |id| play(collection, ItemId::Movie(id)),
                             movies::unique,
                         )
                     });
@@ -1073,21 +701,21 @@ impl CollectionPage {
             content.push(movies)
         };
 
-        let content = if self.shows.is_empty() {
+        let content = if shows.peek().is_none() {
             content
         } else {
             let shows = {
                 let label = label("Shows");
-                let shows = filter_sort(self.shows.values(), &self.filters, &self.sort);
+                let shows = filter_sort(shows, &self.filters, &self.sort);
 
                 let shows: Element<'_, CollectionMessage> = {
                     let content = shows.map(|thumbnail| {
                         thumbnail.list(
-                            self.now,
-                            |id| self.add(ItemId::Show(id)),
-                            |id| self.select(ItemId::Show(id)),
-                            |id, hovered| self.hover(hovered, ItemId::Show(id)),
-                            |id| self.play(ItemId::Show(id)),
+                            now,
+                            move |id| add(collection, ItemId::Show(id)),
+                            move |id| select(collection, ItemId::Show(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Show(id)),
+                            move |id| play(collection, ItemId::Show(id)),
                             shows::unique,
                         )
                     });
@@ -1100,21 +728,21 @@ impl CollectionPage {
             content.push(shows)
         };
 
-        let content = if self.seasons.is_empty() {
+        let content = if seasons.peek().is_none() {
             content
         } else {
             let seasons = {
                 let label = label("Seasons");
-                let seasons = filter_sort(self.seasons.values(), &self.filters, &self.sort);
+                let seasons = filter_sort(seasons, &self.filters, &self.sort);
 
                 let seasons: Element<'_, CollectionMessage> = {
                     let content = seasons.map(|thumbnail| {
                         thumbnail.list(
-                            self.now,
-                            |id| self.add(ItemId::Season(id)),
-                            |id| self.select(ItemId::Season(id)),
-                            |id, hovered| self.hover(hovered, ItemId::Season(id)),
-                            |id| self.play(ItemId::Season(id)),
+                            now,
+                            move |id| add(collection, ItemId::Season(id)),
+                            move |id| select(collection, ItemId::Season(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Season(id)),
+                            move |id| play(collection, ItemId::Season(id)),
                             |_| empty(),
                         )
                     });
@@ -1127,21 +755,21 @@ impl CollectionPage {
             content.push(seasons)
         };
 
-        let content = if self.episodes.is_empty() {
+        let content = if episodes.peek().is_none() {
             content
         } else {
             let episodes = {
                 let label = label("Episodes");
-                let episodes = filter_sort(self.episodes.values(), &self.filters, &self.sort);
+                let episodes = filter_sort(episodes, &self.filters, &self.sort);
 
                 let episodes: Element<'_, CollectionMessage> = {
                     let content = episodes.map(|thumbnail| {
                         thumbnail.list(
-                            self.now,
-                            |id| self.add(ItemId::Episode(id)),
-                            |id| self.select(ItemId::Episode(id)),
-                            |id, hovered| self.hover(hovered, ItemId::Episode(id)),
-                            |id| self.play(ItemId::Episode(id)),
+                            now,
+                            move |id| add(collection, ItemId::Episode(id)),
+                            move |id| select(collection, ItemId::Episode(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
+                            move |id| play(collection, ItemId::Episode(id)),
                             |_| empty(),
                         )
                     });
@@ -1153,31 +781,42 @@ impl CollectionPage {
             content.push(episodes)
         };
 
+        let content = content;
+
         content.into()
     }
 
-    fn grid(&self) -> Element<'_, CollectionMessage> {
-        let label = |label: &'static str| -> Element<'_, CollectionMessage> {
+    fn grid<'a>(
+        &self,
+        now: Instant,
+        mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
+        mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
+        mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
+    ) -> Element<'a, CollectionMessage> {
+        let label = |label: &'a str| -> Element<'a, CollectionMessage> {
             let label = text(label).size(H4);
             column!(label, rule::horizontal(2.0)).spacing(4.0).into()
         };
 
+        let collection = self.collection.id;
+
         let content = Column::new().spacing(40.0);
 
-        let content = if self.movies.is_empty() {
+        let content = if movies.peek().is_none() {
             content
         } else {
             let movies = {
                 let label = label("Movies");
-                let movies = filter_sort(self.movies.values(), &self.filters, &self.sort);
+                let movies = filter_sort(movies, &self.filters, &self.sort);
 
                 let movies = movies.map(|thumbnail| {
                     thumbnail.card(
-                        self.now,
-                        |id| self.add(ItemId::Movie(id)),
-                        |id| self.select(ItemId::Movie(id)),
-                        |id, hovered| self.hover(hovered, ItemId::Movie(id)),
-                        |id| self.play(ItemId::Movie(id)),
+                        now,
+                        move |id| add(collection, ItemId::Movie(id)),
+                        move |id| select(collection, ItemId::Movie(id)),
+                        move |id, hovered| hover(collection, hovered, ItemId::Movie(id)),
+                        move |id| play(collection, ItemId::Movie(id)),
                     )
                 });
 
@@ -1191,20 +830,20 @@ impl CollectionPage {
             content.push(movies)
         };
 
-        let content = if self.shows.is_empty() {
+        let content = if shows.peek().is_none() {
             content
         } else {
             let shows = {
                 let label = label("Shows");
-                let shows = filter_sort(self.shows.values(), &self.filters, &self.sort);
+                let shows = filter_sort(shows, &self.filters, &self.sort);
 
                 let shows = shows.map(|show| {
                     show.card(
-                        self.now,
-                        |id| self.add(ItemId::Show(id)),
-                        |id| self.select(ItemId::Show(id)),
-                        |id, hovered| self.hover(hovered, ItemId::Show(id)),
-                        |id| self.play(ItemId::Show(id)),
+                        now,
+                        move |id| add(collection, ItemId::Show(id)),
+                        move |id| select(collection, ItemId::Show(id)),
+                        move |id, hovered| hover(collection, hovered, ItemId::Show(id)),
+                        move |id| play(collection, ItemId::Show(id)),
                     )
                 });
 
@@ -1219,20 +858,20 @@ impl CollectionPage {
             content.push(shows)
         };
 
-        let content = if self.seasons.is_empty() {
+        let content = if seasons.peek().is_none() {
             content
         } else {
             let seasons = {
                 let label = label("Seasons");
-                let seasons = filter_sort(self.seasons.values(), &self.filters, &self.sort);
+                let seasons = filter_sort(seasons, &self.filters, &self.sort);
 
                 let seasons = seasons.map(|season| {
                     season.card(
-                        self.now,
-                        |id| self.add(ItemId::Season(id)),
-                        |id| self.select(ItemId::Season(id)),
-                        |id, hovered| self.hover(hovered, ItemId::Season(id)),
-                        |id| self.play(ItemId::Season(id)),
+                        now,
+                        move |id| add(collection, ItemId::Season(id)),
+                        move |id| select(collection, ItemId::Season(id)),
+                        move |id, hovered| hover(collection, hovered, ItemId::Season(id)),
+                        move |id| play(collection, ItemId::Season(id)),
                     )
                 });
 
@@ -1247,20 +886,20 @@ impl CollectionPage {
             content.push(seasons)
         };
 
-        let content = if self.episodes.is_empty() {
+        let content = if episodes.peek().is_none() {
             content
         } else {
             let episodes = {
                 let label = label("Episodes");
-                let episodes = filter_sort(self.episodes.values(), &self.filters, &self.sort);
+                let episodes = filter_sort(episodes, &self.filters, &self.sort);
 
                 let episodes = episodes.map(|episode| {
                     episode.card(
-                        self.now,
-                        |id| self.add(ItemId::Episode(id)),
-                        |id| self.select(ItemId::Episode(id)),
-                        |id, hovered| self.hover(hovered, ItemId::Episode(id)),
-                        |id| self.play(ItemId::Episode(id)),
+                        now,
+                        move |id| add(collection, ItemId::Episode(id)),
+                        move |id| select(collection, ItemId::Episode(id)),
+                        move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
+                        move |id| play(collection, ItemId::Episode(id)),
                     )
                 });
 
@@ -1278,77 +917,7 @@ impl CollectionPage {
         content.into()
     }
 
-    pub fn preview(&mut self, item: ItemId) -> Option<Task<CollectionMessage>> {
-        self.focused = None;
-        self.selected_prev = None;
-
-        match item {
-            ItemId::Movie(id) => match self.movies.get_mut(&id) {
-                Some(thumbnail) => {
-                    thumbnail.zoom.go_mut(false, self.now);
-                    self.selected = Some(Preview::Movie(MoviePreview::new(
-                        id,
-                        thumbnail.media.name().to_owned(),
-                    )));
-                    None
-                }
-                None => {
-                    todo!("Fetch missing media?")
-                }
-            },
-            ItemId::Episode(id) => match self.episodes.get_mut(&id) {
-                Some(thumbnail) => {
-                    thumbnail.zoom.go_mut(false, self.now);
-                    self.selected = Some(Preview::Episode(EpisodePreview::new(
-                        id,
-                        thumbnail.media.name().to_owned(),
-                    )));
-                    None
-                }
-                None => {
-                    todo!("Fetch missing media?")
-                }
-            },
-            ItemId::Show(id) => match self.shows.get_mut(&id) {
-                Some(show) => {
-                    let (show, tasks) =
-                        Series::boot(show.media.clone(), self.sort, self.filters, self.layout);
-
-                    self.selected = Some(Preview::Show(Box::new(show)));
-                    let id = self.collection.id;
-
-                    let tasks = tasks.map(move |message| CollectionMessage {
-                        id,
-                        message: Message::Show(message),
-                    });
-
-                    Some(tasks)
-                }
-                None => todo!("Fetch missing media?"),
-            },
-            ItemId::Season(id) => match self.seasons.get_mut(&id) {
-                Some(season) => {
-                    let (season, tasks) =
-                        TvSeason::boot(season.media.clone(), self.sort, self.filters, self.layout);
-
-                    self.selected = Some(Preview::Season(Box::new(season)));
-
-                    let id = self.collection.id;
-                    let tasks = tasks.map(move |message| CollectionMessage {
-                        id,
-                        message: Message::Season(message),
-                    });
-
-                    Some(tasks)
-                }
-                None => todo!("Fetch missing media?"),
-            },
-        }
-    }
-
-    pub fn page_update(&mut self, update: PageUpdate, now: Instant) {
-        self.now = now;
-
+    pub fn page_update(&mut self, update: PageUpdate) {
         let PageUpdate {
             layout,
             sort,
@@ -1358,165 +927,18 @@ impl CollectionPage {
         self.sort = sort;
         self.layout = layout;
         self.filters = filters;
-
-        match self.selected.as_mut() {
-            Some(Preview::Show(show)) => show.page_update(update, now),
-            Some(Preview::Season(season)) => season.page_update(update, now),
-
-            _ => {}
-        }
     }
 
-    fn unfocus(&mut self) {
-        let Some(id) = self.focused.take() else {
-            return;
-        };
-
-        match id {
-            ItemId::Movie(id) => {
-                if let Some(thumbnail) = self.movies.get_mut(&id) {
-                    thumbnail.zoom.go_mut(false, self.now);
-                }
-            }
-            ItemId::Show(id) => {
-                if let Some(thumbnail) = self.shows.get_mut(&id) {
-                    thumbnail.zoom.go_mut(false, self.now);
-                }
-            }
-            ItemId::Season(id) => {
-                if let Some(thumbnail) = self.seasons.get_mut(&id) {
-                    thumbnail.zoom.go_mut(false, self.now);
-                }
-            }
-            ItemId::Episode(id) => {
-                if let Some(thumbnail) = self.episodes.get_mut(&id) {
-                    thumbnail.zoom.go_mut(false, self.now);
-                }
-            }
-        }
-    }
-
-    pub fn name(&self) -> String {
-        match &self.selected {
-            Some(Preview::Movie(movie)) => movie.name.clone(),
-            Some(Preview::Show(show)) => show.name(),
-            Some(Preview::Season(season)) => season.name(),
-            Some(Preview::Episode(episode)) => episode.name.clone(),
-            None => self.collection.name.clone(),
-        }
-    }
-
-    pub fn can_back(&self) -> bool {
-        self.selected.is_some()
-    }
-
-    pub fn can_forward(&self) -> bool {
-        let selected = match &self.selected {
-            Some(Preview::Show(show)) => show.can_forward(),
-            Some(Preview::Season(season)) => season.can_forward(),
-            _ => false,
-        };
-
-        selected || self.selected_prev.is_some()
+    pub fn name(&self) -> &str {
+        &self.collection.name
     }
 
     pub fn show_tools(&self) -> bool {
-        match &self.selected {
-            Some(Preview::Movie(_)) | Some(Preview::Episode(_)) => false,
-            Some(Preview::Show(show)) => show.show_tools(),
-            Some(Preview::Season(season)) => season.show_tools(),
-            None => true,
-        }
-    }
-
-    pub fn rand(&mut self) -> Task<CollectionMessage> {
-        todo!()
-    }
-
-    pub fn refresh(&mut self) -> Task<CollectionMessage> {
-        todo!()
-    }
-
-    pub fn back(&mut self) -> Option<Task<()>> {
-        self.unfocus();
-        let preview = self.selected.take()?;
-
-        match preview {
-            Preview::Show(mut show) => {
-                if show.can_back() {
-                    let task = show.back();
-                    self.selected = Some(Preview::Show(show));
-                    task
-                } else {
-                    self.selected_prev = Some(Preview::Show(show));
-                    Some(self.update_scroll())
-                }
-            }
-            Preview::Season(mut season) => {
-                if season.can_back() {
-                    let task = season.back();
-                    self.selected = Some(Preview::Season(season));
-                    task
-                } else {
-                    self.selected_prev = Some(Preview::Season(season));
-                    Some(self.update_scroll())
-                }
-            }
-            preview => {
-                self.selected_prev = Some(preview);
-                Some(self.update_scroll())
-            }
-        }
-    }
-
-    pub fn forward(&mut self) -> Option<Task<()>> {
-        self.unfocus();
-        match self.selected.as_mut() {
-            Some(Preview::Show(show)) => {
-                if show.can_forward() {
-                    show.forward()
-                } else {
-                    None
-                }
-            }
-            Some(Preview::Season(season)) => {
-                if season.can_forward() {
-                    season.forward()
-                } else {
-                    None
-                }
-            }
-            Some(_) => None,
-            None => {
-                let prev = self.selected_prev.take()?;
-
-                match prev {
-                    Preview::Show(mut show) => {
-                        let task = show.update_scroll();
-                        self.selected = Some(Preview::Show(show));
-                        Some(task)
-                    }
-                    Preview::Season(mut season) => {
-                        let task = season.update_scroll();
-                        self.selected = Some(Preview::Season(season));
-                        Some(task)
-                    }
-                    preview => {
-                        self.selected = Some(preview);
-                        None
-                    }
-                }
-            }
-        }
+        true
     }
 
     pub fn update_scroll(&mut self) -> Task<()> {
-        match self.selected.as_mut() {
-            Some(Preview::Movie(_)) | Some(Preview::Episode(_)) => Task::none(),
-            Some(Preview::Show(show)) => show.update_scroll(),
-            Some(Preview::Season(season)) => season.update_scroll(),
-            None => operation::scroll_to(self.scroll.id.clone(), self.scroll.offset),
-        }
+        operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
     }
 }
 
@@ -1599,4 +1021,32 @@ fn icon_draw<'a>(
             button::Style { border, ..default }
         })
         .into()
+}
+
+fn add(id: CollectionId, item: ItemId) -> CollectionMessage {
+    CollectionMessage {
+        id,
+        message: Message::Add(item),
+    }
+}
+
+fn select(id: CollectionId, item: ItemId) -> CollectionMessage {
+    CollectionMessage {
+        id,
+        message: Message::DetailsItem(item),
+    }
+}
+
+fn hover(id: CollectionId, hovered: bool, item: ItemId) -> CollectionMessage {
+    CollectionMessage {
+        id,
+        message: Message::HoveredItem(hovered, item),
+    }
+}
+
+fn play(id: CollectionId, item: ItemId) -> CollectionMessage {
+    CollectionMessage {
+        id: id,
+        message: Message::PlayItem(item),
+    }
 }

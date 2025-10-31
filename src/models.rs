@@ -11,6 +11,7 @@ pub mod shows;
 pub use collection::{Collection, CollectionId, CollectionView};
 pub use movies::*;
 pub use shows::*;
+pub use collection::ItemId;
 
 use crate::db::{Operation, Query, Table};
 

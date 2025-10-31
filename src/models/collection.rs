@@ -21,7 +21,7 @@ impl From<CollectionId> for ToSqlOutput<'_> {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ItemId {
     Movie(MovieId),
     Show(ShowId),

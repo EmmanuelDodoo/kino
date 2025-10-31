@@ -1,6 +1,5 @@
-// #![allow(dead_code)]
-use super::{PageUpdate, shared::*};
-use crate::models::{Media, Movie, MovieId};
+use super::{HomeMessage, PageKind, PageUpdate, shared::*};
+use crate::models::{ItemId, Media, Movie, MovieId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
@@ -17,391 +16,80 @@ use iced::{
 };
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct MoviePreview {
-    pub tab: Tab,
-    pub name: String,
-    pub id: MovieId,
-}
-
-impl MoviePreview {
-    pub fn new(id: MovieId, name: String) -> Self {
-        Self {
-            tab: Tab::Items,
-            name,
-            id,
-        }
-    }
-
-    pub fn overlay<'a, Message>(
-        &self,
-        thumbnail: &'a Thumbnail<Movie>,
-        on_play: impl Fn(MovieId) -> Message,
-        on_tab: impl Fn(Tab) -> Message,
-        on_collection: impl Fn(MovieId) -> Message,
-    ) -> Element<'a, Message>
-    where
-        Message: 'a + Clone,
-    {
-        let img: Element<'_, Message> = {
-            let img_height = 300.0;
-            let ratio = 2.0 / 3.0;
-            match &thumbnail.poster {
-                Some(handle) => image(handle)
-                    .height(img_height)
-                    .width(img_height * ratio)
-                    .content_fit(ContentFit::Contain)
-                    .into(),
-                None => container(empty())
-                    .height(img_height)
-                    .width(img_height * ratio)
-                    .style(container::dark)
-                    .into(),
-            }
-        };
-
-        let header = {
-            let separator = || Element::from(text("•").size(H3));
-
-            let title = text(thumbnail.media.name()).size(H4);
-            let duration = duration(&thumbnail.media);
-            let rating = ratings(&thumbnail.media);
-            let release = text(thumbnail.media.release_year()).size(H7);
-
-            let details = row!(release, separator(), duration)
-                .spacing(6)
-                .align_y(Vertical::Center);
-
-            let mut tags = vec![];
-            let tag_len = thumbnail.media.tags.len();
-
-            for (i, tag) in thumbnail.media.tags.iter().enumerate() {
-                tags.push(Element::from(text(tag).size(H7)));
-
-                if i < tag_len - 1 {
-                    tags.push(separator())
-                }
-            }
-
-            let tags = row(tags).spacing(6).align_y(Vertical::Center);
-            column!(title, tags, details, rating)
-        };
-
-        let item = "Overview";
-        let tabs = Tab::ALL.into_iter().map(|view| {
-            let is_selected = self.tab == view;
-
-            Element::from(
-                column!(
-                    button(text(view.to_str(item)).size(H7))
-                        .on_press((on_tab)(view))
-                        .style(|theme, status| {
-                            let default = button::text(theme, status);
-
-                            button::Style {
-                                border: iced::Border::default(),
-                                ..default
-                            }
-                        }),
-                    container(Space::new().width(68).height(4)).style(if is_selected {
-                        container::primary
-                    } else {
-                        container::transparent
-                    }),
-                )
-                .align_x(Horizontal::Center)
-                .padding([3, 6])
-                .spacing(0.0),
-            )
-        });
-
-        let tabs = row(tabs).spacing(8.0);
-
-        let view: Element<'_, Message> = {
-            let width = 750.0;
-
-            match self.tab {
-                Tab::Items => {
-                    let synapsis = text(thumbnail.media.synapsis());
-
-                    scrollable(column!(synapsis).spacing(4.0).width(width))
-                        .spacing(4.0)
-                        .into()
-                }
-                Tab::Comments => {
-                    // todo
-                    let comments = ["Some comment here: "; 7]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, comment)| Element::from(text(format!("{comment}{i}"))));
-
-                    let comments =
-                        scrollable(column(comments).spacing(4.0).width(Length::Fill)).spacing(4.0);
-
-                    column!(comments).spacing(8.0).width(width).into()
-                }
-                Tab::Data => data_tab(&thumbnail.media, width),
-                Tab::Collections => {
-                    // todo
-                    let collections = ["Some Collection here: "; 7]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, collection)| Element::from(text(format!("{collection}{i}"))));
-
-                    let collections =
-                        scrollable(column(collections).spacing(4.0).width(Length::Fill))
-                            .spacing(4.0);
-
-                    column!(collections).spacing(8.0).width(width).into()
-                }
-            }
-        };
-
-        let actions = center_x(
-            row!(
-                button(
-                    row!(icon(PLAY).size(H5), text("Play").size(H5))
-                        .spacing(16.0)
-                        .align_y(Vertical::Center),
-                )
-                .padding([6, 12])
-                .on_press((on_play)(self.id))
-                .style(|theme, status| {
-                    let default = button::subtle(theme, status);
-                    let border = default.border.rounded(5);
-
-                    button::Style { border, ..default }
-                }),
-                button(
-                    row!(
-                        icon(ADD_COLLECTION).size(H5),
-                        text("Add to Collection").size(H5)
-                    )
-                    .spacing(16.0)
-                    .align_y(Vertical::Center),
-                )
-                .padding([6, 12])
-                .on_press((on_collection)(self.id))
-                .style(|theme, status| {
-                    let default = button::subtle(theme, status);
-                    let border = default.border.rounded(5);
-
-                    button::Style { border, ..default }
-                }),
-            )
-            .align_y(Vertical::Center)
-            .spacing(16.0),
-        );
-
-        let tabs = column!(tabs, view).height(Length::Fill).spacing(16.0);
-
-        let content = column!(header, tabs).spacing(24.0).width(675.0);
-
-        let content = center_x(row!(img, content).spacing(20.0));
-
-        container(column!(content, actions))
-            .padding([20, 28])
-            .max_height(465.0)
-            .align_x(Horizontal::Center)
-            .width(Length::Fill)
-            .style(|theme| {
-                let default = container::dark(theme);
-                let background = default
-                    .background
-                    .map(|background| background.scale_alpha(0.75));
-
-                let shadow = default.shadow;
-                let shadow = Shadow {
-                    color: Color::BLACK.scale_alpha(0.85),
-                    blur_radius: 20.0,
-                    ..shadow
-                };
-
-                container::Style {
-                    background,
-                    shadow,
-                    ..default
-                }
-            })
-            .into()
-    }
-
-    pub fn view<'a, Message>(
-        &self,
-        thumbnail: &'a Thumbnail<Movie>,
-        on_play: impl Fn(MovieId) -> Message,
-        on_tab: impl Fn(Tab) -> Message,
-        on_collection: impl Fn(MovieId) -> Message,
-    ) -> Element<'a, Message>
-    where
-        Message: 'a + Clone,
-    {
-        let overlay = bottom_center(self.overlay(thumbnail, on_play, on_tab, on_collection));
-
-        let img: Element<'_, Message> = match &thumbnail.backdrop {
-            Some(handle) => image(handle)
-                .width(Length::Fill)
-                .height(Length::FillPortion(3))
-                .content_fit(ContentFit::Cover)
-                .into(),
-            None => container(empty())
-                .width(Length::Fill)
-                .height(Length::FillPortion(3))
-                .style(container::dark)
-                .into(),
-        };
-
-        let content = container(column!(img,)).style(container::dark);
-
-        let content = stack![content, overlay];
-
-        content.into()
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum MoviesMessage {
     Hovered(MovieId, bool),
-    Thumbnails(Vec<Thumbnail<Movie>>),
     Play(MovieId),
-    AddCollection(MovieId),
+    Add(MovieId),
     Details(MovieId),
     Scroll(scrollable::Viewport),
-    Tab(Tab),
-    Animate,
 }
 
 #[derive(Debug, Clone)]
 pub struct Movies {
-    now: Instant,
-    thumbnails: HashMap<MovieId, Thumbnail<Movie>>,
     layout: Layout,
-    focused: Option<MovieId>,
     sort: Sort,
     filter: Filter,
-    preview: Option<MoviePreview>,
-    preview_back: Option<MoviePreview>,
     scroll: Scroll,
 }
 
 impl Movies {
-    pub fn boot(sort: Sort, filters: Filter, grid: Layout) -> (Self, Task<MoviesMessage>) {
-        let load_thumbnails = Task::perform(
-            async {
-                let alt = (6..12).map(|_| Movie::testing2());
-                (0..6)
-                    .map(|_| Movie::testing())
-                    .chain(alt)
-                    .collect::<Vec<_>>()
-            },
-            |videos| MoviesMessage::Thumbnails(videos.into_iter().map(Thumbnail::new).collect()),
-        );
-
-        let (new, id) = Self::new(sort, grid, filters);
+    pub fn boot(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<MoviesMessage>) {
+        let (new, id) = Self::new(sort, layout, filters);
         let scroll = operation::scroll_to(id, operation::AbsoluteOffset::default());
 
-        (new, load_thumbnails.chain(scroll))
+        (new, scroll)
     }
 
-    pub fn dummies(
-        sort: Sort,
-        filters: Filter,
-        grid: Layout,
-        movies: Vec<Movie>,
-    ) -> (Self, Task<MoviesMessage>) {
-        let task = Task::perform(async move { movies }, |movies| {
-            MoviesMessage::Thumbnails(movies.into_iter().map(Thumbnail::new).collect())
-        });
-
-        let (new, id) = Self::new(sort, grid, filters);
+    pub fn dummies(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<MoviesMessage>) {
+        let (new, id) = Self::new(sort, layout, filters);
         let scroll = operation::scroll_to(id, operation::AbsoluteOffset::default());
 
-        (new, task.chain(scroll))
+        (new, scroll)
     }
 
-    fn new(sort: Sort, grid: Layout, filter: Filter) -> (Self, widget::Id) {
-        let now = Instant::now();
+    fn new(sort: Sort, layout: Layout, filter: Filter) -> (Self, widget::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
         (
             Self {
-                now,
-                thumbnails: HashMap::default(),
-                focused: None,
-                layout: grid,
+                layout,
                 sort,
                 filter,
-                preview: None,
-                preview_back: None,
                 scroll,
             },
             id,
         )
     }
 
-    pub fn preview(&mut self, id: MovieId) -> Option<Task<MoviesMessage>> {
-        self.focused = None;
-
-        match self.thumbnails.get_mut(&id) {
-            Some(thumbnail) => {
-                thumbnail.zoom.go_mut(false, self.now);
-                self.preview = Some(MoviePreview::new(id, thumbnail.media.name().to_owned()));
-                self.preview_back = None;
-                None
-            }
-            None => {
-                todo!("Should fetch movie if not already present.")
-            }
-        }
-    }
-
-    pub fn update(&mut self, message: MoviesMessage, now: Instant) -> Task<MoviesMessage> {
-        self.now = now;
-
+    pub fn update(&mut self, message: MoviesMessage) -> Option<HomeMessage> {
         match message {
-            MoviesMessage::Animate => Task::none(),
             MoviesMessage::Hovered(id, is_hovered) => {
-                let Some(thumbnail) = self.thumbnails.get_mut(&id) else {
-                    return Task::none();
-                };
+                let msg = HomeMessage::Hovered(ItemId::Movie(id), is_hovered);
 
-                thumbnail.zoom.go_mut(is_hovered, self.now);
-                self.focused = Some(id);
-                Task::none()
+                Some(msg)
             }
             MoviesMessage::Play(id) => {
-                println!("Play {id:?} pressed");
-                Task::none()
+                let msg = HomeMessage::Play(ItemId::Movie(id));
+                Some(msg)
             }
-            MoviesMessage::Details(id) => self.preview(id).unwrap_or(Task::none()),
-            MoviesMessage::AddCollection(id) => {
-                println!("Add {id:?} to collection pressed");
-                Task::none()
+            MoviesMessage::Details(id) => {
+                let msg = HomeMessage::Goto(PageKind::Movie(id));
+                Some(msg)
             }
-            MoviesMessage::Thumbnails(thumbnails) => {
-                for thumbnail in thumbnails {
-                    self.thumbnails.insert(thumbnail.media.id(), thumbnail);
-                }
-
-                Task::none()
-            }
-            MoviesMessage::Tab(tab) => {
-                if let Some(preview) = self.preview.as_mut() {
-                    preview.tab = tab;
-                }
-                Task::none()
+            MoviesMessage::Add(id) => {
+                let msg = HomeMessage::Add(ItemId::Movie(id));
+                Some(msg)
             }
             MoviesMessage::Scroll(viewport) => {
                 self.scroll.offset = viewport.absolute_offset();
-                Task::none()
+                None
             }
         }
     }
 
-    pub fn page_update(&mut self, update: PageUpdate, now: Instant) {
-        self.now = now;
-
+    pub fn page_update(&mut self, update: PageUpdate) {
         let PageUpdate {
             layout,
             sort,
@@ -413,53 +101,28 @@ impl Movies {
         self.filter = filters;
     }
 
-    pub fn name(&self) -> String {
-        self.preview
-            .as_ref()
-            .map(|thumbnail| thumbnail.name.clone())
-            .unwrap_or(String::from("Movies"))
-    }
-
-    pub fn can_back(&self) -> bool {
-        self.preview.is_some()
-    }
-
-    pub fn can_forward(&self) -> bool {
-        self.preview_back.is_some()
+    pub fn name(&self) -> &str {
+        "Movies"
     }
 
     pub fn show_tools(&self) -> bool {
-        self.preview.is_none()
+        true
     }
 
-    pub fn rand(&mut self) -> Task<()> {
-        use rand::seq::SliceRandom;
-
-        let mut rng = rand::thread_rng();
-        let temp = self.thumbnails.keys().collect::<Vec<_>>();
-
-        if let Some(rand) = temp.choose(&mut rng).copied() {
-            self.preview(*rand);
-        }
-
-        Task::none()
-    }
-
-    pub fn refresh(&mut self) -> Task<MoviesMessage> {
-        todo!()
-    }
-
-    fn grid(&self) -> Element<'_, MoviesMessage> {
-        let content =
-            filter_sort(self.thumbnails.values(), &self.filter, &self.sort).map(|thumbnail| {
-                thumbnail.card(
-                    self.now,
-                    MoviesMessage::AddCollection,
-                    MoviesMessage::Details,
-                    MoviesMessage::Hovered,
-                    MoviesMessage::Play,
-                )
-            });
+    fn grid<'a>(
+        &self,
+        now: Instant,
+        thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
+    ) -> Element<'a, MoviesMessage> {
+        let content = filter_sort(thumbnails, &self.filter, &self.sort).map(|thumbnail| {
+            thumbnail.card(
+                now,
+                MoviesMessage::Add,
+                MoviesMessage::Details,
+                MoviesMessage::Hovered,
+                MoviesMessage::Play,
+            )
+        });
 
         let content = grid(content)
             .spacing(16)
@@ -477,18 +140,21 @@ impl Movies {
         content.into()
     }
 
-    fn list(&self) -> Element<'_, MoviesMessage> {
-        let content =
-            filter_sort(self.thumbnails.values(), &self.filter, &self.sort).map(|thumbnail| {
-                thumbnail.list(
-                    self.now,
-                    MoviesMessage::AddCollection,
-                    MoviesMessage::Details,
-                    MoviesMessage::Hovered,
-                    MoviesMessage::Play,
-                    unique,
-                )
-            });
+    fn list<'a>(
+        &self,
+        now: Instant,
+        thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
+    ) -> Element<'a, MoviesMessage> {
+        let content = filter_sort(thumbnails, &self.filter, &self.sort).map(|thumbnail| {
+            thumbnail.list(
+                now,
+                MoviesMessage::Add,
+                MoviesMessage::Details,
+                MoviesMessage::Hovered,
+                MoviesMessage::Play,
+                unique,
+            )
+        });
 
         let content = column(content).spacing(16);
 
@@ -503,64 +169,19 @@ impl Movies {
         content.into()
     }
 
-    pub fn view(&self) -> Element<'_, MoviesMessage> {
-        match &self.preview {
-            Some(preview) => {
-                let thumbnail = self
-                    .thumbnails
-                    .get(&preview.id)
-                    .expect("Preview Id missing");
-
-                preview.view(
-                    thumbnail,
-                    MoviesMessage::Play,
-                    MoviesMessage::Tab,
-                    MoviesMessage::AddCollection,
-                )
-            }
-            None => match self.layout {
-                Layout::Grid => self.grid(),
-                Layout::List => self.list(),
-            },
+    pub fn view<'a>(
+        &self,
+        now: Instant,
+        thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
+    ) -> Element<'a, MoviesMessage> {
+        match self.layout {
+            Layout::Grid => self.grid(now, thumbnails),
+            Layout::List => self.list(now, thumbnails),
         }
-    }
-
-    fn is_animating(&self) -> bool {
-        self.focused
-            .as_ref()
-            .and_then(|id| self.thumbnails.get(id))
-            .map(|thumbnail| thumbnail.is_animating(self.now))
-            .unwrap_or_default()
     }
 
     pub fn update_scroll(&mut self) -> Task<()> {
         operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
-    }
-
-    pub fn back(&mut self) -> Option<Task<()>> {
-        let preview = self.preview.take()?;
-
-        self.preview_back = Some(preview);
-
-        Some(self.update_scroll())
-    }
-
-    pub fn forward(&mut self) -> Option<Task<()>> {
-        match self.preview_back.take() {
-            Some(preview) => {
-                self.preview = Some(preview);
-                Some(Task::none())
-            }
-            None => None,
-        }
-    }
-
-    pub fn subscription(&self) -> Subscription<MoviesMessage> {
-        if self.is_animating() {
-            iced::window::frames().map(|_| MoviesMessage::Animate)
-        } else {
-            Subscription::none()
-        }
     }
 }
 
