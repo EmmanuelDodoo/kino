@@ -314,14 +314,14 @@ impl Home {
                     PageKind::Movies => {
                         let (movies, task) = Movies::dummies(self.sort, self.filters, self.layout);
 
-                        self.pages.insert(kind, Page::Movies(Box::new(movies)));
+                        self.pages.insert(kind, Page::Movies(movies));
 
                         task.map(HomeMessage::Movies)
                     }
                     PageKind::Shows => {
                         let (shows, tasks) = TvShows::dummies(self.sort, self.filters, self.layout);
 
-                        self.pages.insert(kind, Page::Shows(Box::new(shows)));
+                        self.pages.insert(kind, Page::Shows(shows));
 
                         tasks.map(HomeMessage::Shows)
                     }
@@ -358,7 +358,7 @@ impl Home {
                                 kind,
                                 Page::Show {
                                     id,
-                                    page: Box::new(show),
+                                    page: show,
                                 },
                             );
 
@@ -381,7 +381,7 @@ impl Home {
                                 kind,
                                 Page::Season {
                                     id,
-                                    page: Box::new(season),
+                                    page: season,
                                 },
                             );
 

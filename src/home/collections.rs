@@ -320,9 +320,7 @@ impl CollectionPage {
                 None
             }
             Message::Config(csg) => {
-                let Some(mut config) = self.config.take() else {
-                    return None;
-                };
+                let mut config = self.config.take()?;
 
                 match csg {
                     ConfigMessage::Name(name) => {
@@ -1046,7 +1044,7 @@ fn hover(id: CollectionId, hovered: bool, item: ItemId) -> CollectionMessage {
 
 fn play(id: CollectionId, item: ItemId) -> CollectionMessage {
     CollectionMessage {
-        id: id,
+        id,
         message: Message::PlayItem(item),
     }
 }

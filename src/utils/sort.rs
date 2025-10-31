@@ -3,8 +3,8 @@ use crate::models::Media;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sort {
-    count: usize,
-    sorts: [Option<usize>; SORTS],
+    count: u8,
+    sorts: [Option<u8>; SORTS],
 }
 
 impl Sort {
@@ -123,7 +123,7 @@ impl Sort {
     }
 
     pub fn position(&self, kind: SortKind) -> Option<usize> {
-        self.sorts[kind as usize]
+        self.sorts[kind as usize].map(|pos| pos as usize)
     }
 }
 
@@ -283,8 +283,8 @@ pub mod comments {
 
     #[derive(Debug, Clone, Copy, PartialEq)]
     pub struct Sort {
-        count: usize,
-        sorts: [Option<usize>; KINDS],
+        count: u8,
+        sorts: [Option<u8>; KINDS],
     }
 
     impl Default for Sort {
@@ -382,7 +382,7 @@ pub mod comments {
         }
 
         pub fn position(&self, kind: Kind) -> Option<usize> {
-            self.sorts[kind as usize]
+            self.sorts[kind as usize].map(|pos| pos as usize)
         }
     }
 }

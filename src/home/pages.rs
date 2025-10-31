@@ -38,8 +38,8 @@ pub enum PageKind {
 
 #[derive(Debug, Clone)]
 pub enum Page {
-    Shows(Box<TvShows>),
-    Movies(Box<Movies>),
+    Shows(TvShows),
+    Movies(Movies),
     Comments(()),
     Search(()),
     Collection {
@@ -55,11 +55,11 @@ pub enum Page {
         id: MovieId,
     },
     Season {
-        page: Box<SeasonPage>,
+        page: SeasonPage,
         id: SeasonId,
     },
     Show {
-        page: Box<ShowPage>,
+        page: ShowPage,
         id: ShowId,
     },
 }
