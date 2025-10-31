@@ -235,7 +235,6 @@ impl MoviePage {
                     .map(|background| background.scale_alpha(0.75));
 
                 let shadow = default.shadow;
-                dbg!(shadow);
                 let shadow = Shadow {
                     color: Color::BLACK.scale_alpha(0.85),
                     blur_radius: 10.0,

@@ -562,7 +562,6 @@ impl Database {
                 "{} WHERE id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
                 Self::EPISODE_QUERY
             );
-            dbg!(&sql);
 
             let mut statement = self.prepare_cached(&sql)?;
 
