@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, PageUpdate, shared::*};
+use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
 use crate::models::{ItemId, Media, shows::*};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
@@ -89,12 +89,12 @@ impl SeasonPage {
                 Some(msg)
             }
             Message::AddSelf => {
-                let msg = HomeMessage::Add(ItemId::Season(self.id));
+                let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Season(self.id)));
 
                 Some(msg)
             }
             Message::Add(id) => {
-                let msg = HomeMessage::Add(ItemId::Episode(id));
+                let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Episode(id)));
 
                 Some(msg)
             }

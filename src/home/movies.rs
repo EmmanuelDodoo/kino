@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, PageUpdate, shared::*};
+use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
 use crate::models::{ItemId, Media, Movie, MovieId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
@@ -41,13 +41,6 @@ impl Movies {
         (new, scroll)
     }
 
-    pub fn dummies(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<MoviesMessage>) {
-        let (new, id) = Self::new(sort, layout, filters);
-        let scroll = operation::scroll_to(id, operation::AbsoluteOffset::default());
-
-        (new, scroll)
-    }
-
     fn new(sort: Sort, layout: Layout, filter: Filter) -> (Self, widget::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
@@ -79,7 +72,7 @@ impl Movies {
                 Some(msg)
             }
             MoviesMessage::Add(id) => {
-                let msg = HomeMessage::Add(ItemId::Movie(id));
+                let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id)));
                 Some(msg)
             }
             MoviesMessage::Scroll(viewport) => {

@@ -5,14 +5,15 @@ use iced::{
 };
 
 use super::HomeMessage;
-use super::collections::{CollectionMessage, CollectionPage};
+use super::collection::{CollectionMessage, CollectionPage};
+use super::collections::{Collections, CollectionsMessage};
 use super::episode::{EpisodePage, EpisodePageMessage};
 use super::movie::{MoviePage, MoviePageMessage};
 use super::movies::{Movies, MoviesMessage};
 use super::season::{SeasonPage, SeasonPageMessage};
 use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
-use crate::models::{CollectionId, EpisodeId, MovieId, SeasonId, ShowId};
+use crate::models::{CollectionId, CollectionView, EpisodeId, MovieId, SeasonId, ShowId};
 use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +28,7 @@ pub enum PageKind {
     Home,
     Shows,
     Movies,
+    Collections,
     Comments,
     Search,
     Episode(EpisodeId),
@@ -41,9 +43,10 @@ pub enum Page {
     Shows(TvShows),
     Movies(Movies),
     Comments(()),
+    Collections(Collections),
     Search(()),
     Collection {
-        collection: Box<CollectionPage>,
+        collection: CollectionPage,
         id: CollectionId,
     },
     Episode {
@@ -87,6 +90,10 @@ impl Page {
 
     pub fn is_comments(&self) -> bool {
         matches!(self, Self::Comments(_))
+    }
+
+    pub fn is_collections(&self) -> bool {
+        matches!(self, Self::Collections(_))
     }
 
     pub fn is_custom(&self) -> bool {
@@ -149,10 +156,18 @@ impl Page {
         }
     }
 
+    pub fn collections_update(&mut self, message: CollectionsMessage) -> Option<HomeMessage> {
+        match self {
+            Self::Collections(collections) => collections.update(message),
+            _ => None,
+        }
+    }
+
     pub fn name(&self) -> &str {
         match self {
             Self::Movies(movies) => movies.name(),
             Self::Shows(shows) => shows.name(),
+            Self::Collections(collections) => collections.name(),
             Self::Collection { collection, .. } => collection.name(),
             Self::Movie { page, .. } => page.name(),
             Self::Episode { page, .. } => page.name(),
@@ -164,8 +179,9 @@ impl Page {
 
     pub fn show_tools(&self) -> bool {
         match self {
-            Self::Movies(movies) => movies.show_tools(),
-            Self::Shows(shows) => shows.show_tools(),
+            Self::Movies(_) => true,
+            Self::Shows(_) => true,
+            Self::Collections(_) => false,
             Self::Collection { collection, .. } => collection.show_tools(),
             Self::Episode { page, .. } => page.show_tools(),
             Self::Movie { page, .. } => page.show_tools(),
@@ -179,6 +195,7 @@ impl Page {
         match self {
             Self::Movies(page) => page.update_scroll(),
             Self::Shows(page) => page.update_scroll(),
+            Self::Collections(page) => page.update_scroll(),
             Self::Collection { collection, .. } => collection.update_scroll(),
             Self::Show { page, .. } => page.update_scroll(),
             Self::Season { page, .. } => page.update_scroll(),
@@ -191,6 +208,7 @@ impl Page {
         match self {
             Self::Movies(movies) => movies.page_update(update),
             Self::Shows(shows) => shows.page_update(update),
+            Self::Collections(collections) => collections.page_update(update),
             Self::Collection { collection, .. } => collection.page_update(update),
             Self::Show { page, .. } => page.page_update(update),
             Self::Season { page, .. } => page.page_update(update),

@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageUpdate, shared::*};
+use super::{HomeMessage, PageUpdate, ViewMessage, shared::*};
 use crate::models::{ItemId, Media, Movie, MovieId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
@@ -60,7 +60,7 @@ impl MoviePage {
                 Some(msg)
             }
             Message::AddCollection => {
-                let msg = HomeMessage::Add(ItemId::Movie(self.id));
+                let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(self.id)));
                 Some(msg)
             }
         }

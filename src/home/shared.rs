@@ -1,4 +1,4 @@
-use crate::models::Media;
+use crate::models::{Collection, CollectionId, CollectionView, Media};
 use crate::utils::empty;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
@@ -7,6 +7,7 @@ use iced::{
     Color, ContentFit, Element, Length, Shadow,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
+    font::{Family, Font, Style, Weight},
     mouse,
     time::Instant,
     widget::{
@@ -593,7 +594,162 @@ impl<T: Media> Thumbnail<T> {
             .on_enter((on_hover)(self.media.id(), true));
 
         content.into()
-        // float(content, &self.zoom, now)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CollectionThumbnail {
+    collage: Option<Handle>,
+    pub zoom: Animation<bool>,
+    pub collection: Collection,
+}
+
+impl CollectionThumbnail {
+    pub const HEIGHT: u32 = 200;
+    pub const WIDTH: u32 = 200;
+
+    pub const CARD_WIDTH: f32 = CARD_WIDTH;
+    pub const CARD_HEIGHT: f32 = CARD_HEIGHT * 0.85;
+
+    pub fn new(collection: Collection) -> Self {
+        let paths = collection
+            .posters
+            .iter()
+            .filter_map(|poster| poster.as_deref());
+
+        let collage = collection_collage(paths, Self::WIDTH, Self::HEIGHT);
+
+        Self {
+            collage,
+            collection,
+            zoom: Animation::new(false)
+                .duration(iced::time::Duration::from_millis(50))
+                .easing(Easing::EaseInOut),
+        }
+    }
+
+    pub fn is_animating(&self, now: Instant) -> bool {
+        self.zoom.is_animating(now)
+    }
+
+    pub fn collage<'a, Message: 'a>(&'a self) -> Element<'a, Message> {
+        let radius = 10;
+
+        match &self.collage {
+            Some(handle) => widget::image(handle)
+                .border_radius(radius)
+                .height(Self::HEIGHT)
+                .width(Self::WIDTH)
+                .content_fit(ContentFit::Contain)
+                .into(),
+            None => {
+                let len = self.collection.name.len().min(2);
+                let name = self.collection.name.get(..len).unwrap_or_default();
+                let font = Font {
+                    weight: Weight::Bold,
+                    family: Family::Cursive,
+                    style: Style::Italic,
+                    ..Default::default()
+                };
+
+                let text = text(name).size(H1 * 2.75).font(font);
+
+                center(text)
+                    .height(Self::HEIGHT)
+                    .width(Self::WIDTH)
+                    .style(move |theme| {
+                        let default = container::dark(theme);
+                        let border = default.border.rounded(radius);
+
+                        container::Style { border, ..default }
+                    })
+                    .into()
+            }
+        }
+    }
+
+    pub fn view<'a, Message: 'a + Clone>(
+        &'a self,
+        now: Instant,
+        on_select: impl Fn(CollectionId) -> Message + 'a,
+        on_hover: impl Fn((CollectionView, CollectionId), bool) -> Message + 'a,
+    ) -> Element<'a, Message> {
+        let width = Self::CARD_WIDTH;
+        let height = Self::CARD_HEIGHT;
+        let padding = [3, 6];
+
+        let name = {
+            let title = text(&self.collection.name).size(H6);
+
+            container(title).padding(padding)
+        };
+
+        let img: Element<'_, Message> = {
+            let radius = 10;
+
+            match &self.collage {
+                Some(handle) => widget::image(handle)
+                    .border_radius(radius)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .content_fit(ContentFit::Fill)
+                    .into(),
+
+                None => {
+                    let len = self.collection.name.len().min(2);
+                    let name = self.collection.name.get(..len).unwrap_or_default();
+                    let font = Font {
+                        weight: Weight::Bold,
+                        family: Family::Cursive,
+                        style: Style::Italic,
+                        ..Default::default()
+                    };
+
+                    let text = text(name).size(H1 * 2.75).font(font);
+
+                    center(text)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .style(move |theme| {
+                            let default = container::dark(theme);
+                            let border = default.border.rounded(radius);
+
+                            container::Style { border, ..default }
+                        })
+                        .into()
+                }
+            }
+        };
+
+        let img = container(img).width(width);
+
+        let content = column!(img, name).width(width).height(height);
+
+        let background_factor = 1.0 * self.zoom.interpolate(0.25, 1.0, now);
+        let content = container(content).padding(8).style(move |theme| {
+            let default = container::dark(theme);
+            let border = default.border.rounded(10.0);
+            let background = default
+                .background
+                .map(|background| background.scale_alpha(background_factor));
+
+            container::Style {
+                border,
+                background,
+                ..default
+            }
+        });
+
+        let content = mouse_area(content)
+            .interaction(mouse::Interaction::Pointer)
+            .on_press((on_select)(self.collection.id))
+            .on_exit((on_hover)(
+                (self.collection.view, self.collection.id),
+                false,
+            ))
+            .on_enter((on_hover)((self.collection.view, self.collection.id), true));
+
+        content.into()
     }
 }
 

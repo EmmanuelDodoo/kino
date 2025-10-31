@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageUpdate, shared::*};
+use super::{HomeMessage, PageUpdate, ViewMessage, shared::*};
 use crate::models::{ItemId, Media, shows::*};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
@@ -61,7 +61,7 @@ impl EpisodePage {
                 Some(msg)
             }
             Message::AddCollection => {
-                let msg = HomeMessage::Add(ItemId::Episode(self.id));
+                let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Episode(self.id)));
                 Some(msg)
             }
         }

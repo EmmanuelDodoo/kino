@@ -1,23 +1,25 @@
 use crate::models::Media;
 use crate::utils::{self, icons::*, load_fonts};
 use crate::widgets::menu::{Position, menu};
+use crate::widgets::modal;
 use chrono::{DateTime, Local};
 use iced::{
     Element, Length, Padding, Subscription, Task, Theme,
-    alignment::Vertical,
+    alignment::{Horizontal, Vertical},
     border::{Border, Radius},
     font, keyboard,
     time::Instant,
     widget::{
         button, center, column, container, grid,
         operation::{self, scroll_to},
-        pick_list, row, rule, scrollable, space, text, text_input,
+        pick_list, row, rule, scrollable, space, text, text_editor, text_input,
     },
     window,
 };
 use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
+mod collection;
 mod collections;
 mod episode;
 mod movie;
@@ -32,14 +34,16 @@ use crate::models::{
     Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, Season, SeasonId,
     Show, ShowId, collection::ItemId,
 };
-use collections::{CollectionMessage, CollectionPage, Icon, view_unicode};
+
+use collection::{CollectionMessage, CollectionPage};
+use collections::{Collections, CollectionsMessage};
 use episode::{EpisodePage, EpisodePageMessage};
 use movie::{MoviePage, MoviePageMessage};
 use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind, PageUpdate};
 use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
-use shared::{CARD_HEIGHT, CARD_WIDTH, Scroll, Thumbnail, filter_sort};
+use shared::{CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Scroll, Thumbnail, filter_sort};
 use shows::{TvShows, TvShowsMessage};
 use utils::empty;
 use utils::filter::*;
@@ -85,15 +89,156 @@ enum Focused {
     Show(ShowId),
     Season(SeasonId),
     Episode(EpisodeId),
+    Collection((CollectionView, CollectionId)),
 }
 
 #[derive(Debug, Clone)]
 pub enum Fetch {
-    Collections(Vec<Collection>),
+    Collections(Vec<CollectionThumbnail>),
     Shows(Vec<Thumbnail<Show>>),
     Movies(Vec<Thumbnail<Movie>>),
     Seasons(Vec<Thumbnail<Season>>),
     Episodes(Vec<Thumbnail<Episode>>),
+}
+
+#[derive(Debug, Clone)]
+pub enum ConfigMessage {
+    Name(String),
+    Description(text_editor::Action),
+    View(CollectionView),
+    Icon(Icon),
+    Script(String),
+    Cancel,
+    Save,
+}
+
+#[derive(Debug, Clone)]
+pub struct CollectionConfig {
+    pub name: String,
+    pub description: text_editor::Content,
+    pub icon: Icon,
+    pub view: CollectionView,
+    pub theme: Option<u32>,
+    pub custom: Option<String>,
+}
+
+impl CollectionConfig {
+    pub fn update(&self, collection: &mut Collection) {
+        let Self {
+            name,
+            description,
+            icon,
+            view,
+            theme,
+            custom,
+        } = self;
+
+        collection.name = name.clone();
+        let description = description.text();
+        if description.is_empty() {
+            collection.description = None;
+        } else {
+            collection.description = Some(description);
+        }
+        collection.icon = Some(icon.to_u32());
+        collection.theme = *theme;
+        collection.view = *view;
+        collection.custom = custom.clone();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Icons {
+    Default = 0,
+    Icon1 = 1,
+    Icon2 = 2,
+    Icon3 = 3,
+    Icon4 = 4,
+    Icon5 = 5,
+    Icon6 = 6,
+    Icon7 = 7,
+    Icon8 = 8,
+    Icon9 = 9,
+    Icon10 = 10,
+    Icon11 = 11,
+    Icon12 = 12,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Icon {
+    id: Icons,
+}
+
+impl Icon {
+    pub fn new(icon: Option<u32>) -> Self {
+        match icon {
+            Some(1) => Self { id: Icons::Icon1 },
+            Some(2) => Self { id: Icons::Icon2 },
+            Some(3) => Self { id: Icons::Icon3 },
+            Some(4) => Self { id: Icons::Icon4 },
+            Some(5) => Self { id: Icons::Icon5 },
+            Some(6) => Self { id: Icons::Icon6 },
+            Some(7) => Self { id: Icons::Icon7 },
+            Some(8) => Self { id: Icons::Icon8 },
+            Some(9) => Self { id: Icons::Icon9 },
+            Some(10) => Self { id: Icons::Icon10 },
+            Some(11) => Self { id: Icons::Icon11 },
+            Some(12) => Self { id: Icons::Icon12 },
+            _ => Self { id: Icons::Default },
+        }
+    }
+
+    pub fn unicode(self) -> char {
+        match self.id {
+            Icons::Default => COLLECTION_ICON,
+            Icons::Icon1 => UNFAVORITE,
+            Icons::Icon2 => MOVIE,
+            Icons::Icon3 => SHOW,
+            Icons::Icon4 => POPCORN,
+            Icons::Icon5 => FILM,
+            Icons::Icon6 => TODO,
+            Icons::Icon7 => SWORD,
+            Icons::Icon8 => HISTORY,
+            Icons::Icon9 => GHOST,
+            Icons::Icon10 => ALIEN,
+            Icons::Icon11 => CROWN,
+            Icons::Icon12 => MASKS,
+        }
+    }
+
+    pub fn to_u32(self) -> u32 {
+        self.id as u32
+    }
+
+    pub fn all() -> [Self; 13] {
+        [
+            Self { id: Icons::Default },
+            Self { id: Icons::Icon1 },
+            Self { id: Icons::Icon2 },
+            Self { id: Icons::Icon3 },
+            Self { id: Icons::Icon4 },
+            Self { id: Icons::Icon5 },
+            Self { id: Icons::Icon6 },
+            Self { id: Icons::Icon7 },
+            Self { id: Icons::Icon8 },
+            Self { id: Icons::Icon9 },
+            Self { id: Icons::Icon10 },
+            Self { id: Icons::Icon11 },
+            Self { id: Icons::Icon12 },
+        ]
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ViewMessage {
+    CollectionConfig((CollectionView, CollectionId)),
+    Add(ItemId),
+    AddToCollection((CollectionView, CollectionId)),
+}
+
+#[derive(Debug, Clone)]
+pub enum View {
+    CollectionConfig(CollectionConfig, CollectionView, CollectionId),
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +252,7 @@ pub enum HomeMessage {
     Movies(MoviesMessage),
     Shows(TvShowsMessage),
     Collection(CollectionMessage),
+    Collections(CollectionsMessage),
     MoviePage(MoviePageMessage),
     EpisodePage(EpisodePageMessage),
     ShowPage(ShowPageMessage),
@@ -114,13 +260,14 @@ pub enum HomeMessage {
     Settings,
     Random,
     Back,
-    UpdateCollection {
-        id: CollectionId,
-        view: CollectionView,
-        update: collections::Config,
-    },
+    CollectionConfig(ConfigMessage),
+    OpenView(ViewMessage),
+    CloseView,
     Play(ItemId),
-    Add(ItemId),
+    PlayCollection {
+        id: CollectionId,
+        items: collection::Items,
+    },
     Forward,
     ToggleLayout,
     Home,
@@ -133,6 +280,7 @@ pub enum HomeMessage {
     Refresh,
     PerformPending,
     Hovered(ItemId, bool),
+    HoveredCollection((CollectionView, CollectionId), bool),
 }
 
 pub struct Home {
@@ -147,7 +295,7 @@ pub struct Home {
     shows: HashMap<ShowId, Thumbnail<Show>>,
     seasons: HashMap<SeasonId, Thumbnail<Season>>,
     episodes: HashMap<EpisodeId, Thumbnail<Episode>>,
-    collections: BTreeMap<(CollectionView, CollectionId), Collection>,
+    collections: BTreeMap<(CollectionView, CollectionId), CollectionThumbnail>,
 
     search: String,
 
@@ -163,6 +311,8 @@ pub struct Home {
     filters: Filter,
 
     focused: Option<Focused>,
+
+    view: Option<View>,
 
     scroll: Scroll,
     pending: Vec<Task<HomeMessage>>,
@@ -233,7 +383,14 @@ impl Home {
                 let (collection, _) = Collection::dummy();
                 vec![collection]
             },
-            |collections| HomeMessage::Fetch(Fetch::Collections(collections)),
+            |collections| {
+                HomeMessage::Fetch(Fetch::Collections(
+                    collections
+                        .into_iter()
+                        .map(CollectionThumbnail::new)
+                        .collect(),
+                ))
+            },
         );
 
         let tasks = Task::batch([load_font, movies, shows, collections, seasons, episodes]);
@@ -265,6 +422,7 @@ impl Home {
             collection_states: HashMap::default(),
             recent_shows: BTreeSet::default(),
             recent_movies: BTreeSet::default(),
+            view: None,
         }
     }
 
@@ -292,6 +450,12 @@ impl Home {
                 self.update_scroll()
             }
             HomeMessage::Goto(kind) => {
+                if let Some(current) = self.current_page
+                    && current == kind
+                {
+                    return Task::none();
+                }
+
                 self.backward.retain(|back| *back != kind);
 
                 if let Some(old) = self.current_page.replace(kind) {
@@ -312,7 +476,7 @@ impl Home {
 
                 match kind {
                     PageKind::Movies => {
-                        let (movies, task) = Movies::dummies(self.sort, self.filters, self.layout);
+                        let (movies, task) = Movies::boot(self.sort, self.filters, self.layout);
 
                         self.pages.insert(kind, Page::Movies(movies));
 
@@ -354,13 +518,7 @@ impl Home {
                             let (show, task) =
                                 ShowPage::boot(&show.media, self.sort, self.filters, self.layout);
 
-                            self.pages.insert(
-                                kind,
-                                Page::Show {
-                                    id,
-                                    page: show,
-                                },
-                            );
+                            self.pages.insert(kind, Page::Show { id, page: show });
 
                             task.map(HomeMessage::ShowPage)
                         }
@@ -377,13 +535,7 @@ impl Home {
                                 self.layout,
                             );
 
-                            self.pages.insert(
-                                kind,
-                                Page::Season {
-                                    id,
-                                    page: season,
-                                },
-                            );
+                            self.pages.insert(kind, Page::Season { id, page: season });
 
                             task.map(HomeMessage::SeasonPage)
                         }
@@ -398,7 +550,7 @@ impl Home {
                     {
                         Some((_, collection)) => {
                             let (collection, tasks) = CollectionPage::boot(
-                                collection.clone(),
+                                &collection.collection,
                                 self.sort,
                                 self.filters,
                                 self.layout,
@@ -407,7 +559,7 @@ impl Home {
                             self.pages.insert(
                                 kind,
                                 Page::Collection {
-                                    collection: Box::new(collection),
+                                    collection: collection,
                                     id,
                                 },
                             );
@@ -422,6 +574,14 @@ impl Home {
                             todo!("fetch collection if not present also fetch members")
                         }
                     },
+                    PageKind::Collections => {
+                        let (collections, task) =
+                            Collections::boot(self.sort, self.filters, self.layout);
+
+                        self.pages.insert(kind, Page::Collections(collections));
+
+                        task.map(HomeMessage::Collections)
+                    }
                     _ => {
                         todo!()
                     }
@@ -442,6 +602,15 @@ impl Home {
                 };
 
                 page.shows_update(message)
+                    .map(Task::done)
+                    .unwrap_or_default()
+            }
+            HomeMessage::Collections(message) => {
+                let Some(page) = self.current_page_mut() else {
+                    return Task::none();
+                };
+
+                page.collections_update(message)
                     .map(Task::done)
                     .unwrap_or_default()
             }
@@ -486,54 +655,113 @@ impl Home {
                     return Task::none();
                 };
 
-                use collections::{ConfigMessage, Message};
-
-                let save_config = matches!(message.message, Message::Config(ConfigMessage::Save));
-
-                let update = match &page {
-                    Page::Collection { collection, id } if save_config && message.id == *id => {
-                        let update = collection
-                            .config
-                            .clone()
-                            .expect("Cannot save a none config");
-                        Task::done(HomeMessage::UpdateCollection {
-                            id: *id,
-                            update,
-                            view: collection.collection.view,
-                        })
-                    }
-                    _ => Task::none(),
-                };
-
                 page.collection_update(message)
                     .map(Task::done)
                     .unwrap_or_default()
-                    .chain(update)
             }
-            HomeMessage::UpdateCollection { id, update, view } => {
-                let Some(mut collection) = self.collections.remove(&(view, id)) else {
+            HomeMessage::OpenView(view) => match view {
+                ViewMessage::CollectionConfig(key) => {
+                    let Some(collection) = self.collections.get(&key) else {
+                        return Task::none();
+                    };
+
+                    let description = text_editor::Content::with_text(
+                        collection
+                            .collection
+                            .description
+                            .as_deref()
+                            .unwrap_or_default(),
+                    );
+
+                    let config = CollectionConfig {
+                        name: collection.collection.name.clone(),
+                        description,
+                        view: collection.collection.view,
+                        icon: Icon::new(collection.collection.icon),
+                        theme: collection.collection.theme,
+                        custom: collection.collection.custom.clone(),
+                    };
+
+                    self.view = Some(View::CollectionConfig(
+                        config,
+                        collection.collection.view,
+                        collection.collection.id,
+                    ));
+
+                    Task::none()
+                }
+                ViewMessage::Add(item) => {
+                    println!("Add item {item:?} to collection");
+                    Task::none()
+                }
+                ViewMessage::AddToCollection((_view, id)) => {
+                    println!("Add to collection {id:?}");
+                    Task::none()
+                }
+            },
+            HomeMessage::CollectionConfig(csg) => {
+                let Some(View::CollectionConfig(mut config, view, id)) = self.view.take() else {
                     return Task::none();
                 };
 
-                let collections::Config {
-                    name, icon, view, ..
-                } = update;
+                match csg {
+                    ConfigMessage::Name(name) => {
+                        config.name = name;
+                    }
+                    ConfigMessage::Description(action) => {
+                        config.description.perform(action);
+                    }
+                    ConfigMessage::View(view) => {
+                        config.view = view;
+                    }
+                    ConfigMessage::Icon(icon) => {
+                        config.icon = icon;
+                    }
+                    ConfigMessage::Script(script) => {
+                        if script.is_empty() {
+                            config.custom = None
+                        } else {
+                            config.custom = Some(script)
+                        }
+                    }
+                    ConfigMessage::Cancel => {
+                        self.view = None;
+                        return Task::none();
+                    }
+                    ConfigMessage::Save => {
+                        let Some(mut collection) = self.collections.remove(&(view, id)) else {
+                            return Task::none();
+                        };
 
-                if name != collection.name {
-                    collection.name = name;
+                        if let Some(Page::Collection {
+                            collection,
+                            id: pid,
+                        }) = self.current_page_mut()
+                        {
+                            if *pid == id {
+                                collection.name = config.name.clone();
+                                collection.view = config.view;
+                            }
+                        }
+
+                        config.update(&mut collection.collection);
+                        self.collections.insert(
+                            (collection.collection.view, collection.collection.id),
+                            collection,
+                        );
+
+                        self.view = None;
+
+                        return Task::none();
+                    }
                 }
 
-                if Some(icon.to_u32()) != collection.icon {
-                    collection.icon = Some(icon.to_u32());
-                }
+                self.view = Some(View::CollectionConfig(config, view, id));
 
-                if view != collection.view {
-                    collection.view = view;
-                }
-
-                self.collections
-                    .insert((collection.view, collection.id), collection);
-
+                return Task::none();
+            }
+            HomeMessage::CloseView => {
+                self.view = None;
                 Task::none()
             }
             HomeMessage::Back => {
@@ -852,19 +1080,30 @@ impl Home {
                     }
                     Fetch::Collections(collections) => {
                         for collection in collections {
-                            self.collections
-                                .insert((collection.view, collection.id), collection);
+                            self.collections.insert(
+                                (collection.collection.view, collection.collection.id),
+                                collection,
+                            );
                         }
                     }
                 }
                 Task::none()
             }
             HomeMessage::Play(item) => {
-                println!("Play item {item:?} to collection");
+                println!("Play item {item:?}");
                 Task::none()
             }
-            HomeMessage::Add(item) => {
-                println!("Add item {item:?} to collection");
+            HomeMessage::PlayCollection { id, items } => {
+                println!("Play {items:?} from collection {id:?}");
+                Task::none()
+            }
+            HomeMessage::HoveredCollection(id, is_hovered) => {
+                let Some(collection) = self.collections.get_mut(&id) else {
+                    return Task::none();
+                };
+
+                collection.zoom.go_mut(is_hovered, now);
+                self.focused = Some(Focused::Collection(id));
                 Task::none()
             }
             HomeMessage::Hovered(item, is_hovered) => match item {
@@ -951,11 +1190,11 @@ impl Home {
                 .iter()
                 .filter_map(|((view, id), collection)| match view {
                     CollectionView::Pinned => {
-                        let unicode = Icon::new(collection.icon).unicode();
+                        let unicode = Icon::new(collection.collection.icon).unicode();
                         let content = collection_button(
                             unicode,
-                            &collection.name,
-                            view_unicode(collection.view),
+                            &collection.collection.name,
+                            view_unicode(collection.collection.view),
                             HomeMessage::Goto(PageKind::Collection(*id)),
                             self.current_page()
                                 .map(|page| page.is_collection(id))
@@ -965,10 +1204,10 @@ impl Home {
                         Some(content)
                     }
                     CollectionView::Shown => {
-                        let unicode = Icon::new(collection.icon).unicode();
+                        let unicode = Icon::new(collection.collection.icon).unicode();
                         let content = icon_button(
                             unicode,
-                            &collection.name,
+                            &collection.collection.name,
                             HomeMessage::Goto(PageKind::Collection(*id)),
                             self.current_page()
                                 .map(|page| page.is_collection(id))
@@ -1015,6 +1254,14 @@ impl Home {
 
         let bottom = column!(
             icon_button(
+                icons::LIBRARY,
+                "Collections",
+                HomeMessage::Goto(PageKind::Collections),
+                self.current_page()
+                    .map(Page::is_collections)
+                    .unwrap_or_default()
+            ),
+            icon_button(
                 icons::COMMENT,
                 "Comments",
                 HomeMessage::Goto(Page::goto_comments()),
@@ -1054,7 +1301,7 @@ impl Home {
                     let content = movies.map(|thumbnail| {
                         thumbnail.card(
                             self.now,
-                            |id| HomeMessage::Add(ItemId::Movie(id)),
+                            |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
                             |id| HomeMessage::Play(ItemId::Movie(id)),
@@ -1071,7 +1318,7 @@ impl Home {
                     let content = movies.map(|thumbnail| {
                         thumbnail.list(
                             self.now,
-                            |id| HomeMessage::Add(ItemId::Movie(id)),
+                            |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
                             |id| HomeMessage::Play(ItemId::Movie(id)),
@@ -1102,7 +1349,7 @@ impl Home {
                     let shows = shows.map(|show| {
                         show.card(
                             self.now,
-                            |id| HomeMessage::Add(ItemId::Show(id)),
+                            |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
                             |id| HomeMessage::Play(ItemId::Show(id)),
@@ -1119,7 +1366,7 @@ impl Home {
                     let content = shows.map(|thumbnail| {
                         thumbnail.list(
                             self.now,
-                            |id| HomeMessage::Add(ItemId::Show(id)),
+                            |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
                             |id| HomeMessage::Play(ItemId::Show(id)),
@@ -1193,6 +1440,11 @@ impl Home {
                     .expect("Goto Collection should add the state")
                 {
                     CollectionState::Ready(items) => {
+                        let collection = self
+                            .collections
+                            .get(&(page.view, *id))
+                            .expect("Page collection not found");
+
                         let movies = self
                             .movies
                             .values()
@@ -1226,22 +1478,29 @@ impl Home {
                             })
                             .peekable();
 
-                        page.view(self.now, movies, shows, seasons, episodes)
+                        page.view(self.now, collection, movies, shows, seasons, episodes)
                             .map(HomeMessage::Collection)
                     }
                     CollectionState::Loading => {
                         //todo
+                        let collection = self
+                            .collections
+                            .get(&(page.view, *id))
+                            .expect("Page collection not found");
 
                         let movies = self.movies.values().peekable();
                         let shows = self.shows.values().peekable();
                         let seasons = self.seasons.values().peekable();
                         let episodes = self.episodes.values().peekable();
 
-                        page.view(self.now, movies, shows, seasons, episodes)
+                        page.view(self.now, collection, movies, shows, seasons, episodes)
                             .map(HomeMessage::Collection)
                     }
                 }
             }
+            Some(Page::Collections(collections)) => collections
+                .view(self.now, self.collections.values())
+                .map(HomeMessage::Collections),
             _ => todo!("Page view"),
         }
     }
@@ -1686,7 +1945,16 @@ impl Home {
             .height(Length::Fill)
             .padding([6, 5]);
 
-        content.into()
+        match &self.view {
+            None => content.into(),
+            Some(View::CollectionConfig(config, _view, _id)) => {
+                let overlay = draw_config(config);
+
+                modal(content, overlay)
+                    .on_blur(HomeMessage::CloseView)
+                    .into()
+            }
+        }
     }
 
     pub fn is_animating(&self) -> bool {
@@ -1710,6 +1978,11 @@ impl Home {
                 .seasons
                 .get(id)
                 .map(|media| media.is_animating(self.now))
+                .unwrap_or_default(),
+            Some(Focused::Collection(key)) => self
+                .collections
+                .get(key)
+                .map(|collection| collection.is_animating(self.now))
                 .unwrap_or_default(),
             None => false,
         }
@@ -1828,4 +2101,142 @@ fn container_style(theme: &Theme) -> container::Style {
     };
 
     container::Style { border, ..style }
+}
+
+pub fn view_unicode(view: CollectionView) -> char {
+    match view {
+        CollectionView::Shown => EYE,
+        CollectionView::Pinned => PIN,
+        CollectionView::Hidden => HIDE,
+    }
+}
+
+fn view_draw<'a>(view: CollectionView, selected: bool) -> Element<'a, HomeMessage> {
+    let unicode = view_unicode(view);
+
+    let content = center(icon(unicode).size(P));
+
+    button(content)
+        .on_press(HomeMessage::CollectionConfig(ConfigMessage::View(view)))
+        .style(move |theme, status| {
+            let default = if selected {
+                button::secondary(theme, status)
+            } else {
+                button::background(theme, status)
+            };
+            let border = default.border.rounded(10.0);
+
+            button::Style { border, ..default }
+        })
+        .into()
+}
+
+fn icon_draw<'a>(value: Icon, selected: bool) -> Element<'a, HomeMessage> {
+    let content = center(icon(value.unicode()).size(P));
+
+    button(content)
+        .on_press(HomeMessage::CollectionConfig(ConfigMessage::Icon(value)))
+        .style(move |theme, status| {
+            let default = if selected {
+                button::secondary(theme, status)
+            } else {
+                button::background(theme, status)
+            };
+            let border = default.border.rounded(10.0);
+
+            button::Style { border, ..default }
+        })
+        .into()
+}
+
+fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
+    let width = 500;
+    let height = 500;
+
+    let icon_height = 40.0;
+    let icon_width = 40.0;
+
+    let name = {
+        let label = text("Name");
+
+        let value = config.name.as_str();
+
+        let input = text_input("", value)
+            .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
+            .width(Length::Fill);
+
+        column!(label, input).spacing(2)
+    };
+
+    let description = {
+        let label = text("Description");
+
+        let content = &config.description;
+        let editor = text_editor(content)
+            .on_action(move |action| {
+                HomeMessage::CollectionConfig(ConfigMessage::Description(action))
+            })
+            .height(height as f32 * 0.2);
+
+        column!(label, editor).spacing(2)
+    };
+
+    let view = {
+        let selected = config.view;
+
+        let label = text("Visibility");
+
+        let views = [
+            CollectionView::Pinned,
+            CollectionView::Shown,
+            CollectionView::Hidden,
+        ]
+        .into_iter()
+        .map(|view| view_draw(view, view == selected));
+
+        let views = grid(views)
+            .spacing(16)
+            .fluid(icon_width)
+            .height(grid::aspect_ratio(icon_width, icon_height));
+
+        column!(label, views).spacing(2)
+    };
+
+    let icons = {
+        let selected = config.icon;
+
+        let label = text("Icon");
+
+        let icons = Icon::all()
+            .into_iter()
+            .map(|icon| icon_draw(icon, icon == selected));
+
+        let icons = grid(icons)
+            .spacing(16)
+            .fluid(icon_width)
+            .height(grid::aspect_ratio(icon_width, icon_height));
+
+        column!(label, icons).spacing(2)
+    };
+
+    let actions = {
+        let save = button("Save").on_press(HomeMessage::CollectionConfig(ConfigMessage::Save));
+
+        let cancel =
+            button("Cancel").on_press(HomeMessage::CollectionConfig(ConfigMessage::Cancel));
+
+        column!(row!(save, cancel).spacing(80))
+            .align_x(Horizontal::Center)
+            .width(Length::Fill)
+    };
+
+    let content = column!(name, description, view, icons, space::vertical(), actions).spacing(16);
+
+    let content = container(content)
+        .padding([16, 24])
+        .style(container::dark)
+        .width(width)
+        .height(height);
+
+    content.into()
 }

@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageUpdate, PageKind, shared::*};
+use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
 use crate::models::{ItemId, Media, shows::*};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
@@ -72,7 +72,7 @@ impl TvShows {
                 Some(msg)
             }
             TvShowsMessage::Add(id) => {
-                let msg = HomeMessage::Add(ItemId::Show(id));
+                let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id)));
 
                 Some(msg)
             }
