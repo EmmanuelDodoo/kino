@@ -4,20 +4,18 @@ use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Filter, Sort};
 use iced::{
-    Color, ContentFit, Element, Length, Shadow,
+    ContentFit, Element, Length,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
     font::{Family, Font, Style, Weight},
     mouse,
     time::Instant,
     widget::{
-        self, center, column, container, image::Handle, mouse_area, operation, row, scrollable,
-        space, stack, text,
+        self, center, column, container, image::Handle, mouse_area, operation, row, space, stack,
+        text,
     },
 };
-use image::{
-    DynamicImage, GenericImage, ImageBuffer, ImageReader, ImageResult, Rgba, imageops::FilterType,
-};
+use image::{DynamicImage, GenericImage, ImageBuffer, ImageReader, Rgba, imageops::FilterType};
 
 pub const CARD_HEIGHT: f32 = 350.0;
 pub const CARD_WIDTH: f32 = CARD_HEIGHT * 7.5 / 10.0;
@@ -35,8 +33,6 @@ pub enum Tab {
 
 impl Tab {
     pub const ALL: [Self; 4] = [Self::Items, Self::Data, Self::Comments, Self::Collections];
-
-    pub const EPISODE: [Self; 3] = [Self::Data, Self::Comments, Self::Collections];
 
     pub fn to_str(self, item: &str) -> &str {
         match self {

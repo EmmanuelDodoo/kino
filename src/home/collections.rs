@@ -1,18 +1,11 @@
 use super::{HomeMessage, PageKind, PageUpdate, shared::*};
-use crate::models::{CollectionId, CollectionView, ItemId, Media};
+use crate::models::{CollectionId, CollectionView};
 use crate::utils::filter::*;
-use crate::utils::icons::*;
-use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, empty};
-use iced::widget::Space;
+use crate::utils::{Layout, Sort};
 use iced::{
-    Color, ContentFit, Element, Length, Shadow, Subscription, Task,
-    alignment::{Horizontal, Vertical},
+    Element, Task,
     time::Instant,
-    widget::{
-        self, bottom_center, button, center_x, column, container, grid, image, operation, row,
-        scrollable, stack, text,
-    },
+    widget::{self, container, grid, operation, scrollable},
 };
 
 #[derive(Debug, Clone, Copy)]

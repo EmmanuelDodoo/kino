@@ -6,16 +6,13 @@ use crate::utils::typo::*;
 use crate::utils::{Layout, Sort, empty};
 use iced::widget::Space;
 use iced::{
-    Color, ContentFit, Element, Length, Shadow, Subscription, Task,
+    Element, Length, Task,
     alignment::{Horizontal, Vertical},
     time::Instant,
     widget::{
-        self, bottom_center, button, center_x, column, container, grid, image, operation, row,
-        rule, scrollable, space, stack, text,
+        self, button, column, container, grid, operation, row, rule, scrollable, space, stack, text,
     },
-    window,
 };
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Message {

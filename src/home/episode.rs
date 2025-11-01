@@ -1,21 +1,13 @@
-use super::{HomeMessage, PageUpdate, ViewMessage, shared::*};
+use super::{HomeMessage, ViewMessage, shared::*};
 use crate::models::{ItemId, Media, shows::*};
-use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, empty};
 use iced::widget::Space;
 use iced::{
-    Color, ContentFit, Element, Length, Shadow, Subscription, Task,
+    Color, Element, Length, Shadow,
     alignment::{Horizontal, Vertical},
-    time::Instant,
-    widget::{
-        self, bottom_center, button, center_x, column, container, grid, image, operation, row,
-        rule, scrollable, space, stack, text,
-    },
-    window,
+    widget::{bottom_center, button, center_x, column, container, row, scrollable, stack, text},
 };
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Message {

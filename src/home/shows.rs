@@ -1,21 +1,13 @@
 use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
-use crate::models::{ItemId, Media, shows::*};
+use crate::models::{ItemId, shows::*};
 use crate::utils::filter::*;
-use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, empty};
-use iced::widget::Space;
+use crate::utils::{Layout, Sort};
 use iced::{
-    Color, ContentFit, Element, Length, Shadow, Subscription, Task,
-    alignment::{Horizontal, Vertical},
+    Element, Task,
     time::Instant,
-    widget::{
-        self, bottom_center, button, center_x, column, container, grid, image, operation, row,
-        rule, scrollable, space, stack, text,
-    },
-    window,
+    widget::{self, column, container, grid, operation, scrollable, text},
 };
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TvShowsMessage {
@@ -36,13 +28,6 @@ pub struct TvShows {
 
 impl TvShows {
     pub fn boot(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<TvShowsMessage>) {
-        let (new, id) = Self::new(sort, filters, layout);
-        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::default());
-
-        (new, scroll)
-    }
-
-    pub fn dummies(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<TvShowsMessage>) {
         let (new, id) = Self::new(sort, filters, layout);
         let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::default());
 
@@ -108,10 +93,6 @@ impl TvShows {
 
     pub fn name(&self) -> &str {
         "Tv Shows"
-    }
-
-    pub fn show_tools(&self) -> bool {
-        true
     }
 
     pub fn update_scroll(&mut self) -> Task<()> {

@@ -3,18 +3,13 @@ use crate::models::{ItemId, Media, Movie, MovieId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, empty};
-use iced::widget::Space;
+use crate::utils::{Layout, Sort};
 use iced::{
-    Color, ContentFit, Element, Length, Shadow, Subscription, Task,
-    alignment::{Horizontal, Vertical},
+    Element, Task,
+    alignment::Vertical,
     time::Instant,
-    widget::{
-        self, bottom_center, button, center_x, column, container, grid, image, operation, row,
-        scrollable, stack, text,
-    },
+    widget::{self, column, container, grid, operation, row, scrollable, text},
 };
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 pub enum MoviesMessage {
@@ -96,10 +91,6 @@ impl Movies {
 
     pub fn name(&self) -> &str {
         "Movies"
-    }
-
-    pub fn show_tools(&self) -> bool {
-        true
     }
 
     fn grid<'a>(

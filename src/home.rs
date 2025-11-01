@@ -10,13 +10,11 @@ use iced::{
     font, keyboard,
     time::Instant,
     widget::{
-        button, center, column, container, grid,
-        operation::{self, scroll_to},
-        pick_list, row, rule, scrollable, space, text, text_editor, text_input,
+        button, center, column, container, grid, operation::scroll_to, pick_list, row, rule,
+        scrollable, space, text, text_editor, text_input,
     },
     window,
 };
-use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 mod collection;
@@ -483,7 +481,7 @@ impl Home {
                         task.map(HomeMessage::Movies)
                     }
                     PageKind::Shows => {
-                        let (shows, tasks) = TvShows::dummies(self.sort, self.filters, self.layout);
+                        let (shows, tasks) = TvShows::boot(self.sort, self.filters, self.layout);
 
                         self.pages.insert(kind, Page::Shows(shows));
 
@@ -556,13 +554,7 @@ impl Home {
                                 self.layout,
                             );
 
-                            self.pages.insert(
-                                kind,
-                                Page::Collection {
-                                    collection: collection,
-                                    id,
-                                },
-                            );
+                            self.pages.insert(kind, Page::Collection { collection, id });
 
                             //todo: Fetch members
                             let state = CollectionState::Loading;
@@ -737,11 +729,10 @@ impl Home {
                             collection,
                             id: pid,
                         }) = self.current_page_mut()
+                            && *pid == id
                         {
-                            if *pid == id {
-                                collection.name = config.name.clone();
-                                collection.view = config.view;
-                            }
+                            collection.name = config.name.clone();
+                            collection.view = config.view;
                         }
 
                         config.update(&mut collection.collection);
@@ -758,7 +749,7 @@ impl Home {
 
                 self.view = Some(View::CollectionConfig(config, view, id));
 
-                return Task::none();
+                Task::none()
             }
             HomeMessage::CloseView => {
                 self.view = None;
@@ -2062,8 +2053,7 @@ fn collection_button<'a>(
 ) -> Element<'a, HomeMessage> {
     let size = H6;
     let icon = icons::icon(icon).size(size);
-    let text = container(text(value).size(size))
-        .max_height(60.0);
+    let text = container(text(value).size(size)).max_height(60.0);
     let view = icons::icon(view).size(size);
 
     button(

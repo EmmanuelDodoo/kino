@@ -1,31 +1,25 @@
 use super::{
-    CollectionThumbnail, HomeMessage, MoviePage, PageKind, PageUpdate, SeasonPage, ViewMessage,
-    movies, shared::*, shows, view_unicode,
+    CollectionThumbnail, HomeMessage, PageKind, PageUpdate, ViewMessage, movies, shared::*, shows,
+    view_unicode,
 };
 use crate::models::{
-    Collection, CollectionId, CollectionView, Episode, EpisodeId, Media, Movie, MovieId, Season,
-    SeasonId, Show, ShowId, collection::ItemId,
+    Collection, CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
 };
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Sort, empty};
-use crate::widgets::{menu, modal};
-use iced::widget::Space;
+use crate::widgets::menu;
 use iced::{
-    Color, ContentFit, Element, Length, Shadow, Subscription, Task,
-    alignment::{Horizontal, Vertical},
-    font::{Family, Font, Style, Weight},
+    Element, Length, Task,
+    alignment::Vertical,
     time::Instant,
     widget::{
-        Button, Column, Row, bottom_center, button, center, center_x, column, container, grid,
-        image,
-        operation::{self, scroll_to},
-        row, rule, scrollable, space, stack, text, text_editor, text_input,
+        Button, Column, button, column, container, grid,
+        operation::{self},
+        row, rule, scrollable, text,
     },
-    window,
 };
-use std::collections::{HashMap, hash_map};
 use std::iter::Peekable;
 
 #[derive(Debug, Clone, Copy)]
@@ -46,7 +40,6 @@ pub enum Message {
     Play(Items),
     OpenConfig,
     AddNewItem,
-    MenuToggle(bool),
     None,
 }
 
@@ -104,7 +97,6 @@ impl CollectionPage {
 
         match message.message {
             Message::None => None,
-            Message::MenuToggle(_) => None,
             Message::Scroll(viewport) => {
                 self.scroll.offset = viewport.absolute_offset();
                 None
@@ -231,9 +223,9 @@ impl CollectionPage {
                 });
 
                 menu(base, overlay)
-                    .on_toggle(move |toggle| CollectionMessage {
+                    .on_toggle(move |_| CollectionMessage {
                         id,
-                        message: Message::MenuToggle(toggle),
+                        message: Message::None,
                     })
                     .position(menu::Position::Bottom)
             };

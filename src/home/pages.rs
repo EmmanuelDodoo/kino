@@ -1,8 +1,4 @@
-use iced::{
-    Element, Length, Subscription, Task,
-    time::Instant,
-    widget::{center, text},
-};
+use iced::Task;
 
 use super::HomeMessage;
 use super::collection::{CollectionMessage, CollectionPage};
@@ -13,7 +9,7 @@ use super::movies::{Movies, MoviesMessage};
 use super::season::{SeasonPage, SeasonPageMessage};
 use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
-use crate::models::{CollectionId, CollectionView, EpisodeId, MovieId, SeasonId, ShowId};
+use crate::models::{CollectionId, EpisodeId, MovieId, SeasonId, ShowId};
 use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -25,12 +21,10 @@ pub struct PageUpdate {
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum PageKind {
-    Home,
     Shows,
     Movies,
     Collections,
     Comments,
-    Search,
     Episode(EpisodeId),
     Movie(MovieId),
     Show(ShowId),
@@ -44,7 +38,6 @@ pub enum Page {
     Movies(Movies),
     Comments(()),
     Collections(Collections),
-    Search(()),
     Collection {
         collection: CollectionPage,
         id: CollectionId,
@@ -94,10 +87,6 @@ impl Page {
 
     pub fn is_collections(&self) -> bool {
         matches!(self, Self::Collections(_))
-    }
-
-    pub fn is_custom(&self) -> bool {
-        matches!(self, Self::Collection { .. })
     }
 
     pub fn is_collection(&self, id: &CollectionId) -> bool {

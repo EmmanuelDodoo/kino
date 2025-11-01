@@ -69,6 +69,7 @@ fn main() -> iced::Result {
         home::Home::subscription,
         home::Home::view,
     )
+    .theme(home::Home::theme)
 
     // iced::application::timed(
     //     Playground::boot,
@@ -78,7 +79,6 @@ fn main() -> iced::Result {
     // )
 
     .window_size(Size::new(1200.0, 750.0))
-    .theme(home::Home::theme)
     .run()
 }
 
