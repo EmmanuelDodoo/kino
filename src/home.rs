@@ -1261,14 +1261,14 @@ impl Home {
                     .map(Page::is_collections)
                     .unwrap_or_default()
             ),
-            icon_button(
-                icons::COMMENT,
-                "Comments",
-                HomeMessage::Goto(Page::goto_comments()),
-                self.current_page()
-                    .map(Page::is_comments)
-                    .unwrap_or_default()
-            ),
+            // icon_button(
+            //     icons::COMMENT,
+            //     "Comments",
+            //     HomeMessage::Goto(Page::goto_comments()),
+            //     self.current_page()
+            //         .map(Page::is_comments)
+            //         .unwrap_or_default()
+            // ),
             icon_button(icons::SETTINGS, "Settings", HomeMessage::Settings, false)
         )
         .spacing(16.0);
@@ -1278,7 +1278,7 @@ impl Home {
             .height(Length::Fill);
 
         let content = column!(header, space::vertical().height(24.0), content,)
-            .width(240.0)
+            .width(275.0)
             .height(Length::Fill);
 
         content.into()
@@ -2049,7 +2049,7 @@ fn icon_button<'a>(
         })
         .on_press(message),
     )
-    .max_height(40.0)
+    .max_height(60.0)
     .into()
 }
 
@@ -2063,8 +2063,7 @@ fn collection_button<'a>(
     let size = H6;
     let icon = icons::icon(icon).size(size);
     let text = container(text(value).size(size))
-        .max_height(40.0)
-        .max_width(200.0);
+        .max_height(60.0);
     let view = icons::icon(view).size(size);
 
     button(

@@ -526,7 +526,7 @@ impl<T: Media> Thumbnail<T> {
         };
 
         let play = {
-            let size = CARD_HEIGHT * 0.15;
+            let size = CARD_HEIGHT * 0.135;
 
             let play = icon(PLAY)
                 .size(size)
