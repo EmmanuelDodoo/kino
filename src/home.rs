@@ -1,7 +1,3 @@
-use crate::models::Media;
-use crate::utils::{self, icons::*, load_fonts};
-use crate::widgets::menu::{Position, menu};
-use crate::widgets::modal;
 use chrono::{DateTime, Local};
 use iced::{
     Element, Length, Padding, Subscription, Task, Theme,
@@ -16,6 +12,7 @@ use iced::{
     window,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::PathBuf;
 
 mod collection;
 mod collections;
@@ -33,6 +30,16 @@ use crate::models::{
     Show, ShowId, collection::ItemId,
 };
 
+use crate::app::Message;
+use crate::models::Media;
+use crate::utils::{
+    self, HomeAction, Layout, PlayId, PlayItem, Sort, SortKind, empty, filter::*, icons, icons::*,
+    load_fonts, typo::*,
+};
+use crate::widgets::{
+    menu::{Position, menu},
+    modal, toast,
+};
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};
 use episode::{EpisodePage, EpisodePageMessage};
@@ -43,12 +50,6 @@ use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
 use shared::{CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Scroll, Thumbnail, filter_sort};
 use shows::{TvShows, TvShowsMessage};
-use utils::empty;
-use utils::filter::*;
-use utils::icons;
-use utils::typo;
-use utils::typo::*;
-use utils::{Layout, Sort, SortKind};
 
 #[derive(Debug, Clone)]
 enum CollectionState {
@@ -241,7 +242,6 @@ pub enum View {
 
 #[derive(Debug, Clone)]
 pub enum HomeMessage {
-    FontLoad(Result<(), font::Error>),
     Search(String),
     ToggleSort,
     ToggleFilter,
@@ -258,6 +258,7 @@ pub enum HomeMessage {
     Settings,
     Random,
     Back,
+    Forward,
     CollectionConfig(ConfigMessage),
     OpenView(ViewMessage),
     CloseView,
@@ -266,24 +267,19 @@ pub enum HomeMessage {
         id: CollectionId,
         items: collection::Items,
     },
-    Forward,
     ToggleLayout,
     Home,
     Goto(PageKind),
     NewCollection,
-    Animate,
     None,
     Fetch(Fetch),
     Scroll(scrollable::Viewport),
     Refresh,
-    PerformPending,
     Hovered(ItemId, bool),
     HoveredCollection((CollectionView, CollectionId), bool),
 }
 
 pub struct Home {
-    now: Instant,
-
     forward: Vec<PageKind>,
     backward: Vec<PageKind>,
     current_page: Option<PageKind>,
@@ -304,9 +300,10 @@ pub struct Home {
 
     layout: Layout,
     sort: Sort,
+    filters: Filter,
+
     show_sorts: bool,
     show_filters: bool,
-    filters: Filter,
 
     focused: Option<Focused>,
 
@@ -317,9 +314,7 @@ pub struct Home {
 }
 
 impl Home {
-    pub fn boot() -> (Self, Task<HomeMessage>) {
-        let load_font = load_fonts().map(HomeMessage::FontLoad);
-
+    pub fn boot(layout: Layout, filter_mode: FilterMode) -> (Self, Task<HomeMessage>) {
         let movies = Task::perform(
             async {
                 (0..3)
@@ -391,22 +386,23 @@ impl Home {
             },
         );
 
-        let tasks = Task::batch([load_font, movies, shows, collections, seasons, episodes]);
+        let tasks = Task::batch([movies, shows, collections, seasons, episodes]);
 
-        (Self::new(Layout::default(), FilterMode::default()), tasks)
+        (Self::new(layout, filter_mode), tasks)
     }
 
-    fn new(view: Layout, filter_mode: FilterMode) -> Self {
+    fn new(layout: Layout, filter_mode: FilterMode) -> Self {
         Self {
             forward: vec![],
             backward: vec![],
             search: String::default(),
-            layout: view,
+
+            layout,
             sort: Sort::new_with_name(),
+            filters: Filter::new(filter_mode),
+
             show_sorts: false,
             show_filters: false,
-            now: Instant::now(),
-            filters: Filter::new(filter_mode),
             movies: HashMap::default(),
             shows: HashMap::default(),
             seasons: HashMap::default(),
@@ -424,16 +420,9 @@ impl Home {
         }
     }
 
-    pub fn update(&mut self, message: HomeMessage, now: Instant) -> Task<HomeMessage> {
-        self.now = now;
+    pub fn update(&mut self, message: HomeMessage, now: Instant) -> Task<Message> {
         match message {
             HomeMessage::None => Task::none(),
-            HomeMessage::Animate => Task::none(),
-            HomeMessage::FontLoad(Err(error)) => {
-                eprintln!("Font load error: \n{error:?}");
-                Task::none()
-            }
-            HomeMessage::FontLoad(Ok(_)) => Task::none(),
             HomeMessage::Search(input) => {
                 self.search = input;
                 Task::none()
@@ -445,7 +434,7 @@ impl Home {
                 };
                 self.forward.clear();
                 self.focused = None;
-                self.update_scroll()
+                self.update_scroll().map(|_| Message::None)
             }
             HomeMessage::Goto(kind) => {
                 if let Some(current) = self.current_page
@@ -469,7 +458,7 @@ impl Home {
                         layout: self.layout,
                     };
                     page.page_update(update);
-                    return page.update_scroll().map(|_| HomeMessage::None);
+                    return page.update_scroll().map(|_| Message::None);
                 }
 
                 match kind {
@@ -478,14 +467,14 @@ impl Home {
 
                         self.pages.insert(kind, Page::Movies(movies));
 
-                        task.map(HomeMessage::Movies)
+                        task.map(|msg| Message::Home(HomeMessage::Movies(msg)))
                     }
                     PageKind::Shows => {
                         let (shows, tasks) = TvShows::boot(self.sort, self.filters, self.layout);
 
                         self.pages.insert(kind, Page::Shows(shows));
 
-                        tasks.map(HomeMessage::Shows)
+                        tasks.map(|ssg| Message::Home(HomeMessage::Shows(ssg)))
                     }
                     PageKind::Movie(id) => match self.movies.get(&id) {
                         Some(movie) => {
@@ -518,7 +507,7 @@ impl Home {
 
                             self.pages.insert(kind, Page::Show { id, page: show });
 
-                            task.map(HomeMessage::ShowPage)
+                            task.map(|ssg| Message::Home(HomeMessage::ShowPage(ssg)))
                         }
                         None => {
                             todo!("Fetch show from db")
@@ -535,7 +524,7 @@ impl Home {
 
                             self.pages.insert(kind, Page::Season { id, page: season });
 
-                            task.map(HomeMessage::SeasonPage)
+                            task.map(|ssg| Message::Home(HomeMessage::SeasonPage(ssg)))
                         }
                         None => {
                             todo!("Fetch season from db")
@@ -560,7 +549,7 @@ impl Home {
                             let state = CollectionState::Loading;
                             self.collection_states.insert(id, state);
 
-                            tasks.map(HomeMessage::Collection)
+                            tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
                         }
                         None => {
                             todo!("fetch collection if not present also fetch members")
@@ -572,7 +561,7 @@ impl Home {
 
                         self.pages.insert(kind, Page::Collections(collections));
 
-                        task.map(HomeMessage::Collections)
+                        task.map(|csg| Message::Home(HomeMessage::Collections(csg)))
                     }
                     _ => {
                         todo!()
@@ -585,7 +574,7 @@ impl Home {
                 };
 
                 page.movies_update(message)
-                    .map(Task::done)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
             HomeMessage::Shows(message) => {
@@ -594,7 +583,7 @@ impl Home {
                 };
 
                 page.shows_update(message)
-                    .map(Task::done)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
             HomeMessage::Collections(message) => {
@@ -603,7 +592,7 @@ impl Home {
                 };
 
                 page.collections_update(message)
-                    .map(Task::done)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
             HomeMessage::MoviePage(message) => {
@@ -612,7 +601,7 @@ impl Home {
                 };
 
                 page.movie_update(message)
-                    .map(Task::done)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
             HomeMessage::ShowPage(message) => {
@@ -621,7 +610,7 @@ impl Home {
                 };
 
                 page.show_update(message)
-                    .map(Task::done)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
             HomeMessage::SeasonPage(message) => {
@@ -630,7 +619,7 @@ impl Home {
                 };
 
                 page.season_update(message)
-                    .map(Task::done)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
             HomeMessage::EpisodePage(message) => {
@@ -639,7 +628,7 @@ impl Home {
                 };
 
                 page.episode_update(message)
-                    .map(Task::done)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
             HomeMessage::Collection(message) => {
@@ -648,7 +637,7 @@ impl Home {
                 };
 
                 page.collection_update(message)
-                    .map(Task::done)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
             HomeMessage::OpenView(view) => match view {
@@ -755,102 +744,9 @@ impl Home {
                 self.view = None;
                 Task::none()
             }
-            HomeMessage::Back => {
-                self.focused = None;
-                let update = PageUpdate {
-                    layout: self.layout,
-                    sort: self.sort,
-                    filters: self.filters,
-                };
-
-                match self.current_page.take() {
-                    Some(current) => {
-                        self.forward.push(current);
-
-                        match self.backward.pop() {
-                            Some(new) => {
-                                let page = self
-                                    .pages
-                                    .get_mut(&new)
-                                    .expect("Page cannot be in back without being recorded first");
-                                self.current_page = Some(new);
-                                page.page_update(update);
-                                page.update_scroll().map(|_| HomeMessage::None)
-                            }
-                            None => self.update_scroll(),
-                        }
-                    }
-                    None => {
-                        let Some(new) = self.backward.pop() else {
-                            return Task::none();
-                        };
-                        let page = self
-                            .pages
-                            .get_mut(&new)
-                            .expect("Page cannot be in back without being recorded first");
-                        self.current_page = Some(new);
-                        page.page_update(update);
-                        page.update_scroll().map(|_| HomeMessage::None)
-                    }
-                }
-            }
-            HomeMessage::Forward => {
-                let update = PageUpdate {
-                    layout: self.layout,
-                    sort: self.sort,
-                    filters: self.filters,
-                };
-
-                match self.current_page.take() {
-                    Some(current) => {
-                        self.backward.push(current);
-                        let Some(new) = self.forward.pop() else {
-                            return Task::none();
-                        };
-
-                        let page = self
-                            .pages
-                            .get_mut(&new)
-                            .expect("Page cannot be in forward without being recorded");
-
-                        self.current_page = Some(new);
-                        page.page_update(update);
-                        page.update_scroll().map(|_| HomeMessage::None)
-                    }
-                    None => {
-                        let Some(new) = self.forward.pop() else {
-                            return Task::none();
-                        };
-
-                        let page = self
-                            .pages
-                            .get_mut(&new)
-                            .expect("Page cannot be in forward without being recorded");
-                        self.current_page = Some(new);
-                        page.page_update(update);
-                        page.update_scroll().map(|_| HomeMessage::None)
-                    }
-                }
-            }
-            HomeMessage::ToggleLayout => {
-                if self.layout == Layout::Grid {
-                    self.layout = Layout::List
-                } else {
-                    self.layout = Layout::Grid
-                }
-
-                let update = PageUpdate {
-                    layout: self.layout,
-                    sort: self.sort,
-                    filters: self.filters,
-                };
-
-                if let Some(page) = self.current_page_mut() {
-                    page.page_update(update);
-                };
-
-                Task::none()
-            }
+            HomeMessage::Back => self.back(),
+            HomeMessage::Forward => self.forward(),
+            HomeMessage::ToggleLayout => self.layout_toggle(),
             HomeMessage::Sort(ssg) => {
                 match ssg {
                     SortMessage::AddSort(kind) => self.sort.push(kind),
@@ -902,7 +798,11 @@ impl Home {
                         }
 
                         let Ok(number) = number.parse::<u32>() else {
-                            todo!("Error handling for Home");
+                            let msg = Message::PushToast(
+                                format!("Invalid input: {number}"),
+                                toast::Status::Error,
+                            );
+                            return Task::done(msg);
                         };
 
                         match self.filters.comments.as_mut() {
@@ -937,7 +837,11 @@ impl Home {
                         }
 
                         let Ok(minutes) = minutes.parse::<u64>() else {
-                            todo!("Error handling for Home");
+                            let msg = Message::PushToast(
+                                format!("Invalid input: {minutes}"),
+                                toast::Status::Error,
+                            );
+                            return Task::done(msg);
                         };
 
                         let secs = minutes * 60;
@@ -971,7 +875,11 @@ impl Home {
                         }
 
                         let Ok(hours) = hours.parse::<u64>() else {
-                            todo!("Error handling for Home")
+                            let msg = Message::PushToast(
+                                format!("Invalid input: {hours}"),
+                                toast::Status::Error,
+                            );
+                            return Task::done(msg);
                         };
 
                         let secs = hours * 3600;
@@ -1003,7 +911,11 @@ impl Home {
                         }
 
                         let Ok(year) = year.parse::<i32>() else {
-                            todo!("Error handling for Home")
+                            let msg = Message::PushToast(
+                                format!("Invalid input: {year}"),
+                                toast::Status::Error,
+                            );
+                            return Task::done(msg);
                         };
 
                         match self.filters.release.as_mut() {
@@ -1080,10 +992,7 @@ impl Home {
                 }
                 Task::none()
             }
-            HomeMessage::Play(item) => {
-                println!("Play item {item:?}");
-                Task::none()
-            }
+            HomeMessage::Play(item) => self.play(item),
             HomeMessage::PlayCollection { id, items } => {
                 println!("Play {items:?} from collection {id:?}");
                 Task::none()
@@ -1139,18 +1048,74 @@ impl Home {
                 self.scroll.offset = viewport.absolute_offset();
                 Task::none()
             }
-            HomeMessage::PerformPending => {
-                let mut pending = vec![];
-                std::mem::swap(&mut pending, &mut self.pending);
-                Task::batch(pending)
+        }
+    }
+
+    fn play(&self, item: ItemId) -> Task<Message> {
+        match item {
+            ItemId::Movie(id) => match self.movies.get(&id) {
+                Some(movie) => {
+                    let name = movie.media.name();
+                    let path = &movie.media.full_path;
+
+                    match play_item(PlayId::Movie(id), name, path) {
+                        Ok(item) => Task::done(Message::PlayItem(item)),
+                        Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
+                    }
+                }
+                None => {
+                    todo!("Fetch movie")
+                }
+            },
+            ItemId::Episode(id) => match self.episodes.get(&id) {
+                Some(episode) => {
+                    let name = episode.media.name();
+                    let path = &episode.media.full_path;
+
+                    match play_item(PlayId::Episode(id), name, path) {
+                        Ok(item) => Task::done(Message::PlayItem(item)),
+                        Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
+                    }
+                }
+                None => {
+                    todo!("Fetch Episode")
+                }
+            },
+            ItemId::Show(show) => {
+                // todo: Might want to fetch the episodes from the db directly?
+                let items = self.episodes.values().filter_map(|episode| {
+                    if episode.media.show != show {
+                        return None;
+                    }
+
+                    let id = PlayId::Episode(episode.media.id);
+                    let name = episode.media.name();
+                    let path = &episode.media.full_path;
+                    Some(play_item(id, name, path))
+                });
+
+                play_helper(items)
+            }
+            ItemId::Season(season) => {
+                let items = self.episodes.values().filter_map(|episode| {
+                    let  _ = season;
+                    // todo
+                    // if episode.media.season != season {
+                    //     return None;
+                    // }
+
+                    let id = PlayId::Episode(episode.media.id);
+                    let name = episode.media.name();
+                    let path = &episode.media.full_path;
+                    Some(play_item(id, name, path))
+                });
+                play_helper(items)
             }
         }
     }
 
-    fn update_scroll(&mut self) -> Task<HomeMessage> {
-        let home: Task<()> = scroll_to(self.scroll.id.clone(), self.scroll.offset);
-
-        home.map(|_| HomeMessage::None)
+    fn update_scroll(&mut self) -> Task<()> {
+        scroll_to(self.scroll.id.clone(), self.scroll.offset)
     }
 
     fn current_page(&self) -> Option<&Page> {
@@ -1275,7 +1240,7 @@ impl Home {
         content.into()
     }
 
-    fn recents(&self) -> Element<'_, HomeMessage> {
+    fn recents(&self, now: Instant) -> Element<'_, HomeMessage> {
         let movies = {
             let label = text("Recent Movies").size(H4);
             let label = column!(label, rule::horizontal(2.0)).spacing(4.0);
@@ -1291,7 +1256,7 @@ impl Home {
                 Layout::Grid => {
                     let content = movies.map(|thumbnail| {
                         thumbnail.card(
-                            self.now,
+                            now,
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
@@ -1308,7 +1273,7 @@ impl Home {
                 Layout::List => {
                     let content = movies.map(|thumbnail| {
                         thumbnail.list(
-                            self.now,
+                            now,
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
@@ -1339,7 +1304,7 @@ impl Home {
                 Layout::Grid => {
                     let shows = shows.map(|show| {
                         show.card(
-                            self.now,
+                            now,
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
@@ -1356,7 +1321,7 @@ impl Home {
                 Layout::List => {
                     let content = shows.map(|thumbnail| {
                         thumbnail.list(
-                            self.now,
+                            now,
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
@@ -1380,14 +1345,14 @@ impl Home {
         content.into()
     }
 
-    fn inner(&self) -> Element<'_, HomeMessage> {
+    fn inner(&self, now: Instant) -> Element<'_, HomeMessage> {
         match self.current_page() {
-            None => self.recents(),
-            Some(Page::Shows(shows)) => shows
-                .view(self.now, self.shows.values())
-                .map(HomeMessage::Shows),
+            None => self.recents(now),
+            Some(Page::Shows(shows)) => {
+                shows.view(now, self.shows.values()).map(HomeMessage::Shows)
+            }
             Some(Page::Movies(movies)) => movies
-                .view(self.now, self.movies.values())
+                .view(now, self.movies.values())
                 .map(HomeMessage::Movies),
             Some(Page::Movie { page, id }) => {
                 // todo: while fetching the movie, this could be reached. Need to handle it better.
@@ -1407,7 +1372,7 @@ impl Home {
                     // .filter(|episode| episode.media.season == *id)
                     .filter(|_| true);
 
-                page.view(self.now, season, episodes)
+                page.view(now, season, episodes)
                     .map(HomeMessage::SeasonPage)
             }
             Some(Page::Show { page, id }) => {
@@ -1418,8 +1383,7 @@ impl Home {
                     // .filter(|season| season.media.show == *id)
                     .filter(|_| true);
 
-                page.view(self.now, show, seasons)
-                    .map(HomeMessage::ShowPage)
+                page.view(now, show, seasons).map(HomeMessage::ShowPage)
             }
             Some(Page::Collection {
                 collection: page,
@@ -1469,7 +1433,7 @@ impl Home {
                             })
                             .peekable();
 
-                        page.view(self.now, collection, movies, shows, seasons, episodes)
+                        page.view(now, collection, movies, shows, seasons, episodes)
                             .map(HomeMessage::Collection)
                     }
                     CollectionState::Loading => {
@@ -1484,13 +1448,13 @@ impl Home {
                         let seasons = self.seasons.values().peekable();
                         let episodes = self.episodes.values().peekable();
 
-                        page.view(self.now, collection, movies, shows, seasons, episodes)
+                        page.view(now, collection, movies, shows, seasons, episodes)
                             .map(HomeMessage::Collection)
                     }
                 }
             }
             Some(Page::Collections(collections)) => collections
-                .view(self.now, self.collections.values())
+                .view(now, self.collections.values())
                 .map(HomeMessage::Collections),
             _ => todo!("Page view"),
         }
@@ -1513,7 +1477,7 @@ impl Home {
     }
 
     fn filters_view(&self) -> Element<'_, HomeMessage> {
-        let size = typo::H7;
+        let size = H7;
         let padding = Padding::new(2.0).left(5.0).right(5.0);
 
         let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
@@ -1783,7 +1747,7 @@ impl Home {
     }
 
     fn toolbar(&self) -> Element<'_, HomeMessage> {
-        let size = typo::P;
+        let size = P;
 
         let filter = {
             let icon = if self.show_filters {
@@ -1873,7 +1837,7 @@ impl Home {
         content.into()
     }
 
-    fn content_area(&self) -> Element<'_, HomeMessage> {
+    fn content_area(&self, now: Instant) -> Element<'_, HomeMessage> {
         let title = self.current_page().map(Page::name).unwrap_or("Home");
         let title = container(text(title).size(H6)).max_width(400.0);
 
@@ -1909,7 +1873,7 @@ impl Home {
         )
         .style(container_style);
 
-        let content_area = container(self.inner())
+        let content_area = container(self.inner(now))
             .style(container_style)
             .height(Length::Fill)
             .width(Length::Fill);
@@ -1930,8 +1894,8 @@ impl Home {
         content.into()
     }
 
-    pub fn view(&self) -> Element<'_, HomeMessage> {
-        let content = row!(self.side(), self.content_area())
+    pub fn view(&self, now: Instant) -> Element<'_, HomeMessage> {
+        let content = row!(self.side(), self.content_area(now))
             .width(Length::Fill)
             .height(Length::Fill)
             .padding([6, 5]);
@@ -1948,60 +1912,140 @@ impl Home {
         }
     }
 
-    pub fn is_animating(&self) -> bool {
+    pub fn is_animating(&self, now: Instant) -> bool {
         match &self.focused {
             Some(Focused::Show(id)) => self
                 .shows
                 .get(id)
-                .map(|media| media.is_animating(self.now))
+                .map(|media| media.is_animating(now))
                 .unwrap_or_default(),
             Some(Focused::Movie(id)) => self
                 .movies
                 .get(id)
-                .map(|media| media.is_animating(self.now))
+                .map(|media| media.is_animating(now))
                 .unwrap_or_default(),
             Some(Focused::Episode(id)) => self
                 .episodes
                 .get(id)
-                .map(|media| media.is_animating(self.now))
+                .map(|media| media.is_animating(now))
                 .unwrap_or_default(),
             Some(Focused::Season(id)) => self
                 .seasons
                 .get(id)
-                .map(|media| media.is_animating(self.now))
+                .map(|media| media.is_animating(now))
                 .unwrap_or_default(),
             Some(Focused::Collection(key)) => self
                 .collections
                 .get(key)
-                .map(|collection| collection.is_animating(self.now))
+                .map(|collection| collection.is_animating(now))
                 .unwrap_or_default(),
             None => false,
         }
     }
 
-    pub fn subscription(&self) -> Subscription<HomeMessage> {
-        let keys = keyboard::on_key_press(|key, modifiers| match key {
-            keyboard::Key::Named(keyboard::key::Named::ArrowLeft) if modifiers.alt() => {
-                Some(HomeMessage::Back)
-            }
-            keyboard::Key::Named(keyboard::key::Named::ArrowRight) if modifiers.alt() => {
-                Some(HomeMessage::Forward)
-            }
-
-            _ => None,
-        });
-
-        let animating = if self.is_animating() {
-            window::frames().map(|_| HomeMessage::Animate)
-        } else {
-            Subscription::none()
+    pub fn back(&mut self) -> Task<Message> {
+        self.focused = None;
+        let update = PageUpdate {
+            layout: self.layout,
+            sort: self.sort,
+            filters: self.filters,
         };
 
-        Subscription::batch([keys, animating])
+        match self.current_page.take() {
+            Some(current) => {
+                self.forward.push(current);
+
+                match self.backward.pop() {
+                    Some(new) => {
+                        let page = self
+                            .pages
+                            .get_mut(&new)
+                            .expect("Page cannot be in back without being recorded first");
+                        self.current_page = Some(new);
+                        page.page_update(update);
+                        page.update_scroll().map(|_| Message::None)
+                    }
+                    None => self.update_scroll().map(|_| Message::None),
+                }
+            }
+            None => {
+                let Some(new) = self.backward.pop() else {
+                    return Task::none();
+                };
+                let page = self
+                    .pages
+                    .get_mut(&new)
+                    .expect("Page cannot be in back without being recorded first");
+                self.current_page = Some(new);
+                page.page_update(update);
+                page.update_scroll().map(|_| Message::None)
+            }
+        }
     }
 
-    pub fn theme(&self) -> Option<Theme> {
-        Some(Theme::TokyoNight)
+    pub fn forward(&mut self) -> Task<Message> {
+        let update = PageUpdate {
+            layout: self.layout,
+            sort: self.sort,
+            filters: self.filters,
+        };
+
+        match self.current_page.take() {
+            Some(current) => {
+                self.backward.push(current);
+                let Some(new) = self.forward.pop() else {
+                    return Task::none();
+                };
+
+                let page = self
+                    .pages
+                    .get_mut(&new)
+                    .expect("Page cannot be in forward without being recorded");
+
+                self.current_page = Some(new);
+                page.page_update(update);
+                page.update_scroll().map(|_| Message::None)
+            }
+            None => {
+                let Some(new) = self.forward.pop() else {
+                    return Task::none();
+                };
+
+                let page = self
+                    .pages
+                    .get_mut(&new)
+                    .expect("Page cannot be in forward without being recorded");
+                self.current_page = Some(new);
+                page.page_update(update);
+                page.update_scroll().map(|_| Message::None)
+            }
+        }
+    }
+
+    fn layout_toggle(&mut self) -> Task<Message> {
+        if self.layout == Layout::Grid {
+            self.layout = Layout::List
+        } else {
+            self.layout = Layout::Grid
+        }
+
+        let update = PageUpdate {
+            layout: self.layout,
+            sort: self.sort,
+            filters: self.filters,
+        };
+
+        if let Some(page) = self.current_page_mut() {
+            page.page_update(update);
+        };
+
+        Task::none()
+    }
+
+    pub fn action(&mut self, action: HomeAction) -> Task<Message> {
+        match action {
+            HomeAction::LayoutToggle => self.layout_toggle(),
+        }
     }
 }
 
@@ -2228,4 +2272,63 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         .height(height);
 
     content.into()
+}
+
+fn play_item(id: PlayId, name: &str, path: &PathBuf) -> Result<PlayItem, String> {
+    match path.try_exists() {
+        Ok(false) => Err(format!("{} does not exist", path.to_string_lossy())),
+        Err(error) => Err(format!("{error}")),
+        Ok(true) => {
+            let play = PlayItem {
+                id,
+                name: name.to_owned(),
+                path: path.clone(),
+            };
+
+            Ok(play)
+        }
+    }
+}
+
+fn play_helper(items: impl Iterator<Item = Result<PlayItem, String>>) -> Task<Message> {
+    let mut toasts = vec![];
+    let mut plays = vec![];
+
+    for item in items {
+        match item {
+            Ok(item) => plays.push(item),
+            Err(error) => toasts.push(error),
+        }
+    }
+
+    if plays.is_empty() && toasts.is_empty() {
+        return Task::done(Message::PushToast(
+            "No content to play".to_owned(),
+            toast::Status::Error,
+        ));
+    }
+
+    let status = if plays.is_empty() {
+        toast::Status::Error
+    } else {
+        toast::Status::Warn
+    };
+
+    let play = if !plays.is_empty() {
+        Task::done(Message::PlayItems(plays))
+    } else {
+        Task::none()
+    };
+
+    let toasts = if !toasts.is_empty() {
+        let toasts = toasts
+            .into_iter()
+            .map(|message| (message, status))
+            .collect::<Vec<_>>();
+        Task::done(Message::PushToasts(toasts))
+    } else {
+        Task::none()
+    };
+
+    Task::batch([play, toasts])
 }

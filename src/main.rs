@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_imports)]
 use iced::{
-    Color, ContentFit, Element, Event, Font, Length, Padding, Point, Rectangle, Shadow, Size,
-    Subscription, Task, Theme, Vector,
+    Color, ContentFit, Element, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation,
+    Shadow, Size, Subscription, Task, Theme, Vector,
     advanced::{
         self, Widget, layout, mouse, overlay,
         widget::{operation, tree},
@@ -10,7 +10,7 @@ use iced::{
     animation::{Animation, Easing},
     border::{self, Border, Radius},
     color, font, padding,
-    time::Instant,
+    time::{Instant, Duration},
     widget::{
         Space, bottom, bottom_center, button, center, center_x, center_y, column, container, float,
         grid, image, mouse_area, pick_list, row, scrollable, slider, stack, text, text_input,
@@ -29,7 +29,8 @@ mod player;
 pub mod utils;
 mod widgets;
 
-use player::{Player, PlayerMessage};
+use app::App;
+// use player::{Player, PlayerMessage};
 use utils::filter;
 use utils::filter::*;
 use utils::icons::*;
@@ -59,17 +60,16 @@ fn _test_main() {
 #[rustfmt::skip]
 fn main() -> iced::Result {
     // iced::run(app::App::update, app::App::view)
-    // iced::application(Player::boot, Player::update, Player::view)
-    //     .subscription(Player::subscriptions)
-    //     .run()
+
 
     iced::application::timed(
-        home::Home::boot,
-        home::Home::update,
-        home::Home::subscription,
-        home::Home::view,
+        App::boot, 
+        App::update, 
+        App::subscription,
+        App::view
     )
-    .theme(home::Home::theme)
+        .exit_on_close_request(false)
+        .theme(App::theme)
 
     // iced::application::timed(
     //     Playground::boot,
@@ -77,6 +77,7 @@ fn main() -> iced::Result {
     //     Playground::subscription,
     //     Playground::view,
     // )
+    //     .theme(Playground::theme)
 
     .window_size(Size::new(1200.0, 750.0))
     .run()
@@ -84,23 +85,34 @@ fn main() -> iced::Result {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Toggle(bool),
+    FontLoad(Result<(), iced::font::Error>),
     None,
 }
 
 struct Playground {
     now: Instant,
-    show: bool,
+    animation: Animation<bool>,
+    state: bool,
 }
 
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
+        let fonts = utils::load_fonts().map(Message::FontLoad);
+
+        let now = Instant::now();
+        let mut animation = Animation::new(false)
+            .duration(Duration::from_millis(1500))
+            .easing(Easing::EaseInOut)
+            .repeat_forever();
+        animation.go_mut(true, now);
+
         let new = Self {
-            now: Instant::now(),
-            show: false,
+            now,
+            animation,
+            state: false,
         };
 
-        (new, Task::none())
+        (new, fonts)
     }
 
     fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
@@ -108,30 +120,31 @@ impl Playground {
 
         match message {
             Message::None => Task::none(),
-            Message::Toggle(show) => {
-                self.show = show;
+            Message::FontLoad(Ok(_)) => Task::none(),
+            Message::FontLoad(Err(error)) => {
+                eprintln!("{error:?}");
                 Task::none()
             }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        // let base = container("Base content").style(container::secondary);
-        let base = button("Base button")
-            .style(button::primary)
-            .on_press(Message::None);
-        let overlay = container("Overlaying content").style(container::dark);
+        let rotation = self.animation.interpolate(0.2, 6.28, self.now);
+        let rotation = Rotation::Floating(Radians(rotation));
 
-        let content = menu(base, overlay)
-            .on_toggle(Message::Toggle)
-            .position(menu::Position::Bottom);
+        let svg = utils::loading_svg().rotation(rotation);
 
+        let content = column!(svg).spacing(20);
         let content = center(content);
 
         content.into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        Subscription::none()
+        window::frames().map(|_| Message::None)
+    }
+
+    fn theme(&self) -> Option<Theme> {
+        Some(Theme::Nightfly)
     }
 }

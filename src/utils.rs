@@ -9,6 +9,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::*;
+use crate::models::ItemId;
+use crate::models::{EpisodeId, MovieId};
+
 pub mod icons;
 pub use icons::*;
 pub mod typo;
@@ -21,6 +24,21 @@ pub use sort::{Sort, SortKind};
 /// Returns an empty [`iced::Element`].
 pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
     iced::widget::Space::new().width(0).height(0).into()
+}
+
+pub fn loading_svg() -> iced::widget::Svg<'static> {
+    use iced::widget::svg::{Style, Svg};
+
+    let handle = LOADING_SVG_HANDLE;
+
+    Svg::new(handle.clone())
+        .width(50)
+        .height(50)
+        .style(|theme: &iced::Theme, _| {
+            let color = theme.extended_palette().background.base.text;
+
+            Style { color: Some(color) }
+        })
 }
 
 /// Returns a single thumbnail frame handle in rgba format.
@@ -335,6 +353,119 @@ pub fn rand_u32() -> u32 {
         .subsec_millis()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PlayId {
+    Movie(MovieId),
+    Episode(EpisodeId),
+}
+
+impl From<PlayId> for ItemId {
+    fn from(value: PlayId) -> Self {
+        match value {
+            PlayId::Movie(id) => ItemId::Movie(id),
+            PlayId::Episode(id) => ItemId::Episode(id),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayItem {
+    pub id: PlayId,
+    pub name: String,
+    pub path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct Playlist {
+    current: usize,
+    items: Vec<PlayItem>,
+}
+
+impl Playlist {
+    pub fn new(items: impl Iterator<Item = PlayItem>) -> Self {
+        Self {
+            current: 0,
+            items: items.collect(),
+        }
+    }
+
+    pub fn next(&mut self) -> Option<&PlayItem> {
+        self.current = (self.current + 1).min(self.items.len());
+
+        self.current()
+    }
+
+    pub fn next_peek(&self) -> Option<&PlayItem> {
+        self.items.get(self.current + 1)
+    }
+
+    pub fn current(&self) -> Option<&PlayItem> {
+        self.items.get(self.current)
+    }
+
+    pub fn previous(&mut self) -> Option<&PlayItem> {
+        self.current = self.current.saturating_sub(1);
+
+        self.current()
+    }
+
+    pub fn restart(&mut self) {
+        self.current = 0;
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn has_next(&self) -> bool {
+        self.current < self.items.len() - 1
+    }
+
+    pub fn has_previous(&self) -> bool {
+        self.current != 0
+    }
+
+    pub fn is_done(&self) -> bool {
+        self.current >= self.items.len()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct VideoSettings {
+    pub thumbnail_interval: u32,
+    pub volume: f64,
+    pub speed: f64,
+    pub gamma: f64,
+    pub seek_mult: f64,
+    pub seek_shift_mult: f64,
+    pub volume_change_amt: f64,
+    pub seek_change_amt: f64,
+    pub speed_change_amt: f64,
+    pub show_subtitles: bool,
+    pub muted: bool,
+    /// Whether a loaded video automatically starts playing
+    pub autoplay: bool,
+}
+
+impl Default for VideoSettings {
+    fn default() -> Self {
+        Self {
+            thumbnail_interval: 10,
+            volume: 1.0,
+            speed: 1.0,
+            gamma: 1.5,
+            seek_mult: 1.0,
+            seek_shift_mult: 2.0,
+            volume_change_amt: 0.05,
+            seek_change_amt: 10.0,
+            speed_change_amt: 0.1,
+            show_subtitles: false,
+            muted: false,
+            autoplay: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum Layout {
     #[default]
@@ -348,5 +479,58 @@ impl Layout {
             Self::Grid => icons::LIST,
             Self::List => icons::GRID,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum HomeAction {
+    // todo
+    // SettingsOpen,
+    LayoutToggle,
+    // Refresh,
+    // SearchToggle,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PlayerAction {
+    PlayToggle,
+    PlayNext,
+    PlayPrevious,
+    FullscreenToggle,
+    FullscreenExit,
+    SeekBack,
+    SeekBackShift,
+    SeekFront,
+    SeekFrontShift,
+    VolumeIncrease,
+    VolumeDecrease,
+    MuteToggle,
+    SpeedIncrease,
+    SpeedDecrease,
+    SpeedReset,
+    VideoConfig,
+    VideoComment,
+    SubtitlesToggle,
+    Add,
+    Favorite,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Action {
+    Back,
+    Forward,
+    Home(HomeAction),
+    Player(PlayerAction),
+}
+
+impl From<PlayerAction> for Action {
+    fn from(value: PlayerAction) -> Self {
+        Self::Player(value)
+    }
+}
+
+impl From<HomeAction> for Action {
+    fn from(value: HomeAction) -> Self {
+        Self::Home(value)
     }
 }

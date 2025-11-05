@@ -1,36 +1,56 @@
 use iced::{
     Element, Font, Length, Size, Subscription, Task,
+    advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
-    font,
-    widget::{column, container, image, mouse_area, row, slider, space, stack, text},
+    animation::{Animation, Easing},
+    time::{self, Instant},
+    widget::{Svg, center, column, container, image, mouse_area, row, slider, space, stack, text},
     window,
 };
-use iced_video_player::{Button, Icon, KeyPress, Kind, MouseClick, Video, VideoPlayer, key};
-use std::path::PathBuf;
+use iced_video_player::{Button, Kind, MouseClick, Video, VideoPlayer};
+use std::sync::Arc;
 use std::time::Duration;
 
+use crate::app::Message;
 use crate::utils::{
-    self,
+    self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings,
     icons::{self, sized_button, text_button},
-    load_fonts,
     typo::*,
 };
 use crate::widgets;
 
+#[derive(Debug)]
+pub struct Player {
+    video: Video,
+    position: f64,
+    is_dragging: bool,
+    thumbnails: Vec<image::Handle>,
+    item: PlayItem,
+    duration: f64,
+}
+
+#[derive(Debug)]
+enum AutoState {
+    Loading,
+    Idle,
+    Ready(Box<Player>),
+}
+
+#[derive(Debug)]
+enum State {
+    Loading(Animation<bool>),
+    Idle,
+    Ready(Box<Player>),
+}
+
 #[derive(Debug, Clone)]
-pub enum PlayerMessage {
-    WindowId(Option<window::Id>),
-    FontLoad(Result<(), font::Error>),
+pub enum ManagerMessage {
+    Video(bool, Arc<Player>),
+    Thumbnail((PlayId, Vec<image::Handle>)),
+    Resize((window::Id, Size)),
     SeekRelease,
     Seek(f64),
-    Resize((window::Id, Size)),
-    ThumbnailsReady(Result<Vec<image::Handle>, ()>),
     ChangeVolume(f64),
-    IncrVolume,
-    DecrVolume,
-    IncrSpeed,
-    DecrSpeed,
-    ResetSpeed,
     CursorExit,
     CursorEnter,
     PreviousScreen,
@@ -46,96 +66,150 @@ pub enum PlayerMessage {
     Favorite,
     Comment,
     ToggleFullscreen,
-    ExitFullscreen,
     EndOfStream,
     NewFrame,
     None,
 }
 
 #[derive(Debug)]
-pub struct Player {
-    position: f64,
+pub struct Manager {
+    window: Option<window::Id>,
+    playlist: Playlist,
     show_controls: bool,
+
+    settings: VideoSettings,
+
     maximised: bool,
     is_fullscreen: bool,
-    volume: f64,
-    speed: f64,
-    has_previous: bool,
-    has_next: bool,
-    path: PathBuf,
-    video: Video,
-    thumbnails: Vec<image::Handle>,
-    is_dragging: bool,
-    window_id: Option<window::Id>,
+    state: State,
+    next: AutoState,
 }
 
-impl Player {
+impl Manager {
     const WIDTH: f32 = 150.0;
 
-    pub fn boot() -> (Self, Task<PlayerMessage>) {
-        let path = PathBuf::from("assets/test.mkv");
-        // A better approach would carry only the name and some way to identify the video.
-        let path_ref = path.clone();
-        let mut video =
-            Video::new(&url::Url::from_file_path(path.canonicalize().unwrap()).unwrap()).unwrap();
-        video.set_gamma(1.5);
-
-        let thumbnails_task = {
-            let duration = video.duration().as_secs_f64();
-            let interval = 100u32;
-            let num = duration as u32 / interval;
-            let (width, height) = video.size();
-            Task::perform(
-                tokio::task::spawn_blocking(move || {
-                    let generator = utils::ThumbnailGenerator::new(&path_ref, width, height, 8);
-
-                    Ok((1..=num)
-                        .map(|i| {
-                            generator.generate(gstreamer::ClockTime::from_seconds_f64(
-                                duration * (i as f64 / num as f64),
-                            ))
-                        })
-                        .collect())
-                }),
-                |res| PlayerMessage::ThumbnailsReady(res.unwrap()),
-            )
+    pub fn boot(
+        window: Option<window::Id>,
+        settings: VideoSettings,
+        playlist: Playlist,
+    ) -> (Self, Task<ManagerMessage>) {
+        let load_video = match playlist.current().cloned() {
+            Some(item) => load_video(item, |video| ManagerMessage::Video(false, video)),
+            None => Task::none(),
         };
-        // todo: belongs in main app
-        let load_font = load_fonts().map(PlayerMessage::FontLoad);
-        let load_id = window::oldest().map(PlayerMessage::WindowId);
 
-        let tasks = Task::batch(vec![thumbnails_task, load_font, load_id]);
-
-        (Self::new(video, path), tasks)
+        (Self::new(window, settings, playlist), load_video)
     }
 
-    fn new(video: Video, path: PathBuf) -> Self {
-        let is_fullscreen = false;
+    fn new(window: Option<window::Id>, settings: VideoSettings, playlist: Playlist) -> Self {
+        let state = if playlist.len() > 0 {
+            State::Loading(loading_animation(Instant::now()))
+        } else {
+            State::Idle
+        };
+
         Self {
-            position: video.position().as_secs_f64(),
-            volume: video.volume(),
-            speed: video.speed(),
-            show_controls: !is_fullscreen,
+            window,
+            playlist,
+            show_controls: true,
+            settings,
+            // todo Probably best to get the initial value from app
             maximised: false,
-            is_fullscreen,
-            has_previous: false,
-            has_next: false,
-            is_dragging: false,
-            video,
-            path,
-            thumbnails: vec![],
-            window_id: None,
+            is_fullscreen: false,
+            state,
+            next: AutoState::Idle,
         }
     }
 
-    pub fn update(&mut self, message: PlayerMessage) -> Task<PlayerMessage> {
+    fn prep_video(&self, player: &mut Player) {
+        let VideoSettings {
+            thumbnail_interval: _thumbnails,
+            volume,
+            speed,
+            gamma,
+            seek_mult: _seek,
+            seek_shift_mult: _seek_shift,
+            seek_change_amt: _seek_amt,
+            volume_change_amt: _volume,
+            speed_change_amt: _speed,
+            show_subtitles: _subtitles,
+            muted,
+            autoplay,
+        } = self.settings;
+
+        player.video.set_volume(volume);
+        player.video.set_speed(speed).unwrap();
+        player.video.set_paused(!autoplay);
+        player.video.set_gamma(gamma);
+        player.video.set_muted(muted);
+    }
+
+    pub fn update(&mut self, message: ManagerMessage, now: Instant) -> Task<Message> {
         match message {
-            PlayerMessage::WindowId(id) => {
-                self.window_id = id;
+            ManagerMessage::None => Task::none(),
+            ManagerMessage::Video(is_next, player) => {
+                let mut player = Arc::try_unwrap(player).unwrap();
+
+                let id = player.item.id;
+                let path = player.item.path.clone();
+
+                let interval = self.settings.thumbnail_interval;
+                let duration = player.duration;
+                let (width, height) = player.video.size();
+
+                let load_thumbnails = Task::perform(
+                    tokio::task::spawn_blocking(move || {
+                        let num = duration as u32 / interval;
+                        let generator = utils::ThumbnailGenerator::new(path, width, height, 8);
+                        let imgs = (1..=num)
+                            .map(|i| {
+                                generator.generate(gstreamer::ClockTime::from_seconds_f64(
+                                    duration * (i as f64 / num as f64),
+                                ))
+                            })
+                            .collect();
+
+                        drop(generator);
+
+                        (id, imgs)
+                    }),
+                    move |res| ManagerMessage::Thumbnail(res.unwrap()),
+                );
+
+                if !is_next || matches!(&self.state, State::Idle) {
+                    self.prep_video(&mut player);
+                    self.state = State::Ready(Box::new(player));
+                } else {
+                    player.video.set_paused(true);
+                    self.next = AutoState::Ready(Box::new(player));
+                }
+
+                load_thumbnails.map(Message::Player)
+            }
+            ManagerMessage::Thumbnail((id, generated)) => {
+                let current = self
+                    .player()
+                    .map(|player| player.item.id == id)
+                    .unwrap_or_default();
+
+                if current {
+                    if let Some(Player {
+                        item, thumbnails, ..
+                    }) = self.player_mut()
+                        && item.id == id
+                    {
+                        *thumbnails = generated;
+                    }
+                } else if let AutoState::Ready(player) = &mut self.next
+                    && player.item.id == id
+                {
+                    player.thumbnails = generated;
+                }
+
                 Task::none()
             }
-            PlayerMessage::Resize((id, size)) => {
-                if Some(id) == self.window_id {
+            ManagerMessage::Resize((id, size)) => {
+                if Some(id) == self.window {
                     let maximised = Size::new(1000., 1000.);
                     self.maximised =
                         size.width >= maximised.width && size.height >= maximised.height;
@@ -143,219 +217,137 @@ impl Player {
                 }
                 Task::none()
             }
-            PlayerMessage::None => Task::none(),
-            PlayerMessage::FontLoad(Err(error)) => {
-                eprintln!("{error:?}");
-                Task::none()
-            }
-            PlayerMessage::FontLoad(_) => Task::none(),
-            PlayerMessage::EndOfStream => {
+            ManagerMessage::EndOfStream => {
+                // update playlist
                 todo!("Send message to main with some video stats");
             }
-            PlayerMessage::NewFrame => {
-                if !self.is_dragging {
-                    self.position = self.video.position().as_secs_f64();
+            ManagerMessage::NewFrame => {
+                if let State::Ready(player) = &mut self.state
+                    && !player.is_dragging
+                {
+                    player.position = player.video.position().as_secs_f64();
+
+                    if (player.position) / (player.duration) >= 0.9
+                        && self.playlist.has_next()
+                        && matches!(&self.next, AutoState::Idle)
+                    {
+                        self.next = AutoState::Loading;
+                        let next = self
+                            .playlist
+                            .next_peek()
+                            .cloned()
+                            .map(|item| {
+                                load_video(item, |video| ManagerMessage::Video(true, video))
+                            })
+                            .unwrap_or_default();
+
+                        return next.map(Message::Player);
+                    }
                 }
                 Task::none()
             }
-            PlayerMessage::SeekRelease => {
-                self.is_dragging = false;
-                self.video
-                    .seek(Duration::from_secs_f64(self.position.max(0.0)), false)
-                    .unwrap();
+            ManagerMessage::SeekRelease => {
+                if let Some(Player {
+                    video,
+                    position,
+                    is_dragging,
+                    ..
+                }) = self.player_mut()
+                {
+                    *is_dragging = false;
 
-                self.video.set_paused(false);
-                Task::none()
-            }
-            PlayerMessage::Seek(pos) => {
-                self.position = pos.max(0.0);
-                self.is_dragging = true;
-                self.video.set_paused(true);
-                Task::none()
-            }
-            PlayerMessage::TogglePlay => {
-                self.video.set_paused(!self.video.paused());
-                Task::none()
-            }
-            PlayerMessage::ThumbnailsReady(Err(_err)) => {
-                todo!("Set up error toasts here");
-            }
-            PlayerMessage::ThumbnailsReady(Ok(thumbnails)) => {
-                self.thumbnails = thumbnails;
-                Task::none()
-            }
-            PlayerMessage::ChangeVolume(volume) => {
-                self.volume = volume;
-                self.video.set_volume(volume);
-                Task::none()
-            }
-            PlayerMessage::ToggleMute => {
-                let mute = !self.video.muted();
-                self.video.set_muted(mute);
-
-                if mute {
-                    self.volume = 0.0
-                } else {
-                    self.volume = self.video.volume()
+                    video
+                        .seek(Duration::from_secs_f64(position.max(0.0)), false)
+                        .unwrap();
+                    video.set_paused(false);
                 }
+
                 Task::none()
             }
-            PlayerMessage::SeekBack(shift) => {
-                self.is_dragging = false;
-                let mult = if shift { 2.0 } else { 1.0 };
-                self.position = (self.position - (self.seek_amount() * mult)).max(0.0);
-                self.video
-                    .seek(Duration::from_secs_f64(self.position), false)
-                    .unwrap();
+            ManagerMessage::Seek(pos) => {
+                if let Some(Player {
+                    video,
+                    position,
+                    is_dragging,
+                    ..
+                }) = self.player_mut()
+                {
+                    *position = pos.max(0.0);
+                    *is_dragging = true;
+                    if !video.paused() {
+                        video.set_paused(true);
+                    }
+                }
+
                 Task::none()
             }
-            PlayerMessage::SeekFront(shift) => {
-                self.is_dragging = false;
-                let duration = self.video.duration().as_secs_f64();
-                let mult = if shift { 2.0 } else { 1.0 };
-                self.position = (self.position + (self.seek_amount() * mult)).min(duration);
-                self.video
-                    .seek(Duration::from_secs_f64(self.position), false)
-                    .unwrap();
+            ManagerMessage::TogglePlay => self.play_toggle(),
+            ManagerMessage::ChangeVolume(volume) => {
+                self.settings.volume = volume;
+
+                if let Some(Player { video, .. }) = self.player_mut() {
+                    video.set_volume(volume);
+                }
+
                 Task::none()
             }
-            PlayerMessage::IncrVolume => {
-                self.volume = (self.volume + self.volume_amount()).min(1.0);
-                self.video.set_volume(self.volume);
-                Task::none()
-            }
-            PlayerMessage::DecrVolume => {
-                self.volume = (self.volume - self.volume_amount()).max(0.0);
-                self.video.set_volume(self.volume);
-                Task::none()
-            }
-            PlayerMessage::IncrSpeed => {
-                self.speed += self.speed_amount();
-                self.video.set_speed(self.speed).unwrap();
-                Task::none()
-            }
-            PlayerMessage::DecrSpeed => {
-                self.speed -= self.speed_amount();
-                self.video.set_speed(self.speed).unwrap();
-                Task::none()
-            }
-            PlayerMessage::ResetSpeed => {
-                self.speed = 1.0;
-                self.video.set_speed(self.speed).unwrap();
-                Task::none()
-            }
-            PlayerMessage::CursorExit => {
+            ManagerMessage::ToggleMute => self.mute_toggle(),
+            ManagerMessage::SeekBack(shift) => self.seek_back(shift),
+            ManagerMessage::SeekFront(shift) => self.seek_front(shift),
+            ManagerMessage::CursorExit => {
                 if self.is_fullscreen || self.maximised {
                     self.show_controls = false;
                 }
                 Task::none()
             }
-            PlayerMessage::CursorEnter => {
+            ManagerMessage::CursorEnter => {
                 self.show_controls = true;
                 Task::none()
             }
-            PlayerMessage::ToggleFullscreen => {
-                self.show_controls = self.is_fullscreen;
-                self.is_fullscreen = !self.is_fullscreen;
-                let fullscreen = self.is_fullscreen;
-                iced::window::latest()
-                    .and_then(move |id| {
-                        iced::window::set_mode::<()>(
-                            id,
-                            if fullscreen {
-                                iced::window::Mode::Fullscreen
-                            } else {
-                                iced::window::Mode::Windowed
-                            },
-                        )
-                    })
-                    .discard()
+            ManagerMessage::ToggleFullscreen => self.fullscreen_toggle(),
+            ManagerMessage::PreviousScreen => {
+                use utils::Action;
+
+                Task::done(Message::Action(Action::Back))
             }
-            PlayerMessage::ExitFullscreen => {
-                self.show_controls = true;
-                self.is_fullscreen = false;
-                let fullscreen = self.is_fullscreen;
-                iced::window::latest()
-                    .and_then(move |id| {
-                        iced::window::set_mode::<()>(
-                            id,
-                            if fullscreen {
-                                iced::window::Mode::Fullscreen
-                            } else {
-                                iced::window::Mode::Windowed
-                            },
-                        )
-                    })
-                    .discard()
-            }
-            PlayerMessage::PreviousScreen => {
-                todo!("send message to main with video stats");
-            }
-            PlayerMessage::AddCollection => Task::none(),
-            PlayerMessage::Config => Task::none(),
-            PlayerMessage::ToggleSubtitles => {
-                self.video.toggle_subtitle();
-                Task::none()
-            }
-            PlayerMessage::PlayNext => Task::none(),
-            PlayerMessage::PlayPrevious => Task::none(),
-            PlayerMessage::Favorite => Task::none(),
-            PlayerMessage::Comment => Task::none(),
+            ManagerMessage::ToggleSubtitles => self.subtitles_toggle(),
+            ManagerMessage::PlayNext => self.play_next(now),
+            ManagerMessage::PlayPrevious => self.play_previous(now),
+            ManagerMessage::AddCollection => self.collection_add(),
+            ManagerMessage::Favorite => self.collection_favorite(),
+            ManagerMessage::Config => self.video_config(),
+            ManagerMessage::Comment => self.video_comment(),
         }
     }
 
-    pub fn subscriptions(&self) -> Subscription<PlayerMessage> {
-        window::resize_events().map(PlayerMessage::Resize)
+    pub fn subscription(&self) -> Subscription<ManagerMessage> {
+        window::resize_events().map(ManagerMessage::Resize)
     }
 
-    fn name(&self) -> &str {
-        self.path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default()
-    }
+    fn top(&self) -> Element<'_, ManagerMessage> {
+        let title = match &self.state {
+            State::Ready(player) => text(&player.item.name).size(H6),
+            State::Loading(_) | State::Idle => text(""),
+        };
 
-    fn volume_amount(&self) -> f64 {
-        0.05
-    }
-
-    fn seek_amount(&self) -> f64 {
-        10.0
-    }
-
-    fn speed_amount(&self) -> f64 {
-        0.1
-    }
-
-    fn play_btn(&self) -> (char, PlayerMessage) {
-        if self.video.paused() {
-            (icons::PLAY, PlayerMessage::TogglePlay)
-        } else if self.video.eos() {
-            (icons::REPLAY, PlayerMessage::TogglePlay)
-        } else {
-            (icons::PAUSE, PlayerMessage::TogglePlay)
-        }
-    }
-
-    fn top(&self) -> Element<'_, PlayerMessage> {
-        let title = text(self.name()).size(H6);
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
         let options = column!(
             row!(
                 sized_button(icons::ADD_COLLECTION, icon_size)
-                    .on_press(PlayerMessage::AddCollection),
-                sized_button(icons::ELLIPSIS_VER, icon_size).on_press(PlayerMessage::Config)
+                    .on_press_maybe(self.is_ready(ManagerMessage::AddCollection)),
+                sized_button(icons::ELLIPSIS_VER, icon_size).on_press(ManagerMessage::Config)
             )
             .spacing(6.0)
             .align_y(Vertical::Center)
         )
         .align_x(Horizontal::Right)
         .width(Self::WIDTH);
-        let back =
-            container(sized_button(icons::BACK, icon_size).on_press(PlayerMessage::PreviousScreen))
-                .align_x(Horizontal::Left)
-                .align_y(Vertical::Center)
-                .width(Self::WIDTH);
+        let back = container(
+            sized_button(icons::BACK, icon_size).on_press(ManagerMessage::PreviousScreen),
+        )
+        .align_x(Horizontal::Left)
+        .align_y(Vertical::Center)
+        .width(Self::WIDTH);
 
         let content = row!(
             back,
@@ -367,45 +359,98 @@ impl Player {
         .width(Length::Fill)
         .align_y(Vertical::Center);
 
-        let content: Element<'_, PlayerMessage> = if self.show_controls {
+        let content: Element<'_, ManagerMessage> = if self.show_controls {
             content.into()
         } else {
             space::horizontal().height(35).into()
         };
 
         let content = mouse_area(content)
-            .on_exit(PlayerMessage::CursorExit)
-            .on_enter(PlayerMessage::CursorEnter);
+            .on_exit(ManagerMessage::CursorExit)
+            .on_enter(ManagerMessage::CursorEnter);
 
         content.into()
     }
 
-    fn media_controls(&self) -> Element<'_, PlayerMessage> {
+    fn timeline(&self) -> Element<'_, ManagerMessage> {
+        match self.player() {
+            Some(Player {
+                video,
+                position,
+                thumbnails,
+                ..
+            }) => {
+                let duration = video.duration();
+                let spent = format!(
+                    "{:02}:{:02}:{:02}",
+                    *position as u64 / 3600,
+                    *position as u64 / 60,
+                    *position as u64 % 60,
+                );
+
+                let remaining = duration.as_secs().saturating_sub(*position as u64);
+                let total = format!(
+                    "{:02}:{:02}:{:02}",
+                    remaining / 3600,
+                    remaining / 60,
+                    remaining % 60,
+                );
+
+                let slider = widgets::slider::VideoSlider::new(
+                    0.0..=duration.as_secs_f64(),
+                    *position,
+                    ManagerMessage::Seek,
+                    thumbnails,
+                    Font::default(),
+                    duration,
+                )
+                .step(0.1)
+                .on_release(ManagerMessage::SeekRelease);
+
+                row!(text(spent), slider, text(total))
+                    .spacing(20.0)
+                    .align_y(Vertical::Center)
+                    .width(Length::Fill)
+                    .into()
+            }
+            _ => space::horizontal().into(),
+        }
+    }
+
+    fn is_ready(&self, message: ManagerMessage) -> Option<ManagerMessage> {
+        matches!(&self.state, State::Ready(_)).then_some(message)
+    }
+
+    fn media_controls(&self, now: Instant) -> Element<'_, ManagerMessage> {
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
         let left = {
-            let volume = slider(0.0..=1.0, self.volume, PlayerMessage::ChangeVolume)
-                .step(0.05)
-                .shift_step(0.1)
-                .width(125.0);
+            let volume = slider(
+                0.0..=1.0,
+                self.settings.volume,
+                ManagerMessage::ChangeVolume,
+            )
+            .step(0.05)
+            .shift_step(0.1)
+            .width(125.0);
             row!(
                 sized_button(
-                    if self.video.subtitles() {
+                    if self.settings.show_subtitles {
                         icons::SUBTITLES_OFF
                     } else {
                         icons::SUBTITLES_ON
                     },
                     icon_size
                 )
-                .on_press(PlayerMessage::ToggleSubtitles),
+                .on_press(ManagerMessage::ToggleSubtitles),
                 sized_button(
-                    if self.video.muted() {
+                    if self.settings.muted {
                         icons::MUTE
                     } else {
                         icons::VOLUME
                     },
                     icon_size
                 )
-                .on_press(PlayerMessage::ToggleMute),
+                .on_press(ManagerMessage::ToggleMute),
                 volume
             )
             .spacing(2.0)
@@ -414,17 +459,39 @@ impl Player {
         .width(Self::WIDTH);
 
         let middle = {
-            let (play, message) = self.play_btn();
             let size = if self.is_fullscreen { H1 * 1.125 } else { H1 };
+            let play: Element<'_, ManagerMessage> = match &self.state {
+                State::Idle => sized_button(icons::PLAY, size).into(),
+                State::Loading(animation) => container(loading_svg(animation, now))
+                    .width(size)
+                    .height(size)
+                    .into(),
+                State::Ready(player) => {
+                    let (icon, message) = if player.video.paused() {
+                        (icons::PLAY, ManagerMessage::TogglePlay)
+                    } else if player.video.eos() {
+                        (icons::REPLAY, ManagerMessage::TogglePlay)
+                    } else {
+                        (icons::PAUSE, ManagerMessage::TogglePlay)
+                    };
+
+                    sized_button(icon, size).on_press(message).into()
+                }
+            };
 
             row!(
-                sized_button(icons::PREVIOUS_VIDEO, size)
-                    .on_press_maybe(self.has_previous.then_some(PlayerMessage::PlayPrevious)),
-                sized_button(icons::SEEK_BACK, size).on_press(PlayerMessage::SeekBack(false)),
-                sized_button(play, size).on_press(message),
-                sized_button(icons::SEEK_FRONT, size).on_press(PlayerMessage::SeekFront(false)),
+                sized_button(icons::PREVIOUS_VIDEO, size).on_press_maybe(
+                    self.playlist
+                        .has_previous()
+                        .then_some(ManagerMessage::PlayPrevious)
+                ),
+                sized_button(icons::SEEK_BACK, size)
+                    .on_press_maybe(self.is_ready(ManagerMessage::SeekBack(false))),
+                play,
+                sized_button(icons::SEEK_FRONT, size)
+                    .on_press_maybe(self.is_ready(ManagerMessage::SeekFront(false)),),
                 sized_button(icons::NEXT_VIDEO, size)
-                    .on_press_maybe(self.has_next.then_some(PlayerMessage::PlayNext))
+                    .on_press_maybe(self.playlist.has_next().then_some(ManagerMessage::PlayNext))
             )
             .spacing(2.0)
             .align_y(Vertical::Center)
@@ -432,8 +499,10 @@ impl Player {
 
         let right = column!(
             row!(
-                sized_button(icons::FAVORITE, icon_size).on_press(PlayerMessage::Favorite),
-                sized_button(icons::COMMENT, icon_size).on_press(PlayerMessage::Comment),
+                sized_button(icons::FAVORITE, icon_size)
+                    .on_press_maybe(self.is_ready(ManagerMessage::Favorite)),
+                sized_button(icons::COMMENT, icon_size)
+                    .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
                 sized_button(
                     if self.is_fullscreen {
                         icons::MINIMIZE
@@ -442,7 +511,7 @@ impl Player {
                     },
                     icon_size
                 )
-                .on_press(PlayerMessage::ToggleFullscreen)
+                .on_press(ManagerMessage::ToggleFullscreen)
             )
             .spacing(2.0)
             .align_y(Vertical::Center)
@@ -460,98 +529,51 @@ impl Player {
         .width(Length::Fill)
         .align_y(Vertical::Center);
 
-        let timeline = {
-            let duration = self.video.duration();
-            let spent = format!(
-                "{:02}:{:02}:{:02}",
-                self.position as u64 / 3600,
-                self.position as u64 / 60,
-                self.position as u64 % 60,
-            );
-
-            let remaining = duration.as_secs() - (self.position as u64);
-            let total = format!(
-                "{:02}:{:02}:{:02}",
-                remaining / 3600,
-                remaining / 60,
-                remaining % 60,
-            );
-
-            let slider = widgets::slider::VideoSlider::new(
-                0.0..=duration.as_secs_f64(),
-                self.position,
-                PlayerMessage::Seek,
-                self.thumbnails.clone(),
-                Font::default(),
-                duration,
-            )
-            .step(0.1)
-            .on_release(PlayerMessage::SeekRelease);
-
-            row!(text(spent), slider, text(total))
-                .spacing(20.0)
-                .align_y(Vertical::Center)
-                .width(Length::Fill)
-        };
-
-        let content = column!(timeline, content, space::vertical().height(8.0))
+        let content = column!(self.timeline(), content, space::vertical().height(8.0))
             .spacing(8)
             .width(Length::Fill);
 
-        let content: Element<'_, PlayerMessage> = if self.show_controls {
+        let content: Element<'_, ManagerMessage> = if self.show_controls {
             content.into()
         } else {
             space::horizontal().height(75).into()
         };
 
         let content = mouse_area(content)
-            .on_exit(PlayerMessage::CursorExit)
-            .on_enter(PlayerMessage::CursorEnter);
+            .on_exit(ManagerMessage::CursorExit)
+            .on_enter(ManagerMessage::CursorEnter);
 
         content.into()
     }
 
-    fn video_elem(&self) -> Element<'_, PlayerMessage> {
-        let play = self.play_btn();
-        let fullscreen = video_icon(if self.is_fullscreen {
-            icons::MINIMIZE
-        } else {
-            icons::MAXIMIZE
-        });
-        let fullscreen = Icon {
-            size: Some(24.0.into()),
-            ..fullscreen
-        };
-        let video = container(
-            VideoPlayer::new(&self.video)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .play_icon(video_icon(play.0), play.1)
-                .next_icon(video_icon(icons::NEXT_VIDEO), PlayerMessage::PlayNext)
-                .previous_icon(
-                    video_icon(icons::PREVIOUS_VIDEO),
-                    PlayerMessage::PlayPrevious,
+    fn video_elem(&self, now: Instant) -> Element<'_, ManagerMessage> {
+        match &self.state {
+            State::Ready(player) => {
+                let video = container(
+                    VideoPlayer::new(&player.video)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .on_click(handle_clicks)
+                        .content_fit(iced::ContentFit::Contain)
+                        .on_end_of_stream(ManagerMessage::EndOfStream)
+                        .on_new_frame(ManagerMessage::NewFrame),
                 )
-                .fullscreen_icon(fullscreen, PlayerMessage::ToggleFullscreen)
-                .on_keypress(handle_keypress)
-                .on_click(handle_clicks)
-                .enable_overlay(self.is_fullscreen && !self.show_controls)
-                .content_fit(iced::ContentFit::Contain)
-                .on_end_of_stream(PlayerMessage::EndOfStream)
-                .on_new_frame(PlayerMessage::NewFrame),
-        )
-        .align_x(iced::Alignment::Center)
-        .align_y(iced::Alignment::Center)
-        .width(iced::Length::Fill)
-        .height(iced::Length::Fill);
+                .align_x(iced::Alignment::Center)
+                .align_y(iced::Alignment::Center)
+                .width(iced::Length::Fill)
+                .height(iced::Length::Fill);
 
-        video.into()
+                video.into()
+            }
+            State::Loading(animation) => center(loading_svg(animation, now)).into(),
+            State::Idle => center("No video loaded").into(),
+        }
     }
 
-    pub fn view(&self) -> Element<'_, PlayerMessage> {
+    pub fn view(&self, now: Instant) -> Element<'_, ManagerMessage> {
         let content = stack!(
-            self.video_elem(),
-            column!(self.top(), space::vertical(), self.media_controls())
+            self.video_elem(now),
+            column!(self.top(), space::vertical(), self.media_controls(now))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding([3, 6])
@@ -567,43 +589,344 @@ impl Player {
                 ..Default::default()
             });
 
+
         content.into()
     }
-}
 
-fn video_icon(unicode: char) -> Icon<iced::Font> {
-    Icon {
-        code_point: unicode,
-        font: icons::FONT,
-        size: Some(52.0.into()),
-        color: None,
+    pub fn is_animating(&self, now: Instant) -> bool {
+        let State::Loading(animation) = &self.state else {
+            return false;
+        };
+
+        animation.is_animating(now)
+    }
+
+    fn player(&self) -> Option<&Player> {
+        match &self.state {
+            State::Ready(player) => Some(player),
+            _ => None,
+        }
+    }
+
+    fn player_mut(&mut self) -> Option<&mut Player> {
+        match &mut self.state {
+            State::Ready(player) => Some(player),
+            _ => None,
+        }
+    }
+
+    fn play_toggle(&mut self) -> Task<Message> {
+        if let Some(Player { video, .. }) = self.player_mut() {
+            video.set_paused(!video.paused());
+        }
+        Task::none()
+    }
+
+    fn fullscreen_toggle(&mut self) -> Task<Message> {
+        self.show_controls = self.is_fullscreen;
+        self.is_fullscreen = !self.is_fullscreen;
+        let fullscreen = self.is_fullscreen;
+
+        self.window
+            .map(move |id| {
+                window::set_mode::<Message>(
+                    id,
+                    if fullscreen {
+                        window::Mode::Fullscreen
+                    } else {
+                        window::Mode::Windowed
+                    },
+                )
+                .discard()
+            })
+            .unwrap_or_default()
+    }
+
+    fn fullscreen_exit(&mut self) -> Task<Message> {
+        self.show_controls = true;
+        self.is_fullscreen = false;
+
+        self.window
+            .map(move |id| window::set_mode::<Message>(id, window::Mode::Windowed).discard())
+            .unwrap_or_default()
+    }
+
+    fn seek_back(&mut self, shift: bool) -> Task<Message> {
+        if let State::Ready(player) = &mut self.state {
+            player.is_dragging = false;
+            let mult = if shift {
+                self.settings.seek_shift_mult
+            } else {
+                self.settings.seek_mult
+            };
+
+            player.position = (player.position - (self.settings.seek_change_amt * mult)).max(0.0);
+            player
+                .video
+                .seek(Duration::from_secs_f64(player.position), false)
+                .unwrap();
+        }
+
+        Task::none()
+    }
+
+    fn seek_front(&mut self, shift: bool) -> Task<Message> {
+        if let State::Ready(player) = &mut self.state {
+            player.is_dragging = false;
+            let duration = player.video.duration().as_secs_f64();
+            let mult = if shift {
+                self.settings.seek_shift_mult
+            } else {
+                self.settings.seek_mult
+            };
+            player.position =
+                (player.position + (self.settings.seek_change_amt * mult)).min(duration);
+            player
+                .video
+                .seek(Duration::from_secs_f64(player.position), false)
+                .unwrap();
+        }
+        Task::none()
+    }
+
+    fn volume_increase(&mut self) -> Task<Message> {
+        match &mut self.state {
+            State::Ready(player) => {
+                self.settings.volume =
+                    (self.settings.volume + self.settings.volume_change_amt).min(1.0);
+                player.video.set_volume(self.settings.volume);
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    fn volume_decrease(&mut self) -> Task<Message> {
+        match &mut self.state {
+            State::Ready(player) => {
+                self.settings.volume =
+                    (self.settings.volume - self.settings.volume_change_amt).max(0.0);
+                player.video.set_volume(self.settings.volume);
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    fn mute_toggle(&mut self) -> Task<Message> {
+        match &mut self.state {
+            State::Ready(player) => {
+                let mute = !player.video.muted();
+                player.video.set_muted(mute);
+                self.settings.muted = mute;
+
+                if mute {
+                    self.settings.volume = 0.0
+                } else {
+                    self.settings.volume = player.video.volume()
+                }
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    fn speed_increase(&mut self) -> Task<Message> {
+        match &mut self.state {
+            State::Ready(player) => {
+                self.settings.speed += self.settings.speed_change_amt;
+                player.video.set_speed(self.settings.speed).unwrap();
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    fn speed_decrease(&mut self) -> Task<Message> {
+        match &mut self.state {
+            State::Ready(player) => {
+                self.settings.speed -= self.settings.speed_change_amt;
+                player.video.set_speed(self.settings.speed).unwrap();
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    fn speed_reset(&mut self) -> Task<Message> {
+        match &mut self.state {
+            State::Ready(player) => {
+                self.settings.speed = 1.0;
+                player.video.set_speed(self.settings.speed).unwrap();
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    fn subtitles_toggle(&mut self) -> Task<Message> {
+        // todo: Video settings
+        self.player_mut()
+            .map(|player| player.video.toggle_subtitle());
+
+        Task::none()
+    }
+
+    fn play_next(&mut self, now: Instant) -> Task<Message> {
+        if !self.playlist.has_next() {
+            return Task::none();
+        }
+
+        let Some(next) = self.playlist.next() else {
+            return Task::none();
+        };
+
+        match &mut self.next {
+            AutoState::Idle => {
+                self.state = State::Loading(loading_animation(now));
+
+                load_video(next.clone(), |video| ManagerMessage::Video(false, video))
+                    .map(Message::Player)
+            }
+            AutoState::Loading => {
+                self.state = State::Idle;
+                Task::none()
+            }
+            ready => {
+                let player = std::mem::replace(ready, AutoState::Idle);
+                let mut player = match player {
+                    AutoState::Ready(player) => player,
+                    _ => unreachable!(),
+                };
+
+                self.prep_video(&mut player);
+                player.video.set_paused(false);
+
+                self.state = State::Ready(player);
+
+                Task::none()
+            }
+        }
+    }
+
+    fn play_previous(&mut self, now: Instant) -> Task<Message> {
+        if !self.playlist.has_previous() {
+            return Task::none();
+        }
+
+        let Some(previous) = self.playlist.previous() else {
+            return Task::none();
+        };
+
+        // Intentionally discarding the current video. Don't want to hold on to
+        // some arbitarily sized memory for who knows how long
+        self.state = State::Loading(loading_animation(now));
+        self.next = AutoState::Idle;
+
+        load_video(previous.clone(), |video| {
+            ManagerMessage::Video(false, video)
+        })
+        .map(Message::Player)
+    }
+
+    fn collection_add(&mut self) -> Task<Message> {
+        todo!()
+    }
+
+    fn collection_favorite(&mut self) -> Task<Message> {
+        todo!()
+    }
+
+    fn video_config(&mut self) -> Task<Message> {
+        todo!()
+    }
+
+    fn video_comment(&mut self) -> Task<Message> {
+        todo!()
+    }
+
+    pub fn action(&mut self, action: PlayerAction, now: Instant) -> Task<Message> {
+        match action {
+            PlayerAction::PlayToggle => self.play_toggle(),
+            PlayerAction::PlayNext => self.play_next(now),
+            PlayerAction::PlayPrevious => self.play_previous(now),
+            PlayerAction::FullscreenToggle => self.fullscreen_toggle(),
+            PlayerAction::FullscreenExit => self.fullscreen_exit(),
+            PlayerAction::SeekBack => self.seek_back(false),
+            PlayerAction::SeekBackShift => self.seek_back(true),
+            PlayerAction::SeekFront => self.seek_front(false),
+            PlayerAction::SeekFrontShift => self.seek_front(true),
+            PlayerAction::VolumeIncrease => self.volume_increase(),
+            PlayerAction::VolumeDecrease => self.volume_decrease(),
+            PlayerAction::MuteToggle => self.mute_toggle(),
+            PlayerAction::SpeedIncrease => self.speed_increase(),
+            PlayerAction::SpeedDecrease => self.speed_decrease(),
+            PlayerAction::SpeedReset => self.speed_reset(),
+            PlayerAction::SubtitlesToggle => self.subtitles_toggle(),
+            PlayerAction::Add => self.collection_add(),
+            PlayerAction::Favorite => self.collection_favorite(),
+            PlayerAction::VideoConfig => self.video_config(),
+            PlayerAction::VideoComment => self.video_comment(),
+        }
     }
 }
 
-fn handle_keypress(keypress: KeyPress) -> PlayerMessage {
-    use key::{Key, Named};
+fn load_video<Message: 'static + MaybeSend>(
+    item: PlayItem,
+    f: impl FnOnce(Arc<Player>) -> Message + 'static + MaybeSend,
+) -> Task<Message> {
+    let url = url::Url::from_file_path(item.path.canonicalize().unwrap())
+        .expect("File path should be validated");
 
-    match keypress.key {
-        Key::Named(Named::Space) => PlayerMessage::TogglePlay,
-        Key::Named(Named::Enter) => PlayerMessage::ToggleFullscreen,
-        Key::Named(Named::Escape) => PlayerMessage::ExitFullscreen,
-        Key::Named(Named::ArrowLeft) => PlayerMessage::SeekBack(keypress.modifiers.shift()),
-        Key::Named(Named::ArrowRight) => PlayerMessage::SeekFront(keypress.modifiers.shift()),
-        Key::Named(Named::ArrowUp) => PlayerMessage::IncrVolume,
-        Key::Named(Named::ArrowDown) => PlayerMessage::DecrVolume,
-        Key::Character(char) if char.as_str() == "f" => PlayerMessage::ToggleFullscreen,
-        Key::Character(char) if char.as_str() == "c" => PlayerMessage::IncrSpeed,
-        Key::Character(char) if char.as_str() == "x" => PlayerMessage::DecrSpeed,
-        Key::Character(char) if char.as_str() == "z" => PlayerMessage::ResetSpeed,
-        _ => PlayerMessage::None,
-    }
+    Task::perform(
+        tokio::task::spawn_blocking(move || {
+            let mut video = Video::new(&url).unwrap();
+            video.set_paused(true);
+            let position = video.position().as_secs_f64();
+            let duration = video.duration().as_secs_f64();
+
+            Arc::new(Player {
+                item,
+                video,
+                thumbnails: vec![],
+                position,
+                is_dragging: false,
+                duration,
+            })
+        }),
+        move |res| f(res.unwrap()),
+    )
 }
 
-fn handle_clicks(click: MouseClick) -> PlayerMessage {
+fn handle_clicks(click: MouseClick) -> ManagerMessage {
     match click.button {
-        Button::Left if matches!(click.kind, Kind::Single) => PlayerMessage::TogglePlay,
-        Button::Left if matches!(click.kind, Kind::Double) => PlayerMessage::ToggleFullscreen,
-        Button::Right => PlayerMessage::Config,
-        _ => PlayerMessage::None,
+        Button::Left if matches!(click.kind, Kind::Single) => ManagerMessage::TogglePlay,
+        Button::Left if matches!(click.kind, Kind::Double) => ManagerMessage::ToggleFullscreen,
+        Button::Right => ManagerMessage::Config,
+        _ => ManagerMessage::None,
     }
+}
+
+fn loading_animation(now: Instant) -> Animation<bool> {
+    Animation::new(false)
+        .easing(Easing::EaseInOut)
+        .duration(time::Duration::from_millis(1500))
+        .repeat_forever()
+        .go(true, now)
+}
+
+fn loading_svg(animation: &Animation<bool>, now: Instant) -> Svg<'static> {
+    use iced::{Radians, Rotation};
+    let rotation = animation.interpolate(0.0, 6.28, now);
+    let rotation = Rotation::Floating(Radians(rotation));
+
+    let svg = utils::loading_svg().rotation(rotation);
+
+    svg
 }

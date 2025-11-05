@@ -390,7 +390,7 @@ impl Movie {
 
         let id = MovieId(Uuid::now_v7());
 
-        let path = "~/Desktop/coding/Projects/kino/assets/test.mkv";
+        let path = "assets/test.mkv";
         let full_path = PathBuf::from(path);
 
         Self {
@@ -424,7 +424,7 @@ impl Movie {
         let last_watched = DateTime::parse_from_rfc3339("2024-01-01T10:00:00Z").unwrap();
         let last_watched = Some(last_watched.into());
 
-        let path = "~/Desktop/coding/Projects/kino/assets/test2.mp4";
+        let path = "assets/test2.mp4";
         let full_path = PathBuf::from(path);
 
         Self {

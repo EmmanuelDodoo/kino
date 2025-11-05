@@ -1,201 +1,272 @@
-#![allow(unused_imports, dead_code)]
 use iced::{
-    Element, Length,
-    widget::{Button, Container, Slider, Text, column, image, row, text_input},
+    Element, Length, Subscription, Task, Theme, font,
+    keyboard::{self, Key, Modifiers},
+    time::Instant,
+    widget::{Container, Slider, Text, center, column, image, row, text_input},
+    window,
 };
 use iced_video_player::{Video, VideoPlayer};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::error::*;
-use crate::utils;
+use crate::home::{Home, HomeMessage};
+use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
+use crate::toast;
+use crate::utils::{
+    Action, FilterMode, Layout, PlayItem, PlayerAction, Playlist, Sort, VideoSettings, load_fonts,
+};
+
+#[derive(Clone, Debug, Copy)]
+pub enum Screen {
+    Home,
+    Player,
+    // Settings,
+    // Log,
+}
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    TogglePause,
-    Input(String),
-    InputSubmit,
-    ToggleLoop,
-    Seek(f64),
-    SeekRelease,
-    EndOfStream,
-    NewFrame,
+    FontLoad(Result<(), font::Error>),
+    Exit(window::Id),
+    WindowId(Option<window::Id>),
+    CloseToast(usize),
+    PushToast(String, toast::Status),
+    PushToasts(Vec<(String, toast::Status)>),
+    Home(HomeMessage),
+    Player(PlayerMessage),
+    Action(Action),
+    PlayItem(PlayItem),
+    PlayItems(Vec<PlayItem>),
+    Animate,
+    None,
 }
 
 pub struct App {
-    video: Option<Video>,
-    path: PathBuf,
-    input: Option<String>,
-    position: f64,
-    dragging: bool,
-    thumbnails: Vec<image::Handle>,
-}
+    now: Instant,
+    toasts: Vec<toast::Toast>,
+    window: Option<window::Id>,
 
-impl Default for App {
-    fn default() -> Self {
-        let path = PathBuf::from("assets/test1.mp4");
+    screen: Screen,
+    home: Home,
 
-        App {
-            video: None,
-            path,
-            input: None,
-            position: 0.0,
-            thumbnails: vec![],
-            dragging: false,
-        }
-    }
+    player: Option<Player>,
 }
 
 impl App {
-    pub fn update(&mut self, message: Message) {
+    pub fn boot() -> (Self, Task<Message>) {
+        let load_font = load_fonts().map(Message::FontLoad);
+        let load_id = window::oldest().map(Message::WindowId);
+
+        let (home, home_tasks) = Home::boot(Layout::default(), FilterMode::default());
+        let home_tasks = home_tasks.map(Message::Home);
+
+        let new = Self::new(home);
+
+        let tasks = Task::batch([load_font, load_id, home_tasks]);
+
+        (new, tasks)
+    }
+
+    fn new(home: Home) -> Self {
+        Self {
+            screen: Screen::Home,
+            now: Instant::now(),
+            toasts: vec![],
+            window: None,
+            player: None,
+            home,
+        }
+    }
+
+    pub fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
+        self.now = now;
+
         match message {
-            Message::Input(input) => {
-                self.input = Some(input);
+            Message::None => Task::none(),
+            Message::Animate => Task::none(),
+            Message::FontLoad(Ok(_)) => Task::none(),
+            Message::FontLoad(Err(_)) => {
+                let msg = Message::PushToast("Font load error".to_owned(), toast::Status::Error);
+
+                Task::done(msg)
             }
-            Message::InputSubmit => {
-                let Some(input) = self.input.take() else {
-                    return;
+            Message::WindowId(window) => {
+                self.window = window;
+                Task::none()
+            }
+            Message::Exit(id) => {
+                let Some(own) = &self.window else {
+                    return Task::none();
                 };
 
-                self.path = PathBuf::from(input);
-
-                let thumbnails = {
-                    let generator = utils::ThumbnailGenerator::new(&self.path, 500, 31, 8);
-                    let duration = generator.duration;
-                    let fraction = if duration.seconds() < 60 { 10 } else { 1 };
-                    let len = 100 / fraction;
-
-                    let unit = (duration * fraction) / 100;
-
-                    (1..len).map(|i| generator.generate(unit * i)).collect()
-                };
-
-                let mut video = Video::new(
-                    &url::Url::from_file_path(self.path.canonicalize().unwrap()).unwrap(),
-                )
-                .unwrap();
-                video.set_gamma(1.5);
-                video.set_paused(true);
-
-                self.thumbnails = thumbnails;
-                self.video = Some(video);
-                self.position = 0.0;
-            }
-            Message::TogglePause => {
-                if let Some(video) = self.video.as_mut() {
-                    video.set_paused(!video.paused());
+                if id == *own {
+                    self.player.take();
+                    self.screen = Screen::Home;
+                    window::close::<Message>(own.clone()).discard()
+                } else {
+                    Task::none()
                 }
             }
-            Message::ToggleLoop => {
-                if let Some(video) = self.video.as_mut() {
-                    video.set_looping(!video.looping());
+            Message::PushToast(message, status) => {
+                self.push_toast(toast::Toast::new(message, status));
+                Task::none()
+            }
+            Message::PushToasts(toasts) => {
+                let toasts = toasts
+                    .into_iter()
+                    .map(|(message, status)| toast::Toast::new(message, status));
+
+                self.push_toasts(toasts);
+
+                Task::none()
+            }
+            Message::CloseToast(idx) => {
+                self.toasts.remove(idx);
+
+                Task::none()
+            }
+            Message::Home(hsg) => self.home.update(hsg, now),
+            Message::Player(psg) => {
+                let Some(player) = self.player.as_mut() else {
+                    return Task::none();
+                };
+
+                player.update(psg, now)
+            }
+            Message::PlayItem(item) => self.play_item(std::iter::once(item)),
+            Message::PlayItems(items) => self.play_item(items.into_iter()),
+            Message::Action(action) => match (self.screen, action) {
+                (Screen::Home, Action::Home(action)) => self.home.action(action),
+                (Screen::Home, Action::Back) => self.home.back(),
+                (Screen::Home, Action::Forward) => self.home.forward(),
+                (Screen::Home, _) => Task::none(),
+
+                (Screen::Player, Action::Player(action)) => self
+                    .player
+                    .as_mut()
+                    .map(|player| player.action(action, now))
+                    .unwrap_or_default(),
+                (Screen::Player, Action::Back) => {
+                    self.player.take();
+                    self.screen = Screen::Home;
+                    Task::none()
                 }
-            }
-            Message::Seek(secs) => {
-                let Some(video) = self.video.as_mut() else {
-                    return;
-                };
-                self.dragging = true;
-                self.position = secs;
-                video.set_paused(true);
-            }
-            Message::SeekRelease => {
-                let Some(video) = self.video.as_mut() else {
-                    return;
-                };
-                self.dragging = false;
-                video
-                    .seek(Duration::from_secs_f64(self.position), false)
-                    .expect("seek");
-                video.set_paused(false);
-            }
-            Message::EndOfStream => {
-                println!("end of stream");
-            }
-            Message::NewFrame => {
-                let Some(video) = self.video.as_mut() else {
-                    return;
-                };
-                if !self.dragging {
-                    self.position = video.position().as_secs_f64();
-                }
-            }
+                (Screen::Player, _) => Task::none(),
+            },
         }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let path = {
-            let path = match self.input.as_ref() {
-                Some(input) => input,
-                None => self.path.to_str().unwrap_or_default(),
-            };
+        let content: Element<'_, Message> = match self.screen {
+            Screen::Home => self.home.view(self.now).map(Message::Home),
+            Screen::Player => {
+                let player = self.player.as_ref().unwrap();
 
-            text_input("Video path", path)
-                .on_input(Message::Input)
-                .on_submit(Message::InputSubmit)
+                player.view(self.now).map(Message::Player)
+            }
         };
 
-        match &self.video {
-            Some(video) => {
-                let slider = Container::new(
-                    Slider::new(
-                        0.0..=video.duration().as_secs_f64(),
-                        self.position,
-                        Message::Seek,
-                    )
-                    .step(0.1)
-                    .on_release(Message::SeekRelease),
-                )
-                .padding(iced::Padding::new(5.0).left(10.0).right(10.0));
+        toast::manager(content, &self.toasts, Message::CloseToast).into()
+    }
 
-                let controls = {
-                    let play_btn =
-                        Button::new(Text::new(if video.paused() { "Play" } else { "Pause" }))
-                            .width(80.0)
-                            .on_press(Message::TogglePause);
+    pub fn theme(&self) -> Option<Theme> {
+        Some(Theme::TokyoNight)
+    }
 
-                    let loop_btn = Button::new(Text::new(if video.looping() {
-                        "Disable Loop"
-                    } else {
-                        "Enable Loop"
-                    }))
-                    .width(120.0)
-                    .on_press(Message::ToggleLoop);
+    pub fn subscription(&self) -> Subscription<Message> {
+        let (animating, player) = self
+            .player
+            .as_ref()
+            .map(|player| (player.is_animating(self.now), player.subscription()))
+            .unwrap_or((false, Subscription::none()));
 
-                    let time = Text::new(format!(
-                        "{}:{:02}s / {}:{:02}s",
-                        self.position as u64 / 60,
-                        self.position as u64 % 60,
-                        video.duration().as_secs() / 60,
-                        video.duration().as_secs() % 60,
-                    ))
-                    .width(iced::Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Right);
+        let animating = if self.home.is_animating(self.now) || animating {
+            window::frames().map(|_| Message::Animate)
+        } else {
+            Subscription::none()
+        };
 
-                    row!(play_btn, loop_btn, time)
-                        .spacing(5)
-                        .align_y(iced::alignment::Vertical::Center)
-                        .padding(iced::Padding::new(10.0).top(0.0))
-                };
+        let keys = keyboard::on_key_press(key_action).map(Message::Action);
 
-                let video = Container::new(
-                    VideoPlayer::new(video)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .content_fit(iced::ContentFit::Contain)
-                        .on_end_of_stream(Message::EndOfStream)
-                        .on_new_frame(Message::NewFrame),
-                )
-                .align_x(iced::Alignment::Center)
-                .align_y(iced::Alignment::Center)
-                .width(iced::Length::Fill)
-                .height(iced::Length::Fill);
+        let exit = window::close_requests().map(Message::Exit);
 
-                let content = column!(path, video, slider, controls);
+        let player = player.map(Message::Player);
 
-                content.into()
-            }
-            None => path.into(),
+
+        Subscription::batch([animating, keys, exit, player])
+    }
+
+    fn push_toast(&mut self, toast: toast::Toast) {
+        // todo
+        // match toast.status {
+        //     Status::Info => info!(toast.body),
+        //     Status::Warn => warn!(toast.body),
+        //     Status::Success => info!(toast.body),
+        //     Status::Error => error!(toast.body),
+        // }
+
+        self.toasts.push(toast);
+    }
+
+    pub fn push_toasts(&mut self, toasts: impl Iterator<Item = toast::Toast>) {
+        for toast in toasts {
+            self.push_toast(toast)
         }
     }
+
+    fn play_item(&mut self, items: impl Iterator<Item = PlayItem>) -> Task<Message> {
+        let playlist = Playlist::new(items);
+        let (player, tasks) = Player::boot(self.window.clone(), VideoSettings::default(), playlist);
+        self.player = Some(player);
+        self.screen = Screen::Player;
+
+        tasks.map(Message::Player)
+    }
+}
+
+fn key_action(key: Key, modifiers: Modifiers) -> Option<Action> {
+    match key {
+        Key::Named(keyboard::key::Named::ArrowLeft) if modifiers.alt() => Some(Action::Back),
+        Key::Named(keyboard::key::Named::ArrowRight) if modifiers.alt() => Some(Action::Forward),
+        key => handle_keypress(key, modifiers).map(Action::Player),
+    }
+}
+
+fn handle_keypress(key: Key, modifiers: Modifiers) -> Option<PlayerAction> {
+    use keyboard::key::Named;
+
+    let action = match key {
+        Key::Named(Named::Space) => PlayerAction::PlayToggle,
+        Key::Named(Named::ArrowLeft) if modifiers.command() => PlayerAction::PlayPrevious,
+        Key::Named(Named::ArrowRight) if modifiers.command() => PlayerAction::PlayNext,
+
+        Key::Named(Named::Enter) => PlayerAction::FullscreenToggle,
+        Key::Named(Named::Escape) => PlayerAction::FullscreenExit,
+        Key::Character(char) if char.as_str() == "f" => PlayerAction::FullscreenToggle,
+
+        Key::Named(Named::ArrowLeft) if modifiers.shift() => PlayerAction::SeekBackShift,
+        Key::Named(Named::ArrowLeft) => PlayerAction::SeekBack,
+        Key::Named(Named::ArrowRight) if modifiers.shift() => PlayerAction::SeekFrontShift,
+        Key::Named(Named::ArrowRight) => PlayerAction::SeekFront,
+
+        Key::Named(Named::ArrowUp) => PlayerAction::VolumeIncrease,
+        Key::Named(Named::ArrowDown) => PlayerAction::VolumeDecrease,
+        Key::Character(char) if char.as_str() == "m" => PlayerAction::MuteToggle,
+
+        Key::Character(char) if char.as_str() == "c" => PlayerAction::SpeedIncrease,
+        Key::Character(char) if char.as_str() == "x" => PlayerAction::SpeedDecrease,
+        Key::Character(char) if char.as_str() == "z" => PlayerAction::SpeedReset,
+
+        Key::Character(char) if char.as_str() == "s" && modifiers.shift() => {
+            PlayerAction::VideoConfig
+        }
+
+        Key::Character(char) if char.as_str() == "s" => PlayerAction::SubtitlesToggle,
+
+        Key::Character(char) if char.as_str() == "b" => PlayerAction::VideoComment,
+
+        _ => return None,
+    };
+
+    Some(action)
 }

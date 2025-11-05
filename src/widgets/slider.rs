@@ -31,7 +31,7 @@ where
     step: f64,
     shift_step: Option<f64>,
     value: f64,
-    thumbnails: Vec<Renderer::Handle>,
+    thumbnails: &'a [Renderer::Handle],
     thumbnail_font: <Renderer as text::Renderer>::Font,
     duration: Duration,
     default: Option<f64>,
@@ -64,7 +64,7 @@ where
         range: RangeInclusive<f64>,
         value: f64,
         on_change: F,
-        thumbnails: Vec<Renderer::Handle>,
+        thumbnails: &'a [Renderer::Handle],
         thumbnail_font: <Renderer as text::Renderer>::Font,
         duration: Duration,
     ) -> Self
@@ -493,7 +493,7 @@ where
 
         let mut overlay = vec![];
 
-        if let Some(image) = self.thumbnails.get(image_index).cloned() {
+        if let Some(image) = self.thumbnails.get(image_index) {
             overlay.push(advanced::overlay::Element::new(Box::new(
                 ThumbnailOverlay {
                     position: layout.position() + translation,
@@ -546,16 +546,16 @@ struct State {
     keyboard_modifiers: keyboard::Modifiers,
 }
 
-struct ThumbnailOverlay<Renderer: image::Renderer> {
+struct ThumbnailOverlay<'a, Renderer: image::Renderer> {
     position: iced::Point,
     content_bounds: iced::Rectangle,
-    image: Renderer::Handle,
+    image: &'a Renderer::Handle,
     image_size: iced::Size,
     cursor_position: iced::Point,
 }
 
-impl<Message, Theme, Renderer> advanced::Overlay<Message, Theme, Renderer>
-    for ThumbnailOverlay<Renderer>
+impl<'a, Message, Theme, Renderer> advanced::Overlay<Message, Theme, Renderer>
+    for ThumbnailOverlay<'a, Renderer>
 where
     Renderer: image::Renderer + advanced::Renderer,
 {
