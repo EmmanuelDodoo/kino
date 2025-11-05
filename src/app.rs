@@ -102,7 +102,7 @@ impl App {
                 if id == *own {
                     self.player.take();
                     self.screen = Screen::Home;
-                    window::close::<Message>(own.clone()).discard()
+                    window::close::<Message>(*own).discard()
                 } else {
                     Task::none()
                 }
@@ -216,7 +216,7 @@ impl App {
 
     fn play_item(&mut self, items: impl Iterator<Item = PlayItem>) -> Task<Message> {
         let playlist = Playlist::new(items);
-        let (player, tasks) = Player::boot(self.window.clone(), VideoSettings::default(), playlist);
+        let (player, tasks) = Player::boot(self.window, VideoSettings::default(), playlist);
         self.player = Some(player);
         self.screen = Screen::Player;
 

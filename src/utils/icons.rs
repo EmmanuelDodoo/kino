@@ -112,7 +112,7 @@ pub const EDIT: char = '\u{e846}';
 
 const LOADING_SVG: &[u8] = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'><!-- Icon from Material Design Icons by Pictogrammers - https://github.com/Templarian/MaterialDesign/blob/master/LICENSE --><path fill='currentColor' d='M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8'/></svg>".as_bytes();
 
-pub const LOADING_SVG_HANDLE: LazyLock<iced::widget::svg::Handle> =
+pub static LOADING_SVG_HANDLE: LazyLock<iced::widget::svg::Handle> =
     LazyLock::new(|| iced::widget::svg::Handle::from_memory(LOADING_SVG));
 
 pub fn load_fonts() -> iced::Task<Result<(), font::Error>> {

@@ -29,7 +29,7 @@ pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
 pub fn loading_svg() -> iced::widget::Svg<'static> {
     use iced::widget::svg::{Style, Svg};
 
-    let handle = LOADING_SVG_HANDLE;
+    let handle = &*LOADING_SVG_HANDLE;
 
     Svg::new(handle.clone())
         .width(50)
@@ -389,6 +389,7 @@ impl Playlist {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<&PlayItem> {
         self.current = (self.current + 1).min(self.items.len());
 
@@ -415,6 +416,10 @@ impl Playlist {
 
     pub fn len(&self) -> usize {
         self.items.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
     }
 
     pub fn has_next(&self) -> bool {

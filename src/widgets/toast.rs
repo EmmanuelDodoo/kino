@@ -186,8 +186,10 @@ impl<'a, Message> Widget<Message, Theme, Renderer> for Manager<'a, Message> {
                 instants.truncate(new);
             }
             (old, new) if old < new => {
-                instants
-                    .extend(std::iter::repeat(Some(Instant::now())).take(new.saturating_sub(old)));
+                instants.extend(std::iter::repeat_n(
+                    Some(Instant::now()),
+                    new.saturating_sub(old),
+                ));
             }
             _ => {}
         }

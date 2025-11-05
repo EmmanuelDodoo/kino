@@ -102,7 +102,7 @@ impl Manager {
     }
 
     fn new(window: Option<window::Id>, settings: VideoSettings, playlist: Playlist) -> Self {
-        let state = if playlist.len() > 0 {
+        let state = if !playlist.is_empty() {
             State::Loading(loading_animation(Instant::now()))
         } else {
             State::Idle
@@ -589,7 +589,6 @@ impl Manager {
                 ..Default::default()
             });
 
-
         content.into()
     }
 
@@ -690,81 +689,63 @@ impl Manager {
     }
 
     fn volume_increase(&mut self) -> Task<Message> {
-        match &mut self.state {
-            State::Ready(player) => {
-                self.settings.volume =
-                    (self.settings.volume + self.settings.volume_change_amt).min(1.0);
-                player.video.set_volume(self.settings.volume);
-            }
-            _ => {}
+        if let State::Ready(player) = &mut self.state {
+            self.settings.volume =
+                (self.settings.volume + self.settings.volume_change_amt).min(1.0);
+            player.video.set_volume(self.settings.volume);
         }
 
         Task::none()
     }
 
     fn volume_decrease(&mut self) -> Task<Message> {
-        match &mut self.state {
-            State::Ready(player) => {
-                self.settings.volume =
-                    (self.settings.volume - self.settings.volume_change_amt).max(0.0);
-                player.video.set_volume(self.settings.volume);
-            }
-            _ => {}
+        if let State::Ready(player) = &mut self.state {
+            self.settings.volume =
+                (self.settings.volume - self.settings.volume_change_amt).max(0.0);
+            player.video.set_volume(self.settings.volume);
         }
 
         Task::none()
     }
 
     fn mute_toggle(&mut self) -> Task<Message> {
-        match &mut self.state {
-            State::Ready(player) => {
-                let mute = !player.video.muted();
-                player.video.set_muted(mute);
-                self.settings.muted = mute;
+        if let State::Ready(player) = &mut self.state {
+            let mute = !player.video.muted();
+            player.video.set_muted(mute);
+            self.settings.muted = mute;
 
-                if mute {
-                    self.settings.volume = 0.0
-                } else {
-                    self.settings.volume = player.video.volume()
-                }
+            if mute {
+                self.settings.volume = 0.0
+            } else {
+                self.settings.volume = player.video.volume()
             }
-            _ => {}
         }
 
         Task::none()
     }
 
     fn speed_increase(&mut self) -> Task<Message> {
-        match &mut self.state {
-            State::Ready(player) => {
-                self.settings.speed += self.settings.speed_change_amt;
-                player.video.set_speed(self.settings.speed).unwrap();
-            }
-            _ => {}
+        if let State::Ready(player) = &mut self.state {
+            self.settings.speed += self.settings.speed_change_amt;
+            player.video.set_speed(self.settings.speed).unwrap();
         }
 
         Task::none()
     }
 
     fn speed_decrease(&mut self) -> Task<Message> {
-        match &mut self.state {
-            State::Ready(player) => {
-                self.settings.speed -= self.settings.speed_change_amt;
-                player.video.set_speed(self.settings.speed).unwrap();
-            }
-            _ => {}
+        if let State::Ready(player) = &mut self.state {
+            self.settings.speed -= self.settings.speed_change_amt;
+            player.video.set_speed(self.settings.speed).unwrap();
         }
 
         Task::none()
     }
 
     fn speed_reset(&mut self) -> Task<Message> {
-        match &mut self.state {
-            State::Ready(player) => {
-                self.settings.speed = 1.0;
-                player.video.set_speed(self.settings.speed).unwrap();
-            }
-            _ => {}
+        if let State::Ready(player) = &mut self.state {
+            self.settings.speed = 1.0;
+            player.video.set_speed(self.settings.speed).unwrap();
         }
 
         Task::none()
@@ -772,8 +753,9 @@ impl Manager {
 
     fn subtitles_toggle(&mut self) -> Task<Message> {
         // todo: Video settings
-        self.player_mut()
-            .map(|player| player.video.toggle_subtitle());
+        if let Some(player) = self.player_mut() {
+            player.video.toggle_subtitle();
+        }
 
         Task::none()
     }
@@ -923,10 +905,8 @@ fn loading_animation(now: Instant) -> Animation<bool> {
 
 fn loading_svg(animation: &Animation<bool>, now: Instant) -> Svg<'static> {
     use iced::{Radians, Rotation};
-    let rotation = animation.interpolate(0.0, 6.28, now);
+    let rotation = animation.interpolate(0.0, std::f32::consts::TAU, now);
     let rotation = Rotation::Floating(Radians(rotation));
 
-    let svg = utils::loading_svg().rotation(rotation);
-
-    svg
+    utils::loading_svg().rotation(rotation)
 }

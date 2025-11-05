@@ -12,7 +12,7 @@ use iced::{
     window,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::Path;
 
 mod collection;
 mod collections;
@@ -1098,7 +1098,7 @@ impl Home {
             }
             ItemId::Season(season) => {
                 let items = self.episodes.values().filter_map(|episode| {
-                    let  _ = season;
+                    let _ = season;
                     // todo
                     // if episode.media.season != season {
                     //     return None;
@@ -2274,7 +2274,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     content.into()
 }
 
-fn play_item(id: PlayId, name: &str, path: &PathBuf) -> Result<PlayItem, String> {
+fn play_item(id: PlayId, name: &str, path: &Path) -> Result<PlayItem, String> {
     match path.try_exists() {
         Ok(false) => Err(format!("{} does not exist", path.to_string_lossy())),
         Err(error) => Err(format!("{error}")),
@@ -2282,7 +2282,7 @@ fn play_item(id: PlayId, name: &str, path: &PathBuf) -> Result<PlayItem, String>
             let play = PlayItem {
                 id,
                 name: name.to_owned(),
-                path: path.clone(),
+                path: path.to_path_buf(),
             };
 
             Ok(play)

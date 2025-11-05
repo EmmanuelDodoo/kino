@@ -129,7 +129,7 @@ impl Playground {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let rotation = self.animation.interpolate(0.2, 6.28, self.now);
+        let rotation = self.animation.interpolate(0.2, std::f32::consts::TAU, self.now);
         let rotation = Rotation::Floating(Radians(rotation));
 
         let svg = utils::loading_svg().rotation(rotation);
