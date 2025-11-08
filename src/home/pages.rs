@@ -24,7 +24,6 @@ pub enum PageKind {
     Shows,
     Movies,
     Collections,
-    Comments,
     Episode(EpisodeId),
     Movie(MovieId),
     Show(ShowId),
@@ -67,10 +66,6 @@ impl Page {
 
     pub fn goto_movies() -> PageKind {
         PageKind::Movies
-    }
-
-    pub fn goto_comments() -> PageKind {
-        PageKind::Comments
     }
 
     pub fn is_shows(&self) -> bool {
@@ -149,20 +144,6 @@ impl Page {
         match self {
             Self::Collections(collections) => collections.update(message),
             _ => None,
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Movies(movies) => movies.name(),
-            Self::Shows(shows) => shows.name(),
-            Self::Collections(collections) => collections.name(),
-            Self::Collection { collection, .. } => collection.name(),
-            Self::Movie { page, .. } => page.name(),
-            Self::Episode { page, .. } => page.name(),
-            Self::Season { page, .. } => page.name(),
-            Self::Show { page, .. } => page.name(),
-            _ => todo!(),
         }
     }
 

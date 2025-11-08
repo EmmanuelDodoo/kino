@@ -1,17 +1,15 @@
-use chrono::{DateTime, Local};
 use iced::{
-    Element, Length, Padding, Subscription, Task, Theme,
+    Element, Length, Padding, Task, Theme,
     alignment::{Horizontal, Vertical},
+    animation::Animation,
     border::{Border, Radius},
-    font, keyboard,
     time::Instant,
     widget::{
         button, center, column, container, grid, operation::scroll_to, pick_list, row, rule,
         scrollable, space, text, text_editor, text_input,
     },
-    window,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 mod collection;
@@ -26,15 +24,15 @@ mod shared;
 mod shows;
 
 use crate::models::{
-    Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, Season, SeasonId,
-    Show, ShowId, collection::ItemId,
+    self, Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, Season,
+    SeasonId, Show, ShowId, collection::ItemId,
 };
 
-use crate::app::Message;
+use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
     self, HomeAction, Layout, PlayId, PlayItem, Sort, SortKind, empty, filter::*, icons, icons::*,
-    load_fonts, typo::*,
+    load_fonts, loading_animation, loading_svg, typo::*,
 };
 use crate::widgets::{
     menu::{Position, menu},
@@ -50,12 +48,6 @@ use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
 use shared::{CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Scroll, Thumbnail, filter_sort};
 use shows::{TvShows, TvShowsMessage};
-
-#[derive(Debug, Clone)]
-enum CollectionState {
-    Loading,
-    Ready(HashSet<ItemId>),
-}
 
 #[derive(Debug, Clone)]
 pub enum FilterMessage {
@@ -82,24 +74,6 @@ pub enum SortMessage {
     ToggleReverse,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Focused {
-    Movie(MovieId),
-    Show(ShowId),
-    Season(SeasonId),
-    Episode(EpisodeId),
-    Collection((CollectionView, CollectionId)),
-}
-
-#[derive(Debug, Clone)]
-pub enum Fetch {
-    Collections(Vec<CollectionThumbnail>),
-    Shows(Vec<Thumbnail<Show>>),
-    Movies(Vec<Thumbnail<Movie>>),
-    Seasons(Vec<Thumbnail<Season>>),
-    Episodes(Vec<Thumbnail<Episode>>),
-}
-
 #[derive(Debug, Clone)]
 pub enum ConfigMessage {
     Name(String),
@@ -122,7 +96,7 @@ pub struct CollectionConfig {
 }
 
 impl CollectionConfig {
-    pub fn update(&self, collection: &mut Collection) {
+    pub fn update(self, collection: &mut Collection) {
         let Self {
             name,
             description,
@@ -132,7 +106,7 @@ impl CollectionConfig {
             custom,
         } = self;
 
-        collection.name = name.clone();
+        collection.name = name;
         let description = description.text();
         if description.is_empty() {
             collection.description = None;
@@ -140,9 +114,9 @@ impl CollectionConfig {
             collection.description = Some(description);
         }
         collection.icon = Some(icon.to_u32());
-        collection.theme = *theme;
-        collection.view = *view;
-        collection.custom = custom.clone();
+        collection.theme = theme;
+        collection.view = view;
+        collection.custom = custom;
     }
 }
 
@@ -230,14 +204,43 @@ impl Icon {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ViewMessage {
-    CollectionConfig((CollectionView, CollectionId)),
+    CollectionConfig(CollectionId),
     Add(ItemId),
-    AddToCollection((CollectionView, CollectionId)),
+    AddToCollection(CollectionId),
 }
 
 #[derive(Debug, Clone)]
 pub enum View {
     CollectionConfig(CollectionConfig, CollectionView, CollectionId),
+}
+
+#[derive(Debug, Clone)]
+enum State {
+    Loading(Animation<bool>),
+    Recent {
+        shows: Vec<Thumbnail<Show>>,
+        movies: Vec<Thumbnail<Movie>>,
+    },
+    Shows(Vec<Thumbnail<Show>>),
+    Movies(Vec<Thumbnail<Movie>>),
+    Collections,
+    Movie(Thumbnail<Movie>),
+    Show {
+        show: Thumbnail<Show>,
+        seasons: Vec<Thumbnail<Season>>,
+    },
+    Season {
+        season: Thumbnail<Season>,
+        episodes: Vec<Thumbnail<Episode>>,
+    },
+    Episode(Thumbnail<Episode>),
+    Collection {
+        collection: Box<CollectionThumbnail>,
+        shows: Vec<Thumbnail<Show>>,
+        movies: Vec<Thumbnail<Movie>>,
+        seasons: Vec<Thumbnail<Season>>,
+        episodes: Vec<Thumbnail<Episode>>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -272,11 +275,21 @@ pub enum HomeMessage {
     Goto(PageKind),
     NewCollection,
     None,
-    Fetch(Fetch),
     Scroll(scrollable::Viewport),
-    Refresh,
+    RefreshContent,
     Hovered(ItemId, bool),
     HoveredCollection((CollectionView, CollectionId), bool),
+    FetchedCollections(
+        bool,
+        BTreeMap<(CollectionView, CollectionId), CollectionThumbnail>,
+    ),
+    FetchCollectionState {
+        collection: Box<CollectionThumbnail>,
+        shows: Vec<Thumbnail<Show>>,
+        movies: Vec<Thumbnail<Movie>>,
+        seasons: Vec<Thumbnail<Season>>,
+        episodes: Vec<Thumbnail<Episode>>,
+    },
 }
 
 pub struct Home {
@@ -285,18 +298,11 @@ pub struct Home {
     current_page: Option<PageKind>,
     pages: HashMap<PageKind, Page>,
 
-    movies: HashMap<MovieId, Thumbnail<Movie>>,
-    shows: HashMap<ShowId, Thumbnail<Show>>,
-    seasons: HashMap<SeasonId, Thumbnail<Season>>,
-    episodes: HashMap<EpisodeId, Thumbnail<Episode>>,
+    state: State,
+
     collections: BTreeMap<(CollectionView, CollectionId), CollectionThumbnail>,
 
     search: String,
-
-    recent_movies: BTreeSet<(Option<DateTime<Local>>, MovieId)>,
-    recent_shows: BTreeSet<(Option<DateTime<Local>>, ShowId)>,
-
-    collection_states: HashMap<CollectionId, CollectionState>,
 
     layout: Layout,
     sort: Sort,
@@ -305,118 +311,65 @@ pub struct Home {
     show_sorts: bool,
     show_filters: bool,
 
-    focused: Option<Focused>,
-
     view: Option<View>,
 
     scroll: Scroll,
     pending: Vec<Task<HomeMessage>>,
+
+    recent_limit: Option<i32>,
 }
 
 impl Home {
-    pub fn boot(layout: Layout, filter_mode: FilterMode) -> (Self, Task<HomeMessage>) {
-        let movies = Task::perform(
-            async {
-                (0..3)
-                    .map(|_| Movie::testing())
-                    .chain((0..3).map(|_| Movie::testing2()))
-                    .collect::<Vec<_>>()
-            },
-            |videos| {
-                HomeMessage::Fetch(Fetch::Movies(
-                    videos.into_iter().map(Thumbnail::new).collect(),
-                ))
-            },
-        );
+    pub fn boot(
+        layout: Layout,
+        filters: Filter,
+        sort: Sort,
+        recent_limit: Option<i32>,
+    ) -> (Self, Task<Message>) {
+        let recents = Task::done(Message::Fetch {
+            id: FetchId::Recents,
+            filters,
+            sort,
+            limit: Some(5),
+            offset: None,
+        });
 
-        let shows = Task::perform(
-            async {
-                (0..3)
-                    .map(|_| Show::testing())
-                    .chain((0..3).map(|_| Show::testing1()))
-                    .collect::<Vec<_>>()
-            },
-            |shows| {
-                HomeMessage::Fetch(Fetch::Shows(
-                    shows.into_iter().map(Thumbnail::new).collect(),
-                ))
-            },
-        );
+        let collections = Task::done(Message::Fetch {
+            id: FetchId::Collections(false),
+            filters,
+            sort,
+            limit: None,
+            offset: None,
+        });
 
-        let seasons = Task::perform(
-            async {
-                (0..3)
-                    .map(|_| Season::testing())
-                    .chain((0..3).map(|_| Season::testing2()))
-                    .collect::<Vec<_>>()
-            },
-            |seasons| {
-                HomeMessage::Fetch(Fetch::Seasons(
-                    seasons.into_iter().map(Thumbnail::new).collect(),
-                ))
-            },
-        );
+        let tasks = collections.chain(recents);
+        // let tasks = Task::batch([collections, recents]);
+        // let tasks = recents;
+        // let tasks = Task::none();
 
-        let episodes = Task::perform(
-            async {
-                (0..3)
-                    .map(|_| Episode::testing())
-                    .chain((0..3).map(|_| Episode::testing2()))
-                    .collect::<Vec<_>>()
-            },
-            |episdoes| {
-                HomeMessage::Fetch(Fetch::Episodes(
-                    episdoes.into_iter().map(Thumbnail::new).collect(),
-                ))
-            },
-        );
-
-        let collections = Task::perform(
-            async {
-                let (collection, _) = Collection::dummy();
-                vec![collection]
-            },
-            |collections| {
-                HomeMessage::Fetch(Fetch::Collections(
-                    collections
-                        .into_iter()
-                        .map(CollectionThumbnail::new)
-                        .collect(),
-                ))
-            },
-        );
-
-        let tasks = Task::batch([movies, shows, collections, seasons, episodes]);
-
-        (Self::new(layout, filter_mode), tasks)
+        (Self::new(layout, filters, sort, recent_limit), tasks)
     }
 
-    fn new(layout: Layout, filter_mode: FilterMode) -> Self {
+    fn new(layout: Layout, filters: Filter, sort: Sort, recent_limit: Option<i32>) -> Self {
         Self {
             forward: vec![],
             backward: vec![],
             search: String::default(),
 
             layout,
-            sort: Sort::new_with_name(),
-            filters: Filter::new(filter_mode),
+            sort,
+            filters,
 
             show_sorts: false,
             show_filters: false,
-            movies: HashMap::default(),
-            shows: HashMap::default(),
-            seasons: HashMap::default(),
-            episodes: HashMap::default(),
-            focused: None,
+            state: State::Loading(loading_animation(Instant::now())),
             scroll: Scroll::new(),
             pages: HashMap::default(),
             current_page: None,
             pending: vec![],
             collections: BTreeMap::default(),
-            collection_states: HashMap::default(),
-            recent_shows: BTreeSet::default(),
-            recent_movies: BTreeSet::default(),
             view: None,
+            recent_limit,
         }
     }
 
@@ -428,13 +381,53 @@ impl Home {
                 Task::none()
             }
             HomeMessage::Settings => Task::none(),
+            HomeMessage::FetchedCollections(state, collections) => {
+                self.collections = collections;
+                if state {
+                    self.state = State::Collections;
+                }
+
+                Task::none()
+            }
+            HomeMessage::FetchCollectionState {
+                collection,
+                shows,
+                movies,
+                seasons,
+                episodes,
+            } => {
+                let State::Loading(_) = &self.state else {
+                    return Task::none();
+                };
+
+                self.state = State::Collection {
+                    collection,
+                    shows,
+                    movies,
+                    seasons,
+                    episodes,
+                };
+
+                Task::none()
+            }
             HomeMessage::Home => {
                 if let Some(old) = self.current_page.take() {
                     self.backward.push(old);
                 };
                 self.forward.clear();
-                self.focused = None;
-                self.update_scroll().map(|_| Message::None)
+                self.state = State::Loading(loading_animation(now));
+
+                let scroll = self.update_scroll().map(|_| Message::None);
+
+                let msg = Message::Fetch {
+                    id: FetchId::Recents,
+                    filters: self.filters,
+                    sort: self.sort,
+                    limit: self.recent_limit,
+                    offset: None,
+                };
+
+                Task::batch([Task::done(msg), scroll])
             }
             HomeMessage::Goto(kind) => {
                 if let Some(current) = self.current_page
@@ -449,7 +442,17 @@ impl Home {
                     self.backward.push(old)
                 };
                 self.forward.clear();
-                self.focused = None;
+                self.state = State::Loading(loading_animation(now));
+
+                let fid = fetch_kind(kind);
+
+                let msg = Message::Fetch {
+                    id: fid,
+                    filters: self.filters,
+                    sort: self.sort,
+                    limit: None,
+                    offset: None,
+                };
 
                 if let Some(page) = self.pages.get_mut(&kind) {
                     let update = PageUpdate {
@@ -458,10 +461,13 @@ impl Home {
                         layout: self.layout,
                     };
                     page.page_update(update);
-                    return page.update_scroll().map(|_| Message::None);
+
+                    let scroll = page.update_scroll().map(|_| Message::None);
+
+                    return Task::done(msg).chain(scroll);
                 }
 
-                match kind {
+                let task = match kind {
                     PageKind::Movies => {
                         let (movies, task) = Movies::boot(self.sort, self.filters, self.layout);
 
@@ -476,97 +482,55 @@ impl Home {
 
                         tasks.map(|ssg| Message::Home(HomeMessage::Shows(ssg)))
                     }
-                    PageKind::Movie(id) => match self.movies.get(&id) {
-                        Some(movie) => {
-                            let movie = MoviePage::new(&movie.media);
+                    PageKind::Movie(id) => {
+                        let movie = MoviePage::new(id);
 
-                            self.pages.insert(kind, Page::Movie { page: movie, id });
+                        self.pages.insert(kind, Page::Movie { page: movie, id });
 
-                            Task::none()
-                        }
-                        None => {
-                            todo!("Fetch movie from db")
-                        }
-                    },
-                    PageKind::Episode(id) => match self.episodes.get(&id) {
-                        Some(episode) => {
-                            let episode = EpisodePage::new(&episode.media);
+                        Task::none()
+                    }
+                    PageKind::Episode(id) => {
+                        let episode = EpisodePage::new(id);
 
-                            self.pages.insert(kind, Page::Episode { page: episode, id });
+                        self.pages.insert(kind, Page::Episode { page: episode, id });
 
-                            Task::none()
-                        }
-                        None => {
-                            todo!("Fetch episode from db")
-                        }
-                    },
-                    PageKind::Show(id) => match self.shows.get(&id) {
-                        Some(show) => {
-                            let (show, task) =
-                                ShowPage::boot(&show.media, self.sort, self.filters, self.layout);
+                        Task::none()
+                    }
+                    PageKind::Show(id) => {
+                        let (show, task) = ShowPage::boot(id, self.sort, self.filters, self.layout);
 
-                            self.pages.insert(kind, Page::Show { id, page: show });
+                        self.pages.insert(kind, Page::Show { id, page: show });
 
-                            task.map(|ssg| Message::Home(HomeMessage::ShowPage(ssg)))
-                        }
-                        None => {
-                            todo!("Fetch show from db")
-                        }
-                    },
-                    PageKind::Season(id) => match self.seasons.get(&id) {
-                        Some(season) => {
-                            let (season, task) = SeasonPage::boot(
-                                &season.media,
-                                self.sort,
-                                self.filters,
-                                self.layout,
-                            );
+                        task.map(|ssg| Message::Home(HomeMessage::ShowPage(ssg)))
+                    }
+                    PageKind::Season(id) => {
+                        let (season, task) =
+                            SeasonPage::boot(id, self.sort, self.filters, self.layout);
 
-                            self.pages.insert(kind, Page::Season { id, page: season });
+                        self.pages.insert(kind, Page::Season { id, page: season });
 
-                            task.map(|ssg| Message::Home(HomeMessage::SeasonPage(ssg)))
-                        }
-                        None => {
-                            todo!("Fetch season from db")
-                        }
-                    },
-                    PageKind::Collection(id) => match self
-                        .collections
-                        .iter()
-                        .find(|((_, collection), _)| *collection == id)
-                    {
-                        Some((_, collection)) => {
-                            let (collection, tasks) = CollectionPage::boot(
-                                &collection.collection,
-                                self.sort,
-                                self.filters,
-                                self.layout,
-                            );
+                        task.map(|ssg| Message::Home(HomeMessage::SeasonPage(ssg)))
+                    }
+                    PageKind::Collection(id) => {
+                        let (collection, tasks) =
+                            CollectionPage::boot(id, self.sort, self.filters, self.layout);
 
-                            self.pages.insert(kind, Page::Collection { collection, id });
+                        self.pages.insert(kind, Page::Collection { collection, id });
 
-                            //todo: Fetch members
-                            let state = CollectionState::Loading;
-                            self.collection_states.insert(id, state);
-
-                            tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
-                        }
-                        None => {
-                            todo!("fetch collection if not present also fetch members")
-                        }
-                    },
+                        tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
+                    }
                     PageKind::Collections => {
                         let (collections, task) =
                             Collections::boot(self.sort, self.filters, self.layout);
 
                         self.pages.insert(kind, Page::Collections(collections));
+                        self.state = State::Collections;
 
-                        task.map(|csg| Message::Home(HomeMessage::Collections(csg)))
+                        return task.map(|csg| Message::Home(HomeMessage::Collections(csg)));
                     }
-                    _ => {
-                        todo!()
-                    }
-                }
+                };
+
+                Task::batch([Task::done(msg), task])
             }
             HomeMessage::Movies(message) => {
                 let Some(page) = self.current_page_mut() else {
@@ -642,7 +606,12 @@ impl Home {
             }
             HomeMessage::OpenView(view) => match view {
                 ViewMessage::CollectionConfig(key) => {
-                    let Some(collection) = self.collections.get(&key) else {
+                    let Some(collection) = self
+                        .collections
+                        .keys()
+                        .find(|(_, id)| key == *id)
+                        .and_then(|key| self.collections.get(key))
+                    else {
                         return Task::none();
                     };
 
@@ -673,11 +642,11 @@ impl Home {
                 }
                 ViewMessage::Add(item) => {
                     println!("Add item {item:?} to collection");
-                    Task::none()
+                    todo!()
                 }
-                ViewMessage::AddToCollection((_view, id)) => {
+                ViewMessage::AddToCollection(id) => {
                     println!("Add to collection {id:?}");
-                    Task::none()
+                    todo!()
                 }
             },
             HomeMessage::CollectionConfig(csg) => {
@@ -714,17 +683,16 @@ impl Home {
                             return Task::none();
                         };
 
-                        if let Some(Page::Collection {
-                            collection,
-                            id: pid,
-                        }) = self.current_page_mut()
-                            && *pid == id
+                        collection.collection.view = config.view;
+                        collection.collection.icon = Some(config.icon.to_u32());
+                        collection.collection.name = config.name.clone();
+
+                        if let State::Collection { collection, .. } = &mut self.state
+                            && collection.collection.id == id
                         {
-                            collection.name = config.name.clone();
-                            collection.view = config.view;
+                            config.update(&mut collection.collection);
                         }
 
-                        config.update(&mut collection.collection);
                         self.collections.insert(
                             (collection.collection.view, collection.collection.id),
                             collection,
@@ -732,6 +700,7 @@ impl Home {
 
                         self.view = None;
 
+                        // todo: Save in DB
                         return Task::none();
                     }
                 }
@@ -744,8 +713,8 @@ impl Home {
                 self.view = None;
                 Task::none()
             }
-            HomeMessage::Back => self.back(),
-            HomeMessage::Forward => self.forward(),
+            HomeMessage::Back => self.back(now),
+            HomeMessage::Forward => self.forward(now),
             HomeMessage::ToggleLayout => self.layout_toggle(),
             HomeMessage::Sort(ssg) => {
                 match ssg {
@@ -953,94 +922,104 @@ impl Home {
             HomeMessage::Random => {
                 todo!("Random");
             }
-            HomeMessage::Refresh => {
-                todo!("Refreshing");
-            }
-            HomeMessage::Fetch(fsg) => {
-                match fsg {
-                    Fetch::Episodes(episodes) => {
-                        for episode in episodes {
-                            self.episodes.insert(episode.id(), episode);
-                        }
-                    }
-                    Fetch::Seasons(seasons) => {
-                        for season in seasons {
-                            self.seasons.insert(season.id(), season);
-                        }
-                    }
-                    Fetch::Shows(shows) => {
-                        for show in shows {
-                            self.recent_shows.insert((show.media.recent(), show.id()));
-                            self.shows.insert(show.id(), show);
-                        }
-                    }
-                    Fetch::Movies(movies) => {
-                        for movie in movies {
-                            self.recent_movies
-                                .insert((movie.media.recent(), movie.id()));
-                            self.movies.insert(movie.id(), movie);
-                        }
-                    }
-                    Fetch::Collections(collections) => {
-                        for collection in collections {
-                            self.collections.insert(
-                                (collection.collection.view, collection.collection.id),
-                                collection,
-                            );
-                        }
-                    }
-                }
-                Task::none()
-            }
+            HomeMessage::RefreshContent => self.content_refresh(now),
             HomeMessage::Play(item) => self.play(item),
             HomeMessage::PlayCollection { id, items } => {
                 println!("Play {items:?} from collection {id:?}");
                 Task::none()
             }
-            HomeMessage::HoveredCollection(id, is_hovered) => {
-                let Some(collection) = self.collections.get_mut(&id) else {
+            HomeMessage::HoveredCollection(key, is_hovered) => {
+                let State::Collections = &mut self.state else {
                     return Task::none();
                 };
 
-                collection.zoom.go_mut(is_hovered, now);
-                self.focused = Some(Focused::Collection(id));
+                if let Some(collection) = self.collections.get_mut(&key) {
+                    collection.zoom.go_mut(is_hovered, now);
+                }
+
                 Task::none()
             }
-            HomeMessage::Hovered(item, is_hovered) => match item {
-                ItemId::Movie(id) => {
-                    let Some(media) = self.movies.get_mut(&id) else {
-                        return Task::none();
+            HomeMessage::Hovered(id, is_hovered) => match (&mut self.state, id) {
+                (State::Loading(_), _)
+                | (State::Episode(_), _)
+                | (State::Movie(_), _)
+                | (State::Collections, _) => Task::none(),
+                (State::Recent { shows, .. }, ItemId::Show(id)) => {
+                    if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
+                        show.zoom.go_mut(is_hovered, now);
                     };
 
-                    media.zoom.go_mut(is_hovered, now);
-                    self.focused = Some(Focused::Movie(id));
                     Task::none()
                 }
-                ItemId::Show(id) => {
-                    let Some(media) = self.shows.get_mut(&id) else {
-                        return Task::none();
-                    };
+                (State::Recent { movies, .. }, ItemId::Movie(id)) => {
+                    if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                        movie.zoom.go_mut(is_hovered, now);
+                    }
 
-                    media.zoom.go_mut(is_hovered, now);
-                    self.focused = Some(Focused::Show(id));
                     Task::none()
                 }
-                ItemId::Season(id) => {
-                    let Some(media) = self.seasons.get_mut(&id) else {
-                        return Task::none();
+                (State::Recent { .. }, _) => Task::none(),
+                (State::Shows(shows), ItemId::Show(id)) => {
+                    if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
+                        show.zoom.go_mut(is_hovered, now);
                     };
 
-                    media.zoom.go_mut(is_hovered, now);
-                    self.focused = Some(Focused::Season(id));
                     Task::none()
                 }
-                ItemId::Episode(id) => {
-                    let Some(media) = self.episodes.get_mut(&id) else {
-                        return Task::none();
+                (State::Shows(_), _) => Task::none(),
+                (State::Movies(movies), ItemId::Movie(id)) => {
+                    if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                        movie.zoom.go_mut(is_hovered, now);
+                    }
+
+                    Task::none()
+                }
+                (State::Movies(_), _) => Task::none(),
+                (State::Show { seasons, .. }, ItemId::Season(id)) => {
+                    if let Some(season) = seasons.iter_mut().find(|season| season.media.id == id) {
+                        season.zoom.go_mut(is_hovered, now);
+                    }
+                    Task::none()
+                }
+                (State::Show { .. }, _) => Task::none(),
+                (State::Season { episodes, .. }, ItemId::Episode(id)) => {
+                    if let Some(episode) =
+                        episodes.iter_mut().find(|episode| episode.media.id == id)
+                    {
+                        episode.zoom.go_mut(is_hovered, now);
+                    }
+
+                    Task::none()
+                }
+                (State::Season { .. }, _) => Task::none(),
+                (State::Collection { shows, .. }, ItemId::Show(id)) => {
+                    if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
+                        show.zoom.go_mut(is_hovered, now);
                     };
 
-                    media.zoom.go_mut(is_hovered, now);
-                    self.focused = Some(Focused::Episode(id));
+                    Task::none()
+                }
+                (State::Collection { movies, .. }, ItemId::Movie(id)) => {
+                    if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                        movie.zoom.go_mut(is_hovered, now);
+                    }
+
+                    Task::none()
+                }
+                (State::Collection { seasons, .. }, ItemId::Season(id)) => {
+                    if let Some(season) = seasons.iter_mut().find(|show| show.media.id == id) {
+                        season.zoom.go_mut(is_hovered, now);
+                    };
+
+                    Task::none()
+                }
+                (State::Collection { episodes, .. }, ItemId::Episode(id)) => {
+                    if let Some(episode) =
+                        episodes.iter_mut().find(|episode| episode.media.id == id)
+                    {
+                        episode.zoom.go_mut(is_hovered, now);
+                    }
+
                     Task::none()
                 }
             },
@@ -1052,65 +1031,53 @@ impl Home {
     }
 
     fn play(&self, item: ItemId) -> Task<Message> {
-        match item {
-            ItemId::Movie(id) => match self.movies.get(&id) {
-                Some(movie) => {
-                    let name = movie.media.name();
-                    let path = &movie.media.full_path;
+        match (&self.state, item) {
+            (State::Loading(_), _) => Task::none(),
+            (State::Recent { movies, .. }, ItemId::Movie(id)) => {
+                let Some(movie) = movies.iter().find(|movie| movie.media.id == id) else {
+                    return Task::none();
+                };
 
-                    match play_item(PlayId::Movie(id), name, path) {
-                        Ok(item) => Task::done(Message::PlayItem(item)),
-                        Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
-                    }
-                }
-                None => {
-                    todo!("Fetch movie")
-                }
-            },
-            ItemId::Episode(id) => match self.episodes.get(&id) {
-                Some(episode) => {
-                    let name = episode.media.name();
-                    let path = &episode.media.full_path;
+                let name = movie.media.name();
+                let path = &movie.media.full_path;
 
-                    match play_item(PlayId::Episode(id), name, path) {
-                        Ok(item) => Task::done(Message::PlayItem(item)),
-                        Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
-                    }
+                match play_item(PlayId::Movie(id), name, path) {
+                    Ok(item) => Task::done(Message::PlayItem(item)),
+                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
                 }
-                None => {
-                    todo!("Fetch Episode")
-                }
-            },
-            ItemId::Show(show) => {
-                // todo: Might want to fetch the episodes from the db directly?
-                let items = self.episodes.values().filter_map(|episode| {
-                    if episode.media.show != show {
-                        return None;
-                    }
-
-                    let id = PlayId::Episode(episode.media.id);
-                    let name = episode.media.name();
-                    let path = &episode.media.full_path;
-                    Some(play_item(id, name, path))
-                });
-
-                play_helper(items)
             }
-            ItemId::Season(season) => {
-                let items = self.episodes.values().filter_map(|episode| {
-                    let _ = season;
-                    // todo
-                    // if episode.media.season != season {
-                    //     return None;
-                    // }
+            (State::Season { episodes, .. }, ItemId::Episode(id)) => {
+                let Some(episode) = episodes.iter().find(|episode| episode.media.id == id) else {
+                    return Task::none();
+                };
 
-                    let id = PlayId::Episode(episode.media.id);
-                    let name = episode.media.name();
-                    let path = &episode.media.full_path;
-                    Some(play_item(id, name, path))
-                });
-                play_helper(items)
+                let name = episode.media.name();
+                let path = &episode.media.full_path;
+
+                match play_item(PlayId::Episode(id), name, path) {
+                    Ok(item) => Task::done(Message::PlayItem(item)),
+                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
+                }
             }
+            (State::Movie(movie), ItemId::Movie(id)) => {
+                let name = movie.media.name();
+                let path = &movie.media.full_path;
+
+                match play_item(PlayId::Movie(id), name, path) {
+                    Ok(item) => Task::done(Message::PlayItem(item)),
+                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
+                }
+            }
+            (State::Episode(episode), ItemId::Episode(id)) => {
+                let name = episode.media.name();
+                let path = &episode.media.full_path;
+
+                match play_item(PlayId::Episode(id), name, path) {
+                    Ok(item) => Task::done(Message::PlayItem(item)),
+                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
+                }
+            }
+            _ => todo!(),
         }
     }
 
@@ -1229,7 +1196,7 @@ impl Home {
         )
         .spacing(16.0);
 
-        let content = column!(collections, space::vertical(), bottom,)
+        let content = column!(collections, bottom,)
             .padding([0, 5])
             .height(Length::Fill);
 
@@ -1240,17 +1207,17 @@ impl Home {
         content.into()
     }
 
-    fn recents(&self, now: Instant) -> Element<'_, HomeMessage> {
+    fn recents<'a>(
+        &self,
+        now: Instant,
+        movies: &'a [Thumbnail<Movie>],
+        shows: &'a [Thumbnail<Show>],
+    ) -> Element<'a, HomeMessage> {
         let movies = {
             let label = text("Recent Movies").size(H4);
             let label = column!(label, rule::horizontal(2.0)).spacing(4.0);
 
-            let movies = self
-                .recent_movies
-                .iter()
-                .filter_map(|(_, id)| self.movies.get(id));
-
-            let movies = filter_sort(movies, &self.filters, &self.sort);
+            let movies = filter_sort(movies.iter(), &self.filters, &self.sort);
 
             let movies: Element<'_, HomeMessage> = match self.layout {
                 Layout::Grid => {
@@ -1293,12 +1260,7 @@ impl Home {
             let label = text("Recent Shows").size(H4);
             let label = column!(label, rule::horizontal(2.0)).spacing(4.0);
 
-            let shows = self
-                .recent_shows
-                .iter()
-                .filter_map(|(_, id)| self.shows.get(id));
-
-            let shows = filter_sort(shows, &self.filters, &self.sort);
+            let shows = filter_sort(shows.iter(), &self.filters, &self.sort);
 
             let shows: Element<'_, HomeMessage> = match self.layout {
                 Layout::Grid => {
@@ -1343,121 +1305,6 @@ impl Home {
             .on_scroll(HomeMessage::Scroll);
 
         content.into()
-    }
-
-    fn inner(&self, now: Instant) -> Element<'_, HomeMessage> {
-        match self.current_page() {
-            None => self.recents(now),
-            Some(Page::Shows(shows)) => {
-                shows.view(now, self.shows.values()).map(HomeMessage::Shows)
-            }
-            Some(Page::Movies(movies)) => movies
-                .view(now, self.movies.values())
-                .map(HomeMessage::Movies),
-            Some(Page::Movie { page, id }) => {
-                // todo: while fetching the movie, this could be reached. Need to handle it better.
-                let movie = self.movies.get(id).expect("Page movie not found");
-                page.view(movie).map(HomeMessage::MoviePage)
-            }
-            Some(Page::Episode { page, id }) => {
-                let episode = self.episodes.get(id).expect("Page episdoe not found");
-                page.view(episode).map(HomeMessage::EpisodePage)
-            }
-            Some(Page::Season { page, id }) => {
-                let season = self.seasons.get(id).expect("Page season not found");
-                let episodes = self
-                    .episodes
-                    .values()
-                    // todo
-                    // .filter(|episode| episode.media.season == *id)
-                    .filter(|_| true);
-
-                page.view(now, season, episodes)
-                    .map(HomeMessage::SeasonPage)
-            }
-            Some(Page::Show { page, id }) => {
-                let show = self.shows.get(id).expect("Page show not found");
-                let seasons = self
-                    .seasons
-                    .values()
-                    // .filter(|season| season.media.show == *id)
-                    .filter(|_| true);
-
-                page.view(now, show, seasons).map(HomeMessage::ShowPage)
-            }
-            Some(Page::Collection {
-                collection: page,
-                id,
-            }) => {
-                match self
-                    .collection_states
-                    .get(id)
-                    .expect("Goto Collection should add the state")
-                {
-                    CollectionState::Ready(items) => {
-                        let collection = self
-                            .collections
-                            .get(&(page.view, *id))
-                            .expect("Page collection not found");
-
-                        let movies = self
-                            .movies
-                            .values()
-                            .filter(|movie| {
-                                let id = ItemId::Movie(movie.id());
-                                items.contains(&id)
-                            })
-                            .peekable();
-                        let shows = self
-                            .shows
-                            .values()
-                            .filter(|show| {
-                                let id = ItemId::Show(show.id());
-                                items.contains(&id)
-                            })
-                            .peekable();
-                        let seasons = self
-                            .seasons
-                            .values()
-                            .filter(|season| {
-                                let id = ItemId::Season(season.id());
-                                items.contains(&id)
-                            })
-                            .peekable();
-                        let episodes = self
-                            .episodes
-                            .values()
-                            .filter(|episode| {
-                                let id = ItemId::Episode(episode.id());
-                                items.contains(&id)
-                            })
-                            .peekable();
-
-                        page.view(now, collection, movies, shows, seasons, episodes)
-                            .map(HomeMessage::Collection)
-                    }
-                    CollectionState::Loading => {
-                        //todo
-                        let collection = self
-                            .collections
-                            .get(&(page.view, *id))
-                            .expect("Page collection not found");
-
-                        let movies = self.movies.values().peekable();
-                        let shows = self.shows.values().peekable();
-                        let seasons = self.seasons.values().peekable();
-                        let episodes = self.episodes.values().peekable();
-
-                        page.view(now, collection, movies, shows, seasons, episodes)
-                            .map(HomeMessage::Collection)
-                    }
-                }
-            }
-            Some(Page::Collections(collections)) => collections
-                .view(now, self.collections.values())
-                .map(HomeMessage::Collections),
-            _ => todo!("Page view"),
-        }
     }
 
     fn navigation(&self) -> Element<'_, HomeMessage> {
@@ -1806,7 +1653,7 @@ impl Home {
         let left = row!(filter, sort).align_y(Vertical::Center).spacing(10.0);
 
         let right = row!(
-            icons::sized_button(icons::REFRESH, size).on_press(HomeMessage::Refresh),
+            icons::sized_button(icons::REFRESH, size).on_press(HomeMessage::RefreshContent),
             icons::sized_button(icons::RAND, size).on_press(HomeMessage::Random),
             icons::sized_button(self.layout.icon(), size).on_press(HomeMessage::ToggleLayout),
         )
@@ -1838,7 +1685,18 @@ impl Home {
     }
 
     fn content_area(&self, now: Instant) -> Element<'_, HomeMessage> {
-        let title = self.current_page().map(Page::name).unwrap_or("Home");
+        let title = match &self.state {
+            State::Recent { .. } => "Recents",
+            State::Shows(_) => "Shows",
+            State::Movies(_) => "Movies",
+            State::Show { show, .. } => show.media.name(),
+            State::Movie(movie) => movie.media.name(),
+            State::Season { season, .. } => season.media.name(),
+            State::Episode(episode) => episode.media.name(),
+            State::Loading(_) => "Loading",
+            State::Collections => "Collections",
+            State::Collection { collection, .. } => &collection.collection.name,
+        };
         let title = container(text(title).size(H6)).max_width(400.0);
 
         let search = {
@@ -1873,7 +1731,7 @@ impl Home {
         )
         .style(container_style);
 
-        let content_area = container(self.inner(now))
+        let content_area = container(self.content(now))
             .style(container_style)
             .height(Length::Fill)
             .width(Length::Fill);
@@ -1892,6 +1750,59 @@ impl Home {
         .width(Length::Fill);
 
         content.into()
+    }
+
+    pub fn content(&self, now: Instant) -> Element<'_, HomeMessage> {
+        match (&self.state, self.current_page()) {
+            (State::Loading(animation), _) => center(loading_svg(animation, now)).into(),
+            (State::Recent { shows, movies }, None) => self.recents(now, movies, shows),
+            (State::Shows(shows), Some(Page::Shows(page))) => {
+                page.view(now, shows.iter()).map(HomeMessage::Shows)
+            }
+            (State::Movies(movies), Some(Page::Movies(page))) => {
+                page.view(now, movies.iter()).map(HomeMessage::Movies)
+            }
+            (State::Collections, Some(Page::Collections(page))) => page
+                .view(now, self.collections.values())
+                .map(HomeMessage::Collections),
+            (State::Collections, None) => center("Loading").into(),
+            (State::Episode(episode), Some(Page::Episode { page, .. })) => {
+                page.view(episode).map(HomeMessage::EpisodePage)
+            }
+            (State::Movie(movie), Some(Page::Movie { page, .. })) => {
+                page.view(movie).map(HomeMessage::MoviePage)
+            }
+            (State::Season { season, episodes }, Some(Page::Season { page, .. })) => page
+                .view(now, season, episodes.iter())
+                .map(HomeMessage::SeasonPage),
+            (State::Show { show, seasons }, Some(Page::Show { page, .. })) => page
+                .view(now, show, seasons.iter())
+                .map(HomeMessage::ShowPage),
+            (
+                State::Collection {
+                    collection,
+                    shows,
+                    movies,
+                    seasons,
+                    episodes,
+                },
+                Some(Page::Collection {
+                    collection: page, ..
+                }),
+            ) => page
+                .view(
+                    now,
+                    collection,
+                    movies.iter().peekable(),
+                    shows.iter().peekable(),
+                    seasons.iter().peekable(),
+                    episodes.iter().peekable(),
+                )
+                .map(HomeMessage::Collection),
+            unreached => {
+                todo!("{unreached:?}")
+            }
+        }
     }
 
     pub fn view(&self, now: Instant) -> Element<'_, HomeMessage> {
@@ -1913,46 +1824,52 @@ impl Home {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        match &self.focused {
-            Some(Focused::Show(id)) => self
-                .shows
-                .get(id)
-                .map(|media| media.is_animating(now))
-                .unwrap_or_default(),
-            Some(Focused::Movie(id)) => self
-                .movies
-                .get(id)
-                .map(|media| media.is_animating(now))
-                .unwrap_or_default(),
-            Some(Focused::Episode(id)) => self
-                .episodes
-                .get(id)
-                .map(|media| media.is_animating(now))
-                .unwrap_or_default(),
-            Some(Focused::Season(id)) => self
-                .seasons
-                .get(id)
-                .map(|media| media.is_animating(now))
-                .unwrap_or_default(),
-            Some(Focused::Collection(key)) => self
+        match &self.state {
+            State::Loading(animation) => animation.is_animating(now),
+            State::Recent { shows, movies } => {
+                let shows = shows.iter().any(|show| show.is_animating(now));
+                let movies = movies.iter().any(|movie| movie.is_animating(now));
+
+                shows || movies
+            }
+            State::Shows(shows) => shows.iter().any(|show| show.is_animating(now)),
+            State::Movies(movies) => movies.iter().any(|movie| movie.is_animating(now)),
+            State::Show { seasons, .. } => seasons.iter().any(|season| season.is_animating(now)),
+            State::Season { episodes, .. } => {
+                episodes.iter().any(|episode| episode.is_animating(now))
+            }
+            State::Collections => self
                 .collections
-                .get(key)
-                .map(|collection| collection.is_animating(now))
-                .unwrap_or_default(),
-            None => false,
+                .values()
+                .any(|collection| collection.is_animating(now)),
+            State::Movie(_) | State::Episode(_) => false,
+            State::Collection {
+                shows,
+                movies,
+                seasons,
+                episodes,
+                ..
+            } => {
+                let shows = shows.iter().any(|show| show.is_animating(now));
+                let movies = movies.iter().any(|movie| movie.is_animating(now));
+                let seasons = seasons.iter().any(|season| season.is_animating(now));
+                let episodes = episodes.iter().any(|episode| episode.is_animating(now));
+
+                shows || movies || seasons || episodes
+            }
         }
     }
 
-    pub fn back(&mut self) -> Task<Message> {
-        self.focused = None;
+    pub fn back(&mut self, now: Instant) -> Task<Message> {
         let update = PageUpdate {
             layout: self.layout,
             sort: self.sort,
             filters: self.filters,
         };
 
-        match self.current_page.take() {
+        let (task, id, limit) = match self.current_page.take() {
             Some(current) => {
+                self.state = State::Loading(loading_animation(now));
                 self.forward.push(current);
 
                 match self.backward.pop() {
@@ -1963,40 +1880,71 @@ impl Home {
                             .expect("Page cannot be in back without being recorded first");
                         self.current_page = Some(new);
                         page.page_update(update);
-                        page.update_scroll().map(|_| Message::None)
+                        let task = page.update_scroll().map(|_| Message::None);
+
+                        if matches!(new, PageKind::Collections) {
+                            self.state = State::Collections;
+                            return task;
+                        }
+
+                        (task, fetch_kind(new), None)
                     }
-                    None => self.update_scroll().map(|_| Message::None),
+                    None => (
+                        self.update_scroll().map(|_| Message::None),
+                        FetchId::Recents,
+                        self.recent_limit,
+                    ),
                 }
             }
             None => {
                 let Some(new) = self.backward.pop() else {
                     return Task::none();
                 };
+
+                self.state = State::Loading(loading_animation(now));
                 let page = self
                     .pages
                     .get_mut(&new)
                     .expect("Page cannot be in back without being recorded first");
                 self.current_page = Some(new);
                 page.page_update(update);
-                page.update_scroll().map(|_| Message::None)
+                let task = page.update_scroll().map(|_| Message::None);
+
+                if matches!(new, PageKind::Collections) {
+                    self.state = State::Collections;
+                    return task;
+                }
+
+                (task, fetch_kind(new), None)
             }
-        }
+        };
+
+        let msg = Message::Fetch {
+            id,
+            filters: self.filters,
+            sort: self.sort,
+            limit,
+            offset: None,
+        };
+
+        Task::batch([Task::done(msg), task])
     }
 
-    pub fn forward(&mut self) -> Task<Message> {
+    pub fn forward(&mut self, now: Instant) -> Task<Message> {
         let update = PageUpdate {
             layout: self.layout,
             sort: self.sort,
             filters: self.filters,
         };
 
-        match self.current_page.take() {
+        let (task, id) = match self.current_page.take() {
             Some(current) => {
                 self.backward.push(current);
                 let Some(new) = self.forward.pop() else {
                     return Task::none();
                 };
 
+                self.state = State::Loading(loading_animation(now));
                 let page = self
                     .pages
                     .get_mut(&new)
@@ -2004,22 +1952,89 @@ impl Home {
 
                 self.current_page = Some(new);
                 page.page_update(update);
-                page.update_scroll().map(|_| Message::None)
+                let task = page.update_scroll().map(|_| Message::None);
+
+                if matches!(new, PageKind::Collections) {
+                    self.state = State::Collections;
+                    return task;
+                }
+
+                (task, fetch_kind(new))
             }
             None => {
                 let Some(new) = self.forward.pop() else {
                     return Task::none();
                 };
 
+                self.state = State::Loading(loading_animation(now));
                 let page = self
                     .pages
                     .get_mut(&new)
                     .expect("Page cannot be in forward without being recorded");
                 self.current_page = Some(new);
                 page.page_update(update);
-                page.update_scroll().map(|_| Message::None)
+                let task = page.update_scroll().map(|_| Message::None);
+
+                if matches!(new, PageKind::Collections) {
+                    self.state = State::Collections;
+                    return task;
+                }
+
+                (task, fetch_kind(new))
             }
-        }
+        };
+
+        let msg = Message::Fetch {
+            id,
+            filters: self.filters,
+            sort: self.sort,
+            limit: None,
+            offset: None,
+        };
+
+        Task::batch([Task::done(msg), task])
+    }
+
+    fn content_refresh(&mut self, now: Instant) -> Task<Message> {
+        let (id, limit) = match &self.state {
+            State::Loading(_) => return Task::none(),
+            State::Recent { .. } => (FetchId::Recents, self.recent_limit),
+            State::Movies(_) => (FetchId::Movies, None),
+            State::Shows(_) => (FetchId::Shows, None),
+            State::Show { show, .. } => (FetchId::Show(show.media.id), None),
+            State::Season { season, .. } => (FetchId::Season(season.media.id), None),
+            State::Episode(episode) => (FetchId::Episode(episode.media.id), None),
+            State::Movie(movie) => (FetchId::Movie(movie.media.id), None),
+            State::Collections => (FetchId::Collections(true), None),
+            State::Collection { collection, .. } => {
+                (FetchId::Collection(collection.collection.id), None)
+            }
+        };
+
+        self.state = State::Loading(loading_animation(now));
+
+        let msg = Message::Fetch {
+            id,
+            filters: self.filters,
+            sort: self.sort,
+            limit,
+            offset: None,
+        };
+
+        Task::done(msg)
+    }
+
+    fn refresh(&mut self, now: Instant) -> Task<Message> {
+        let rsg = Message::Fetch {
+            id: FetchId::Collections(false),
+            filters: self.filters,
+            sort: self.sort,
+            limit: None,
+            offset: None,
+        };
+        let rsg = Task::done(rsg);
+
+        Task::batch([rsg, self.content_refresh(now)])
     }
 
     fn layout_toggle(&mut self) -> Task<Message> {
@@ -2042,10 +2057,113 @@ impl Home {
         Task::none()
     }
 
-    pub fn action(&mut self, action: HomeAction) -> Task<Message> {
+    pub fn action(&mut self, action: HomeAction, now: Instant) -> Task<Message> {
         match action {
             HomeAction::LayoutToggle => self.layout_toggle(),
+            HomeAction::RefreshContent => self.content_refresh(now),
+            HomeAction::Refresh => self.refresh(now),
         }
+    }
+
+    pub fn fetched_recents(&mut self, movies: Vec<Movie>, shows: Vec<Show>) {
+        let movies = movies.into_iter().map(Thumbnail::new).collect();
+        let shows = shows.into_iter().map(Thumbnail::new).collect();
+
+        let state = State::Recent { shows, movies };
+
+        self.state = state;
+    }
+
+    pub fn fetched_shows(&mut self, shows: Vec<Show>) {
+        let shows = shows.into_iter().map(Thumbnail::new).collect();
+
+        self.state = State::Shows(shows)
+    }
+
+    pub fn fetched_movies(&mut self, movies: Vec<Movie>) {
+        let movies = movies.into_iter().map(Thumbnail::new).collect();
+
+        self.state = State::Movies(movies)
+    }
+
+    pub fn fetched_show(&mut self, show: Show, seasons: Vec<Season>) {
+        let show = Thumbnail::new(show);
+        let seasons = seasons.into_iter().map(Thumbnail::new).collect();
+
+        self.state = State::Show { show, seasons }
+    }
+
+    pub fn fetched_movie(&mut self, movie: Movie) {
+        self.state = State::Movie(Thumbnail::new(movie))
+    }
+
+    pub fn fetched_season(&mut self, season: Season, episodes: Vec<Episode>) {
+        let season = Thumbnail::new(season);
+        let episodes = episodes.into_iter().map(Thumbnail::new).collect();
+
+        self.state = State::Season { season, episodes }
+    }
+
+    pub fn fetched_episode(&mut self, episode: Episode) {
+        self.state = State::Episode(Thumbnail::new(episode))
+    }
+
+    pub fn fetched_collections(
+        &mut self,
+        collections: Vec<Collection>,
+        state: bool,
+    ) -> Task<Message> {
+        Task::perform(
+            async move {
+                collections
+                    .into_iter()
+                    .map(|collection| {
+                        (
+                            (collection.view, collection.id),
+                            CollectionThumbnail::new(collection),
+                        )
+                    })
+                    .collect::<BTreeMap<_, _>>()
+            },
+            move |collections| Message::Home(HomeMessage::FetchedCollections(state, collections)),
+        )
+    }
+
+    pub fn fetched_collection(
+        &mut self,
+        collection: Collection,
+        items: Vec<models::collection::Item>,
+    ) -> Task<Message> {
+        use models::collection::Item;
+
+        Task::perform(
+            async {
+                let collection = CollectionThumbnail::new(collection);
+
+                let mut movies = vec![];
+                let mut shows = vec![];
+                let mut seasons = vec![];
+                let mut episodes = vec![];
+
+                for item in items {
+                    match item {
+                        Item::Movie(movie) => movies.push(Thumbnail::new(movie)),
+                        Item::Show(show) => shows.push(Thumbnail::new(show)),
+                        Item::Season(season) => seasons.push(Thumbnail::new(season)),
+                        Item::Episode(episode) => episodes.push(Thumbnail::new(episode)),
+                    }
+                }
+
+                HomeMessage::FetchCollectionState {
+                    collection: Box::new(collection),
+                    shows,
+                    movies,
+                    seasons,
+                    episodes,
+                }
+            },
+            Message::Home,
+        )
     }
 }
 
@@ -2331,4 +2449,17 @@ fn play_helper(items: impl Iterator<Item = Result<PlayItem, String>>) -> Task<Me
     };
 
     Task::batch([play, toasts])
+}
+
+fn fetch_kind(kind: PageKind) -> FetchId {
+    match kind {
+        PageKind::Shows => FetchId::Shows,
+        PageKind::Movies => FetchId::Movies,
+        PageKind::Collections => FetchId::Collections(true),
+        PageKind::Show(id) => FetchId::Show(id),
+        PageKind::Season(id) => FetchId::Season(id),
+        PageKind::Episode(id) => FetchId::Episode(id),
+        PageKind::Movie(id) => FetchId::Movie(id),
+        PageKind::Collection(id) => FetchId::Collection(id),
+    }
 }

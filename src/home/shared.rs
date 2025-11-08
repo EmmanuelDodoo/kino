@@ -222,7 +222,7 @@ pub fn collection_collage<'a>(
     let len = imgs.len();
     let mut canvas: ImageBuffer<Rgba<u8>, Vec<_>> = ImageBuffer::new(width, height);
 
-    let mut flip = false;
+    let mut flip = true;
     let mut img_width = 0;
     let mut img_height = 0;
 
@@ -336,11 +336,8 @@ impl<T: Media> Thumbnail<T> {
         width: impl Into<Length>,
         height: impl Into<Length>,
     ) -> Element<'a, Message> {
-        let radius = 10;
-
         match &self.backdrop {
             Some(handle) => widget::image(handle)
-                .border_radius(radius)
                 .height(height)
                 .width(width)
                 .content_fit(ContentFit::Cover)
@@ -348,12 +345,7 @@ impl<T: Media> Thumbnail<T> {
             None => container(empty())
                 .height(height)
                 .width(width)
-                .style(move |theme| {
-                    let default = container::dark(theme);
-                    let border = default.border.rounded(radius);
-
-                    container::Style { border, ..default }
-                })
+                .style(container::dark)
                 .into(),
         }
     }

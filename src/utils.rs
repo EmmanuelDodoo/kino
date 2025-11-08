@@ -3,6 +3,7 @@ use gstreamer::{
     self as gst,
     prelude::{ElementExt, ElementExtManual, GstBinExt, GstBinExtManual, PadExt},
 };
+use iced::animation::{Animation, Easing};
 use iced::widget::image;
 use std::fs::File;
 use std::io::Write;
@@ -26,131 +27,34 @@ pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
     iced::widget::Space::new().width(0).height(0).into()
 }
 
-pub fn loading_svg() -> iced::widget::Svg<'static> {
+pub fn loading_svg(
+    animation: &Animation<bool>,
+    now: iced::time::Instant,
+) -> iced::widget::Svg<'static> {
     use iced::widget::svg::{Style, Svg};
+    use iced::{Radians, Rotation};
 
     let handle = &*LOADING_SVG_HANDLE;
+    let rotation = animation.interpolate(0.0, std::f32::consts::TAU, now);
+    let rotation = Rotation::Floating(Radians(rotation));
 
     Svg::new(handle.clone())
         .width(50)
         .height(50)
-        .style(|theme: &iced::Theme, _| {
+        .style(|theme: &iced::Theme, _status| {
             let color = theme.extended_palette().background.base.text;
 
             Style { color: Some(color) }
         })
+        .rotation(rotation)
 }
 
-/// Returns a single thumbnail frame handle in rgba format.
-pub fn _generate_thumbnail(
-    path: impl AsRef<Path>,
-    width: u32,
-    height: u32,
-    downscale: u32,
-    save: bool,
-) -> Result<image::Handle> {
-    gst::init().map_err(GStreamerError::Glib)?;
-
-    let src = gst::ElementFactory::make("filesrc")
-        .name("file-source")
-        .build()
-        .map_err(GStreamerError::BoolError)?;
-    src.set_property("location", path.as_ref());
-    let decodebin = gst::ElementFactory::make("decodebin")
-        .name("decoder")
-        .build()
-        .map_err(GStreamerError::BoolError)?;
-    let sink = gst::ElementFactory::make("appsink")
-        .build()
-        .map_err(GStreamerError::BoolError)?;
-    let sink_ref = sink.clone();
-
-    let pipeline = gst::Pipeline::with_name("Thumbnail");
-    pipeline
-        .add_many([&src, &decodebin])
-        .map_err(GStreamerError::BoolError)?;
-
-    src.link(&decodebin).map_err(GStreamerError::BoolError)?;
-
-    let pipeline_weak = pipeline.downgrade();
-    decodebin.connect_pad_added(move |_dbin, src_pad| {
-        if src_pad.query_caps(None).to_string().contains("video/") {
-            let pipeline = match pipeline_weak.upgrade() {
-                Some(p) => p,
-                None => return,
-            };
-            let convert = gst::ElementFactory::make("videoconvert").build().unwrap();
-            let scale = gst::ElementFactory::make("videoscale").build().unwrap();
-            let jpegenc = gst::ElementFactory::make("jpegenc").build().unwrap();
-            jpegenc.set_property("quality", 50);
-
-            pipeline
-                .add_many([&convert, &scale, &jpegenc, &sink])
-                .unwrap();
-            gst::Element::link_many([&convert, &scale, &jpegenc, &sink]).unwrap();
-
-            for e in [&convert, &scale, &jpegenc, &sink] {
-                e.sync_state_with_parent().unwrap();
-            }
-
-            let sink_pad = convert.static_pad("sink").unwrap();
-            src_pad.link(&sink_pad).unwrap();
-        }
-    });
-
-    // Start pipeline in paused state (so we can seek without playing)
-    pipeline
-        .set_state(gst::State::Paused)
-        .map_err(GStreamerError::StateChangeError)?;
-
-    // Wait until preroll (pipeline ready to process)
-    let (res, _, _) = pipeline.state(gst::ClockTime::NONE);
-    if let Err(err) = res {
-        eprintln!("{err:?}");
-    }
-
-    let duration = pipeline
-        .query_duration::<gst::ClockTime>()
-        .ok_or(Error::ThumbnailEmptyVideo)?;
-    let position = (duration * 10) / 100;
-
-    // Seek to 10% into the video
-    pipeline
-        .seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT, position)
-        .map_err(GStreamerError::BoolError)?;
-
-    // Pull one frame from appsink
-    let sink = sink_ref.dynamic_cast::<gstreamer_app::AppSink>().unwrap();
-    let sample = sink
-        .try_pull_preroll(gst::ClockTime::from_mseconds(250))
-        .expect("Couldn't pull sample");
-    let buffer = sample.buffer().expect("Could get sample buffer");
-    let frame = buffer.map_readable().map_err(GStreamerError::BoolError)?;
-
-    if save {
-        let mut thumbnail_path = PathBuf::from("assets").join(".thumbnails");
-        let thumbnail_stem = path
-            .as_ref()
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .unwrap_or("untitled");
-
-        thumbnail_path.push(thumbnail_stem);
-        thumbnail_path.set_extension("jpeg");
-
-        let mut file = File::create(thumbnail_path)?;
-        file.write_all(&frame)?;
-    }
-
-    pipeline
-        .set_state(gst::State::Null)
-        .map_err(GStreamerError::StateChangeError)?;
-
-    Ok(image::Handle::from_rgba(
-        width / downscale,
-        height / downscale,
-        yuv_to_rgba(frame.as_slice(), width as _, height as _, downscale),
-    ))
+pub fn loading_animation(now: iced::time::Instant) -> Animation<bool> {
+    Animation::new(false)
+        .easing(Easing::EaseInOut)
+        .duration(iced::time::Duration::from_millis(1000))
+        .repeat_forever()
+        .go(true, now)
 }
 
 /// Far faster at generating multiple thumbnails than
@@ -158,6 +62,7 @@ pub fn _generate_thumbnail(
 ///
 pub struct ThumbnailGenerator {
     pipeline: gst::Pipeline,
+    bus: gst::Bus,
     width: i32,
     height: i32,
     downscale: u32,
@@ -175,76 +80,20 @@ impl Drop for ThumbnailGenerator {
 }
 
 impl ThumbnailGenerator {
-    pub fn new(path: impl AsRef<Path>, width: i32, height: i32, downscale: u32) -> Self {
+    pub fn new(path: url::Url, width: i32, height: i32, downscale: u32) -> Self {
         gst::init().map_err(GStreamerError::Glib).unwrap();
 
         let template = format!(
-            "filesrc location=\"{}\" ! decodebin ! videoconvert ! videoscale ! appsink name=sink drop=true caps=video/x-raw,format=NV12,pixel-aspect-ratio=1/1",
-            path.as_ref().to_str().unwrap_or_default()
+            "urisourcebin uri=\"{}\" ! decodebin ! videoconvert ! videoscale ! appsink name=sink drop=true caps=video/x-raw,format=NV12,pixel-aspect-ratio=1/1",
+            path.as_str()
         );
         let pipeline = gst::parse::launch(template.as_ref())
             .unwrap()
             .downcast::<gst::Pipeline>()
             .unwrap();
-        // .map_err(|_| Error::Cast)?;
+
         let sink = pipeline.by_name("sink").expect("Missing appsink");
         let sink = sink.downcast::<gstreamer_app::AppSink>().unwrap();
-
-        // let src = gst::ElementFactory::make("filesrc")
-        //     .name("file-source")
-        //     .build()
-        //     .map_err(GStreamerError::BoolError)
-        //     .unwrap();
-        // src.set_property("location", path.as_ref());
-        // let decodebin = gst::ElementFactory::make("decodebin")
-        //     .name("decoder")
-        //     .build()
-        //     .map_err(GStreamerError::BoolError)
-        //     .unwrap();
-        // let sink = gst::ElementFactory::make("appsink")
-        //     .build()
-        //     .map_err(GStreamerError::BoolError)
-        //     .unwrap();
-        // let caps = gst::Caps::builder("video/x-raw")
-        //     .field("format", &"NV12")
-        //     .field("pixel-aspect-ratio", &gst::Fraction::new(1, 1))
-        //     .build();
-        // sink.set_property("caps", &caps);
-        // let sink_ref = sink.clone();
-        //
-        // let pipeline = gst::Pipeline::with_name("Thumbnail");
-        // pipeline
-        //     .add_many(&[&src, &decodebin])
-        //     .map_err(GStreamerError::BoolError)
-        //     .unwrap();
-        //
-        // src.link(&decodebin)
-        //     .map_err(GStreamerError::BoolError)
-        //     .unwrap();
-        //
-        // let pipeline_weak = pipeline.downgrade();
-        // decodebin.connect_pad_added(move |_dbin, src_pad| {
-        //     if src_pad.query_caps(None).to_string().contains("video/") {
-        //         let pipeline = match pipeline_weak.upgrade() {
-        //             Some(p) => p,
-        //             None => return,
-        //         };
-        //         let convert = gst::ElementFactory::make("videoconvert").build().unwrap();
-        //         let scale = gst::ElementFactory::make("videoscale").build().unwrap();
-        //         // let jpegenc = gst::ElementFactory::make("jpegenc").build().unwrap();
-        //         // jpegenc.set_property("quality", 50);
-        //
-        //         pipeline.add_many(&[&convert, &scale, &sink]).unwrap();
-        //         gst::Element::link_many(&[&convert, &scale, &sink]).unwrap();
-        //
-        //         for e in [&convert, &scale, &sink] {
-        //             e.sync_state_with_parent().unwrap();
-        //         }
-        //
-        //         let sink_pad = convert.static_pad("sink").unwrap();
-        //         src_pad.link(&sink_pad).unwrap();
-        //     }
-        // });
 
         pipeline
             .set_state(gst::State::Paused)
@@ -257,13 +106,13 @@ impl ThumbnailGenerator {
             eprintln!("{err:?}");
         }
 
-        // let sink = sink_ref.dynamic_cast::<gstreamer_app::AppSink>().unwrap();
         let duration = pipeline
             .query_duration::<gst::ClockTime>()
             .ok_or(Error::ThumbnailEmptyVideo)
             .unwrap();
 
         Self {
+            bus: pipeline.bus().unwrap(),
             pipeline,
             sink,
             width,
@@ -294,17 +143,18 @@ impl ThumbnailGenerator {
             .map_err(GStreamerError::BoolError)
             .unwrap();
 
-        let sample = self
-            .sink
-            .pull_preroll()
-            // .try_pull_preroll(gst::ClockTime::from_mseconds(250))
-            // .expect("Couldn't pull sample");
-            .unwrap();
+        let sample = self.sink.pull_preroll().unwrap();
         let buffer = sample.buffer().expect("Could get sample buffer");
         let frame = buffer
             .map_readable()
             .map_err(GStreamerError::BoolError)
             .unwrap();
+
+        while let Some(msg) = self.bus.pop() {
+            if let gst::MessageView::Error(error) = msg.view() {
+                eprintln!("{error:?}")
+            }
+        }
 
         image::Handle::from_rgba(
             width as u32 / downscale,
@@ -449,7 +299,9 @@ pub struct VideoSettings {
     pub show_subtitles: bool,
     pub muted: bool,
     /// Whether a loaded video automatically starts playing
-    pub autoplay: bool,
+    pub auto_start: bool,
+    /// Whether the next video in a playlist is automatically loaded and played.
+    pub auto_next: bool,
 }
 
 impl Default for VideoSettings {
@@ -466,7 +318,8 @@ impl Default for VideoSettings {
             speed_change_amt: 0.1,
             show_subtitles: false,
             muted: false,
-            autoplay: true,
+            auto_start: true,
+            auto_next: true,
         }
     }
 }
@@ -492,7 +345,9 @@ pub enum HomeAction {
     // todo
     // SettingsOpen,
     LayoutToggle,
-    // Refresh,
+    RefreshContent,
+    /// Refreshes both content and the side menu
+    Refresh,
     // SearchToggle,
 }
 

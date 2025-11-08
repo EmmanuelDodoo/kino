@@ -10,7 +10,7 @@ use iced::{
     animation::{Animation, Easing},
     border::{self, Border, Radius},
     color, font, padding,
-    time::{Instant, Duration},
+    time::{Duration, Instant},
     widget::{
         Space, bottom, bottom_center, button, center, center_x, center_y, column, container, float,
         grid, image, mouse_area, pick_list, row, scrollable, slider, stack, text, text_input,
@@ -41,20 +41,20 @@ use utils::typo::*;
 use utils::{Layout, Sort, SortKind, empty};
 use widgets::*;
 
-fn _test_main() {
-    // fn main() {
-    let temp = utils::ThumbnailGenerator::new("assets/test1.mp4", 500, 31, 8);
-
-    let total = temp.duration;
-    dbg!(total);
-    let unit = (total * 25) / 100;
-
-    for i in 1..4 {
-        let time = unit * i;
-        temp.generate(time);
-        dbg!(i);
-    }
-}
+// fn _test_main() {
+//     // fn main() {
+//     let temp = utils::ThumbnailGenerator::new("assets/test1.mp4", 500, 31, 8);
+//
+//     let total = temp.duration;
+//     dbg!(total);
+//     let unit = (total * 25) / 100;
+//
+//     for i in 1..4 {
+//         let time = unit * i;
+//         temp.generate(time);
+//         dbg!(i);
+//     }
+// }
 
 // fn test_main() -> iced::Result {
 #[rustfmt::skip]
@@ -86,40 +86,38 @@ fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     FontLoad(Result<(), iced::font::Error>),
-    None,
+    Load,
 }
 
 struct Playground {
     now: Instant,
-    animation: Animation<bool>,
-    state: bool,
+    db: db::Database,
 }
 
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let fonts = utils::load_fonts().map(Message::FontLoad);
+        let dummy = Task::done(Message::Load);
 
         let now = Instant::now();
-        let mut animation = Animation::new(false)
-            .duration(Duration::from_millis(1500))
-            .easing(Easing::EaseInOut)
-            .repeat_forever();
-        animation.go_mut(true, now);
 
         let new = Self {
             now,
-            animation,
-            state: false,
+            db: db::Database::open_test_db().unwrap(),
         };
 
-        (new, fonts)
+        (new, Task::batch([fonts, dummy]))
     }
 
     fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
         self.now = now;
 
         match message {
-            Message::None => Task::none(),
+            Message::Load => {
+                let collections = self.db.get_collections(crate::models::collection::Sort::default()).unwrap();
+                dbg!(collections);
+                Task::none()
+            }
             Message::FontLoad(Ok(_)) => Task::none(),
             Message::FontLoad(Err(error)) => {
                 eprintln!("{error:?}");
@@ -129,19 +127,14 @@ impl Playground {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let rotation = self.animation.interpolate(0.2, std::f32::consts::TAU, self.now);
-        let rotation = Rotation::Floating(Radians(rotation));
-
-        let svg = utils::loading_svg().rotation(rotation);
-
-        let content = column!(svg).spacing(20);
+        let content = button("Load").on_press(Message::Load);
         let content = center(content);
 
         content.into()
     }
 
-    fn subscription(&self) -> Subscription<Message> {
-        window::frames().map(|_| Message::None)
+    fn subscription(&self) -> Subscription<Message>{
+        Subscription::none()
     }
 
     fn theme(&self) -> Option<Theme> {

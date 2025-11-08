@@ -26,15 +26,13 @@ pub struct EpisodePageMessage {
 pub struct EpisodePage {
     pub tab: Tab,
     pub id: EpisodeId,
-    pub name: String,
 }
 
 impl EpisodePage {
-    pub fn new(episode: &Episode) -> Self {
+    pub fn new(id: EpisodeId) -> Self {
         Self {
-            id: episode.id,
+            id,
             tab: Tab::Items,
-            name: episode.name().to_owned(),
         }
     }
 
@@ -241,10 +239,6 @@ impl EpisodePage {
         let content = stack![content, overlay];
 
         content.into()
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn show_tools(&self) -> bool {

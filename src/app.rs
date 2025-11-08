@@ -9,12 +9,28 @@ use iced_video_player::{Video, VideoPlayer};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::db;
 use crate::home::{Home, HomeMessage};
+use crate::models::{CollectionId, EpisodeId, ItemId, MovieId, SeasonId, ShowId, collection};
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::toast;
 use crate::utils::{
-    Action, FilterMode, Layout, PlayItem, PlayerAction, Playlist, Sort, VideoSettings, load_fonts,
+    Action, Filter, FilterMode, HomeAction, Layout, PlayItem, PlayerAction, Playlist, Sort,
+    VideoSettings, load_fonts,
 };
+
+#[derive(Debug, Clone, Copy)]
+pub enum FetchId {
+    Recents,
+    Shows,
+    Movies,
+    Collections(bool),
+    Movie(MovieId),
+    Show(ShowId),
+    Season(SeasonId),
+    Episode(EpisodeId),
+    Collection(CollectionId),
+}
 
 #[derive(Clone, Debug, Copy)]
 pub enum Screen {
@@ -38,6 +54,13 @@ pub enum Message {
     PlayItem(PlayItem),
     PlayItems(Vec<PlayItem>),
     Animate,
+    Fetch {
+        id: FetchId,
+        filters: Filter,
+        sort: Sort,
+        limit: Option<i32>,
+        offset: Option<i32>,
+    },
     None,
 }
 
@@ -50,6 +73,8 @@ pub struct App {
     home: Home,
 
     player: Option<Player>,
+
+    db: db::Database,
 }
 
 impl App {
@@ -57,8 +82,12 @@ impl App {
         let load_font = load_fonts().map(Message::FontLoad);
         let load_id = window::oldest().map(Message::WindowId);
 
-        let (home, home_tasks) = Home::boot(Layout::default(), FilterMode::default());
-        let home_tasks = home_tasks.map(Message::Home);
+        let (home, home_tasks) = Home::boot(
+            Layout::default(),
+            Filter::new(FilterMode::default()),
+            Sort::new_with_name(),
+            Some(5),
+        );
 
         let new = Self::new(home);
 
@@ -68,6 +97,8 @@ impl App {
     }
 
     fn new(home: Home) -> Self {
+        let db = db::Database::open_test_db().expect("Failed to open DB");
+
         Self {
             screen: Screen::Home,
             now: Instant::now(),
@@ -75,6 +106,7 @@ impl App {
             window: None,
             player: None,
             home,
+            db,
         }
     }
 
@@ -136,9 +168,9 @@ impl App {
             Message::PlayItem(item) => self.play_item(std::iter::once(item)),
             Message::PlayItems(items) => self.play_item(items.into_iter()),
             Message::Action(action) => match (self.screen, action) {
-                (Screen::Home, Action::Home(action)) => self.home.action(action),
-                (Screen::Home, Action::Back) => self.home.back(),
-                (Screen::Home, Action::Forward) => self.home.forward(),
+                (Screen::Home, Action::Home(action)) => self.home.action(action, now),
+                (Screen::Home, Action::Back) => self.home.back(now),
+                (Screen::Home, Action::Forward) => self.home.forward(now),
                 (Screen::Home, _) => Task::none(),
 
                 (Screen::Player, Action::Player(action)) => self
@@ -152,6 +184,164 @@ impl App {
                     Task::none()
                 }
                 (Screen::Player, _) => Task::none(),
+            },
+            Message::Fetch {
+                id,
+                filters: filter,
+                sort,
+                limit,
+                offset,
+            } => match id {
+                FetchId::Shows => {
+                    let shows = match self.db.get_shows(limit, offset, filter, sort) {
+                        Ok(shows) => shows,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetched_shows(shows);
+
+                    Task::none()
+                }
+                FetchId::Movies => {
+                    let movies = match self.db.get_movies(limit, offset, filter, sort) {
+                        Ok(movies) => movies,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetched_movies(movies);
+
+                    Task::none()
+                }
+                FetchId::Recents => {
+                    let movies = match self.db.get_movies(limit, offset, filter, sort) {
+                        Ok(movies) => movies,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+                    let shows = match self.db.get_shows(limit, offset, filter, sort) {
+                        Ok(shows) => shows,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetched_recents(movies, shows);
+
+                    Task::none()
+                }
+                FetchId::Show(id) => {
+                    let show = match self.db.get_show(id) {
+                        Ok(show) => show,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    let seasons = match self.db.get_show_seasons(id, limit, offset, filter, sort) {
+                        Ok(seasons) => seasons,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetched_show(show, seasons);
+
+                    Task::none()
+                }
+                FetchId::Season(id) => {
+                    let season = match self.db.get_season(id) {
+                        Ok(season) => season,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    let episodes =
+                        match self.db.get_season_episodes(id, limit, offset, filter, sort) {
+                            Ok(episodes) => episodes,
+                            Err(error) => {
+                                let msg =
+                                    Message::PushToast(error.to_string(), toast::Status::Error);
+                                return Task::done(msg);
+                            }
+                        };
+
+                    self.home.fetched_season(season, episodes);
+
+                    Task::none()
+                }
+                FetchId::Episode(id) => {
+                    let episode = match self.db.get_episode(id) {
+                        Ok(episode) => episode,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetched_episode(episode);
+
+                    Task::none()
+                }
+                FetchId::Movie(id) => {
+                    let movie = match self.db.get_movie(id) {
+                        Ok(movie) => movie,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetched_movie(movie);
+
+                    Task::none()
+                }
+                FetchId::Collections(state) => {
+                    //todo: collection sorts
+                    let collections = match self.db.get_collections(collection::Sort::default()) {
+                        Ok(collection) => collection,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetched_collections(collections, state)
+                }
+                FetchId::Collection(id) => {
+                    let collection = match self.db.get_collection(id) {
+                        Ok(collection) => collection,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    let items = match self
+                        .db
+                        .get_collection_items(id, limit, offset, filter, sort)
+                    {
+                        Ok(items) => items,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetched_collection(collection, items)
+                }
             },
         }
     }
@@ -192,7 +382,6 @@ impl App {
 
         let player = player.map(Message::Player);
 
-
         Subscription::batch([animating, keys, exit, player])
     }
 
@@ -228,11 +417,24 @@ fn key_action(key: Key, modifiers: Modifiers) -> Option<Action> {
     match key {
         Key::Named(keyboard::key::Named::ArrowLeft) if modifiers.alt() => Some(Action::Back),
         Key::Named(keyboard::key::Named::ArrowRight) if modifiers.alt() => Some(Action::Forward),
-        key => handle_keypress(key, modifiers).map(Action::Player),
+        key => player_keypress(key, modifiers).map(Action::Player),
     }
 }
 
-fn handle_keypress(key: Key, modifiers: Modifiers) -> Option<PlayerAction> {
+fn home_keypress(key: Key, modifiers: Modifiers) -> Option<HomeAction> {
+    use keyboard::key::Named;
+
+    let action = match key {
+        Key::Character(char) if char.as_str() == "l" => HomeAction::LayoutToggle,
+        Key::Character(char) if char.as_str() == "r" && modifiers.shift() => HomeAction::Refresh,
+        Key::Character(char) if char.as_str() == "r" => HomeAction::RefreshContent,
+        _ => return None,
+    };
+
+    Some(action)
+}
+
+fn player_keypress(key: Key, modifiers: Modifiers) -> Option<PlayerAction> {
     use keyboard::key::Named;
 
     let action = match key {

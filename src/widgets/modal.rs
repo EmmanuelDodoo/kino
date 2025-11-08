@@ -228,7 +228,7 @@ where
             &layout.bounds(),
         );
 
-        if cursor.is_over(layout.bounds()) && matches!(event, Event::Mouse(_)) {
+        if self.on_blur.is_none() && cursor.is_over(layout.bounds()) && matches!(event, Event::Mouse(_)) {
             shell.capture_event();
         }
     }

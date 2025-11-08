@@ -190,6 +190,19 @@ impl Database {
         )
     }
 
+    pub fn get_season(&self, id: SeasonId) -> rusqlite::Result<Season> {
+        let sql = format!("{} WHERE season.id=:id", Self::SEASON_QUERY);
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement.query_row(
+            &[
+                (":id", &ToSqlOutput::from(id)),
+            ],
+            Season::from_row,
+        )
+    }
+
     pub fn get_season_episodes(
         &self,
         season: SeasonId,
@@ -237,6 +250,18 @@ impl Database {
             &[
                 (":id", &ToSqlOutput::from(id)),
                 (":season", &ToSqlOutput::from(season)),
+            ],
+            Episode::from_row,
+        )
+    }
+
+    pub fn get_episode(&self, id: EpisodeId) -> rusqlite::Result<Episode> {
+        let sql = format!("{} WHERE id=:id", Self::EPISODE_QUERY);
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement.query_row(
+            &[
+                (":id", &ToSqlOutput::from(id)),
             ],
             Episode::from_row,
         )

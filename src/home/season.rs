@@ -39,13 +39,12 @@ pub struct SeasonPage {
     sort: Sort,
     filters: Filter,
     tab: Tab,
-    name: String,
     scroll: Scroll,
 }
 
 impl SeasonPage {
     pub fn boot(
-        season: &Season,
+        season: SeasonId,
         sort: Sort,
         filters: Filter,
         layout: Layout,
@@ -56,19 +55,18 @@ impl SeasonPage {
         (new, scroll)
     }
 
-    fn new(season: &Season, sort: Sort, filters: Filter, layout: Layout) -> (Self, widget::Id) {
+    fn new(season: SeasonId, sort: Sort, filters: Filter, layout: Layout) -> (Self, widget::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
         (
             Self {
-                id: season.id,
+                id: season,
                 layout,
                 sort,
                 filters,
                 tab: Tab::Items,
                 scroll,
-                name: season.name().to_owned(),
             },
             id,
         )
@@ -131,10 +129,6 @@ impl SeasonPage {
         self.sort = sort;
         self.layout = layout;
         self.filters = filters;
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn show_tools(&self) -> bool {

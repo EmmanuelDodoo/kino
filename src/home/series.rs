@@ -39,13 +39,12 @@ pub struct ShowPage {
     sort: Sort,
     filters: Filter,
     tab: Tab,
-    name: String,
     scroll: Scroll,
 }
 
 impl ShowPage {
     pub fn boot(
-        show: &Show,
+        show: ShowId,
         sort: Sort,
         filters: Filter,
         layout: Layout,
@@ -56,14 +55,13 @@ impl ShowPage {
         (new, scroll)
     }
 
-    fn new(show: &Show, sort: Sort, filters: Filter, layout: Layout) -> (Self, widget::Id) {
+    fn new(show: ShowId, sort: Sort, filters: Filter, layout: Layout) -> (Self, widget::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
         (
             Self {
-                id: show.id,
-                name: show.name().to_owned(),
+                id: show,
                 layout,
                 sort,
                 filters,
@@ -131,10 +129,6 @@ impl ShowPage {
         self.sort = sort;
         self.layout = layout;
         self.filters = filters;
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn show_tools(&self) -> bool {

@@ -52,8 +52,6 @@ pub struct CollectionMessage {
 #[derive(Debug, Clone)]
 pub struct CollectionPage {
     id: CollectionId,
-    pub name: String,
-    pub view: CollectionView,
     layout: Layout,
     sort: Sort,
     filters: Filter,
@@ -62,12 +60,12 @@ pub struct CollectionPage {
 
 impl CollectionPage {
     pub fn boot(
-        collection: &Collection,
+        collection: CollectionId,
         sort: Sort,
         filter: Filter,
         layout: Layout,
     ) -> (Self, Task<CollectionMessage>) {
-        let id = collection.id;
+        let id = collection;
 
         let new = Self::new(collection, sort, filter, layout);
 
@@ -78,11 +76,9 @@ impl CollectionPage {
         (new, scroll)
     }
 
-    fn new(collection: &Collection, sort: Sort, filters: Filter, layout: Layout) -> Self {
+    fn new(collection: CollectionId, sort: Sort, filters: Filter, layout: Layout) -> Self {
         Self {
-            id: collection.id,
-            name: collection.name.clone(),
-            view: collection.view,
+            id: collection,
             layout,
             sort,
             filters,
@@ -129,13 +125,12 @@ impl CollectionPage {
                 Some(msg)
             }
             Message::OpenConfig => {
-                let msg =
-                    HomeMessage::OpenView(ViewMessage::CollectionConfig((self.view, self.id)));
+                let msg = HomeMessage::OpenView(ViewMessage::CollectionConfig(self.id));
 
                 Some(msg)
             }
             Message::AddNewItem => {
-                let msg = HomeMessage::OpenView(ViewMessage::AddToCollection((self.view, self.id)));
+                let msg = HomeMessage::OpenView(ViewMessage::AddToCollection(self.id));
 
                 Some(msg)
             }
@@ -541,10 +536,6 @@ impl CollectionPage {
 
     pub fn update_scroll(&mut self) -> Task<()> {
         operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 }
 

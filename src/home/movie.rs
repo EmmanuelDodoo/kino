@@ -26,15 +26,13 @@ pub struct MoviePageMessage {
 pub struct MoviePage {
     pub id: MovieId,
     pub tab: Tab,
-    pub name: String,
 }
 
 impl MoviePage {
-    pub fn new(movie: &Movie) -> Self {
+    pub fn new(id: MovieId) -> Self {
         Self {
-            id: movie.id,
+            id,
             tab: Tab::Items,
-            name: movie.name().to_owned(),
         }
     }
 
@@ -253,10 +251,6 @@ impl MoviePage {
         let content = stack![content, overlay];
 
         content.into()
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn show_tools(&self) -> bool {

@@ -15,6 +15,7 @@ use crate::app::Message;
 use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings,
     icons::{self, sized_button, text_button},
+    loading_animation, loading_svg,
     typo::*,
 };
 use crate::widgets;
@@ -132,14 +133,19 @@ impl Manager {
             seek_change_amt: _seek_amt,
             volume_change_amt: _volume,
             speed_change_amt: _speed,
-            show_subtitles: _subtitles,
+            show_subtitles,
             muted,
-            autoplay,
+            auto_start,
+            auto_next: _autoplay,
         } = self.settings;
+
+        if show_subtitles {
+            player.video.toggle_subtitle()
+        };
 
         player.video.set_volume(volume);
         player.video.set_speed(speed).unwrap();
-        player.video.set_paused(!autoplay);
+        player.video.set_paused(!auto_start);
         player.video.set_gamma(gamma);
         player.video.set_muted(muted);
     }
@@ -160,6 +166,7 @@ impl Manager {
                 let load_thumbnails = Task::perform(
                     tokio::task::spawn_blocking(move || {
                         let num = duration as u32 / interval;
+                        let path = url::Url::from_file_path(path.canonicalize().unwrap()).unwrap();
                         let generator = utils::ThumbnailGenerator::new(path, width, height, 8);
                         let imgs = (1..=num)
                             .map(|i| {
@@ -230,6 +237,7 @@ impl Manager {
                     if (player.position) / (player.duration) >= 0.9
                         && self.playlist.has_next()
                         && matches!(&self.next, AutoState::Idle)
+                        && self.settings.auto_next
                     {
                         self.next = AutoState::Loading;
                         let next = self
@@ -753,10 +761,14 @@ impl Manager {
 
     fn subtitles_toggle(&mut self) -> Task<Message> {
         // todo: Video settings
-        if let Some(player) = self.player_mut() {
+        let shown = if let Some(player) = self.player_mut() {
             player.video.toggle_subtitle();
-        }
+            player.video.subtitles()
+        } else {
+            false
+        };
 
+        self.settings.show_subtitles = shown;
         Task::none()
     }
 
@@ -863,12 +875,10 @@ fn load_video<Message: 'static + MaybeSend>(
     item: PlayItem,
     f: impl FnOnce(Arc<Player>) -> Message + 'static + MaybeSend,
 ) -> Task<Message> {
-    let url = url::Url::from_file_path(item.path.canonicalize().unwrap())
-        .expect("File path should be validated");
-
     Task::perform(
         tokio::task::spawn_blocking(move || {
-            let mut video = Video::new(&url).unwrap();
+            let path = url::Url::from_file_path(item.path.canonicalize().unwrap()).unwrap();
+            let mut video = Video::new(&path).unwrap();
             video.set_paused(true);
             let position = video.position().as_secs_f64();
             let duration = video.duration().as_secs_f64();
@@ -893,20 +903,4 @@ fn handle_clicks(click: MouseClick) -> ManagerMessage {
         Button::Right => ManagerMessage::Config,
         _ => ManagerMessage::None,
     }
-}
-
-fn loading_animation(now: Instant) -> Animation<bool> {
-    Animation::new(false)
-        .easing(Easing::EaseInOut)
-        .duration(time::Duration::from_millis(1500))
-        .repeat_forever()
-        .go(true, now)
-}
-
-fn loading_svg(animation: &Animation<bool>, now: Instant) -> Svg<'static> {
-    use iced::{Radians, Rotation};
-    let rotation = animation.interpolate(0.0, std::f32::consts::TAU, now);
-    let rotation = Rotation::Floating(Radians(rotation));
-
-    utils::loading_svg().rotation(rotation)
 }
