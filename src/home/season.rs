@@ -255,7 +255,7 @@ impl SeasonPage {
                 .spacing(6)
                 .align_y(Vertical::Center);
 
-            let synapsis = container(text(season.media.synapsis()))
+            let synopsis = container(text(season.media.synopsis()))
                 .max_width(750)
                 .height(Length::Fill);
 
@@ -305,7 +305,7 @@ impl SeasonPage {
                 title,
                 details,
                 space::vertical().height(3),
-                synapsis,
+                synopsis,
                 actions
             )
             .height(img_height)

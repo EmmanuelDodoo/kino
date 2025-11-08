@@ -276,7 +276,7 @@ impl ShowPage {
                 row(tags).spacing(6).align_y(Vertical::Center)
             };
 
-            let synapsis = container(text(show.media.synapsis()))
+            let synopsis = container(text(show.media.synopsis()))
                 .max_width(750)
                 .height(Length::Fill);
 
@@ -326,7 +326,7 @@ impl ShowPage {
                 title,
                 details,
                 space::vertical().height(3),
-                synapsis,
+                synopsis,
                 actions
             )
             .height(img_height)

@@ -131,9 +131,9 @@ impl MoviePage {
 
             match self.tab {
                 Tab::Items => {
-                    let synapsis = text(movie.media.synapsis());
+                    let synopsis = text(movie.media.synopsis());
 
-                    scrollable(column!(synapsis).spacing(4.0).width(width))
+                    scrollable(column!(synopsis).spacing(4.0).width(width))
                         .spacing(4.0)
                         .into()
                 }

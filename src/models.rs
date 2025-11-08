@@ -40,7 +40,7 @@ pub trait Media {
 
     fn comments(&self) -> u32;
 
-    fn synapsis(&self) -> &str;
+    fn synopsis(&self) -> &str;
 
     fn poster(&self) -> Option<&str>;
 

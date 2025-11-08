@@ -40,7 +40,7 @@ pub struct Movie {
     poster: Option<String>,
     backdrop: Option<String>,
     pub tags: Vec<String>,
-    synapsis: String,
+    synopsis: String,
     release: NaiveDate,
     added: DateTime<Local>,
     watch_count: u32,
@@ -74,7 +74,7 @@ impl Movie {
             })
             .unwrap_or_default()
         };
-        let synapsis = row.get::<_, String>("synapsis")?;
+        let synopsis = row.get::<_, String>("synopsis")?;
 
         let release = row.get::<_, NaiveDate>("release")?;
 
@@ -105,7 +105,7 @@ impl Movie {
             poster,
             backdrop,
             tags,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count,
@@ -128,7 +128,7 @@ impl Movie {
             poster,
             backdrop,
             tags,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count,
@@ -148,7 +148,7 @@ impl Movie {
         let poster = ToSqlOutput::Owned(Value::from(poster.clone()));
         let backdrop = ToSqlOutput::Owned(Value::from(backdrop.clone()));
         let tags = ToSqlOutput::from(tags.join(","));
-        let synapsis = ToSqlOutput::from(synapsis.clone());
+        let synopsis = ToSqlOutput::from(synopsis.clone());
         let release = naivedate_to_sql(release);
         let added = datetime_to_sql(added);
         let watch_count = ToSqlOutput::from(*watch_count);
@@ -170,7 +170,7 @@ impl Movie {
             (":poster", poster),
             (":backdrop", backdrop),
             (":tags", tags),
-            (":synapsis", synapsis),
+            (":synopsis", synopsis),
             (":release", release),
             (":added", added),
             (":watch_count", watch_count),
@@ -183,7 +183,7 @@ impl Movie {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO movie (id, directory, path, name, original_name, poster, backdrop, tags, synapsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synapsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration)";
+        let sql = "INSERT INTO movie (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration)";
 
         let params = self.insert_params();
 
@@ -320,7 +320,7 @@ impl Movie {
         backdrop: Option<String>,
         poster: Option<String>,
         tags: Vec<String>,
-        synapsis: String,
+        synopsis: String,
         release: NaiveDate,
         duration: u64,
     ) -> (Self, Query<'a>) {
@@ -336,7 +336,7 @@ impl Movie {
             backdrop,
             poster,
             tags,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count: 0,
@@ -362,7 +362,7 @@ impl Movie {
             .into_iter()
             .map(ToOwned::to_owned)
             .collect();
-        let synapsis = "A test dummy which is partially adequate".to_owned();
+        let synopsis = "A test dummy which is partially adequate".to_owned();
         let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
         let duration = 3600;
 
@@ -375,7 +375,7 @@ impl Movie {
             backdrop,
             poster,
             tags,
-            synapsis,
+            synopsis,
             release,
             duration,
         )
@@ -408,7 +408,7 @@ impl Movie {
             last_watched: None,
             comments: 69,
             watch_count: 57,
-            synapsis: "In 1926, Newt Scamander arrives at the Magical Congress of the United States of America with a magically expanded briefcase, which houses a number of dangerous creatures and their habitats. When the creatures escape from the briefcase, it sends the American wizarding authorities after Newt, and threatens to strain even further the state of magical and non-magical relations.".to_owned(),
+            synopsis: "In 1926, Newt Scamander arrives at the Magical Congress of the United States of America with a magically expanded briefcase, which houses a number of dangerous creatures and their habitats. When the creatures escape from the briefcase, it sends the American wizarding authorities after Newt, and threatens to strain even further the state of magical and non-magical relations.".to_owned(),
             tags: vec!["tag-1".into(), "tag-2".into(), "tag-team".into()],
             backdrop: Some("assets/test.jpg".into())
 
@@ -442,7 +442,7 @@ impl Movie {
             added,
             comments: 420,
             watch_count: 1,
-            synapsis: "When the creator of a popular video game system dies, a virtual contest is created to compete for his fortune.".to_owned(),
+            synopsis: "When the creator of a popular video game system dies, a virtual contest is created to compete for his fortune.".to_owned(),
             tags: vec!["Adventure", "Action", "Science Fiction"].into_iter().map(ToOwned::to_owned).collect(),
             backdrop: Some("assets/player1.jpg".into()),
 
@@ -501,8 +501,8 @@ impl Media for Movie {
         self.comments
     }
 
-    fn synapsis(&self) -> &str {
-        &self.synapsis
+    fn synopsis(&self) -> &str {
+        &self.synopsis
     }
 
     fn watch_count(&self) -> u32 {

@@ -62,7 +62,7 @@ pub struct Show {
     poster: Option<String>,
     backdrop: Option<String>,
     pub tags: Vec<String>,
-    synapsis: String,
+    synopsis: String,
     release: NaiveDate,
     added: DateTime<Local>,
     watch_count: u32,
@@ -100,7 +100,7 @@ impl Show {
             })
             .unwrap_or_default()
         };
-        let synapsis = row.get::<_, String>("synapsis")?;
+        let synopsis = row.get::<_, String>("synopsis")?;
 
         let release = row.get::<_, NaiveDate>("release")?;
 
@@ -136,7 +136,7 @@ impl Show {
             poster,
             backdrop,
             tags,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count,
@@ -160,7 +160,7 @@ impl Show {
             poster,
             backdrop,
             tags,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count: _watch,
@@ -182,7 +182,7 @@ impl Show {
         let poster = ToSqlOutput::Owned(Value::from(poster.clone()));
         let backdrop = ToSqlOutput::Owned(Value::from(backdrop.clone()));
         let tags = ToSqlOutput::from(tags.join(","));
-        let synapsis = ToSqlOutput::from(synapsis.clone());
+        let synopsis = ToSqlOutput::from(synopsis.clone());
         let release = naivedate_to_sql(release);
         let added = datetime_to_sql(added);
 
@@ -195,7 +195,7 @@ impl Show {
             (":poster", poster),
             (":backdrop", backdrop),
             (":tags", tags),
-            (":synapsis", synapsis),
+            (":synopsis", synopsis),
             (":release", release),
             (":added", added),
         ]
@@ -217,7 +217,7 @@ impl Show {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO tv_show (id, directory, path, name, original_name, poster, backdrop, tags, synapsis, release, created_at) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synapsis, :release, :added)";
+        let sql = "INSERT INTO tv_show (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added)";
 
         let params = self.insert_params();
 
@@ -289,7 +289,7 @@ impl Show {
         backdrop: Option<String>,
         poster: Option<String>,
         tags: Vec<String>,
-        synapsis: String,
+        synopsis: String,
         release: NaiveDate,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
@@ -303,7 +303,7 @@ impl Show {
             backdrop,
             poster,
             tags,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count: 0,
@@ -329,7 +329,7 @@ impl Show {
             .into_iter()
             .map(ToOwned::to_owned)
             .collect();
-        let synapsis = "A test dummy which is partially adequate".to_owned();
+        let synopsis = "A test dummy which is partially adequate".to_owned();
         let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
 
         Self::new(
@@ -340,7 +340,7 @@ impl Show {
             backdrop,
             poster,
             tags,
-            synapsis,
+            synopsis,
             release,
         )
     }
@@ -354,7 +354,7 @@ impl Show {
             .into_iter()
             .map(ToOwned::to_owned)
             .collect();
-        let  synapsis= "Physicists Leonard and Sheldon find their nerd-centric social circle with pals Howard and Raj expanding when aspiring actress Penny moves in next door.".to_owned();
+        let  synopsis= "Physicists Leonard and Sheldon find their nerd-centric social circle with pals Howard and Raj expanding when aspiring actress Penny moves in next door.".to_owned();
         let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
 
         Self::new(
@@ -365,7 +365,7 @@ impl Show {
             backdrop,
             poster,
             tags,
-            synapsis,
+            synopsis,
             release,
         )
         .0
@@ -380,7 +380,7 @@ impl Show {
             .into_iter()
             .map(ToOwned::to_owned)
             .collect();
-        let synapsis= "When they were boys, Sam and Dean Winchester lost their mother to a mysterious and demonic supernatural force. Subsequently, their father raised them to be soldiers. He taught them about the paranormal evil that lives in the dark corners and on the back roads of America ... and he taught them how to kill it. Now, the Winchester brothers crisscross the country in their '67 Chevy Impala, battling every kind of supernatural threat they encounter along the way.".to_owned();
+        let synopsis= "When they were boys, Sam and Dean Winchester lost their mother to a mysterious and demonic supernatural force. Subsequently, their father raised them to be soldiers. He taught them about the paranormal evil that lives in the dark corners and on the back roads of America ... and he taught them how to kill it. Now, the Winchester brothers crisscross the country in their '67 Chevy Impala, battling every kind of supernatural threat they encounter along the way.".to_owned();
         let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
 
         Self::new(
@@ -391,7 +391,7 @@ impl Show {
             backdrop,
             poster,
             tags,
-            synapsis,
+            synopsis,
             release,
         )
         .0
@@ -449,8 +449,8 @@ impl Media for Show {
         self.comments
     }
 
-    fn synapsis(&self) -> &str {
-        &self.synapsis
+    fn synopsis(&self) -> &str {
+        &self.synopsis
     }
 
     fn watch_count(&self) -> u32 {
@@ -467,7 +467,7 @@ pub struct Season {
     poster: Option<String>,
     // Join from show
     backdrop: Option<String>,
-    synapsis: String,
+    synopsis: String,
     release: NaiveDate,
     added: DateTime<Local>,
     watch_count: u32,
@@ -496,7 +496,7 @@ impl Season {
         let original_name = row.get::<_, String>("original_name")?;
         let poster = row.get::<_, Option<String>>("poster")?;
         let backdrop = row.get::<_, Option<String>>("backdrop")?;
-        let synapsis = row.get::<_, String>("synapsis")?;
+        let synopsis = row.get::<_, String>("synopsis")?;
 
         let release = row.get::<_, NaiveDate>("release")?;
 
@@ -535,7 +535,7 @@ impl Season {
             path,
             poster,
             backdrop,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count,
@@ -559,7 +559,7 @@ impl Season {
             path,
             poster,
             backdrop: _backdrop,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count,
@@ -582,7 +582,7 @@ impl Season {
         let original_name = ToSqlOutput::from(original_name.clone());
         let poster = ToSqlOutput::Owned(Value::from(poster.clone()));
 
-        let synapsis = ToSqlOutput::from(synapsis.clone());
+        let synopsis = ToSqlOutput::from(synopsis.clone());
         let release = naivedate_to_sql(release);
         let added = datetime_to_sql(added);
         let watch_count = ToSqlOutput::from(*watch_count);
@@ -609,7 +609,7 @@ impl Season {
             (":original_name", original_name),
             (":path", path),
             (":poster", poster),
-            (":synapsis", synapsis),
+            (":synopsis", synopsis),
             (":release", release),
             (":added", added),
             (":watch_count", watch_count),
@@ -626,7 +626,7 @@ impl Season {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO season (id, show_id, name, original_name, path, poster, synapsis,release, created_at, watch_count, episode_count, rating, progress, last_watched, recent_episode, duration, comment_count, season_number) VALUES (:id, :show, :name, :original_name, :path, :poster, :synapsis, :release, :added, :watch_count, :episodes, :rating, :progress, :last_watched, :recent_episode, :duration, :comments, :number)";
+        let sql = "INSERT INTO season (id, show_id, name, original_name, path, poster, synopsis,release, created_at, watch_count, episode_count, rating, progress, last_watched, recent_episode, duration, comment_count, season_number) VALUES (:id, :show, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :episodes, :rating, :progress, :last_watched, :recent_episode, :duration, :comments, :number)";
 
         let params = self.insert_params();
 
@@ -680,7 +680,7 @@ impl Season {
         original_name: String,
         path: String,
         poster: Option<String>,
-        synapsis: String,
+        synopsis: String,
         release: NaiveDate,
         season_number: u16,
     ) -> (Self, Query<'a>) {
@@ -694,7 +694,7 @@ impl Season {
             path,
             backdrop: show.backdrop.clone(),
             poster,
-            synapsis,
+            synopsis,
             added,
             release,
             duration: 0,
@@ -717,7 +717,7 @@ impl Season {
         let name = "Test Season".to_owned();
         let path = "Test Season 1".to_owned();
         let poster = None;
-        let synapsis = "A dummy season for testing purposes only".to_owned();
+        let synopsis = "A dummy season for testing purposes only".to_owned();
         let release = NaiveDate::parse_from_str("2019-09-05", "%Y-%m-%d").unwrap();
         let season_number = 5;
 
@@ -727,7 +727,7 @@ impl Season {
             name,
             path,
             poster,
-            synapsis,
+            synopsis,
             release,
             season_number,
         )
@@ -758,7 +758,7 @@ impl Season {
             added,
             comments: 20,
             watch_count: 28,
-            synapsis: "Physicists Leonard and Sheldon find their nerd-centric social circle with pals Howard and Raj expanding when aspiring actress Penny moves in next door.".to_owned(),
+            synopsis: "Physicists Leonard and Sheldon find their nerd-centric social circle with pals Howard and Raj expanding when aspiring actress Penny moves in next door.".to_owned(),
         }
     }
 
@@ -790,7 +790,7 @@ impl Season {
             added,
             watch_count: 6,
             comments: 420,
-            synapsis: "When they were boys, Sam. He taught them about the paranormal evil that lives in the dark corners and on the back roads of America ... and he taught them how to kill it. Now, the Winchester brothers crisscross the country in their '67 Chevy Impala, battling every kind of supernatural threat they encounter along the way.".to_owned(),
+            synopsis: "When they were boys, Sam. He taught them about the paranormal evil that lives in the dark corners and on the back roads of America ... and he taught them how to kill it. Now, the Winchester brothers crisscross the country in their '67 Chevy Impala, battling every kind of supernatural threat they encounter along the way.".to_owned(),
 
         }
     }
@@ -847,8 +847,8 @@ impl Media for Season {
         self.comments
     }
 
-    fn synapsis(&self) -> &str {
-        &self.synapsis
+    fn synopsis(&self) -> &str {
+        &self.synopsis
     }
 
     fn watch_count(&self) -> u32 {
@@ -866,7 +866,7 @@ pub struct Episode {
     poster: Option<String>,
     // Join from show
     backdrop: Option<String>,
-    synapsis: String,
+    synopsis: String,
     release: NaiveDate,
     added: DateTime<Local>,
     watch_count: u32,
@@ -895,7 +895,7 @@ impl Episode {
         let poster = row.get::<_, Option<String>>("poster")?;
 
         let backdrop = row.get::<_, Option<String>>("backdrop")?;
-        let synapsis = row.get::<_, String>("synapsis")?;
+        let synopsis = row.get::<_, String>("synopsis")?;
 
         let release = row.get::<_, NaiveDate>("release")?;
 
@@ -934,7 +934,7 @@ impl Episode {
             full_path,
             poster,
             backdrop,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count,
@@ -958,7 +958,7 @@ impl Episode {
             full_path: _full_path,
             poster,
             backdrop: _backdrop,
-            synapsis,
+            synopsis,
             release,
             added,
             watch_count,
@@ -980,7 +980,7 @@ impl Episode {
         let original_name = ToSqlOutput::from(original_name.clone());
         let poster = ToSqlOutput::Owned(Value::from(poster.clone()));
 
-        let synapsis = ToSqlOutput::from(synapsis.clone());
+        let synopsis = ToSqlOutput::from(synopsis.clone());
         let release = naivedate_to_sql(release);
         let added = datetime_to_sql(added);
         let watch_count = ToSqlOutput::from(*watch_count);
@@ -1003,7 +1003,7 @@ impl Episode {
             (":original_name", original_name),
             (":path", path),
             (":poster", poster),
-            (":synapsis", synapsis),
+            (":synopsis", synopsis),
             (":release", release),
             (":added", added),
             (":watch_count", watch_count),
@@ -1018,7 +1018,7 @@ impl Episode {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO episode (id, season_id, name, original_name, path, poster, synapsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :path, :poster, :synapsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :number)";
+        let sql = "INSERT INTO episode (id, season_id, name, original_name, path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :number)";
 
         let params = self.insert_params();
 
@@ -1155,7 +1155,7 @@ impl Episode {
         full_path: PathBuf,
         poster: Option<String>,
         backdrop: Option<String>,
-        synapsis: String,
+        synopsis: String,
         release: NaiveDate,
         duration: u64,
         episode_number: u16,
@@ -1172,7 +1172,7 @@ impl Episode {
             show: season.show,
             backdrop,
             poster,
-            synapsis,
+            synopsis,
             added,
             release,
             duration,
@@ -1195,7 +1195,7 @@ impl Episode {
         let full_path = PathBuf::from("test_full_path.mkv");
         let poster = None;
         let backdrop = None;
-        let synapsis = "A dummy episode for testing purposes only".to_owned();
+        let synopsis = "A dummy episode for testing purposes only".to_owned();
         let release = NaiveDate::parse_from_str("2022-09-02", "%Y-%m-%d").unwrap();
         let episode_number = 12;
         let duration = 3872;
@@ -1208,7 +1208,7 @@ impl Episode {
             full_path,
             poster,
             backdrop,
-            synapsis,
+            synopsis,
             release,
             duration,
             episode_number,
@@ -1243,7 +1243,7 @@ impl Episode {
             added,
             watch_count: 12,
             comments: 20,
-            synapsis: "Physicists Leonard and Sheldon find their nerd-centric social circle with pals Howard and Raj expanding when aspiring actress Penny moves in next door.".to_owned(),
+            synopsis: "Physicists Leonard and Sheldon find their nerd-centric social circle with pals Howard and Raj expanding when aspiring actress Penny moves in next door.".to_owned(),
         }
     }
 
@@ -1277,7 +1277,7 @@ impl Episode {
             watch_count: 0,
             added,
             comments: 420,
-            synapsis: "When they were boys, Sam. He taught them about the paranormal evil that lives in the dark corners and on the back roads of America ... and he taught them how to kill it. Now, the Winchester brothers crisscross the country in their '67 Chevy Impala, battling every kind of supernatural threat they encounter along the way.".to_owned(),
+            synopsis: "When they were boys, Sam. He taught them about the paranormal evil that lives in the dark corners and on the back roads of America ... and he taught them how to kill it. Now, the Winchester brothers crisscross the country in their '67 Chevy Impala, battling every kind of supernatural threat they encounter along the way.".to_owned(),
 
         }
     }
@@ -1334,8 +1334,8 @@ impl Media for Episode {
         self.comments
     }
 
-    fn synapsis(&self) -> &str {
-        &self.synapsis
+    fn synopsis(&self) -> &str {
+        &self.synopsis
     }
 
     fn watch_count(&self) -> u32 {

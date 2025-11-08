@@ -119,9 +119,9 @@ impl EpisodePage {
 
             match self.tab {
                 Tab::Items => {
-                    let synapsis = text(episode.media.synapsis());
+                    let synopsis = text(episode.media.synopsis());
 
-                    scrollable(column!(synapsis).spacing(4.0).width(width))
+                    scrollable(column!(synopsis).spacing(4.0).width(width))
                         .spacing(4.0)
                         .into()
                 }

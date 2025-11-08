@@ -98,8 +98,8 @@ pub fn add_labelled<'a, T: Media, Message: 'a + Clone>(
         .into()
 }
 
-pub fn synapsis<'a, T: Media, Message: 'a>(media: &'a T) -> Element<'a, Message> {
-    container(text(media.synapsis()).size(H7))
+pub fn synopsis<'a, T: Media, Message: 'a>(media: &'a T) -> Element<'a, Message> {
+    container(text(media.synopsis()).size(H7))
         .max_height(52.0)
         .into()
 }
@@ -376,7 +376,7 @@ impl<T: Media> Thumbnail<T> {
 
         let ratings = ratings(&self.media);
 
-        let synapsis = synapsis(&self.media);
+        let synopsis = synopsis(&self.media);
 
         let unique = unique(&self.media);
 
@@ -391,7 +391,7 @@ impl<T: Media> Thumbnail<T> {
         .align_y(Vertical::Center)
         .width(Length::Fill);
 
-        let details = row!(column!(title, ratings, synapsis, bottom).spacing(16))
+        let details = row!(column!(title, ratings, synopsis, bottom).spacing(16))
             .height(Length::Fill)
             .align_y(Vertical::Center);
 
