@@ -2022,7 +2022,7 @@ impl Home {
         Task::done(msg)
     }
 
-    fn refresh(&mut self, now: Instant) -> Task<Message> {
+    pub fn refresh(&mut self, now: Instant) -> Task<Message> {
         let rsg = Message::Fetch {
             id: FetchId::Collections(false),
             filters: self.filters,

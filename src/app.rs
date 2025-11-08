@@ -1,13 +1,12 @@
 use iced::{
     Element, Length, Subscription, Task, Theme, font,
     keyboard::{self, Key, Modifiers},
-    time::Instant,
+    time::{self, Duration, Instant},
     widget::{Container, Slider, Text, center, column, image, row, text_input},
     window,
 };
 use iced_video_player::{Video, VideoPlayer};
 use std::path::PathBuf;
-use std::time::Duration;
 
 use crate::db;
 use crate::home::{Home, HomeMessage};
@@ -63,6 +62,7 @@ pub enum Message {
         limit: Option<i32>,
         offset: Option<i32>,
     },
+    Refresh(Instant),
     None,
 }
 
@@ -75,6 +75,9 @@ pub struct App {
     home: Home,
 
     player: Option<Player>,
+
+    last_refresh: Instant,
+    refresh_interval: Duration,
 
     db: db::Database,
 }
@@ -104,6 +107,8 @@ impl App {
         Self {
             screen: Screen::Home,
             now: Instant::now(),
+            last_refresh: Instant::now(),
+            refresh_interval: Duration::from_secs(75),
             toasts: vec![],
             window: None,
             player: None,
@@ -127,6 +132,16 @@ impl App {
             Message::WindowId(window) => {
                 self.window = window;
                 Task::none()
+            }
+            Message::Refresh(refresh) => {
+                if refresh.duration_since(self.last_refresh) >= self.refresh_interval {
+                    self.last_refresh = refresh;
+                    self.home.refresh(now)
+                } else {
+                    Task::none()
+
+                }
+
             }
             Message::Exit(id) => {
                 let Some(own) = &self.window else {
@@ -170,6 +185,7 @@ impl App {
             Message::PlayItem(item) => self.play_item(std::iter::once(item)),
             Message::PlayItems(items) => self.play_item(items.into_iter()),
             Message::Action(action) => match (self.screen, action) {
+                // todo: update last refresh
                 (Screen::Home, Action::Home(action)) => self.home.action(action, now),
                 (Screen::Home, Action::Back) => self.home.back(now),
                 (Screen::Home, Action::Forward) => self.home.forward(now),
@@ -376,7 +392,9 @@ impl App {
 
         let player = player.map(Message::Player);
 
-        Subscription::batch([animating, keys, exit, player])
+        let refresh = time::every(self.refresh_interval).map(Message::Refresh);
+
+        Subscription::batch([animating, keys, exit, player, refresh])
     }
 
     fn push_toast(&mut self, toast: toast::Toast) {
