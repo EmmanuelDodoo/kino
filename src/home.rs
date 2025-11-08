@@ -235,7 +235,7 @@ enum State {
     },
     Episode(Thumbnail<Episode>),
     Collection {
-        collection: Box<CollectionThumbnail>,
+        collection: (CollectionView, CollectionId),
         shows: Vec<Thumbnail<Show>>,
         movies: Vec<Thumbnail<Movie>>,
         seasons: Vec<Thumbnail<Season>>,
@@ -277,19 +277,13 @@ pub enum HomeMessage {
     None,
     Scroll(scrollable::Viewport),
     RefreshContent,
+    Refresh,
     Hovered(ItemId, bool),
-    HoveredCollection((CollectionView, CollectionId), bool),
+    HoveredCollection(CollectionId, bool),
     FetchedCollections(
         bool,
         BTreeMap<(CollectionView, CollectionId), CollectionThumbnail>,
     ),
-    FetchCollectionState {
-        collection: Box<CollectionThumbnail>,
-        shows: Vec<Thumbnail<Show>>,
-        movies: Vec<Thumbnail<Movie>>,
-        seasons: Vec<Thumbnail<Season>>,
-        episodes: Vec<Thumbnail<Episode>>,
-    },
 }
 
 pub struct Home {
@@ -386,27 +380,6 @@ impl Home {
                 if state {
                     self.state = State::Collections;
                 }
-
-                Task::none()
-            }
-            HomeMessage::FetchCollectionState {
-                collection,
-                shows,
-                movies,
-                seasons,
-                episodes,
-            } => {
-                let State::Loading(_) = &self.state else {
-                    return Task::none();
-                };
-
-                self.state = State::Collection {
-                    collection,
-                    shows,
-                    movies,
-                    seasons,
-                    episodes,
-                };
 
                 Task::none()
             }
@@ -511,11 +484,17 @@ impl Home {
 
                         task.map(|ssg| Message::Home(HomeMessage::SeasonPage(ssg)))
                     }
-                    PageKind::Collection(id) => {
+                    PageKind::Collection(key) => {
                         let (collection, tasks) =
-                            CollectionPage::boot(id, self.sort, self.filters, self.layout);
+                            CollectionPage::boot(key.1, self.sort, self.filters, self.layout);
 
-                        self.pages.insert(kind, Page::Collection { collection, id });
+                        self.pages.insert(
+                            kind,
+                            Page::Collection {
+                                collection,
+                                id: key.1,
+                            },
+                        );
 
                         tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
                     }
@@ -683,14 +662,13 @@ impl Home {
                             return Task::none();
                         };
 
-                        collection.collection.view = config.view;
-                        collection.collection.icon = Some(config.icon.to_u32());
-                        collection.collection.name = config.name.clone();
+                        config.update(&mut collection.collection);
 
-                        if let State::Collection { collection, .. } = &mut self.state
-                            && collection.collection.id == id
+                        if let State::Collection {
+                            collection: key, ..
+                        } = &mut self.state
                         {
-                            config.update(&mut collection.collection);
+                            *key = (collection.collection.view, collection.collection.id);
                         }
 
                         self.collections.insert(
@@ -923,6 +901,7 @@ impl Home {
                 todo!("Random");
             }
             HomeMessage::RefreshContent => self.content_refresh(now),
+            HomeMessage::Refresh => self.refresh(now),
             HomeMessage::Play(item) => self.play(item),
             HomeMessage::PlayCollection { id, items } => {
                 println!("Play {items:?} from collection {id:?}");
@@ -933,9 +912,15 @@ impl Home {
                     return Task::none();
                 };
 
-                if let Some(collection) = self.collections.get_mut(&key) {
-                    collection.zoom.go_mut(is_hovered, now);
-                }
+                let Some(key) = self.collections.keys().find(|(_, id)| *id == key).copied() else {
+                    return Task::none();
+                };
+
+                let Some(collection) = self.collections.get_mut(&key) else {
+                    return Task::none();
+                };
+
+                collection.zoom.go_mut(is_hovered, now);
 
                 Task::none()
             }
@@ -1108,39 +1093,40 @@ impl Home {
                 .spacing(12.0)
         };
 
-        let collections =
-            self.collections
-                .iter()
-                .filter_map(|((view, id), collection)| match view {
-                    CollectionView::Pinned => {
-                        let unicode = Icon::new(collection.collection.icon).unicode();
-                        let content = collection_button(
-                            unicode,
-                            &collection.collection.name,
-                            view_unicode(collection.collection.view),
-                            HomeMessage::Goto(PageKind::Collection(*id)),
-                            self.current_page()
-                                .map(|page| page.is_collection(id))
-                                .unwrap_or_default(),
-                        );
+        let collections = self
+            .collections
+            .iter()
+            //todo could additionally sort by name
+            .filter_map(|((view, id), collection)| match view {
+                CollectionView::Pinned => {
+                    let unicode = Icon::new(collection.collection.icon).unicode();
+                    let content = collection_button(
+                        unicode,
+                        &collection.collection.name,
+                        view_unicode(collection.collection.view),
+                        HomeMessage::Goto(PageKind::Collection((*view, *id))),
+                        self.current_page()
+                            .map(|page| page.is_collection(id))
+                            .unwrap_or_default(),
+                    );
 
-                        Some(content)
-                    }
-                    CollectionView::Shown => {
-                        let unicode = Icon::new(collection.collection.icon).unicode();
-                        let content = icon_button(
-                            unicode,
-                            &collection.collection.name,
-                            HomeMessage::Goto(PageKind::Collection(*id)),
-                            self.current_page()
-                                .map(|page| page.is_collection(id))
-                                .unwrap_or_default(),
-                        );
+                    Some(content)
+                }
+                CollectionView::Shown => {
+                    let unicode = Icon::new(collection.collection.icon).unicode();
+                    let content = icon_button(
+                        unicode,
+                        &collection.collection.name,
+                        HomeMessage::Goto(PageKind::Collection((*view, *id))),
+                        self.current_page()
+                            .map(|page| page.is_collection(id))
+                            .unwrap_or_default(),
+                    );
 
-                        Some(content)
-                    }
-                    CollectionView::Hidden => None,
-                });
+                    Some(content)
+                }
+                CollectionView::Hidden => None,
+            });
 
         let collections = column!(
             icon_button(
@@ -1695,7 +1681,13 @@ impl Home {
             State::Episode(episode) => episode.media.name(),
             State::Loading(_) => "Loading",
             State::Collections => "Collections",
-            State::Collection { collection, .. } => &collection.collection.name,
+            State::Collection { collection, .. } => self
+                .collections
+                .keys()
+                .find(|(_, id)| *id == collection.1)
+                .and_then(|key| self.collections.get(key))
+                .map(|collection| collection.collection.name.as_str())
+                .unwrap_or_default(),
         };
         let title = container(text(title).size(H6)).max_width(400.0);
 
@@ -1789,8 +1781,15 @@ impl Home {
                 Some(Page::Collection {
                     collection: page, ..
                 }),
-            ) => page
-                .view(
+            ) => {
+                let collection = self
+                    .collections
+                    .keys()
+                    .find(|(_, id)| *id == collection.1)
+                    .and_then(|key| self.collections.get(key))
+                    .expect("Trying to display an unrecorded collection");
+
+                page.view(
                     now,
                     collection,
                     movies.iter().peekable(),
@@ -1798,7 +1797,8 @@ impl Home {
                     seasons.iter().peekable(),
                     episodes.iter().peekable(),
                 )
-                .map(HomeMessage::Collection),
+                .map(HomeMessage::Collection)
+            }
             unreached => {
                 todo!("{unreached:?}")
             }
@@ -2006,9 +2006,7 @@ impl Home {
             State::Episode(episode) => (FetchId::Episode(episode.media.id), None),
             State::Movie(movie) => (FetchId::Movie(movie.media.id), None),
             State::Collections => (FetchId::Collections(true), None),
-            State::Collection { collection, .. } => {
-                (FetchId::Collection(collection.collection.id), None)
-            }
+            State::Collection { collection, .. } => (FetchId::Collection(*collection), None),
         };
 
         self.state = State::Loading(loading_animation(now));
@@ -2131,39 +2129,26 @@ impl Home {
 
     pub fn fetched_collection(
         &mut self,
-        collection: Collection,
-        items: Vec<models::collection::Item>,
+        collection: (CollectionView, CollectionId),
+        items: (Vec<Movie>, Vec<Show>, Vec<Season>, Vec<Episode>),
     ) -> Task<Message> {
         use models::collection::Item;
+        let (movies, shows, seasons, episodes) = items;
 
-        Task::perform(
-            async {
-                let collection = CollectionThumbnail::new(collection);
+        let movies = movies.into_iter().map(Thumbnail::new).collect();
+        let shows = shows.into_iter().map(Thumbnail::new).collect();
+        let seasons = seasons.into_iter().map(Thumbnail::new).collect();
+        let episodes = episodes.into_iter().map(Thumbnail::new).collect();
 
-                let mut movies = vec![];
-                let mut shows = vec![];
-                let mut seasons = vec![];
-                let mut episodes = vec![];
+        self.state = State::Collection {
+            collection,
+            shows,
+            movies,
+            seasons,
+            episodes,
+        };
 
-                for item in items {
-                    match item {
-                        Item::Movie(movie) => movies.push(Thumbnail::new(movie)),
-                        Item::Show(show) => shows.push(Thumbnail::new(show)),
-                        Item::Season(season) => seasons.push(Thumbnail::new(season)),
-                        Item::Episode(episode) => episodes.push(Thumbnail::new(episode)),
-                    }
-                }
-
-                HomeMessage::FetchCollectionState {
-                    collection: Box::new(collection),
-                    shows,
-                    movies,
-                    seasons,
-                    episodes,
-                }
-            },
-            Message::Home,
-        )
+        Task::none()
     }
 }
 

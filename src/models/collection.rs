@@ -354,7 +354,7 @@ impl Collection {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub enum CollectionView {
     Pinned = 0,
     #[default]

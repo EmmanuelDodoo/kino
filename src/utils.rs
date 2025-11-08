@@ -316,7 +316,7 @@ impl Default for VideoSettings {
             volume_change_amt: 0.05,
             seek_change_amt: 10.0,
             speed_change_amt: 0.1,
-            show_subtitles: false,
+            show_subtitles: true,
             muted: false,
             auto_start: true,
             auto_next: true,

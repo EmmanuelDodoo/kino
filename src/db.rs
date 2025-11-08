@@ -195,12 +195,7 @@ impl Database {
 
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(
-            &[
-                (":id", &ToSqlOutput::from(id)),
-            ],
-            Season::from_row,
-        )
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], Season::from_row)
     }
 
     pub fn get_season_episodes(
@@ -259,12 +254,7 @@ impl Database {
         let sql = format!("{} WHERE id=:id", Self::EPISODE_QUERY);
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(
-            &[
-                (":id", &ToSqlOutput::from(id)),
-            ],
-            Episode::from_row,
-        )
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], Episode::from_row)
     }
 
     pub fn get_ecomments(
@@ -455,6 +445,7 @@ impl Database {
         statement.query_row(&[(":id", &ToSqlOutput::from(id))], Collection::from_row)
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn get_collection_items(
         &self,
         collection: CollectionId,
@@ -462,7 +453,7 @@ impl Database {
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-    ) -> rusqlite::Result<Vec<collection::Item>> {
+    ) -> rusqlite::Result<(Vec<Movie>, Vec<Show>, Vec<Season>, Vec<Episode>)> {
         use collection::{Item, ItemId};
 
         let repeat = |count: usize| -> String {
@@ -495,9 +486,7 @@ impl Database {
             }
         }
 
-        let mut items: Vec<Item> = vec![];
-
-        if !movies.is_empty() {
+        let movies = if !movies.is_empty() {
             let vars = repeat(movies.len());
 
             let filter = filter
@@ -513,15 +502,14 @@ impl Database {
                 Self::MOVIE_QUERY,
             );
             let mut statement = self.prepare_cached(&sql)?;
-            let movies: rusqlite::Result<Vec<Item>> = statement
-                .query_map(params_from_iter(movies), |row| {
-                    Movie::from_row(row).map(Item::Movie)
-                })?
-                .collect();
-            items.extend(movies?)
-        }
+            statement
+                .query_map(params_from_iter(movies),  Movie::from_row)?
+                .collect::<rusqlite::Result<Vec<Movie>>>()?
+        } else {
+            vec![]
+        };
 
-        if !shows.is_empty() {
+        let shows = if !shows.is_empty() {
             let filter = filter
                 .query(Some("tv_show"))
                 .map(|query| format!("AND {query}"))
@@ -537,16 +525,14 @@ impl Database {
                 Self::SHOW_QUERY
             );
             let mut statement = self.prepare_cached(&sql)?;
-            let shows: rusqlite::Result<Vec<Item>> = statement
-                .query_map(params_from_iter(shows), |row| {
-                    Show::from_row(row).map(Item::Show)
-                })?
-                .collect();
+            statement
+                .query_map(params_from_iter(shows),  Show::from_row)?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        } else {
+            vec![]
+        };
 
-            items.extend(shows?)
-        }
-
-        if !seasons.is_empty() {
+        let seasons = if !seasons.is_empty() {
             let filter = filter
                 .query(Some("season"))
                 .map(|query| format!("AND {query}"))
@@ -562,16 +548,14 @@ impl Database {
                 Self::SEASON_QUERY
             );
             let mut statement = self.prepare_cached(&sql)?;
-            let seasons: rusqlite::Result<Vec<Item>> = statement
-                .query_map(params_from_iter(seasons), |row| {
-                    Season::from_row(row).map(Item::Season)
-                })?
-                .collect();
+            statement
+                .query_map(params_from_iter(seasons),  Season::from_row)?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        } else {
+            vec![]
+        };
 
-            items.extend(seasons?)
-        }
-
-        if !episodes.is_empty() {
+        let episodes = if !episodes.is_empty() {
             let filter = filter
                 .query(None)
                 .map(|query| format!("AND {query}"))
@@ -590,16 +574,14 @@ impl Database {
 
             let mut statement = self.prepare_cached(&sql)?;
 
-            let episodes: rusqlite::Result<Vec<Item>> = statement
-                .query_map(params_from_iter(episodes), |row| {
-                    Episode::from_row(row).map(Item::Episode)
-                })?
-                .collect();
+            statement
+                .query_map(params_from_iter(episodes),  Episode::from_row)?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        } else {
+            vec![]
+        };
 
-            items.extend(episodes?);
-        }
-
-        Ok(items)
+        Ok((movies, shows, seasons, episodes))
     }
 
     pub(super) fn open_test_db() -> rusqlite::Result<Database> {

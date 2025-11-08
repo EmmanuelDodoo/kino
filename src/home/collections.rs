@@ -10,8 +10,8 @@ use iced::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum CollectionsMessage {
-    Hovered((CollectionView, CollectionId), bool),
-    Details(CollectionId),
+    Hovered(CollectionId, bool),
+    Details((CollectionView, CollectionId)),
     Scroll(scrollable::Viewport),
 }
 
@@ -53,8 +53,8 @@ impl Collections {
 
                 Some(msg)
             }
-            CollectionsMessage::Details(id) => {
-                let msg = HomeMessage::Goto(PageKind::Collection(id));
+            CollectionsMessage::Details(key) => {
+                let msg = HomeMessage::Goto(PageKind::Collection(key));
                 Some(msg)
             }
             CollectionsMessage::Scroll(viewport) => {

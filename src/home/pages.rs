@@ -9,7 +9,7 @@ use super::movies::{Movies, MoviesMessage};
 use super::season::{SeasonPage, SeasonPageMessage};
 use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
-use crate::models::{CollectionId, EpisodeId, MovieId, SeasonId, ShowId};
+use crate::models::{CollectionId, CollectionView, EpisodeId, MovieId, SeasonId, ShowId};
 use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,7 +28,7 @@ pub enum PageKind {
     Movie(MovieId),
     Show(ShowId),
     Season(SeasonId),
-    Collection(CollectionId),
+    Collection((CollectionView, CollectionId)),
 }
 
 #[derive(Debug, Clone)]

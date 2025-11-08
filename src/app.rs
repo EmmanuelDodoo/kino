@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use crate::db;
 use crate::home::{Home, HomeMessage};
-use crate::models::{CollectionId, EpisodeId, ItemId, MovieId, SeasonId, ShowId, collection};
+use crate::models::{
+    CollectionId, CollectionView, EpisodeId, ItemId, MovieId, SeasonId, ShowId, collection,
+};
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::toast;
 use crate::utils::{
@@ -29,7 +31,7 @@ pub enum FetchId {
     Show(ShowId),
     Season(SeasonId),
     Episode(EpisodeId),
-    Collection(CollectionId),
+    Collection((CollectionView, CollectionId)),
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -320,18 +322,10 @@ impl App {
 
                     self.home.fetched_collections(collections, state)
                 }
-                FetchId::Collection(id) => {
-                    let collection = match self.db.get_collection(id) {
-                        Ok(collection) => collection,
-                        Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
-                            return Task::done(msg);
-                        }
-                    };
-
+                FetchId::Collection(key) => {
                     let items = match self
                         .db
-                        .get_collection_items(id, limit, offset, filter, sort)
+                        .get_collection_items(key.1, limit, offset, filter, sort)
                     {
                         Ok(items) => items,
                         Err(error) => {
@@ -340,7 +334,7 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_collection(collection, items)
+                    self.home.fetched_collection(key, items)
                 }
             },
         }

@@ -659,8 +659,8 @@ impl CollectionThumbnail {
     pub fn view<'a, Message: 'a + Clone>(
         &'a self,
         now: Instant,
-        on_select: impl Fn(CollectionId) -> Message + 'a,
-        on_hover: impl Fn((CollectionView, CollectionId), bool) -> Message + 'a,
+        on_select: impl Fn((CollectionView, CollectionId)) -> Message + 'a,
+        on_hover: impl Fn(CollectionId, bool) -> Message + 'a,
     ) -> Element<'a, Message> {
         let width = Self::CARD_WIDTH;
         let height = Self::CARD_HEIGHT;
@@ -730,12 +730,9 @@ impl CollectionThumbnail {
 
         let content = mouse_area(content)
             .interaction(mouse::Interaction::Pointer)
-            .on_press((on_select)(self.collection.id))
-            .on_exit((on_hover)(
-                (self.collection.view, self.collection.id),
-                false,
-            ))
-            .on_enter((on_hover)((self.collection.view, self.collection.id), true));
+            .on_press((on_select)((self.collection.view, self.collection.id)))
+            .on_exit((on_hover)(self.collection.id, false))
+            .on_enter((on_hover)(self.collection.id, true));
 
         content.into()
     }
