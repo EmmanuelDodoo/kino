@@ -9,7 +9,7 @@ use super::movies::{Movies, MoviesMessage};
 use super::season::{SeasonPage, SeasonPageMessage};
 use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
-use crate::models::{CollectionId, CollectionView, EpisodeId, MovieId, SeasonId, ShowId};
+use crate::models::{CollectionId, CollectionView, EpisodeId, ItemId, MovieId, SeasonId, ShowId};
 use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +29,17 @@ pub enum PageKind {
     Show(ShowId),
     Season(SeasonId),
     Collection((CollectionView, CollectionId)),
+}
+
+impl From<ItemId> for PageKind {
+    fn from(value: ItemId) -> Self {
+        match value {
+            ItemId::Movie(id) => Self::Movie(id),
+            ItemId::Show(id) => Self::Show(id),
+            ItemId::Season(id) => Self::Season(id),
+            ItemId::Episode(id) => Self::Episode(id),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

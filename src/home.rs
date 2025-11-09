@@ -1,13 +1,15 @@
 use iced::{
-    Element, Length, Padding, Task, Theme,
+    Element, Length, Padding, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
     animation::Animation,
     border::{Border, Radius},
-    time::Instant,
+    time::{Duration, Instant},
     widget::{
-        button, center, column, container, grid, operation::scroll_to, pick_list, row, rule,
-        scrollable, space, text, text_editor, text_input,
+        self, Container, button, center, column, container, grid,
+        operation::{self, scroll_to},
+        pick_list, row, rule, scrollable, space, text, text_editor, text_input,
     },
+    window,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -24,8 +26,8 @@ mod shared;
 mod shows;
 
 use crate::models::{
-    self, Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, Season,
-    SeasonId, Show, ShowId, collection::ItemId,
+    self, Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, SearchItem,
+    Season, SeasonId, Show, ShowId, collection::ItemId,
 };
 
 use crate::app::{FetchId, Message};
@@ -46,7 +48,9 @@ use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind, PageUpdate};
 use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
-use shared::{CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Scroll, Thumbnail, filter_sort};
+use shared::{
+    CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Scroll, SearchView, Thumbnail, filter_sort,
+};
 use shows::{TvShows, TvShowsMessage};
 
 #[derive(Debug, Clone)]
@@ -137,6 +141,24 @@ enum Icons {
     Icon12 = 12,
 }
 
+#[derive(Debug, Clone)]
+pub struct SearchState {
+    items: Vec<SearchView>,
+    search: String,
+    last_edit: Option<Instant>,
+    filter: Option<SearchFilter>,
+    text_input: widget::Id,
+}
+
+#[derive(Debug, Clone)]
+pub enum SearchMessage {
+    Load,
+    Search(String),
+    Hovered(ItemId, bool),
+    Searching,
+    ClearFilter,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Icon {
     id: Icons,
@@ -202,16 +224,18 @@ impl Icon {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig(CollectionId),
     Add(ItemId),
     AddToCollection(CollectionId),
+    Search,
 }
 
 #[derive(Debug, Clone)]
 pub enum View {
     CollectionConfig(CollectionConfig, CollectionView, CollectionId),
+    Search(SearchState, Option<CollectionId>),
 }
 
 #[derive(Debug, Clone)]
@@ -245,7 +269,6 @@ enum State {
 
 #[derive(Debug, Clone)]
 pub enum HomeMessage {
-    Search(String),
     ToggleSort,
     ToggleFilter,
     Filter(FilterMessage),
@@ -263,6 +286,7 @@ pub enum HomeMessage {
     Back,
     Forward,
     CollectionConfig(ConfigMessage),
+    SearchMessage(SearchMessage),
     OpenView(ViewMessage),
     CloseView,
     Play(ItemId),
@@ -295,8 +319,6 @@ pub struct Home {
     state: State,
 
     collections: BTreeMap<(CollectionView, CollectionId), CollectionThumbnail>,
-
-    search: String,
 
     layout: Layout,
     sort: Sort,
@@ -348,7 +370,6 @@ impl Home {
         Self {
             forward: vec![],
             backward: vec![],
-            search: String::default(),
 
             layout,
             sort,
@@ -370,10 +391,6 @@ impl Home {
     pub fn update(&mut self, message: HomeMessage, now: Instant) -> Task<Message> {
         match message {
             HomeMessage::None => Task::none(),
-            HomeMessage::Search(input) => {
-                self.search = input;
-                Task::none()
-            }
             HomeMessage::Settings => Task::none(),
             HomeMessage::FetchedCollections(state, collections) => {
                 self.collections = collections;
@@ -409,6 +426,7 @@ impl Home {
                     return Task::none();
                 }
 
+                self.view = None;
                 self.backward.retain(|back| *back != kind);
 
                 if let Some(old) = self.current_page.replace(kind) {
@@ -623,10 +641,8 @@ impl Home {
                     println!("Add item {item:?} to collection");
                     todo!()
                 }
-                ViewMessage::AddToCollection(id) => {
-                    println!("Add to collection {id:?}");
-                    todo!()
-                }
+                ViewMessage::AddToCollection(id) => self.toggle_search(Some(id)),
+                ViewMessage::Search => self.toggle_search(None),
             },
             HomeMessage::CollectionConfig(csg) => {
                 let Some(View::CollectionConfig(mut config, view, id)) = self.view.take() else {
@@ -686,6 +702,71 @@ impl Home {
                 self.view = Some(View::CollectionConfig(config, view, id));
 
                 Task::none()
+            }
+            HomeMessage::SearchMessage(ssg) => {
+                let Some(View::Search(state, _)) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match ssg {
+                    SearchMessage::Hovered(id, is_hovered) => {
+                        if let Some(item) = state.items.iter_mut().find(|view| view.item.id == id) {
+                            item.animation.go_mut(is_hovered, now);
+                        };
+
+                        Task::none()
+                    }
+                    SearchMessage::Search(mut search) => {
+                        state.last_edit = Some(now);
+                        match search.find(":").and_then(|pos| {
+                            SearchFilter::new(&search[0..pos]).map(|filter| (pos, filter))
+                        }) {
+                            Some((pos, filter)) => {
+                                search.replace_range(0..=pos, "");
+                                state.filter = Some(filter);
+                                state.search = search;
+
+                                operation::focus(state.text_input.clone())
+                            }
+                            None => match state.filter {
+                                Some(filter) if search.is_empty() && state.search.is_empty() => {
+                                    state.filter = None;
+
+                                    state.search = filter.to_str().to_owned();
+
+                                    operation::focus(state.text_input.clone())
+                                }
+                                _ => {
+                                    state.search = search;
+
+                                    Task::none()
+                                }
+                            },
+                        }
+                    }
+                    SearchMessage::ClearFilter => {
+                        state.filter = None;
+                        Task::none()
+                    }
+                    SearchMessage::Load => self.load(),
+                    SearchMessage::Searching => {
+                        if state
+                            .last_edit
+                            .map(|last_edit| {
+                                now.duration_since(last_edit) < Duration::from_millis(500)
+                            })
+                            .unwrap_or_default()
+                        {
+                            return Task::none();
+                        }
+
+                        if state.last_edit.is_none() {
+                            return Task::none();
+                        }
+
+                        self.load()
+                    }
+                }
             }
             HomeMessage::CloseView => {
                 self.view = None;
@@ -902,10 +983,13 @@ impl Home {
             }
             HomeMessage::RefreshContent => self.content_refresh(now),
             HomeMessage::Refresh => self.refresh(now),
-            HomeMessage::Play(item) => self.play(item),
+            HomeMessage::Play(item) => {
+                self.view = None;
+                self.play(item)
+            }
             HomeMessage::PlayCollection { id, items } => {
                 println!("Play {items:?} from collection {id:?}");
-                Task::none()
+                todo!()
             }
             HomeMessage::HoveredCollection(key, is_hovered) => {
                 let State::Collections = &mut self.state else {
@@ -1015,6 +1099,19 @@ impl Home {
         }
     }
 
+    pub fn subscription(&self) -> Subscription<Message> {
+        let searching = match &self.view {
+            Some(View::Search(state, _)) => state.last_edit.is_some(),
+            _ => false,
+        };
+        if searching {
+            window::frames()
+                .map(|_| Message::Home(HomeMessage::SearchMessage(SearchMessage::Searching)))
+        } else {
+            Subscription::none()
+        }
+    }
+
     fn play(&self, item: ItemId) -> Task<Message> {
         match (&self.state, item) {
             (State::Loading(_), _) => Task::none(),
@@ -1062,7 +1159,7 @@ impl Home {
                     Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
                 }
             }
-            _ => todo!(),
+            unreached => todo!("Needs rework after search implementation {unreached:?}"),
         }
     }
 
@@ -1689,24 +1786,10 @@ impl Home {
                 .map(|collection| collection.collection.name.as_str())
                 .unwrap_or_default(),
         };
-        let title = container(text(title).size(H6)).max_width(400.0);
+        let title = container(text(title).size(H6)).height(30);
 
-        let search = {
-            let size = H7;
-            let icon = text_input::Icon {
-                font: icons::FONT,
-                code_point: icons::SEARCH,
-                side: text_input::Side::Right,
-                size: Some(size.into()),
-                spacing: 5.0,
-            };
-
-            text_input("Search", &self.search)
-                .icon(icon)
-                .size(size)
-                .width(175.0)
-                .on_input(HomeMessage::Search)
-        };
+        let search =
+            sized_button(icons::SEARCH, H6).on_press(HomeMessage::OpenView(ViewMessage::Search));
 
         let top = container(
             row!(
@@ -1805,7 +1888,7 @@ impl Home {
         }
     }
 
-    pub fn view(&self, now: Instant) -> Element<'_, HomeMessage> {
+    pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, HomeMessage> {
         let content = row!(self.side(), self.content_area(now))
             .width(Length::Fill)
             .height(Length::Fill)
@@ -1820,11 +1903,27 @@ impl Home {
                     .on_blur(HomeMessage::CloseView)
                     .into()
             }
+            Some(View::Search(state, None)) => {
+                let overlay =
+                    draw_search(state, |id| HomeMessage::Goto(id.into()), theme, now, true);
+
+                modal(content, overlay)
+                    .on_blur(HomeMessage::CloseView)
+                    .into()
+            }
+            Some(View::Search(state, Some(_collection))) => {
+                // todo
+                let overlay = draw_search(state, |_| HomeMessage::None, theme, now, false);
+
+                modal(content, overlay)
+                    .on_blur(HomeMessage::CloseView)
+                    .into()
+            }
         }
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        match &self.state {
+        let state = match &self.state {
             State::Loading(animation) => animation.is_animating(now),
             State::Recent { shows, movies } => {
                 let shows = shows.iter().any(|show| show.is_animating(now));
@@ -1857,7 +1956,14 @@ impl Home {
 
                 shows || movies || seasons || episodes
             }
-        }
+        };
+
+        let searching = match &self.view {
+            Some(View::Search(state, _)) => state.items.iter().any(|item| item.is_animating(now)),
+            _ => false,
+        };
+
+        searching || state
     }
 
     pub fn back(&mut self, now: Instant) -> Task<Message> {
@@ -2060,6 +2166,7 @@ impl Home {
             HomeAction::LayoutToggle => self.layout_toggle(),
             HomeAction::RefreshContent => self.content_refresh(now),
             HomeAction::Refresh => self.refresh(now),
+            HomeAction::SearchToggle => self.toggle_search(None),
         }
     }
 
@@ -2149,6 +2256,44 @@ impl Home {
         };
 
         Task::none()
+    }
+
+    pub fn load(&mut self) -> Task<Message> {
+        let Some(View::Search(state, _)) = self.view.as_mut() else {
+            return Task::none();
+        };
+
+        state.last_edit = None;
+
+        if state.search.trim().is_empty() {
+            state.items.clear();
+            return Task::none();
+        }
+
+        Task::done(Message::LoadSearch(state.search.clone(), state.filter))
+    }
+
+    pub fn loaded_search(&mut self, items: Vec<SearchItem>) {
+        let Some(View::Search(state, _)) = self.view.as_mut() else {
+            return;
+        };
+
+        state.items = items.into_iter().map(SearchView::new).collect()
+    }
+
+    pub fn toggle_search(&mut self, collection: Option<CollectionId>) -> Task<Message> {
+        let text_input = widget::Id::unique();
+        let state = SearchState {
+            items: vec![],
+            search: String::default(),
+            last_edit: None,
+            filter: None,
+            text_input: text_input.clone(),
+        };
+
+        self.view = Some(View::Search(state, collection));
+
+        operation::focus(text_input)
     }
 }
 
@@ -2368,13 +2513,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
 
     let content = column!(name, description, view, icons, space::vertical(), actions).spacing(16);
 
-    let content = container(content)
-        .padding([16, 24])
-        .style(container::dark)
-        .width(width)
-        .height(height);
-
-    content.into()
+    modal_container(content).width(width).height(height).into()
 }
 
 fn play_item(id: PlayId, name: &str, path: &Path) -> Result<PlayItem, String> {
@@ -2447,4 +2586,82 @@ fn fetch_kind(kind: PageKind) -> FetchId {
         PageKind::Movie(id) => FetchId::Movie(id),
         PageKind::Collection(id) => FetchId::Collection(id),
     }
+}
+
+fn modal_container<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Container<'a, HomeMessage> {
+    container(content)
+        .padding([16, 24])
+        .style(|theme| {
+            let default = container::dark(theme);
+            let border = default.border.rounded(5.0);
+
+            container::Style { border, ..default }
+        })
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Center)
+}
+
+fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
+    state: &'a SearchState,
+    primary: F,
+    theme: &Theme,
+    now: Instant,
+    set_play: bool,
+) -> Element<'a, HomeMessage> {
+    let items = state.items.iter().map(|item| {
+        item.view(
+            now,
+            &theme,
+            HomeMessage::Play,
+            primary.clone(),
+            |id, hovered| HomeMessage::SearchMessage(SearchMessage::Hovered(id, hovered)),
+            |_| HomeMessage::None,
+            set_play,
+        )
+    });
+
+    let input = {
+        let filter: Element<'_, HomeMessage> = match state.filter {
+            Some(filter) => {
+                let content = row!(filter.to_str(), icon(CANCEL))
+                    .align_y(Vertical::Center)
+                    .spacing(4.0);
+
+                button(content)
+                    .on_press(HomeMessage::SearchMessage(SearchMessage::ClearFilter))
+                    .style(|theme, status| {
+                        let default = button::primary(theme, status);
+                        let border = default.border.rounded(5);
+
+                        button::Style { border, ..default }
+                    })
+                    .into()
+            }
+            None => empty(),
+        };
+
+        let size = H6;
+        let icon = text_input::Icon {
+            font: icons::FONT,
+            code_point: icons::SEARCH,
+            side: text_input::Side::Right,
+            size: Some(size.into()),
+            spacing: 5.0,
+        };
+        let input = text_input("Search Media", &state.search)
+            .id(state.text_input.clone())
+            .size(size)
+            .icon(icon)
+            .on_input(|search| HomeMessage::SearchMessage(SearchMessage::Search(search)))
+            .on_submit(HomeMessage::SearchMessage(SearchMessage::Load));
+
+        row!(filter, input).spacing(10.0).align_y(Vertical::Center)
+    };
+
+    let content = column!(input).extend(items).spacing(16.0);
+
+    modal_container(content)
+        .max_width(550)
+        .height(Length::Shrink)
+        .into()
 }

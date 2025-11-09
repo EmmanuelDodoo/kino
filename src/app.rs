@@ -11,13 +11,14 @@ use std::path::PathBuf;
 use crate::db;
 use crate::home::{Home, HomeMessage};
 use crate::models::{
-    CollectionId, CollectionView, EpisodeId, ItemId, MovieId, SeasonId, ShowId, collection,
+    CollectionId, CollectionView, EpisodeId, ItemId, MovieId, SearchItem, SeasonId, ShowId,
+    collection,
 };
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::toast;
 use crate::utils::{
-    Action, Filter, FilterMode, HomeAction, Layout, PlayItem, PlayerAction, Playlist, Sort,
-    VideoSettings, load_fonts,
+    Action, Filter, FilterMode, HomeAction, Layout, PlayItem, PlayerAction, Playlist, SearchFilter,
+    Sort, VideoSettings, load_fonts,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -54,6 +55,7 @@ pub enum Message {
     Action(Action),
     PlayItem(PlayItem),
     PlayItems(Vec<PlayItem>),
+    LoadSearch(String, Option<SearchFilter>),
     Animate,
     Fetch {
         id: FetchId,
@@ -139,9 +141,7 @@ impl App {
                     self.home.refresh(now)
                 } else {
                     Task::none()
-
                 }
-
             }
             Message::Exit(id) => {
                 let Some(own) = &self.window else {
@@ -353,12 +353,26 @@ impl App {
                     self.home.fetched_collection(key, items)
                 }
             },
+            Message::LoadSearch(search, filter) => {
+                let items = match self.db.search(search, filter, Some(5)) {
+                    Ok(items) => items,
+                    Err(error) => {
+                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        return Task::done(msg);
+                    }
+                };
+
+                self.home.loaded_search(items);
+
+                Task::none()
+            }
         }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
+        let theme = self.theme().unwrap();
         let content: Element<'_, Message> = match self.screen {
-            Screen::Home => self.home.view(self.now).map(Message::Home),
+            Screen::Home => self.home.view(&theme, self.now).map(Message::Home),
             Screen::Player => {
                 let player = self.player.as_ref().unwrap();
 
@@ -379,6 +393,7 @@ impl App {
             .as_ref()
             .map(|player| (player.is_animating(self.now), player.subscription()))
             .unwrap_or((false, Subscription::none()));
+        let player = player.map(Message::Player);
 
         let animating = if self.home.is_animating(self.now) || animating {
             window::frames().map(|_| Message::Animate)
@@ -390,11 +405,12 @@ impl App {
 
         let exit = window::close_requests().map(Message::Exit);
 
-        let player = player.map(Message::Player);
+
+        let home = self.home.subscription();
 
         let refresh = time::every(self.refresh_interval).map(Message::Refresh);
 
-        Subscription::batch([animating, keys, exit, player, refresh])
+        Subscription::batch([animating, keys, exit, player, refresh, home])
     }
 
     fn push_toast(&mut self, toast: toast::Toast) {

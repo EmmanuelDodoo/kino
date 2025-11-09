@@ -350,6 +350,41 @@ impl Directory {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SearchItem{
+    pub id: ItemId,
+    pub name: String,
+    pub snippet: String,
+    pub tags: Vec<String>,
+}
+
+impl SearchItem {
+    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self>{
+        let id = ItemId::from_row(row)?;
+
+        let name = row.get::<_, String>("name")?;
+
+        let snippet = row.get::<_, String>("snippet")?;
+
+        let tags = row.get::<_, Option<String>>("tags")?;
+        let tags = {
+            tags.map(|tags| {
+                tags.split(",")
+                    .map(ToOwned::to_owned)
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default()
+        };
+
+        Ok(Self {
+            id,
+            name,
+            snippet,
+            tags
+        })
+    }
+}
+
 fn naivedate_to_sql<'a>(date: &NaiveDate) -> ToSqlOutput<'a> {
     let date_str = date.format("%F").to_string();
     ToSqlOutput::from(date_str)

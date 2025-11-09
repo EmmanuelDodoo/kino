@@ -1,5 +1,6 @@
 use chrono::Datelike;
 
+pub use search::SearchFilter;
 use crate::models::Media;
 use std::fmt::{self, Display};
 
@@ -472,6 +473,50 @@ pub mod comments {
             let query = [added, timestamp].into_iter().flatten().collect::<Vec<_>>();
 
             Some(query.join(&format!(" {mode} ")))
+        }
+    }
+}
+
+pub mod search {
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum SearchFilter {
+        Movie,
+        Show,
+        Season,
+        Episode,
+    }
+
+    impl SearchFilter {
+        pub fn new(s: &str) -> Option<Self> {
+            let new = match s {
+                "movie" => Self::Movie,
+                "show" => Self::Show,
+                "season" => Self::Season,
+                "episode" => Self::Episode,
+                _ => return None,
+            };
+
+            Some(new)
+        }
+
+        pub fn to_str(&self) -> &'static str {
+            match self {
+                Self::Movie => "movie",
+                Self::Show => "show",
+                Self::Season => "season",
+                Self::Episode => "episode",
+            }
+        }
+
+        pub fn query(&self) -> String {
+            let kind = match self {
+                Self::Movie => "movie",
+                Self::Show => "show",
+                Self::Season => "season",
+                Self::Episode => "episode",
+            };
+
+            format!("AND media_type = '{kind}'")
         }
     }
 }

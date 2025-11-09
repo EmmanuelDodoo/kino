@@ -1,25 +1,26 @@
-use crate::models::{Collection, CollectionId, CollectionView, Media};
+use crate::models::{Collection, CollectionId, CollectionView, ItemId, Media, SearchItem};
 use crate::utils::empty;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Filter, Sort};
 use iced::{
-    ContentFit, Element, Length,
+    ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
+    font,
     font::{Family, Font, Style, Weight},
     mouse,
     time::Instant,
     widget::{
-        self, center, column, container, image::Handle, mouse_area, operation, row, space, stack,
-        text,
+        self, center, column, container, image::Handle, markdown, mouse_area, operation, row,
+        space, stack, text,
     },
 };
 use image::{DynamicImage, GenericImage, ImageBuffer, ImageReader, Rgba, imageops::FilterType};
 
 pub const CARD_HEIGHT: f32 = 350.0;
 pub const CARD_WIDTH: f32 = CARD_HEIGHT * 7.5 / 10.0;
-pub const LIST_HEIGHT: f32 = 200.0;
+pub const LIST_HEIGHT: f32 = 175.0;
 pub const LIST_WIDTH: f32 = LIST_HEIGHT * 5.5 / 10.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -288,7 +289,7 @@ impl<T: Media> Thumbnail<T> {
 
         Self {
             zoom: Animation::new(false)
-                .duration(iced::time::Duration::from_millis(50))
+                .duration(iced::time::Duration::from_millis(100))
                 .easing(Easing::EaseInOut),
             poster,
             backdrop,
@@ -490,7 +491,7 @@ impl<T: Media> Thumbnail<T> {
         };
 
         let details = {
-            let title = text(self.media.name()).size(H7);
+            let title = text(self.media.name()).size(H7).height(30.0);
             let ratings = ratings(&self.media);
             let release = {
                 let release = text(self.media.release_year()).size(H7);
@@ -611,7 +612,7 @@ impl CollectionThumbnail {
             collage,
             collection,
             zoom: Animation::new(false)
-                .duration(iced::time::Duration::from_millis(50))
+                .duration(iced::time::Duration::from_millis(100))
                 .easing(Easing::EaseInOut),
         }
     }
@@ -735,6 +736,147 @@ impl CollectionThumbnail {
             .on_enter((on_hover)(self.collection.id, true));
 
         content.into()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SearchView {
+    pub item: SearchItem,
+    snippet: Vec<markdown::Item>,
+    pub animation: Animation<bool>,
+}
+
+impl SearchView {
+    pub fn new(item: SearchItem) -> Self {
+        Self {
+            animation: Animation::new(false)
+                .duration(iced::time::Duration::from_millis(100))
+                .easing(Easing::EaseInOut),
+            snippet: markdown::parse(&item.snippet).collect(),
+            item,
+        }
+    }
+
+    pub fn is_animating(&self, now: Instant) -> bool {
+        self.animation.is_animating(now)
+    }
+
+    pub fn view<'a, Message: 'a + Clone>(
+        &'a self,
+        now: Instant,
+        theme: &Theme,
+        on_play: impl Fn(ItemId) -> Message,
+        on_details: impl Fn(ItemId) -> Message,
+        on_hover: impl Fn(ItemId, bool) -> Message,
+        on_url: impl Fn(url::Url) -> Message + 'a,
+        set_play: bool,
+    ) -> Element<'a, Message> {
+        use iced::theme::palette::Pair;
+
+        fn pair(theme: &Theme) -> Pair {
+            theme.extended_palette().background.weak
+        }
+
+        let separator = || {
+            Element::from(text("•").line_height(0.9).size(H5).style(|theme: &Theme| {
+                let color = pair(theme).text.scale_alpha(0.9);
+                text::Style { color: Some(color) }
+            }))
+        };
+
+        let media = {
+            let media = match &self.item.id {
+                ItemId::Movie(_) => "movie",
+                ItemId::Show(_) => "show",
+                ItemId::Season(_) => "season",
+                ItemId::Episode(_) => "episode",
+            };
+
+            text(media).size(H8).style(|theme: &Theme| {
+                let color = pair(theme).text.scale_alpha(0.9);
+                text::Style { color: Some(color) }
+            })
+        };
+
+        let name = {
+            let font = Font {
+                weight: font::Weight::Medium,
+                family: font::Family::Monospace,
+                ..Default::default()
+            };
+
+            container(
+                text(&self.item.name)
+                    .size(H5)
+                    .font(font)
+                    .width(Length::Fill),
+            )
+            .max_height(30.0)
+        };
+
+        let snippet = {
+            let settings = markdown::Settings::with_text_size(P, theme);
+
+            markdown::view(&self.snippet, settings).map(on_url)
+        };
+
+        let tags = {
+            let mut tags = vec![];
+            let tag_len = self.item.tags.len();
+
+            for (i, tag) in self.item.tags.iter().enumerate() {
+                tags.push(Element::from(text(tag).size(H8).style(|theme: &Theme| {
+                    let color = pair(theme).text.scale_alpha(0.9);
+                    text::Style { color: Some(color) }
+                })));
+
+                if i < tag_len - 1 {
+                    tags.push(separator())
+                }
+            }
+
+            row(tags).spacing(6).align_y(Vertical::Center)
+        };
+
+        let content = column!(media, name, snippet, tags).width(450).spacing(2.0);
+
+        let play: Element<'_, Message> = if set_play {
+            let size = H1;
+            let play = icon(PLAY).size(size).align_x(Horizontal::Center);
+
+            mouse_area(play)
+                .interaction(iced::mouse::Interaction::Pointer)
+                .on_press((on_play)(self.item.id))
+                .into()
+        } else {
+            empty()
+        };
+
+        let content = row!(content, space::horizontal(), play).align_y(Vertical::Center);
+
+        let background_factor = 1.0 * self.animation.interpolate(0.25, 0.75, now);
+        let content = container(content)
+            .width(500)
+            .style(move |theme| {
+                let default = container::secondary(theme);
+                let border = default.border.rounded(5.0);
+                let background = default
+                    .background
+                    .map(|background| background.scale_alpha(background_factor));
+
+                container::Style {
+                    border,
+                    background,
+                    ..default
+                }
+            })
+            .padding([6, 12]);
+        mouse_area(content)
+            .on_press((on_details)(self.item.id))
+            .interaction(mouse::Interaction::Pointer)
+            .on_exit((on_hover)(self.item.id, false))
+            .on_enter((on_hover)(self.item.id, true))
+            .into()
     }
 }
 

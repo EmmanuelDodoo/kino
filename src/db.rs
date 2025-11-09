@@ -1,11 +1,11 @@
 // #![allow(unused_imports, dead_code)]
 use crate::models::{
     Collection, CollectionId, Directory, DirectoryId, EComment, ECommentId, Episode, EpisodeId,
-    MComment, MCommentId, Movie, MovieId, Season, SeasonId, Show, ShowId,
+    MComment, MCommentId, Movie, MovieId, SearchItem, Season, SeasonId, Show, ShowId,
     collection::{self, Item},
 };
 
-use crate::filter::{self, Filter};
+use crate::filter::{self, Filter, search::SearchFilter};
 use crate::sort::{self, Sort};
 
 use chrono::{DateTime, Local};
@@ -503,7 +503,7 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(movies),  Movie::from_row)?
+                .query_map(params_from_iter(movies), Movie::from_row)?
                 .collect::<rusqlite::Result<Vec<Movie>>>()?
         } else {
             vec![]
@@ -526,7 +526,7 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(shows),  Show::from_row)?
+                .query_map(params_from_iter(shows), Show::from_row)?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
@@ -549,7 +549,7 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(seasons),  Season::from_row)?
+                .query_map(params_from_iter(seasons), Season::from_row)?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
@@ -575,13 +575,43 @@ impl Database {
             let mut statement = self.prepare_cached(&sql)?;
 
             statement
-                .query_map(params_from_iter(episodes),  Episode::from_row)?
+                .query_map(params_from_iter(episodes), Episode::from_row)?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
         };
 
         Ok((movies, shows, seasons, episodes))
+    }
+
+    pub fn search(
+        &self,
+        term: String,
+        filter: Option<SearchFilter>,
+        limit: Option<i32>,
+    ) -> rusqlite::Result<Vec<SearchItem>> {
+        let limit = limit.unwrap_or(-1);
+        let filter = filter.map(|filter| filter.query()).unwrap_or_default();
+
+        let sql = format!(
+            "SELECT
+            i.media_type,
+            i.media_id,
+            f.name,
+            snippet(media_fts, 1, '**', '**', '...', 16) as snippet,
+            f.tags
+            FROM media_fts f
+            INNER JOIN media_fts_index i on f.rowid = i.rowid
+            WHERE media_fts MATCH :term {filter}
+            ORDER BY rank
+            LIMIT {limit}"
+        );
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_map(&[(":term", &ToSqlOutput::from(term))], SearchItem::from_row)?
+            .collect()
     }
 
     pub(super) fn open_test_db() -> rusqlite::Result<Database> {

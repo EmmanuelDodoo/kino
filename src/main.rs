@@ -2,19 +2,16 @@
 use iced::{
     Color, ContentFit, Element, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation,
     Shadow, Size, Subscription, Task, Theme, Vector,
-    advanced::{
-        self, Widget, layout, mouse, overlay,
-        widget::{operation, tree},
-    },
+    advanced::{self, Widget, layout, mouse, overlay, widget::tree},
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
     border::{self, Border, Radius},
     color, font, padding,
     time::{Duration, Instant},
     widget::{
-        Space, bottom, bottom_center, button, center, center_x, center_y, column, container, float,
-        grid, image, mouse_area, pick_list, row, scrollable, slider, stack, text, text_input,
-        tooltip,
+        self, Space, bottom, bottom_center, button, center, center_x, center_y, column, container,
+        float, grid, image, markdown, mouse_area, operation, pick_list, rich_text, row, scrollable,
+        slider, space, span, stack, text, text_input, tooltip,
     },
     window,
 };
@@ -30,15 +27,16 @@ pub mod utils;
 mod widgets;
 
 use app::App;
-// use player::{Player, PlayerMessage};
+use models::{ItemId, SearchItem};
 use utils::filter;
 use utils::filter::*;
+use utils::icons;
 use utils::icons::*;
 use utils::sort;
 use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Layout, Sort, SortKind, empty};
+use utils::{Layout, SearchFilter, Sort, SortKind, empty};
 use widgets::*;
 
 // fn _test_main() {
@@ -86,7 +84,7 @@ fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     FontLoad(Result<(), iced::font::Error>),
-    Load,
+    None,
 }
 
 struct Playground {
@@ -97,7 +95,7 @@ struct Playground {
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let fonts = utils::load_fonts().map(Message::FontLoad);
-        let dummy = Task::done(Message::Load);
+        // let load = Task::done(Message::Load);
 
         let now = Instant::now();
 
@@ -106,18 +104,14 @@ impl Playground {
             db: db::Database::open_test_db().unwrap(),
         };
 
-        (new, Task::batch([fonts, dummy]))
+        (new, Task::batch([fonts]))
     }
 
     fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
         self.now = now;
 
         match message {
-            Message::Load => {
-                let collections = self.db.get_collections(crate::models::collection::Sort::default()).unwrap();
-                dbg!(collections);
-                Task::none()
-            }
+            Message::None => Task::none(),
             Message::FontLoad(Ok(_)) => Task::none(),
             Message::FontLoad(Err(error)) => {
                 eprintln!("{error:?}");
@@ -127,17 +121,16 @@ impl Playground {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let content = button("Load").on_press(Message::Load);
-        let content = center(content);
+        let content = center("Playground");
 
         content.into()
     }
 
-    fn subscription(&self) -> Subscription<Message>{
+    fn subscription(&self) -> Subscription<Message> {
         Subscription::none()
     }
 
     fn theme(&self) -> Option<Theme> {
-        Some(Theme::Nightfly)
+        Some(Theme::TokyoNight)
     }
 }

@@ -5,7 +5,7 @@
 
 -- Insert TV Shows
 INSERT INTO tv_show (id, directory, path, name, original_name, poster, tags, synopsis, release, created_at, backdrop) VALUES
-('0199cff2-667c-7c73-b6c2-6e0f1276d32f', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Digital Horizons', 'Digital Horizons','Digital Horizons', 'assets/show.png', 'sci-fi,drama,technology', 'A gripping tale of AI consciousness and human connection in a near-future world.', '2023-02-01', '2023-01-01T10:00:00Z', 'assets/show3.png'),
+('0199cff2-667c-7c73-b6c2-6e0f1276d32f', '0199de91-1a9d-73d2-a819-a4dfbadf8228', 'Digital Horizons','Digital Horizons some long ass text for testing limit','Digital Horizons', 'assets/show.png', 'sci-fi,drama,technology', 'A gripping tale of AI consciousness and human connection in a near-future world.', '2023-02-01', '2023-01-01T10:00:00Z', 'assets/show3.png'),
 ('0199cffc-ead6-7ab3-a961-cc4c146e4fc8', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Mystery Manor', 'Mystery Manor','Mystery Manor', 'assets/show.png', 'mystery,thriller,crime', 'Detective Sarah Chen solves impossible crimes in a mansion full of secrets.', '2023-03-03', '2023-05-15T09:00:00Z', 'assets/show3.png'),
 ('0199cffd-c688-79d2-8018-bad6db895ff5', '0199de91-1a9d-73d2-a819-a4dfbadf8228', 'Culinary Quest', 'Culinary Quest','Culinary Quest', 'assets/show.png', 'cooking,competition,reality', 'Top chefs compete in exotic locations for the ultimate culinary title.', '2024-04-04', '2024-05-15T09:00:00Z', 'assets/show3.png');
 
@@ -51,8 +51,7 @@ INSERT INTO episode (id, path, name, original_name, progress, synopsis, rating, 
 -- Insert Episodes for Mystery Manor Season 2
 INSERT INTO episode (id, path, name, original_name, progress, synopsis, rating, poster, season_id, release, created_at, duration, last_watched, watch_count, episode_number) VALUES
 ('01933b70-2a42-7000-8000-00000000000f', 'Episode 1', 'New Blood','New Blood',1.0, 'A fresh mystery draws Chen back to the manor.', 4, 'assets/show5.png', '01933b6f-1a42-7000-8000-000000000004', '2024-01-01', '2024-03-25T21:00:00Z', 3300, '2024-03-26T22:00:00Z', 1, 1),
-('01933b70-2a42-7000-8000-000000000010', 'Episode 2', 'Echoes of the
-Past','Echoes of the Past', 1.0, 'Old ghosts resurface with new victims.', 5, 'assets/show5.png', '01933b6f-1a42-7000-8000-000000000004', '2024-02-02', '2024-04-01T21:00:00Z', 3360, '2024-04-02T21:45:00Z', 1, 2),
+('01933b70-2a42-7000-8000-000000000010', 'Episode 2', 'Echoes of the Past','Echoes of the Past', 1.0, 'Old ghosts resurface with new victims.', 5, 'assets/show5.png', '01933b6f-1a42-7000-8000-000000000004', '2024-02-02', '2024-04-01T21:00:00Z', 3360, '2024-04-02T21:45:00Z', 1, 2),
 ('01933b70-2a42-7000-8000-000000000011', 'Episode 3', 'The Legacy','The Legacy', 0.7, 'A familys dark secret comes to light.', 4, 'assets/show5.png', '01933b6f-1a42-7000-8000-000000000004', '2024-03-03', '2024-04-08T21:00:00Z', 3240, '2024-04-09T21:30:00Z', 1, 3),
 ('01933b70-2a42-7000-8000-000000000012', 'Episode 4', 'Deception','Deception', 0.0, 'Nothing is as it seems in the manor.', 4, 'assets/show5.png', '01933b6f-1a42-7000-8000-000000000004', '2024-04-04', '2024-04-15T21:00:00Z', 3300, NULL, 0, 4);
 

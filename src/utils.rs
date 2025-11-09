@@ -18,7 +18,7 @@ pub use icons::*;
 pub mod typo;
 pub use typo::*;
 pub mod filter;
-pub use filter::{Comments, Comp, Duration, Filter, FilterMode, Progress, ProgressKind, Release};
+pub use filter::{Comments, search::SearchFilter, Comp, Duration, Filter, FilterMode, Progress, ProgressKind, Release};
 pub mod sort;
 pub use sort::{Sort, SortKind};
 
@@ -348,7 +348,7 @@ pub enum HomeAction {
     RefreshContent,
     /// Refreshes both content and the side menu
     Refresh,
-    // SearchToggle,
+    SearchToggle,
 }
 
 #[derive(Debug, Clone, Copy)]
