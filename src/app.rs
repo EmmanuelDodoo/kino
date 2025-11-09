@@ -9,7 +9,7 @@ use iced_video_player::{Video, VideoPlayer};
 use std::path::PathBuf;
 
 use crate::db;
-use crate::home::{Home, HomeMessage};
+use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
     CollectionId, CollectionView, EpisodeId, ItemId, MovieId, SearchItem, SeasonId, ShowId,
     collection,
@@ -211,20 +211,31 @@ impl App {
                 offset,
             } => match id {
                 FetchId::Shows => {
-                    let shows = match self.db.get_shows(limit, offset, filter, sort) {
-                        Ok(shows) => shows,
-                        Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
-                            return Task::done(msg);
-                        }
-                    };
+                    let shows =
+                        match self
+                            .db
+                            .get_shows(limit, offset, filter, sort, shared::Thumbnail::new)
+                        {
+                            Ok(shows) => shows,
+                            Err(error) => {
+                                let msg =
+                                    Message::PushToast(error.to_string(), toast::Status::Error);
+                                return Task::done(msg);
+                            }
+                        };
 
                     self.home.fetched_shows(shows);
 
                     Task::none()
                 }
                 FetchId::Movies => {
-                    let movies = match self.db.get_movies(limit, offset, filter, sort) {
+                    let movies = match self.db.get_movies(
+                        limit,
+                        offset,
+                        filter,
+                        sort,
+                        shared::Thumbnail::new,
+                    ) {
                         Ok(movies) => movies,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -237,27 +248,38 @@ impl App {
                     Task::none()
                 }
                 FetchId::Recents => {
-                    let movies = match self.db.get_movies(limit, offset, filter, sort) {
+                    let movies = match self.db.get_movies(
+                        limit,
+                        offset,
+                        filter,
+                        sort,
+                        shared::Thumbnail::new,
+                    ) {
                         Ok(movies) => movies,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
                             return Task::done(msg);
                         }
                     };
-                    let shows = match self.db.get_shows(limit, offset, filter, sort) {
-                        Ok(shows) => shows,
-                        Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
-                            return Task::done(msg);
-                        }
-                    };
+                    let shows =
+                        match self
+                            .db
+                            .get_shows(limit, offset, filter, sort, shared::Thumbnail::new)
+                        {
+                            Ok(shows) => shows,
+                            Err(error) => {
+                                let msg =
+                                    Message::PushToast(error.to_string(), toast::Status::Error);
+                                return Task::done(msg);
+                            }
+                        };
 
                     self.home.fetched_recents(movies, shows);
 
                     Task::none()
                 }
                 FetchId::Show(id) => {
-                    let show = match self.db.get_show(id) {
+                    let show = match self.db.get_show(id, shared::Thumbnail::new) {
                         Ok(show) => show,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -265,7 +287,14 @@ impl App {
                         }
                     };
 
-                    let seasons = match self.db.get_show_seasons(id, limit, offset, filter, sort) {
+                    let seasons = match self.db.get_show_seasons(
+                        id,
+                        limit,
+                        offset,
+                        filter,
+                        sort,
+                        shared::Thumbnail::new,
+                    ) {
                         Ok(seasons) => seasons,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -278,7 +307,7 @@ impl App {
                     Task::none()
                 }
                 FetchId::Season(id) => {
-                    let season = match self.db.get_season(id) {
+                    let season = match self.db.get_season(id, shared::Thumbnail::new) {
                         Ok(season) => season,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -286,22 +315,27 @@ impl App {
                         }
                     };
 
-                    let episodes =
-                        match self.db.get_season_episodes(id, limit, offset, filter, sort) {
-                            Ok(episodes) => episodes,
-                            Err(error) => {
-                                let msg =
-                                    Message::PushToast(error.to_string(), toast::Status::Error);
-                                return Task::done(msg);
-                            }
-                        };
+                    let episodes = match self.db.get_season_episodes(
+                        id,
+                        limit,
+                        offset,
+                        filter,
+                        sort,
+                        shared::Thumbnail::new,
+                    ) {
+                        Ok(episodes) => episodes,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
 
                     self.home.fetched_season(season, episodes);
 
                     Task::none()
                 }
                 FetchId::Episode(id) => {
-                    let episode = match self.db.get_episode(id) {
+                    let episode = match self.db.get_episode(id, shared::Thumbnail::new) {
                         Ok(episode) => episode,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -314,7 +348,7 @@ impl App {
                     Task::none()
                 }
                 FetchId::Movie(id) => {
-                    let movie = match self.db.get_movie(id) {
+                    let movie = match self.db.get_movie(id, shared::Thumbnail::new) {
                         Ok(movie) => movie,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -339,10 +373,17 @@ impl App {
                     self.home.fetched_collections(collections, state)
                 }
                 FetchId::Collection(key) => {
-                    let items = match self
-                        .db
-                        .get_collection_items(key.1, limit, offset, filter, sort)
-                    {
+                    let items = match self.db.get_collection_items(
+                        key.1,
+                        limit,
+                        offset,
+                        filter,
+                        sort,
+                        shared::Thumbnail::new,
+                        shared::Thumbnail::new,
+                        shared::Thumbnail::new,
+                        shared::Thumbnail::new,
+                    ) {
                         Ok(items) => items,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -354,7 +395,10 @@ impl App {
                 }
             },
             Message::LoadSearch(search, filter) => {
-                let items = match self.db.search(search, filter, Some(5)) {
+                let items = match self
+                    .db
+                    .search(search, filter, Some(5), shared::SearchView::new)
+                {
                     Ok(items) => items,
                     Err(error) => {
                         let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -404,7 +448,6 @@ impl App {
         let keys = keyboard::on_key_press(key_action).map(Message::Action);
 
         let exit = window::close_requests().map(Message::Exit);
-
 
         let home = self.home.subscription();
 

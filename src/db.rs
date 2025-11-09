@@ -59,13 +59,14 @@ impl Database {
         statement.query_row(&[(":id", &ToSqlOutput::from(id))], Directory::from_row)
     }
 
-    pub fn get_movies(
+    pub fn get_movies<T>(
         &self,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-    ) -> rusqlite::Result<Vec<Movie>> {
+        map: fn(Movie) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -86,31 +87,38 @@ impl Database {
         let mut statement = self.prepare_cached(&sql)?;
 
         statement
-            .query_map(&[(":limit", &limit), (":offset", &offset)], Movie::from_row)?
+            .query_map(&[(":limit", &limit), (":offset", &offset)], |row| {
+                Movie::from_row(row).map(map)
+            })?
             .collect()
     }
 
-    pub fn get_movie(&self, id: MovieId) -> rusqlite::Result<Movie> {
+    pub fn get_movie<T>(&self, id: MovieId, map: fn(Movie) -> T) -> rusqlite::Result<T> {
         let sql = format!("{} WHERE movie.id=:id", Self::MOVIE_QUERY);
 
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], Movie::from_row)
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
+            Movie::from_row(row).map(map)
+        })
     }
 
-    pub fn get_show(&self, id: ShowId) -> rusqlite::Result<Show> {
+    pub fn get_show<T>(&self, id: ShowId, map: fn(Show) -> T) -> rusqlite::Result<T> {
         let mut statement = self.prepare_cached("SELECT * FROM tv_show WHERE id=:id")?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], Show::from_row)
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
+            Show::from_row(row).map(map)
+        })
     }
 
-    pub fn get_shows(
+    pub fn get_shows<T>(
         &self,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-    ) -> rusqlite::Result<Vec<Show>> {
+        map: fn(Show) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -132,18 +140,21 @@ impl Database {
 
         let mut statement = self.prepare_cached(&sql)?;
         statement
-            .query_map(&[(":limit", &limit), (":offset", &offset)], Show::from_row)?
+            .query_map(&[(":limit", &limit), (":offset", &offset)], |row| {
+                Show::from_row(row).map(map)
+            })?
             .collect()
     }
 
-    pub fn get_show_seasons(
+    pub fn get_show_seasons<T>(
         &self,
         show: ShowId,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-    ) -> rusqlite::Result<Vec<Season>> {
+        map: fn(Season) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -169,43 +180,30 @@ impl Database {
                     (":limit", &ToSqlOutput::from(limit)),
                     (":offset", &ToSqlOutput::from(offset)),
                 ],
-                Season::from_row,
+                |row| Season::from_row(row).map(map),
             )?
             .collect()
     }
 
-    pub fn get_show_season(&self, id: SeasonId, show: ShowId) -> rusqlite::Result<Season> {
-        let sql = format!(
-            "{} WHERE season.show_id=:show AND season.id=:id",
-            Self::SEASON_QUERY
-        );
-        let mut statement = self.prepare_cached(&sql)?;
-
-        statement.query_row(
-            &[
-                (":id", &ToSqlOutput::from(id)),
-                (":show", &ToSqlOutput::from(show)),
-            ],
-            Season::from_row,
-        )
-    }
-
-    pub fn get_season(&self, id: SeasonId) -> rusqlite::Result<Season> {
+    pub fn get_season<T>(&self, id: SeasonId, map: fn(Season) -> T) -> rusqlite::Result<T> {
         let sql = format!("{} WHERE season.id=:id", Self::SEASON_QUERY);
 
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], Season::from_row)
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
+            Season::from_row(row).map(map)
+        })
     }
 
-    pub fn get_season_episodes(
+    pub fn get_season_episodes<T>(
         &self,
         season: SeasonId,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-    ) -> rusqlite::Result<Vec<Episode>> {
+        map: fn(Episode) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -232,38 +230,28 @@ impl Database {
                     (":limit", &ToSqlOutput::from(limit)),
                     (":offset", &ToSqlOutput::from(offset)),
                 ],
-                Episode::from_row,
+                |row| Episode::from_row(row).map(map),
             )?
             .collect()
     }
 
-    pub fn get_season_episode(&self, id: EpisodeId, season: SeasonId) -> rusqlite::Result<Episode> {
-        let sql = format!("{} WHERE season_id=:season AND id=:id", Self::EPISODE_QUERY);
-        let mut statement = self.prepare_cached(&sql)?;
-
-        statement.query_row(
-            &[
-                (":id", &ToSqlOutput::from(id)),
-                (":season", &ToSqlOutput::from(season)),
-            ],
-            Episode::from_row,
-        )
-    }
-
-    pub fn get_episode(&self, id: EpisodeId) -> rusqlite::Result<Episode> {
+    pub fn get_episode<T>(&self, id: EpisodeId, map: fn(Episode) -> T) -> rusqlite::Result<T> {
         let sql = format!("{} WHERE id=:id", Self::EPISODE_QUERY);
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], Episode::from_row)
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
+            Episode::from_row(row).map(map)
+        })
     }
 
-    pub fn get_ecomments(
+    pub fn get_ecomments<T>(
         &self,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: filter::comments::Filter,
         sort: sort::comments::Sort,
-    ) -> rusqlite::Result<Vec<EComment>> {
+        map: fn(EComment) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -282,21 +270,21 @@ impl Database {
         let mut statement = self.prepare_cached(&sql)?;
 
         statement
-            .query_map(
-                &[(":limit", &limit), (":offset", &offset)],
-                EComment::from_row,
-            )?
+            .query_map(&[(":limit", &limit), (":offset", &offset)], |row| {
+                EComment::from_row(row).map(map)
+            })?
             .collect()
     }
 
-    pub fn get_episode_comments(
+    pub fn get_episode_comments<T>(
         &self,
         episode: EpisodeId,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: filter::comments::Filter,
         sort: sort::comments::Sort,
-    ) -> rusqlite::Result<Vec<EComment>> {
+        map: fn(EComment) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -322,36 +310,33 @@ impl Database {
                     (":limit", &ToSqlOutput::from(limit)),
                     (":offset", &ToSqlOutput::from(offset)),
                 ],
-                EComment::from_row,
+                |row| EComment::from_row(row).map(map),
             )?
             .collect()
     }
 
-    pub fn get_episode_comment(
+    pub fn get_episode_comment<T>(
         &self,
         id: ECommentId,
-        episode: EpisodeId,
-    ) -> rusqlite::Result<EComment> {
-        let sql = "SELECT * FROM episode_comment WHERE episode_comment.episode_id=:episode AND episode_comment.id=:id ";
+        map: fn(EComment) -> T,
+    ) -> rusqlite::Result<T> {
+        let sql = "SELECT * FROM episode_comment WHERE episode_comment.id=:id ";
 
         let mut statement = self.prepare_cached(sql)?;
 
-        statement.query_row(
-            &[
-                (":id", &ToSqlOutput::from(id)),
-                (":episode", &ToSqlOutput::from(episode)),
-            ],
-            EComment::from_row,
-        )
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
+            EComment::from_row(row).map(map)
+        })
     }
 
-    pub fn get_mcomments(
+    pub fn get_mcomments<T>(
         &self,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: filter::comments::Filter,
         sort: sort::comments::Sort,
-    ) -> rusqlite::Result<Vec<MComment>> {
+        map: fn(MComment) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -370,21 +355,21 @@ impl Database {
         let mut statement = self.prepare_cached(&sql)?;
 
         statement
-            .query_map(
-                &[(":limit", &limit), (":offset", &offset)],
-                MComment::from_row,
-            )?
+            .query_map(&[(":limit", &limit), (":offset", &offset)], |row| {
+                MComment::from_row(row).map(map)
+            })?
             .collect()
     }
 
-    pub fn get_movie_comments(
+    pub fn get_movie_comments<T>(
         &self,
         movie: MovieId,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: filter::comments::Filter,
         sort: sort::comments::Sort,
-    ) -> rusqlite::Result<Vec<MComment>> {
+        map: fn(MComment) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -410,23 +395,23 @@ impl Database {
                     (":limit", &ToSqlOutput::from(limit)),
                     (":offset", &ToSqlOutput::from(offset)),
                 ],
-                MComment::from_row,
+                |row| MComment::from_row(row).map(map),
             )?
             .collect()
     }
 
-    pub fn get_movie_comment(&self, id: MCommentId, movie: MovieId) -> rusqlite::Result<MComment> {
-        let sql = "SELECT * FROM movie_comment WHERE movie_comment.movie_id=:movie AND movie_comment.id=:id ";
+    pub fn get_movie_comment<T>(
+        &self,
+        id: MCommentId,
+        map: fn(MComment) -> T,
+    ) -> rusqlite::Result<T> {
+        let sql = "SELECT * FROM movie_comment WHERE movie_comment.id=:id ";
 
         let mut statement = self.prepare_cached(sql)?;
 
-        statement.query_row(
-            &[
-                (":id", &ToSqlOutput::from(id)),
-                (":movie", &ToSqlOutput::from(movie)),
-            ],
-            MComment::from_row,
-        )
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
+            MComment::from_row(row).map(map)
+        })
     }
 
     pub fn get_collections(&self, sort: collection::Sort) -> rusqlite::Result<Vec<Collection>> {
@@ -445,15 +430,19 @@ impl Database {
         statement.query_row(&[(":id", &ToSqlOutput::from(id))], Collection::from_row)
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn get_collection_items(
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
+    pub fn get_collection_items<M, S, A, E>(
         &self,
         collection: CollectionId,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-    ) -> rusqlite::Result<(Vec<Movie>, Vec<Show>, Vec<Season>, Vec<Episode>)> {
+        movie_map: fn(Movie) -> M,
+        show_map: fn(Show) -> S,
+        season_map: fn(Season) -> A,
+        episode_map: fn(Episode) -> E,
+    ) -> rusqlite::Result<(Vec<M>, Vec<S>, Vec<A>, Vec<E>)> {
         use collection::{Item, ItemId};
 
         let repeat = |count: usize| -> String {
@@ -503,8 +492,10 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(movies), Movie::from_row)?
-                .collect::<rusqlite::Result<Vec<Movie>>>()?
+                .query_map(params_from_iter(movies), |row| {
+                    Movie::from_row(row).map(movie_map)
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
         };
@@ -526,7 +517,9 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(shows), Show::from_row)?
+                .query_map(params_from_iter(shows), |row| {
+                    Show::from_row(row).map(show_map)
+                })?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
@@ -549,7 +542,9 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(seasons), Season::from_row)?
+                .query_map(params_from_iter(seasons), |row| {
+                    Season::from_row(row).map(season_map)
+                })?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
@@ -575,7 +570,9 @@ impl Database {
             let mut statement = self.prepare_cached(&sql)?;
 
             statement
-                .query_map(params_from_iter(episodes), Episode::from_row)?
+                .query_map(params_from_iter(episodes), |row| {
+                    Episode::from_row(row).map(episode_map)
+                })?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
@@ -584,12 +581,13 @@ impl Database {
         Ok((movies, shows, seasons, episodes))
     }
 
-    pub fn search(
+    pub fn search<T>(
         &self,
         term: String,
         filter: Option<SearchFilter>,
         limit: Option<i32>,
-    ) -> rusqlite::Result<Vec<SearchItem>> {
+        map: fn(SearchItem) -> T,
+    ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let filter = filter.map(|filter| filter.query()).unwrap_or_default();
 
@@ -610,7 +608,9 @@ impl Database {
         let mut statement = self.prepare_cached(&sql)?;
 
         statement
-            .query_map(&[(":term", &ToSqlOutput::from(term))], SearchItem::from_row)?
+            .query_map(&[(":term", &ToSqlOutput::from(term))], |row| {
+                SearchItem::from_row(row).map(map)
+            })?
             .collect()
     }
 

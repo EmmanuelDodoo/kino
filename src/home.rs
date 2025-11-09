@@ -22,7 +22,7 @@ mod movies;
 mod pages;
 mod season;
 mod series;
-mod shared;
+pub mod shared;
 mod shows;
 
 use crate::models::{
@@ -2170,47 +2170,34 @@ impl Home {
         }
     }
 
-    pub fn fetched_recents(&mut self, movies: Vec<Movie>, shows: Vec<Show>) {
-        let movies = movies.into_iter().map(Thumbnail::new).collect();
-        let shows = shows.into_iter().map(Thumbnail::new).collect();
-
+    pub fn fetched_recents(&mut self, movies: Vec<Thumbnail<Movie>>, shows: Vec<Thumbnail<Show>>) {
         let state = State::Recent { shows, movies };
 
         self.state = state;
     }
 
-    pub fn fetched_shows(&mut self, shows: Vec<Show>) {
-        let shows = shows.into_iter().map(Thumbnail::new).collect();
-
+    pub fn fetched_shows(&mut self, shows: Vec<Thumbnail<Show>>) {
         self.state = State::Shows(shows)
     }
 
-    pub fn fetched_movies(&mut self, movies: Vec<Movie>) {
-        let movies = movies.into_iter().map(Thumbnail::new).collect();
-
+    pub fn fetched_movies(&mut self, movies: Vec<Thumbnail<Movie>>) {
         self.state = State::Movies(movies)
     }
 
-    pub fn fetched_show(&mut self, show: Show, seasons: Vec<Season>) {
-        let show = Thumbnail::new(show);
-        let seasons = seasons.into_iter().map(Thumbnail::new).collect();
-
+    pub fn fetched_show(&mut self, show: Thumbnail<Show>, seasons: Vec<Thumbnail<Season>>) {
         self.state = State::Show { show, seasons }
     }
 
-    pub fn fetched_movie(&mut self, movie: Movie) {
-        self.state = State::Movie(Thumbnail::new(movie))
+    pub fn fetched_movie(&mut self, movie: Thumbnail<Movie>) {
+        self.state = State::Movie(movie)
     }
 
-    pub fn fetched_season(&mut self, season: Season, episodes: Vec<Episode>) {
-        let season = Thumbnail::new(season);
-        let episodes = episodes.into_iter().map(Thumbnail::new).collect();
-
+    pub fn fetched_season(&mut self, season: Thumbnail<Season>, episodes: Vec<Thumbnail<Episode>>) {
         self.state = State::Season { season, episodes }
     }
 
-    pub fn fetched_episode(&mut self, episode: Episode) {
-        self.state = State::Episode(Thumbnail::new(episode))
+    pub fn fetched_episode(&mut self, episode: Thumbnail<Episode>) {
+        self.state = State::Episode(episode)
     }
 
     pub fn fetched_collections(
@@ -2237,15 +2224,15 @@ impl Home {
     pub fn fetched_collection(
         &mut self,
         collection: (CollectionView, CollectionId),
-        items: (Vec<Movie>, Vec<Show>, Vec<Season>, Vec<Episode>),
+        items: (
+            Vec<Thumbnail<Movie>>,
+            Vec<Thumbnail<Show>>,
+            Vec<Thumbnail<Season>>,
+            Vec<Thumbnail<Episode>>,
+        ),
     ) -> Task<Message> {
         use models::collection::Item;
         let (movies, shows, seasons, episodes) = items;
-
-        let movies = movies.into_iter().map(Thumbnail::new).collect();
-        let shows = shows.into_iter().map(Thumbnail::new).collect();
-        let seasons = seasons.into_iter().map(Thumbnail::new).collect();
-        let episodes = episodes.into_iter().map(Thumbnail::new).collect();
 
         self.state = State::Collection {
             collection,
@@ -2273,12 +2260,12 @@ impl Home {
         Task::done(Message::LoadSearch(state.search.clone(), state.filter))
     }
 
-    pub fn loaded_search(&mut self, items: Vec<SearchItem>) {
+    pub fn loaded_search(&mut self, items: Vec<SearchView>) {
         let Some(View::Search(state, _)) = self.view.as_mut() else {
             return;
         };
 
-        state.items = items.into_iter().map(SearchView::new).collect()
+        state.items = items
     }
 
     pub fn toggle_search(&mut self, collection: Option<CollectionId>) -> Task<Message> {

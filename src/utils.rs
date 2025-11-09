@@ -344,6 +344,7 @@ impl Layout {
 pub enum HomeAction {
     // todo
     // SettingsOpen,
+    // Esc to exit modals
     LayoutToggle,
     RefreshContent,
     /// Refreshes both content and the side menu
