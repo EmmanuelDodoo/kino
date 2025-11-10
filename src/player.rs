@@ -3,8 +3,11 @@ use iced::{
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
+    font,
     time::{self, Instant},
-    widget::{Svg, center, column, container, image, mouse_area, row, slider, space, stack, text},
+    widget::{
+        Svg, button, center, column, container, image, mouse_area, row, slider, space, stack, text,
+    },
     window,
 };
 use iced_video_player::{Button, Kind, MouseClick, Video, VideoPlayer};
@@ -61,6 +64,7 @@ pub enum ManagerMessage {
     ToggleMute,
     PlayPrevious,
     PlayNext,
+    SpeedReset,
     SeekFront(bool),
     SeekBack(bool),
     TogglePlay,
@@ -331,6 +335,7 @@ impl Manager {
             ManagerMessage::Favorite => self.collection_favorite(),
             ManagerMessage::Config => self.video_config(),
             ManagerMessage::Comment => self.video_comment(),
+            ManagerMessage::SpeedReset => self.speed_reset(),
         }
     }
 
@@ -446,6 +451,19 @@ impl Manager {
             .step(0.05)
             .shift_step(0.1)
             .width(125.0);
+
+            let speed = text(format!("{:.02}x", self.settings.speed))
+                .size(icon_size / (1.125))
+                .font(Font {
+                    family: font::Family::Monospace,
+                    weight: font::Weight::Semibold,
+                    ..Default::default()
+                });
+            let speed = button(speed)
+                .padding(0)
+                .style(button::text)
+                .on_press(ManagerMessage::SpeedReset);
+
             row!(
                 sized_button(
                     if self.settings.show_subtitles {
@@ -456,6 +474,7 @@ impl Manager {
                     icon_size
                 )
                 .on_press(ManagerMessage::ToggleSubtitles),
+                speed,
                 sized_button(
                     if self.settings.muted {
                         icons::MUTE
@@ -467,10 +486,10 @@ impl Manager {
                 .on_press(ManagerMessage::ToggleMute),
                 volume
             )
-            .spacing(2.0)
+            .spacing(4.0)
             .align_y(Vertical::Center)
         }
-        .width(Self::WIDTH);
+        .width(Self::WIDTH + 100.0);
 
         let middle = {
             let size = if self.is_fullscreen { H1 * 1.125 } else { H1 };
