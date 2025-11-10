@@ -31,7 +31,7 @@ pub enum FetchId {
     Show(ShowId),
     Season(SeasonId),
     Episode(EpisodeId),
-    Collection((CollectionView, CollectionId)),
+    Collection(CollectionId),
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -374,7 +374,7 @@ impl App {
                 }
                 FetchId::Collection(key) => {
                     let items = match self.db.get_collection_items(
-                        key.1,
+                        key,
                         limit,
                         offset,
                         filter,

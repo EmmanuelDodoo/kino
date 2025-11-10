@@ -11,7 +11,7 @@ use iced::{
 #[derive(Debug, Clone, Copy)]
 pub enum CollectionsMessage {
     Hovered(CollectionId, bool),
-    Details((CollectionView, CollectionId)),
+    Details(CollectionId),
     Scroll(scrollable::Viewport),
 }
 

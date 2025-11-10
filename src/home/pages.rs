@@ -28,7 +28,7 @@ pub enum PageKind {
     Movie(MovieId),
     Show(ShowId),
     Season(SeasonId),
-    Collection((CollectionView, CollectionId)),
+    Collection(CollectionId),
 }
 
 impl From<ItemId> for PageKind {
