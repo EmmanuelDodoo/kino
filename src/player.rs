@@ -99,7 +99,13 @@ impl Manager {
             None => Task::none(),
         };
 
-        (Self::new(window, settings, playlist), load_video)
+        let size = window
+            .map(|id| window::size(id).map(move |size| ManagerMessage::Resize((id, size))))
+            .unwrap_or_default();
+
+        let tasks = Task::batch([size, load_video]);
+
+        (Self::new(window, settings, playlist), tasks)
     }
 
     fn new(window: Option<window::Id>, settings: VideoSettings, playlist: Playlist) -> Self {
