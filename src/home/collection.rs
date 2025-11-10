@@ -24,6 +24,7 @@ use std::iter::Peekable;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Items {
+    All,
     Movies,
     Shows,
     Seasons,
@@ -200,7 +201,9 @@ impl CollectionPage {
                 .height(Length::Fill);
 
             let play = {
-                let base = btn(id, PLAY, "Play", Message::None);
+                let play = btn(id, PLAY, "Play", Message::Play(Items::All));
+
+                let base = icon(ELLIPSIS_VER).size(H7);
 
                 let actions = column!(
                     btn(id, PLAY, "Play movies", Message::Play(Items::Movies)),
@@ -217,18 +220,20 @@ impl CollectionPage {
                     container::Style { border, ..default }
                 });
 
-                menu(base, overlay)
+                let hidden = menu(base, overlay)
                     .on_toggle(move |_| CollectionMessage {
                         id,
                         message: Message::None,
                     })
-                    .position(menu::Position::Bottom)
+                    .position(menu::Position::Right);
+
+                row!(play, hidden).spacing(2.0).align_y(Vertical::Center)
             };
 
             let actions = row!(
-                play,
                 btn(id, ADD, "Add", Message::AddNewItem),
-                btn(id, EDIT, "Edit", Message::OpenConfig)
+                btn(id, EDIT, "Edit", Message::OpenConfig),
+                play,
             )
             .align_y(Vertical::Center)
             .spacing(16.0);
