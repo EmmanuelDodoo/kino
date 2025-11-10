@@ -85,18 +85,18 @@ pub enum ConfigMessage {
     View(CollectionView),
     Icon(Icon),
     Script(String),
-    Cancel,
     Save,
 }
 
 #[derive(Debug, Clone)]
 pub struct CollectionConfig {
-    pub name: String,
-    pub description: text_editor::Content,
-    pub icon: Icon,
-    pub view: CollectionView,
-    pub theme: Option<u32>,
-    pub custom: Option<String>,
+    name: String,
+    description: text_editor::Content,
+    icon: Icon,
+    view: CollectionView,
+    theme: Option<u32>,
+    custom: Option<String>,
+    name_input: widget::Id,
 }
 
 impl CollectionConfig {
@@ -108,6 +108,7 @@ impl CollectionConfig {
             view,
             theme,
             custom,
+            name_input: _text_input,
         } = self;
 
         collection.name = name;
@@ -410,7 +411,7 @@ impl Home {
                     self.state = State::Collections;
                 }
 
-                Task::none()
+                self.update_page_scroll()
             }
             HomeMessage::Home => {
                 if let Some(old) = self.current_page.take() {
@@ -625,6 +626,8 @@ impl Home {
                             .unwrap_or_default(),
                     );
 
+                    let name_input = widget::Id::unique();
+
                     let config = CollectionConfig {
                         name: collection.collection.name.clone(),
                         description,
@@ -632,11 +635,13 @@ impl Home {
                         icon: Icon::new(collection.collection.icon),
                         theme: collection.collection.theme,
                         custom: collection.collection.custom.clone(),
+                        name_input: name_input.clone(),
                     };
 
                     self.view = Some(View::CollectionConfig(config, collection.collection.id));
+                    let focus = operation::focus(name_input);
 
-                    Task::none()
+                    Task::batch([focus, self.update_page_scroll()])
                 }
                 ViewMessage::Add(item) => {
                     let state = CollectionAddState {
@@ -674,10 +679,6 @@ impl Home {
                         } else {
                             config.custom = Some(script)
                         }
-                    }
-                    ConfigMessage::Cancel => {
-                        self.view = None;
-                        return Task::none();
                     }
                     ConfigMessage::Save => {
                         let Some(collection) = self
@@ -791,7 +792,7 @@ impl Home {
             }
             HomeMessage::CloseView => {
                 self.view = None;
-                Task::none()
+                self.update_page_scroll()
             }
             HomeMessage::Back => self.back(now),
             HomeMessage::Forward => self.forward(now),
@@ -1186,6 +1187,13 @@ impl Home {
 
     fn update_scroll(&mut self) -> Task<()> {
         scroll_to(self.scroll.id.clone(), self.scroll.offset)
+    }
+
+    fn update_page_scroll(&mut self) -> Task<Message> {
+        match self.current_page_mut() {
+            None => self.update_scroll().discard(),
+            Some(page) => page.update_scroll().discard(),
+        }
     }
 
     fn current_page(&self) -> Option<&Page> {
@@ -2200,34 +2208,55 @@ impl Home {
         }
     }
 
-    pub fn fetched_recents(&mut self, movies: Vec<Thumbnail<Movie>>, shows: Vec<Thumbnail<Show>>) {
+    pub fn fetched_recents(
+        &mut self,
+        movies: Vec<Thumbnail<Movie>>,
+        shows: Vec<Thumbnail<Show>>,
+    ) -> Task<Message> {
         let state = State::Recent { shows, movies };
 
         self.state = state;
+
+        self.update_page_scroll()
     }
 
-    pub fn fetched_shows(&mut self, shows: Vec<Thumbnail<Show>>) {
-        self.state = State::Shows(shows)
+    pub fn fetched_shows(&mut self, shows: Vec<Thumbnail<Show>>) -> Task<Message> {
+        self.state = State::Shows(shows);
+
+        self.update_page_scroll()
     }
 
-    pub fn fetched_movies(&mut self, movies: Vec<Thumbnail<Movie>>) {
-        self.state = State::Movies(movies)
+    pub fn fetched_movies(&mut self, movies: Vec<Thumbnail<Movie>>) -> Task<Message> {
+        self.state = State::Movies(movies);
+        self.update_page_scroll()
     }
 
-    pub fn fetched_show(&mut self, show: Thumbnail<Show>, seasons: Vec<Thumbnail<Season>>) {
-        self.state = State::Show { show, seasons }
+    pub fn fetched_show(
+        &mut self,
+        show: Thumbnail<Show>,
+        seasons: Vec<Thumbnail<Season>>,
+    ) -> Task<Message> {
+        self.state = State::Show { show, seasons };
+        self.update_page_scroll()
     }
 
-    pub fn fetched_movie(&mut self, movie: Thumbnail<Movie>) {
-        self.state = State::Movie(movie)
+    pub fn fetched_movie(&mut self, movie: Thumbnail<Movie>) -> Task<Message> {
+        self.state = State::Movie(movie);
+        self.update_page_scroll()
     }
 
-    pub fn fetched_season(&mut self, season: Thumbnail<Season>, episodes: Vec<Thumbnail<Episode>>) {
-        self.state = State::Season { season, episodes }
+    pub fn fetched_season(
+        &mut self,
+        season: Thumbnail<Season>,
+        episodes: Vec<Thumbnail<Episode>>,
+    ) -> Task<Message> {
+        self.state = State::Season { season, episodes };
+        self.update_page_scroll()
     }
 
-    pub fn fetched_episode(&mut self, episode: Thumbnail<Episode>) {
-        self.state = State::Episode(episode)
+    pub fn fetched_episode(&mut self, episode: Thumbnail<Episode>) -> Task<Message> {
+        self.state = State::Episode(episode);
+        self.update_page_scroll()
     }
 
     pub fn fetched_collections(
@@ -2267,13 +2296,15 @@ impl Home {
             episodes,
         };
 
-        Task::none()
+        self.update_page_scroll()
     }
 
-    pub fn fetched_memberships(&mut self, memberships: Vec<CollectionId>) {
+    pub fn fetched_memberships(&mut self, memberships: Vec<CollectionId>) -> Task<Message> {
         if let Some(View::CollectionAdd(CollectionAddState { selected, .. })) = self.view.as_mut() {
             selected.extend(memberships.into_iter());
         }
+
+        self.update_page_scroll()
     }
 
     pub fn load(&mut self) -> Task<Message> {
@@ -2291,12 +2322,14 @@ impl Home {
         Task::done(Message::LoadSearch(state.search.clone(), state.filter))
     }
 
-    pub fn loaded_search(&mut self, items: Vec<SearchView>) {
+    pub fn loaded_search(&mut self, items: Vec<SearchView>) -> Task<Message> {
         let Some(View::Search(state, _)) = self.view.as_mut() else {
-            return;
+            return self.update_page_scroll();
         };
 
-        state.items = items
+        state.items = items;
+
+        self.update_page_scroll()
     }
 
     pub fn toggle_search(&mut self, collection: Option<CollectionId>) -> Task<Message> {
@@ -2311,7 +2344,9 @@ impl Home {
 
         self.view = Some(View::Search(state, collection));
 
-        operation::focus(text_input)
+        let focus = operation::focus(text_input);
+
+        Task::batch([focus, self.update_page_scroll()])
     }
 }
 
@@ -2461,6 +2496,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let value = config.name.as_str();
 
         let input = text_input("", value)
+            .id(config.name_input.clone())
             .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
             .width(Length::Fill);
 
@@ -2521,8 +2557,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let actions = {
         let save = button("Save").on_press(HomeMessage::CollectionConfig(ConfigMessage::Save));
 
-        let cancel =
-            button("Cancel").on_press(HomeMessage::CollectionConfig(ConfigMessage::Cancel));
+        let cancel = button("Cancel").on_press(HomeMessage::CloseView);
 
         column!(row!(save, cancel).spacing(80))
             .align_x(Horizontal::Center)

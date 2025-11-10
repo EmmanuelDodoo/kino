@@ -225,9 +225,7 @@ impl App {
                             }
                         };
 
-                    self.home.fetched_shows(shows);
-
-                    Task::none()
+                    self.home.fetched_shows(shows)
                 }
                 FetchId::Movies => {
                     let movies = match self.db.get_movies(
@@ -244,9 +242,7 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_movies(movies);
-
-                    Task::none()
+                    self.home.fetched_movies(movies)
                 }
                 FetchId::Recents => {
                     let movies = match self.db.get_movies(
@@ -275,9 +271,7 @@ impl App {
                             }
                         };
 
-                    self.home.fetched_recents(movies, shows);
-
-                    Task::none()
+                    self.home.fetched_recents(movies, shows)
                 }
                 FetchId::Show(id) => {
                     let show = match self.db.get_show(id, shared::Thumbnail::new) {
@@ -303,9 +297,7 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_show(show, seasons);
-
-                    Task::none()
+                    self.home.fetched_show(show, seasons)
                 }
                 FetchId::Season(id) => {
                     let season = match self.db.get_season(id, shared::Thumbnail::new) {
@@ -331,9 +323,7 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_season(season, episodes);
-
-                    Task::none()
+                    self.home.fetched_season(season, episodes)
                 }
                 FetchId::Episode(id) => {
                     let episode = match self.db.get_episode(id, shared::Thumbnail::new) {
@@ -344,9 +334,7 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_episode(episode);
-
-                    Task::none()
+                    self.home.fetched_episode(episode)
                 }
                 FetchId::Movie(id) => {
                     let movie = match self.db.get_movie(id, shared::Thumbnail::new) {
@@ -357,9 +345,7 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_movie(movie);
-
-                    Task::none()
+                    self.home.fetched_movie(movie)
                 }
                 FetchId::Collections(state) => {
                     //todo: collection sorts
@@ -407,9 +393,7 @@ impl App {
                     }
                 };
 
-                self.home.loaded_search(items);
-
-                Task::none()
+                self.home.loaded_search(items)
             }
             Message::FetchMemberShip(item) => {
                 let memberships = match item {
@@ -443,9 +427,7 @@ impl App {
                     },
                 };
 
-                self.home.fetched_memberships(memberships);
-
-                Task::none()
+                self.home.fetched_memberships(memberships)
             }
         }
     }
