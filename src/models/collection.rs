@@ -13,6 +13,14 @@ use crate::db::{Database, Operation, Query, Table};
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CollectionId(Uuid);
 
+impl CollectionId {
+    /// Expects relevant column named "collection_id"
+    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+        row.get::<_, String>("collection_id")
+            .map(|id| CollectionId(Uuid::try_parse(&id).unwrap()))
+    }
+}
+
 impl From<CollectionId> for ToSqlOutput<'_> {
     fn from(value: CollectionId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via

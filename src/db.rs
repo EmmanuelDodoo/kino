@@ -614,6 +614,58 @@ impl Database {
             .collect()
     }
 
+    pub fn get_movie_memberships(&self, movie: MovieId) -> rusqlite::Result<Vec<CollectionId>> {
+        let sql = "SELECT collection_item.collection_id FROM collection_item WHERE media_type='movie' AND media_id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement
+            .query_map(
+                &[(":id", &ToSqlOutput::from(movie))],
+                CollectionId::from_row,
+            )?
+            .collect()
+    }
+
+    pub fn get_show_memberships(&self, show: ShowId) -> rusqlite::Result<Vec<CollectionId>> {
+        let sql = "SELECT collection_item.collection_id FROM collection_item WHERE media_type='show' AND media_id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":id", &ToSqlOutput::from(show))], CollectionId::from_row)?
+            .collect()
+    }
+
+    pub fn get_season_memberships(&self, season: SeasonId) -> rusqlite::Result<Vec<CollectionId>> {
+        let sql = "SELECT collection_item.collection_id FROM collection_item WHERE media_type='season' AND media_id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement
+            .query_map(
+                &[(":id", &ToSqlOutput::from(season))],
+                CollectionId::from_row,
+            )?
+            .collect()
+    }
+
+    pub fn get_episode_memberships(
+        &self,
+        episode: EpisodeId,
+    ) -> rusqlite::Result<Vec<CollectionId>> {
+        let sql = "SELECT collection_item.collection_id FROM collection_item WHERE media_type='episode' AND media_id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement
+            .query_map(
+                &[(":id", &ToSqlOutput::from(episode))],
+                CollectionId::from_row,
+            )?
+            .collect()
+    }
+
     pub(super) fn open_test_db() -> rusqlite::Result<Database> {
         let schema = include_str!("../schema.sql");
 

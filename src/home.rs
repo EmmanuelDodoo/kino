@@ -11,7 +11,7 @@ use iced::{
     },
     window,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 mod collection;
@@ -141,24 +141,6 @@ enum Icons {
     Icon12 = 12,
 }
 
-#[derive(Debug, Clone)]
-pub struct SearchState {
-    items: Vec<SearchView>,
-    search: String,
-    last_edit: Option<Instant>,
-    filter: Option<SearchFilter>,
-    text_input: widget::Id,
-}
-
-#[derive(Debug, Clone)]
-pub enum SearchMessage {
-    Load,
-    Search(String),
-    Hovered(ItemId, bool),
-    Searching,
-    ClearFilter,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Icon {
     id: Icons,
@@ -225,6 +207,36 @@ impl Icon {
 }
 
 #[derive(Debug, Clone)]
+pub struct SearchState {
+    items: Vec<SearchView>,
+    search: String,
+    last_edit: Option<Instant>,
+    filter: Option<SearchFilter>,
+    text_input: widget::Id,
+}
+
+#[derive(Debug, Clone)]
+pub enum SearchMessage {
+    Load,
+    Search(String),
+    Hovered(ItemId, bool),
+    Searching,
+    ClearFilter,
+}
+
+#[derive(Debug, Clone)]
+pub struct CollectionAddState {
+    item: ItemId,
+    selected: HashSet<CollectionId>,
+}
+
+#[derive(Debug, Clone)]
+pub enum CollectionAddMessage {
+    Toggle(bool, CollectionId),
+    Save,
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig(CollectionId),
     Add(ItemId),
@@ -236,6 +248,7 @@ pub enum ViewMessage {
 pub enum View {
     CollectionConfig(CollectionConfig, CollectionId),
     Search(SearchState, Option<CollectionId>),
+    CollectionAdd(CollectionAddState),
 }
 
 #[derive(Debug, Clone)]
@@ -287,6 +300,7 @@ pub enum HomeMessage {
     Forward,
     CollectionConfig(ConfigMessage),
     SearchMessage(SearchMessage),
+    CollectionAdd(CollectionAddMessage),
     OpenView(ViewMessage),
     CloseView,
     Play(ItemId),
@@ -451,7 +465,7 @@ impl Home {
                     };
                     page.page_update(update);
 
-                    let scroll = page.update_scroll().map(|_| Message::None);
+                    let scroll = page.update_scroll().discard();
 
                     return Task::done(msg).chain(scroll);
                 }
@@ -625,8 +639,13 @@ impl Home {
                     Task::none()
                 }
                 ViewMessage::Add(item) => {
-                    println!("Add item {item:?} to collection");
-                    todo!()
+                    let state = CollectionAddState {
+                        item,
+                        selected: HashSet::new(),
+                    };
+                    self.view = Some(View::CollectionAdd(state));
+
+                    Task::done(Message::FetchMemberShip(item))
                 }
                 ViewMessage::AddToCollection(id) => self.toggle_search(Some(id)),
                 ViewMessage::Search => self.toggle_search(None),
@@ -750,6 +769,24 @@ impl Home {
 
                         self.load()
                     }
+                }
+            }
+            HomeMessage::CollectionAdd(csg) => {
+                let Some(View::CollectionAdd(state)) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match csg {
+                    CollectionAddMessage::Toggle(selected, id) => {
+                        if selected {
+                            state.selected.remove(&id);
+                        } else {
+                            state.selected.insert(id);
+                        }
+
+                        Task::none()
+                    }
+                    CollectionAddMessage::Save => todo!(),
                 }
             }
             HomeMessage::CloseView => {
@@ -1900,6 +1937,18 @@ impl Home {
                     .on_blur(HomeMessage::CloseView)
                     .into()
             }
+            Some(View::CollectionAdd(state)) => {
+                let overlay = draw_collection_add(
+                    state,
+                    self.collections
+                        .iter()
+                        .map(|thumbnail| &thumbnail.collection),
+                );
+
+                modal(content, overlay)
+                    .on_blur(HomeMessage::CloseView)
+                    .into()
+            }
         }
     }
 
@@ -2219,6 +2268,12 @@ impl Home {
         };
 
         Task::none()
+    }
+
+    pub fn fetched_memberships(&mut self, memberships: Vec<CollectionId>) {
+        if let Some(View::CollectionAdd(CollectionAddState { selected, .. })) = self.view.as_mut() {
+            selected.extend(memberships.into_iter());
+        }
     }
 
     pub fn load(&mut self) -> Task<Message> {
@@ -2553,7 +2608,7 @@ fn fetch_kind(kind: PageKind) -> FetchId {
 
 fn modal_container<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Container<'a, HomeMessage> {
     container(content)
-        .padding([16, 24])
+        .padding([12, 20])
         .style(|theme| {
             let default = container::dark(theme);
             let border = default.border.rounded(5.0);
@@ -2639,4 +2694,68 @@ fn sort_collections(collections: &mut [CollectionThumbnail]) {
                 &y.collection.name,
             ))
     });
+}
+
+fn draw_collection_add<'a>(
+    state: &'a CollectionAddState,
+    collections: impl Iterator<Item = &'a Collection>,
+) -> Element<'a, HomeMessage> {
+    let title = text("Add to Collection").size(H6);
+
+    fn btn(collection: &Collection, selected: bool) -> Element<'_, HomeMessage> {
+        button(container(text(&collection.name)))
+            .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(
+                selected,
+                collection.id,
+            )))
+            .style(move |theme, status| {
+                let default = if selected {
+                    button::secondary(theme, status)
+                } else {
+                    button::background(theme, status)
+                };
+                let border = default.border.rounded(5.0);
+
+                button::Style { border, ..default }
+            })
+            .into()
+    }
+
+    let collections =
+        collections.map(|collection| btn(collection, state.selected.contains(&collection.id)));
+
+    let collections = grid(collections)
+        .fluid(200)
+        .height(Length::Shrink)
+        .spacing(12);
+
+    let collections = scrollable(
+        container(collections)
+            .padding([6, 8])
+            .style(|theme: &Theme| {
+                let color = theme.extended_palette().background.strong.color;
+                let default = container::transparent(theme);
+                let border = default.border.rounded(5).color(color).width(2.0);
+
+                container::Style { border, ..default }
+            }),
+    )
+    .spacing(16.0);
+
+    let actions = {
+        let save = button("Save")
+            .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Save))
+            .style(button::subtle);
+
+        let cancel = button("Cancel")
+            .on_press(HomeMessage::CloseView)
+            .style(button::subtle);
+
+        row!(save, cancel).spacing(100)
+    };
+    let content = column!(title, collections, actions)
+        .spacing(20)
+        .align_x(Horizontal::Center);
+
+    modal_container(content).max_width(500).into()
 }

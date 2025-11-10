@@ -55,6 +55,7 @@ pub enum Message {
     Action(Action),
     PlayItem(PlayItem),
     PlayItems(Vec<PlayItem>),
+    FetchMemberShip(ItemId),
     LoadSearch(String, Option<SearchFilter>),
     Animate,
     Fetch {
@@ -407,6 +408,42 @@ impl App {
                 };
 
                 self.home.loaded_search(items);
+
+                Task::none()
+            }
+            Message::FetchMemberShip(item) => {
+                let memberships = match item {
+                    ItemId::Movie(id) => match self.db.get_movie_memberships(id) {
+                        Ok(memberships) => memberships,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    },
+                    ItemId::Show(id) => match self.db.get_show_memberships(id) {
+                        Ok(memberships) => memberships,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    },
+                    ItemId::Season(id) => match self.db.get_season_memberships(id) {
+                        Ok(memberships) => memberships,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    },
+                    ItemId::Episode(id) => match self.db.get_episode_memberships(id) {
+                        Ok(memberships) => memberships,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    },
+                };
+
+                self.home.fetched_memberships(memberships);
 
                 Task::none()
             }
