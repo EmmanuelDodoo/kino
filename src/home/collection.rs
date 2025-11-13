@@ -4,6 +4,7 @@ use super::{
 };
 use crate::models::{
     Collection, CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
+    collection::Items,
 };
 use crate::utils::filter::*;
 use crate::utils::icons::*;
@@ -21,15 +22,6 @@ use iced::{
     },
 };
 use std::iter::Peekable;
-
-#[derive(Debug, Clone, Copy)]
-pub enum Items {
-    All,
-    Movies,
-    Shows,
-    Seasons,
-    Episodes,
-}
 
 #[derive(Debug, Clone)]
 pub enum Message {

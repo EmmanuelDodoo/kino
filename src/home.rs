@@ -27,7 +27,7 @@ mod shows;
 
 use crate::models::{
     self, Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, SearchItem,
-    Season, SeasonId, Show, ShowId, collection::ItemId,
+    Season, SeasonId, Show, ShowId, collection::ItemId, collection::Items,
 };
 
 use crate::app::{FetchId, Message};
@@ -305,10 +305,7 @@ pub enum HomeMessage {
     OpenView(ViewMessage),
     CloseView,
     Play(ItemId),
-    PlayCollection {
-        id: CollectionId,
-        items: collection::Items,
-    },
+    PlayCollection { id: CollectionId, items: Items },
     ToggleLayout,
     Home,
     Goto(PageKind),
@@ -1007,11 +1004,10 @@ impl Home {
             HomeMessage::Refresh => self.refresh(now),
             HomeMessage::Play(item) => {
                 self.view = None;
-                self.play(item)
+                Task::done(Message::PlayItem(item))
             }
             HomeMessage::PlayCollection { id, items } => {
-                println!("Play {items:?} from collection {id:?}");
-                todo!()
+                Task::done(Message::PlayCollectionItems { id, items })
             }
             HomeMessage::HoveredCollection(key, is_hovered) => {
                 let State::Collections = &mut self.state else {
@@ -1131,57 +1127,6 @@ impl Home {
                 .map(|_| Message::Home(HomeMessage::SearchMessage(SearchMessage::Searching)))
         } else {
             Subscription::none()
-        }
-    }
-
-    fn play(&self, item: ItemId) -> Task<Message> {
-        match (&self.state, item) {
-            (State::Loading(_), _) => Task::none(),
-            (State::Recent { movies, .. }, ItemId::Movie(id)) => {
-                let Some(movie) = movies.iter().find(|movie| movie.media.id == id) else {
-                    return Task::none();
-                };
-
-                let name = movie.media.name();
-                let path = &movie.media.full_path;
-
-                match play_item(PlayId::Movie(id), name, path) {
-                    Ok(item) => Task::done(Message::PlayItem(item)),
-                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
-                }
-            }
-            (State::Season { episodes, .. }, ItemId::Episode(id)) => {
-                let Some(episode) = episodes.iter().find(|episode| episode.media.id == id) else {
-                    return Task::none();
-                };
-
-                let name = episode.media.name();
-                let path = &episode.media.full_path;
-
-                match play_item(PlayId::Episode(id), name, path) {
-                    Ok(item) => Task::done(Message::PlayItem(item)),
-                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
-                }
-            }
-            (State::Movie(movie), ItemId::Movie(id)) => {
-                let name = movie.media.name();
-                let path = &movie.media.full_path;
-
-                match play_item(PlayId::Movie(id), name, path) {
-                    Ok(item) => Task::done(Message::PlayItem(item)),
-                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
-                }
-            }
-            (State::Episode(episode), ItemId::Episode(id)) => {
-                let name = episode.media.name();
-                let path = &episode.media.full_path;
-
-                match play_item(PlayId::Episode(id), name, path) {
-                    Ok(item) => Task::done(Message::PlayItem(item)),
-                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
-                }
-            }
-            unreached => todo!("Needs rework after search implementation {unreached:?}"),
         }
     }
 
@@ -2285,7 +2230,6 @@ impl Home {
             Vec<Thumbnail<Episode>>,
         ),
     ) -> Task<Message> {
-        use models::collection::Item;
         let (movies, shows, seasons, episodes) = items;
 
         self.state = State::Collection {
@@ -2567,65 +2511,6 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let content = column!(name, description, view, icons, space::vertical(), actions).spacing(16);
 
     modal_container(content).width(width).height(height).into()
-}
-
-fn play_item(id: PlayId, name: &str, path: &Path) -> Result<PlayItem, String> {
-    match path.try_exists() {
-        Ok(false) => Err(format!("{} does not exist", path.to_string_lossy())),
-        Err(error) => Err(format!("{error}")),
-        Ok(true) => {
-            let play = PlayItem {
-                id,
-                name: name.to_owned(),
-                path: path.to_path_buf(),
-            };
-
-            Ok(play)
-        }
-    }
-}
-
-fn play_helper(items: impl Iterator<Item = Result<PlayItem, String>>) -> Task<Message> {
-    let mut toasts = vec![];
-    let mut plays = vec![];
-
-    for item in items {
-        match item {
-            Ok(item) => plays.push(item),
-            Err(error) => toasts.push(error),
-        }
-    }
-
-    if plays.is_empty() && toasts.is_empty() {
-        return Task::done(Message::PushToast(
-            "No content to play".to_owned(),
-            toast::Status::Error,
-        ));
-    }
-
-    let status = if plays.is_empty() {
-        toast::Status::Error
-    } else {
-        toast::Status::Warn
-    };
-
-    let play = if !plays.is_empty() {
-        Task::done(Message::PlayItems(plays))
-    } else {
-        Task::none()
-    };
-
-    let toasts = if !toasts.is_empty() {
-        let toasts = toasts
-            .into_iter()
-            .map(|message| (message, status))
-            .collect::<Vec<_>>();
-        Task::done(Message::PushToasts(toasts))
-    } else {
-        Task::none()
-    };
-
-    Task::batch([play, toasts])
 }
 
 fn fetch_kind(kind: PageKind) -> FetchId {

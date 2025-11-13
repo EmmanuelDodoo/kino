@@ -2,7 +2,7 @@
 use crate::models::{
     Collection, CollectionId, Directory, DirectoryId, EComment, ECommentId, Episode, EpisodeId,
     MComment, MCommentId, Movie, MovieId, SearchItem, Season, SeasonId, Show, ShowId,
-    collection::{self, Item},
+    collection::{self},
 };
 
 use crate::filter::{self, Filter, search::SearchFilter};
@@ -93,22 +93,26 @@ impl Database {
             .collect()
     }
 
-    pub fn get_movie<T>(&self, id: MovieId, map: fn(Movie) -> T) -> rusqlite::Result<T> {
+    pub fn get_movie<T>(
+        &self,
+        id: MovieId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<T> {
         let sql = format!("{} WHERE movie.id=:id", Self::MOVIE_QUERY);
 
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
-            Movie::from_row(row).map(map)
-        })
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)
     }
 
-    pub fn get_show<T>(&self, id: ShowId, map: fn(Show) -> T) -> rusqlite::Result<T> {
+    pub fn get_show<T>(
+        &self,
+        id: ShowId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<T> {
         let mut statement = self.prepare_cached("SELECT * FROM tv_show WHERE id=:id")?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
-            Show::from_row(row).map(map)
-        })
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)
     }
 
     pub fn get_shows<T>(
@@ -153,7 +157,7 @@ impl Database {
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-        map: fn(Season) -> T,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
     ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
@@ -180,19 +184,21 @@ impl Database {
                     (":limit", &ToSqlOutput::from(limit)),
                     (":offset", &ToSqlOutput::from(offset)),
                 ],
-                |row| Season::from_row(row).map(map),
+                map,
             )?
             .collect()
     }
 
-    pub fn get_season<T>(&self, id: SeasonId, map: fn(Season) -> T) -> rusqlite::Result<T> {
+    pub fn get_season<T>(
+        &self,
+        id: SeasonId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<T> {
         let sql = format!("{} WHERE season.id=:id", Self::SEASON_QUERY);
 
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
-            Season::from_row(row).map(map)
-        })
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)
     }
 
     pub fn get_season_episodes<T>(
@@ -202,7 +208,7 @@ impl Database {
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-        map: fn(Episode) -> T,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
     ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
@@ -230,18 +236,20 @@ impl Database {
                     (":limit", &ToSqlOutput::from(limit)),
                     (":offset", &ToSqlOutput::from(offset)),
                 ],
-                |row| Episode::from_row(row).map(map),
+                map,
             )?
             .collect()
     }
 
-    pub fn get_episode<T>(&self, id: EpisodeId, map: fn(Episode) -> T) -> rusqlite::Result<T> {
+    pub fn get_episode<T>(
+        &self,
+        id: EpisodeId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<T> {
         let sql = format!("{} WHERE id=:id", Self::EPISODE_QUERY);
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
-            Episode::from_row(row).map(map)
-        })
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)
     }
 
     pub fn get_ecomments<T>(
@@ -431,19 +439,19 @@ impl Database {
     }
 
     #[allow(clippy::type_complexity, clippy::too_many_arguments)]
-    pub fn get_collection_items<M, S, A, E>(
+    pub fn get_collection_members<M, S, A, E>(
         &self,
         collection: CollectionId,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-        movie_map: fn(Movie) -> M,
-        show_map: fn(Show) -> S,
-        season_map: fn(Season) -> A,
-        episode_map: fn(Episode) -> E,
+        movie_map: fn(&Row<'_>) -> rusqlite::Result<M>,
+        show_map: fn(&Row<'_>) -> rusqlite::Result<S>,
+        season_map: fn(&Row<'_>) -> rusqlite::Result<A>,
+        episode_map: fn(&Row<'_>) -> rusqlite::Result<E>,
     ) -> rusqlite::Result<(Vec<M>, Vec<S>, Vec<A>, Vec<E>)> {
-        use collection::{Item, ItemId};
+        use collection::ItemId;
 
         let repeat = |count: usize| -> String {
             assert_ne!(count, 0);
@@ -456,18 +464,15 @@ impl Database {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
-        let sql = "SELECT * FROM collection_item WHERE collection_id=:collection";
-
         let mut movies = vec![];
         let mut shows = vec![];
         let mut seasons = vec![];
         let mut episodes = vec![];
 
-        let mut ids = self.prepare_cached(sql)?;
-        let mut ids = ids.query(&[(":collection", &ToSqlOutput::from(collection))])?;
+        let items = self.get_collection_items(collection)?;
 
-        while let Some(row) = ids.next()? {
-            match ItemId::from_row(row)? {
+        for item in items {
+            match item {
                 ItemId::Movie(movie) => movies.push(ToSqlOutput::from(movie)),
                 ItemId::Show(show) => shows.push(ToSqlOutput::from(show)),
                 ItemId::Season(season) => seasons.push(ToSqlOutput::from(season)),
@@ -492,9 +497,7 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(movies), |row| {
-                    Movie::from_row(row).map(movie_map)
-                })?
+                .query_map(params_from_iter(movies), movie_map)?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
@@ -517,9 +520,7 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(shows), |row| {
-                    Show::from_row(row).map(show_map)
-                })?
+                .query_map(params_from_iter(shows), show_map)?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
@@ -542,9 +543,7 @@ impl Database {
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
-                .query_map(params_from_iter(seasons), |row| {
-                    Season::from_row(row).map(season_map)
-                })?
+                .query_map(params_from_iter(seasons), season_map)?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
@@ -570,15 +569,29 @@ impl Database {
             let mut statement = self.prepare_cached(&sql)?;
 
             statement
-                .query_map(params_from_iter(episodes), |row| {
-                    Episode::from_row(row).map(episode_map)
-                })?
+                .query_map(params_from_iter(episodes), episode_map)?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             vec![]
         };
 
         Ok((movies, shows, seasons, episodes))
+    }
+
+    pub fn get_collection_items(
+        &self,
+        collection: CollectionId,
+    ) -> rusqlite::Result<Vec<collection::ItemId>> {
+        use collection::ItemId;
+        let sql = "SELECT * FROM collection_item WHERE collection_id=:collection";
+
+        let mut ids = self.prepare_cached(sql)?;
+
+        ids.query_map(
+            &[(":collection", &ToSqlOutput::from(collection))],
+            ItemId::from_row,
+        )?
+        .collect()
     }
 
     pub fn search<T>(

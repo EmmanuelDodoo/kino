@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 use std::fmt::{self, Display};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -9,6 +8,8 @@ pub enum Error {
     GStreamerError(GStreamerError),
     ThumbnailEmptyVideo,
     IO(std::io::Error),
+    Database(rusqlite::Error),
+    Raw(String),
 }
 
 impl Display for Error {
@@ -16,6 +17,8 @@ impl Display for Error {
         match self {
             Self::GStreamerError(error) => error.fmt(f),
             Self::IO(error) => error.fmt(f),
+            Self::Database(error) => error.fmt(f),
+            Self::Raw(error) => error.fmt(f),
             Self::ThumbnailEmptyVideo => write!(f, "Tried creating a thumbnail for an empty Video"),
         }
     }
@@ -26,6 +29,8 @@ impl std::error::Error for Error {
         match self {
             Self::GStreamerError(error) => error.source(),
             Self::IO(error) => error.source(),
+            Self::Database(error) => error.source(),
+            Self::Raw(_) => None,
             Self::ThumbnailEmptyVideo => None,
         }
     }
@@ -34,6 +39,18 @@ impl std::error::Error for Error {
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
         Self::IO(value)
+    }
+}
+
+impl From<rusqlite::Error> for Error {
+    fn from(value: rusqlite::Error) -> Self {
+        Self::Database(value)
+    }
+}
+
+impl From<String> for Error {
+    fn from(value: String) -> Self {
+        Self::Raw(value)
     }
 }
 

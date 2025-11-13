@@ -776,7 +776,9 @@ impl Manager {
     }
 
     fn speed_reset(&mut self) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state {
+        if let State::Ready(player) = &mut self.state
+            && player.video.speed() != 1.0
+        {
             self.settings.speed = 1.0;
             player.video.set_speed(self.settings.speed).unwrap();
         }

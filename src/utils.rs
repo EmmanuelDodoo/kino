@@ -18,7 +18,10 @@ pub use icons::*;
 pub mod typo;
 pub use typo::*;
 pub mod filter;
-pub use filter::{Comments, search::SearchFilter, Comp, Duration, Filter, FilterMode, Progress, ProgressKind, Release};
+pub use filter::{
+    Comments, Comp, Duration, Filter, FilterMode, Progress, ProgressKind, Release,
+    search::SearchFilter,
+};
 pub mod sort;
 pub use sort::{Sort, SortKind};
 
@@ -223,6 +226,57 @@ pub struct PlayItem {
     pub id: PlayId,
     pub name: String,
     pub path: PathBuf,
+    pub progress: f32,
+    pub duration: u64,
+}
+
+impl PlayItem {
+    pub fn from_episode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        let id = EpisodeId::from_row(row)?;
+        let id = PlayId::Episode(id);
+
+        let full_path: PathBuf = {
+            let path = row.get::<_, String>("path")?;
+            let directory = row.get::<_, String>("directory_path")?;
+            let show = row.get::<_, String>("show_path")?;
+            let season = row.get::<_, String>("season_path")?;
+            [&directory, &show, &season, &path].iter().collect()
+        };
+
+        Self::new(row, id, full_path)
+    }
+
+    pub fn from_movie(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        let id = MovieId::from_row(row)?;
+        let id = PlayId::Movie(id);
+
+        let full_path: PathBuf = {
+            let path = row.get::<_, String>("path")?;
+            let directory = row.get::<_, String>("directory_path")?;
+            [&directory, &path].iter().collect()
+        };
+
+        Self::new(row, id, full_path)
+    }
+
+    fn new(row: &rusqlite::Row<'_>, id: PlayId, path: PathBuf) -> rusqlite::Result<Self> {
+        let name = row.get::<_, String>("name")?;
+        let progress = row.get::<_, f32>("progress")?;
+        let duration = row.get::<_, u64>("duration")?;
+
+        Ok(Self {
+            id,
+            name,
+            path,
+            progress,
+            duration,
+        })
+    }
+
+    pub fn progress(&mut self, progress: f32) {
+        assert!((0.0..1.0).contains(&progress), "Progress out of bounds");
+        self.progress = progress;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -232,11 +286,45 @@ pub struct Playlist {
 }
 
 impl Playlist {
+    pub fn empty() -> Self {
+        Self {
+            current: 0,
+            items: vec![],
+        }
+    }
+
     pub fn new(items: impl Iterator<Item = PlayItem>) -> Self {
         Self {
             current: 0,
             items: items.collect(),
         }
+    }
+
+    pub fn single(item: PlayItem) -> Self {
+        Self {
+            current: 0,
+            items: vec![item],
+        }
+    }
+
+    pub fn merge(mut self, mut other: Self, flip: bool) -> Self {
+        let total = self.items.len() + other.items.len();
+        let current = if flip {
+            other.current.min(total.saturating_sub(1))
+        } else {
+            self.current
+        };
+
+        self.items.append(&mut other.items);
+
+        Self {
+            current,
+            items: self.items,
+        }
+    }
+
+    pub fn position(&mut self, position: usize) {
+        self.current = position.min(self.items.len().saturating_sub(1));
     }
 
     #[allow(clippy::should_implement_trait)]

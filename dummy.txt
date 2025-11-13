@@ -5,14 +5,14 @@
 
 -- Insert TV Shows
 INSERT INTO tv_show (id, directory, path, name, original_name, poster, tags, synopsis, release, created_at, backdrop) VALUES
-('0199cff2-667c-7c73-b6c2-6e0f1276d32f', '0199de91-1a9d-73d2-a819-a4dfbadf8228', 'Digital Horizons','Digital Horizons some long ass text for testing limit','Digital Horizons', 'assets/show.png', 'sci-fi,drama,technology', 'A gripping tale of AI consciousness and human connection in a near-future world.', '2023-02-01', '2023-01-01T10:00:00Z', 'assets/show3.png'),
+('0199cff2-667c-7c73-b6c2-6e0f1276d32f', '0199de91-1a9d-73d2-a819-a4dfbadf8228', 'digital','Digital Horizons some long ass text for testing limit','Digital Horizons', 'assets/show.png', 'sci-fi,drama,technology', 'A gripping tale of AI consciousness and human connection in a near-future world.', '2023-02-01', '2023-01-01T10:00:00Z', 'assets/show3.png'),
 ('0199cffc-ead6-7ab3-a961-cc4c146e4fc8', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Mystery Manor', 'Mystery Manor','Mystery Manor', 'assets/show.png', 'mystery,thriller,crime', 'Detective Sarah Chen solves impossible crimes in a mansion full of secrets.', '2023-03-03', '2023-05-15T09:00:00Z', 'assets/show3.png'),
 ('0199cffd-c688-79d2-8018-bad6db895ff5', '0199de91-1a9d-73d2-a819-a4dfbadf8228', 'Culinary Quest', 'Culinary Quest','Culinary Quest', 'assets/show.png', 'cooking,competition,reality', 'Top chefs compete in exotic locations for the ultimate culinary title.', '2024-04-04', '2024-05-15T09:00:00Z', 'assets/show3.png');
 
 -- Insert Seasons
 INSERT INTO season (id, path, name, original_name, poster, synopsis, release, created_at, show_id, season_number) VALUES
 -- Digital Horizons Seasons
-('01933b6f-1a42-7000-8000-000000000001', 'Season 1', 'Digital Horizons - Season 1','Digital Horizons - Season 1', 'assets/show1.png', 'The awakening of the first truly sentient AI begins to reshape society.', '2023-05-05', '2023-01-01T00:00:00Z', '0199cff2-667c-7c73-b6c2-6e0f1276d32f', 1),
+('01933b6f-1a42-7000-8000-000000000001', 'season1', 'Digital Horizons - Season 1','Digital Horizons - Season 1', 'assets/show1.png', 'The awakening of the first truly sentient AI begins to reshape society.', '2023-05-05', '2023-01-01T00:00:00Z', '0199cff2-667c-7c73-b6c2-6e0f1276d32f', 1),
 ('01933b6f-1a42-7000-8000-000000000002', 'Season 2', 'Digital Horizons - Season 2','Digital Horizons - Season 2', 'assets/show1.png', 'Tensions rise as AI rights movements clash with human interests.', '2023-06-05', '2023-08-25T00:00:00Z', '0199cff2-667c-7c73-b6c2-6e0f1276d32f', 2),
 -- Mystery Manor Seasons
 ('01933b6f-1a42-7000-8000-000000000003', 'Season 1', 'Mystery Manor - Season
@@ -25,11 +25,10 @@ INSERT INTO season (id, path, name, original_name, poster, synopsis, release, cr
 
 -- Insert Episodes for Digital Horizons Season 1
 INSERT INTO episode (id, path, name, original_name, progress, synopsis, rating, poster, season_id, release, created_at, duration, last_watched, watch_count, episode_number) VALUES
-('01933b70-2a42-7000-8000-000000000001', 'Episode 1', 'Awakening','Awakening', 1.0, 'An AI research lab experiences an unprecedented breakthrough.', 5, 'assets/fantastic.png', '01933b6f-1a42-7000-8000-000000000001', '2023-09-09', '2023-01-15T20:00:00Z', 2820, '2023-01-16T21:45:00Z', 2, 1),
-('01933b70-2a42-7000-8000-000000000002', 'Episode 2', 'First Contact','First Contact', 1.0, 'Scientists attempt to communicate with the new consciousness.', 5, 'assets/fantastic.png', '01933b6f-1a42-7000-8000-000000000001', '2023-10-10', '2023-01-22T20:00:00Z', 2760, '2023-01-23T22:10:00Z', 2, 2),
-('01933b70-2a42-7000-8000-000000000003', 'Episode 3', 'Recognition','Recognition', 1.0, 'The AI demonstrates emotional understanding beyond programming.', 4, 'assets/fantastic.png', '01933b6f-1a42-7000-8000-000000000001', '2023-11-11', '2023-01-29T20:00:00Z', 2880, '2023-01-30T21:30:00Z', 2, 3),
-('01933b70-2a42-7000-8000-000000000004', 'Episdoe 4',
-'Integration','Integration', 0.7, 'Attempts to integrate the AI into society face resistance.', 4, 'assets/show.png', '01933b6f-1a42-7000-8000-000000000001', '2023-12-12', '2023-02-05T20:00:00Z', 2940, '2023-02-06T20:35:00Z', 1, 4),
+('01933b70-2a42-7000-8000-000000000001', 'test1.mp4', 'Awakening','Awakening', 1.0, 'An AI research lab experiences an unprecedented breakthrough.', 5, 'assets/fantastic.png', '01933b6f-1a42-7000-8000-000000000001', '2023-09-09', '2023-01-15T20:00:00Z', 2820, '2023-01-16T21:45:00Z', 2, 1),
+('01933b70-2a42-7000-8000-000000000002', 'test3.mp4', 'First Contact','First Contact', 1.0, 'Scientists attempt to communicate with the new consciousness.', 5, 'assets/fantastic.png', '01933b6f-1a42-7000-8000-000000000001', '2023-10-10', '2023-01-22T20:00:00Z', 2760, '2023-01-23T22:10:00Z', 2, 2),
+('01933b70-2a42-7000-8000-000000000003', 'test2.mp4', 'Recognition','Recognition', 1.0, 'The AI demonstrates emotional understanding beyond programming.', 4, 'assets/fantastic.png', '01933b6f-1a42-7000-8000-000000000001', '2023-11-11', '2023-01-29T20:00:00Z', 2880, '2023-01-30T21:30:00Z', 2, 3),
+('01933b70-2a42-7000-8000-000000000004', 'test.mkv', 'Integration','Integration', 0.7, 'Attempts to integrate the AI into society face resistance.', 4, 'assets/show.png', '01933b6f-1a42-7000-8000-000000000001', '2023-12-12', '2023-02-05T20:00:00Z', 2940, '2023-02-06T20:35:00Z', 1, 4),
 ('01933b70-2a42-7000-8000-000000000005', 'Episode 5', 'Divergence','Divergence', 0.0, 'A competing AI development threatens everything.', 4, 'assets/show.png', '01933b6f-1a42-7000-8000-000000000001', '2023-12-13', '2023-02-12T20:00:00Z', 2700, NULL, 0, 5);
 
 -- Insert Episodes for Digital Horizons Season 2

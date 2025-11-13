@@ -314,6 +314,10 @@ impl Filter {
         }
     }
 
+    pub fn none() -> Self {
+        Self::new(FilterMode::default())
+    }
+
     pub fn is_any(&self) -> bool {
         self.progress.is_any()
             && self.rating.is_any()

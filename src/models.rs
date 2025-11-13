@@ -5,13 +5,17 @@ use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRe
 use uuid::Uuid;
 
 pub mod collection;
+pub mod episodes;
 pub mod movies;
+pub mod seasons;
 pub mod shows;
 
-pub use collection::{Collection, CollectionId, CollectionView};
-pub use movies::*;
-pub use shows::*;
 pub use collection::ItemId;
+pub use collection::{Collection, CollectionId, CollectionView};
+pub use episodes::*;
+pub use movies::*;
+pub use seasons::*;
+pub use shows::*;
 
 use crate::db::{Operation, Query, Table};
 
@@ -351,7 +355,7 @@ impl Directory {
 }
 
 #[derive(Debug, Clone)]
-pub struct SearchItem{
+pub struct SearchItem {
     pub id: ItemId,
     pub name: String,
     pub snippet: String,
@@ -359,7 +363,7 @@ pub struct SearchItem{
 }
 
 impl SearchItem {
-    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self>{
+    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         let id = ItemId::from_row(row)?;
 
         let name = row.get::<_, String>("name")?;
@@ -380,7 +384,7 @@ impl SearchItem {
             id,
             name,
             snippet,
-            tags
+            tags,
         })
     }
 }

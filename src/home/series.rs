@@ -1,5 +1,5 @@
 use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
-use crate::models::{ItemId, Media, shows::*};
+use crate::models::{ItemId, Media, Season, SeasonId, Show, ShowId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;

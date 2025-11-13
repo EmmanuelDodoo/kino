@@ -4,24 +4,22 @@ use rusqlite::types::{ToSqlOutput, Value};
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use super::{DirectoryId, Media, datetime_to_sql, naivedate_to_sql};
+use super::{DirectoryId, Media, Season, SeasonId, ShowId, datetime_to_sql, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MovieId(Uuid);
+pub struct EpisodeId(Uuid);
 
-impl From<MovieId> for ToSqlOutput<'_> {
-    fn from(value: MovieId) -> Self {
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
-        ToSqlOutput::from(value.0.to_string())
-    }
-}
-
-impl MovieId {
+impl EpisodeId {
     /// Expects relevant column name as "id"
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         Self::from_row_helper("id", row)
+    }
+
+    pub fn from_recents(row: &Row<'_>) -> rusqlite::Result<Option<Self>> {
+        Ok(row
+            .get::<_, Option<String>>("recent_episode")?
+            .map(|id| EpisodeId(Uuid::try_parse(&id).unwrap())))
     }
 
     pub fn from_collection(row: &Row<'_>) -> rusqlite::Result<Self> {
@@ -30,15 +28,23 @@ impl MovieId {
 
     fn from_row_helper(column: &str, row: &Row<'_>) -> rusqlite::Result<Self> {
         row.get::<_, String>(column)
-            .map(|id| MovieId(Uuid::try_parse(&id).unwrap()))
+            .map(|id| EpisodeId(Uuid::try_parse(&id).unwrap()))
+    }
+}
+
+impl From<EpisodeId> for ToSqlOutput<'_> {
+    fn from(value: EpisodeId) -> Self {
+        // todo!: to_string is needed because the raw string is fed into the db via
+        // the dummy inputs. Production shouldn't need this.
+        ToSqlOutput::from(value.0.to_string())
     }
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MCommentId(Uuid);
+pub struct ECommentId(Uuid);
 
-impl From<MCommentId> for ToSqlOutput<'_> {
-    fn from(value: MCommentId) -> Self {
+impl From<ECommentId> for ToSqlOutput<'_> {
+    fn from(value: ECommentId) -> Self {
         // todo!: to_string is needed because the raw string is fed into the db via
         // the dummy inputs. Production shouldn't need this.
         ToSqlOutput::from(value.0.to_string())
@@ -46,49 +52,43 @@ impl From<MCommentId> for ToSqlOutput<'_> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Movie {
-    pub id: MovieId,
+pub struct Episode {
+    pub id: EpisodeId,
     name: String,
     original_name: String,
-    pub directory: DirectoryId,
     path: String,
     pub full_path: PathBuf,
     poster: Option<String>,
+    // Join from show
     backdrop: Option<String>,
-    pub tags: Vec<String>,
     synopsis: String,
     release: NaiveDate,
     added: DateTime<Local>,
     watch_count: u32,
-    rating: Option<f32>,
+    pub show: ShowId,
+    pub season: SeasonId,
+    pub number: u16,
     progress: f32,
+    rating: Option<f32>,
     last_watched: Option<DateTime<Local>>,
     duration: u64,
     comments: u32,
 }
 
-impl Movie {
-    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Movie> {
-        // todo
-        let id = MovieId::from_row(row)?;
-        let directory = row.get::<_, String>("directory")?;
-        let directory = DirectoryId(Uuid::try_parse(&directory).unwrap());
+impl Episode {
+    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+        // let id = SeasonId(row.get::<_, Uuid>("id")?);
+        // todo!: to_string is needed because the raw string is fed into the db via
+        // the dummy inputs. Production shouldn't need this.
+        let id = EpisodeId::from_row(row)?;
 
         let path = row.get::<_, String>("path")?;
 
         let name = row.get::<_, String>("name")?;
         let original_name = row.get::<_, String>("original_name")?;
         let poster = row.get::<_, Option<String>>("poster")?;
+
         let backdrop = row.get::<_, Option<String>>("backdrop")?;
-        let tags = {
-            let tags = row.get::<_, Option<String>>("tags")?;
-            tags.map(|tags| {
-                tags.split(",")
-                    .map(ToOwned::to_owned)
-                    .collect::<Vec<String>>()
-            })
-            .unwrap_or_default()
-        };
         let synopsis = row.get::<_, String>("synopsis")?;
 
         let release = row.get::<_, NaiveDate>("release")?;
@@ -96,34 +96,45 @@ impl Movie {
         let added = row.get::<_, DateTime<Local>>("created_at")?;
 
         let watch_count = row.get::<_, u32>("watch_count")?;
+
+        let number = row.get::<_, u16>("episode_number")?;
+
         let progress = row.get::<_, f32>("progress")?;
 
         let rating = row.get::<_, Option<f32>>("rating")?;
 
         let last_watched = row.get::<_, Option<DateTime<Local>>>("last_watched")?;
+
+        // todo
+        let show = ShowId::from_child(row)?;
+        let season = SeasonId::from_child(row)?;
+
         let duration = row.get::<_, u64>("duration")?;
 
         let comments = row.get::<_, u32>("comment_count")?;
 
         let full_path: PathBuf = {
             let directory = row.get::<_, String>("directory_path")?;
-            [&directory, &path].iter().collect()
+            let show = row.get::<_, String>("show_path")?;
+            let season = row.get::<_, String>("season_path")?;
+            [&directory, &show, &season, &path].iter().collect()
         };
 
         Ok(Self {
             id,
-            directory,
             name,
             original_name,
             path,
             full_path,
             poster,
             backdrop,
-            tags,
             synopsis,
             release,
             added,
             watch_count,
+            show,
+            season,
+            number,
             progress,
             rating,
             last_watched,
@@ -137,54 +148,55 @@ impl Movie {
             id,
             name,
             original_name,
-            directory,
             path,
             full_path: _full_path,
             poster,
-            backdrop,
-            tags,
+            backdrop: _backdrop,
             synopsis,
             release,
             added,
             watch_count,
-            rating,
+            show: _show,
+            season,
+            number,
             progress,
+            rating,
             last_watched,
             duration,
-            comments: _comments,
+            comments,
         } = self;
 
         let id = ToSqlOutput::from(*id);
-        let directory = ToSqlOutput::from(*directory);
+        let season = ToSqlOutput::from(*season);
         let path = ToSqlOutput::from(path.clone());
 
         let name = ToSqlOutput::from(name.clone());
         let original_name = ToSqlOutput::from(original_name.clone());
         let poster = ToSqlOutput::Owned(Value::from(poster.clone()));
-        let backdrop = ToSqlOutput::Owned(Value::from(backdrop.clone()));
-        let tags = ToSqlOutput::from(tags.join(","));
+
         let synopsis = ToSqlOutput::from(synopsis.clone());
         let release = naivedate_to_sql(release);
         let added = datetime_to_sql(added);
         let watch_count = ToSqlOutput::from(*watch_count);
+        let number = ToSqlOutput::from(*number);
 
         let rating = ToSqlOutput::Owned(Value::from(*rating));
         let progress = ToSqlOutput::from(*progress);
         let last_watched = last_watched
             .map(|date| datetime_to_sql(&date))
             .unwrap_or(ToSqlOutput::Owned(Value::Null));
+
         let duration = i64::try_from(*duration).expect("duration cannot be expressed as i64");
         let duration = ToSqlOutput::from(duration);
+        let comments = ToSqlOutput::from(*comments);
 
         vec![
             (":id", id),
-            (":directory", directory),
-            (":path", path),
+            (":season", season),
             (":name", name),
             (":original_name", original_name),
+            (":path", path),
             (":poster", poster),
-            (":backdrop", backdrop),
-            (":tags", tags),
             (":synopsis", synopsis),
             (":release", release),
             (":added", added),
@@ -193,18 +205,20 @@ impl Movie {
             (":progress", progress),
             (":last_watched", last_watched),
             (":duration", duration),
+            (":comments", comments),
+            (":number", number),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO movie (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration)";
+        let sql = "INSERT INTO episode (id, season_id, name, original_name, path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :number)";
 
         let params = self.insert_params();
 
         Query {
             id: self.id.0,
-            table: Table::Movies,
+            table: Table::Episode,
             sql,
             params,
             op: Operation::Insert,
@@ -213,12 +227,13 @@ impl Movie {
 
     #[must_use]
     pub fn delete<'a>(self) -> Query<'a> {
-        let sql = "DELETE FROM movie WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(self.id))];
+        let sql = "DELTE FROM episode WHERE id=:id";
+        let id = ToSqlOutput::from(self.id);
+        let params = [(":id", id)];
 
         Query {
             id: self.id.0,
-            table: Table::Movies,
+            table: Table::Episode,
             sql,
             params: params.to_vec(),
             op: Operation::Delete,
@@ -229,7 +244,7 @@ impl Movie {
     pub fn set_name<'a>(&mut self, name: String) -> Query<'a> {
         self.name = name;
 
-        let sql = "UPDATE movie SET name=:name WHERE id=:id";
+        let sql = "UPDATE episode SET name=:name WHERE id=:id";
         let params = [
             (":id", ToSqlOutput::from(self.id)),
             (":name", ToSqlOutput::from(self.name.clone())),
@@ -237,26 +252,7 @@ impl Movie {
 
         Query {
             id: self.id.0,
-            table: Table::Movies,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    #[must_use]
-    pub fn set_watch_count<'a>(&mut self, count: u32) -> Query<'a> {
-        self.watch_count = count;
-
-        let sql = "UPDATE movie SET watch_count=:count WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":count", ToSqlOutput::from(count)),
-        ];
-
-        Query {
-            id: self.id.0,
-            table: Table::Movies,
+            table: Table::Episode,
             sql,
             params: params.to_vec(),
             op: Operation::Update,
@@ -268,7 +264,7 @@ impl Movie {
         assert!(rating > 0.0 && rating <= 5.0, "Episode rating out of range");
         self.rating = Some(rating);
 
-        let sql = "UPDATE movie SET rating=:rating WHERE id=:id";
+        let sql = "UPDATE episode SET rating=:rating WHERE id=:id";
         let params = [
             (":id", ToSqlOutput::from(self.id)),
             (":rating", ToSqlOutput::from(rating)),
@@ -276,7 +272,26 @@ impl Movie {
 
         Query {
             id: self.id.0,
-            table: Table::Movies,
+            table: Table::Episode,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_watch_count<'a>(&mut self, count: u32) -> Query<'a> {
+        self.watch_count = count;
+
+        let sql = "UPDATE episode SET watch_count=:count WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(self.id)),
+            (":count", ToSqlOutput::from(count)),
+        ];
+
+        Query {
+            id: self.id.0,
+            table: Table::Episode,
             sql,
             params: params.to_vec(),
             op: Operation::Update,
@@ -291,7 +306,7 @@ impl Movie {
         );
         self.progress = progress;
 
-        let sql = "UPDATE movie SET progress=:progress WHERE id=:id";
+        let sql = "UPDATE episode SET progress=:progress WHERE id=:id";
         let params = [
             (":id", ToSqlOutput::from(self.id)),
             (":progress", ToSqlOutput::from(progress)),
@@ -299,7 +314,7 @@ impl Movie {
 
         Query {
             id: self.id.0,
-            table: Table::Movies,
+            table: Table::Episode,
             sql,
             params: params.to_vec(),
             op: Operation::Update,
@@ -310,7 +325,7 @@ impl Movie {
     pub fn set_last_watched<'a>(&mut self, watched: DateTime<Local>) -> Query<'a> {
         self.last_watched = Some(watched);
 
-        let sql = "UPDATE movie SET last_watched=:watched WHERE id=:id";
+        let sql = "UPDATE episode SET last_watched=:watched WHERE id=:id";
         let params = [
             (":id", ToSqlOutput::from(self.id)),
             (":watched", datetime_to_sql(&watched)),
@@ -318,7 +333,7 @@ impl Movie {
 
         Query {
             id: self.id.0,
-            table: Table::Movies,
+            table: Table::Episode,
             sql,
             params: params.to_vec(),
             op: Operation::Update,
@@ -327,39 +342,40 @@ impl Movie {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
-        directory: DirectoryId,
-        path: String,
-        full_path: PathBuf,
+        season: &Season,
         name: String,
         original_name: String,
-        backdrop: Option<String>,
+        path: String,
+        full_path: PathBuf,
         poster: Option<String>,
-        tags: Vec<String>,
+        backdrop: Option<String>,
         synopsis: String,
         release: NaiveDate,
         duration: u64,
+        episode_number: u16,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
 
         let new = Self {
-            id: MovieId(Uuid::now_v7()),
-            directory,
-            path,
-            full_path,
+            id: EpisodeId(Uuid::now_v7()),
             name,
             original_name,
+            path,
+            full_path,
+            season: season.id,
+            show: season.show,
             backdrop,
             poster,
-            tags,
             synopsis,
-            release,
             added,
-            watch_count: 0,
-            progress: 0.0,
-            rating: None,
-            last_watched: None,
+            release,
             duration,
+            watch_count: 0,
+            rating: None,
+            progress: 0.0,
+            last_watched: None,
             comments: 0,
+            number: episode_number,
         };
 
         let query = new.insert();
@@ -367,106 +383,35 @@ impl Movie {
         (new, query)
     }
 
-    pub fn dummy<'a>(directory: DirectoryId) -> (Self, Query<'a>) {
-        let path = "dummy_movie".to_owned();
-        let full_path = ["movies", &path].iter().collect();
-        let name = "Test Movie".to_owned();
-        let backdrop = None;
+    pub fn dummy<'a>(season: &Season) -> (Self, Query<'a>) {
+        let name = "Test Episode".to_owned();
+        let path = "Test Episode.mkv".to_owned();
+        let full_path = PathBuf::from("test_full_path.mkv");
         let poster = None;
-        let tags = ["test", "hope", "growth"]
-            .into_iter()
-            .map(ToOwned::to_owned)
-            .collect();
-        let synopsis = "A test dummy which is partially adequate".to_owned();
-        let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
-        let duration = 3600;
+        let backdrop = None;
+        let synopsis = "A dummy episode for testing purposes only".to_owned();
+        let release = NaiveDate::parse_from_str("2022-09-02", "%Y-%m-%d").unwrap();
+        let episode_number = 12;
+        let duration = 3872;
 
         Self::new(
-            directory,
-            path,
-            full_path,
+            season,
             name.clone(),
             name,
-            backdrop,
+            path,
+            full_path,
             poster,
-            tags,
+            backdrop,
             synopsis,
             release,
             duration,
+            episode_number,
         )
-    }
-
-    pub fn testing() -> Self {
-        let duration = (crate::utils::rand_u32() as usize) as u64;
-
-        let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
-
-        let added = Local::now();
-
-        let id = MovieId(Uuid::now_v7());
-
-        let path = "assets/test.mkv";
-        let full_path = PathBuf::from(path);
-
-        Self {
-            id,
-            directory: DirectoryId(Uuid::now_v7()),
-            name: "Fantastic Beasts And Where To Find Them".to_owned(),
-            original_name: "Fantastic Beasts And Where To Find Them".to_owned(),
-            duration,
-            path: path.to_owned(), full_path,
-            rating: Some(3.85),
-            progress: 0.35,
-            poster: Some("assets/fantastic.png".into()),
-            release,
-            added ,
-            last_watched: None,
-            comments: 69,
-            watch_count: 57,
-            synopsis: "In 1926, Newt Scamander arrives at the Magical Congress of the United States of America with a magically expanded briefcase, which houses a number of dangerous creatures and their habitats. When the creatures escape from the briefcase, it sends the American wizarding authorities after Newt, and threatens to strain even further the state of magical and non-magical relations.".to_owned(),
-            tags: vec!["tag-1".into(), "tag-2".into(), "tag-team".into()],
-            backdrop: Some("assets/test.jpg".into())
-
-        }
-    }
-
-    pub fn testing2() -> Self {
-        let duration = (crate::utils::rand_u32() as usize) as u64;
-
-        let added = Local::now();
-        let release = NaiveDate::parse_from_str("2011-03-05", "%Y-%m-%d").unwrap();
-
-        let last_watched = DateTime::parse_from_rfc3339("2024-01-01T10:00:00Z").unwrap();
-        let last_watched = Some(last_watched.into());
-
-        let path = "assets/test2.mp4";
-        let full_path = PathBuf::from(path);
-
-        Self {
-            id: MovieId(Uuid::now_v7()),
-            directory: DirectoryId(Uuid::now_v7()),
-            name: "Ready Player One".to_owned(),
-            original_name: "Ready Player One".to_owned(),
-            path: path.to_owned(), full_path,
-            duration,
-            rating: Some(1.24),
-            progress: 0.95,
-            poster: Some("assets/ready.png".into()),
-            last_watched,
-            release,
-            added,
-            comments: 420,
-            watch_count: 1,
-            synopsis: "When the creator of a popular video game system dies, a virtual contest is created to compete for his fortune.".to_owned(),
-            tags: vec!["Adventure", "Action", "Science Fiction"].into_iter().map(ToOwned::to_owned).collect(),
-            backdrop: Some("assets/player1.jpg".into()),
-
-        }
     }
 }
 
-impl Media for Movie {
-    type Id = MovieId;
+impl Media for Episode {
+    type Id = EpisodeId;
 
     fn id(&self) -> Self::Id {
         self.id
@@ -526,34 +471,34 @@ impl Media for Movie {
 }
 
 #[derive(Debug, Clone)]
-pub struct MComment {
-    pub id: MCommentId,
-    added: DateTime<Local>,
-    content: String,
-    movie: MovieId,
-    timestamp: Option<u64>,
+pub struct EComment {
+    pub id: ECommentId,
+    pub added: DateTime<Local>,
+    pub content: String,
+    pub episode: EpisodeId,
+    pub timestamp: Option<u64>,
 }
 
-impl MComment {
+impl EComment {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         //todo
         let id = row.get::<_, String>("id")?;
-        let id = MCommentId(Uuid::try_parse(&id).unwrap());
+        let id = ECommentId(Uuid::try_parse(&id).unwrap());
 
-        let movie = row.get::<_, String>("movie_id")?;
-        let movie = MovieId(Uuid::try_parse(&movie).unwrap());
+        let episode = row.get::<_, String>("episode_id")?;
+        let episode = EpisodeId(Uuid::try_parse(&episode).unwrap());
 
         let added = row.get::<_, DateTime<Local>>("created_at")?;
 
         let content = row.get::<_, String>("content")?;
 
-        let timestamp = row.get::<_, Option<u64>>("movie_timestamp")?;
+        let timestamp = row.get::<_, Option<u64>>("episode_timestamp")?;
 
         Ok(Self {
             id,
             added,
             content,
-            movie,
+            episode,
             timestamp,
         })
     }
@@ -563,7 +508,7 @@ impl MComment {
             id,
             added,
             content,
-            movie,
+            episode,
             timestamp,
         } = self;
 
@@ -571,7 +516,7 @@ impl MComment {
         let added = datetime_to_sql(added);
         let content = ToSqlOutput::from(content.clone());
 
-        let movie = ToSqlOutput::from(*movie);
+        let episode = ToSqlOutput::from(*episode);
         let timestamp = timestamp
             .map(|time| {
                 ToSqlOutput::from(
@@ -584,20 +529,20 @@ impl MComment {
             (":id", id),
             (":added", added),
             (":content", content),
-            (":movie", movie),
+            (":episode", episode),
             (":timestamp", timestamp),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO movie_comment (id, created_at, content, movie_id, movie_timestamp) VALUES (:id, :added, :content, :movie, :timestamp)";
+        let sql = "INSERT INTO episode_comment (id, created_at, content, episode_id, episode_timestamp) VALUES (:id, :added, :content, :episode, :timestamp)";
 
         let params = self.insert_params();
 
         Query {
             id: self.id.0,
-            table: Table::MComment,
+            table: Table::EComment,
             sql,
             params,
             op: Operation::Insert,
@@ -606,13 +551,13 @@ impl MComment {
 
     #[must_use]
     pub fn delete<'a>(self) -> Query<'a> {
-        let sql = "DELETE FROM movie_comment WHERE id=:id";
+        let sql = "DELETE FROM episode_comment WHERE id=:id";
         let id = ToSqlOutput::from(self.id);
         let params = [(":id", id)];
 
         Query {
             id: self.id.0,
-            table: Table::MComment,
+            table: Table::EComment,
             sql,
             params: params.to_vec(),
             op: Operation::Delete,
@@ -623,7 +568,7 @@ impl MComment {
     pub fn set_content<'a>(&mut self, content: String) -> Query<'a> {
         self.content = content.clone();
 
-        let sql = "UPDATE movie_comment SET content=:content WHERE id=:id";
+        let sql = "UPDATE episode_comment SET content=:content WHERE id=:id";
         let params = [
             (":id", ToSqlOutput::from(self.id)),
             (":content", ToSqlOutput::from(content)),
@@ -631,7 +576,7 @@ impl MComment {
 
         Query {
             id: self.id.0,
-            table: Table::MComment,
+            table: Table::EComment,
             sql,
             params: params.to_vec(),
             op: Operation::Update,
@@ -642,7 +587,7 @@ impl MComment {
     pub fn set_timestamp<'a>(&mut self, timestamp: Option<u64>) -> Query<'a> {
         self.timestamp = timestamp;
 
-        let sql = "UPDATE movie_comment SET movie_timestamp=:timestamp WHERE id=:id";
+        let sql = "UPDATE episode_comment SET episode_timestamp=:timestamp WHERE id=:id";
 
         let timestamp = timestamp
             .map(|time| {
@@ -659,22 +604,26 @@ impl MComment {
 
         Query {
             id: self.id.0,
-            table: Table::MComment,
+            table: Table::EComment,
             sql,
             params: params.to_vec(),
             op: Operation::Update,
         }
     }
 
-    pub fn new<'a>(movie: MovieId, content: String, timestamp: Option<u64>) -> (Self, Query<'a>) {
+    pub fn new<'a>(
+        episode: EpisodeId,
+        content: String,
+        timestamp: Option<u64>,
+    ) -> (Self, Query<'a>) {
         let added = Local::now();
 
         let new = Self {
-            id: MCommentId(Uuid::now_v7()),
+            id: ECommentId(Uuid::now_v7()),
             added,
             content,
             timestamp,
-            movie,
+            episode,
         };
 
         let query = new.insert();
@@ -682,10 +631,10 @@ impl MComment {
         (new, query)
     }
 
-    pub fn dummy<'a>(movie: MovieId) -> (Self, Query<'a>) {
-        let content = "A dummy movie comment".to_owned();
+    pub(super) fn dummy<'a>(episode: EpisodeId) -> (Self, Query<'a>) {
+        let content = "A dummy episode comment".to_owned();
         let timestamp = None;
 
-        Self::new(movie, content, timestamp)
+        Self::new(episode, content, timestamp)
     }
 }

@@ -39,26 +39,13 @@ pub enum ItemId {
 
 impl ItemId {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        let id = row.get::<_, String>("media_id")?;
         let kind = row.get::<_, String>("media_type")?;
 
         match kind.as_str() {
-            "movie" => {
-                let id = MovieId(Uuid::try_parse(&id).unwrap());
-                Ok(Self::Movie(id))
-            }
-            "show" => {
-                let id = ShowId(Uuid::try_parse(&id).unwrap());
-                Ok(Self::Show(id))
-            }
-            "season" => {
-                let id = SeasonId(Uuid::try_parse(&id).unwrap());
-                Ok(Self::Season(id))
-            }
-            "episode" => {
-                let id = EpisodeId(Uuid::try_parse(&id).unwrap());
-                Ok(Self::Episode(id))
-            }
+            "movie" => MovieId::from_collection(row).map(Self::Movie),
+            "show" => ShowId::from_collection(row).map(Self::Show),
+            "season" => SeasonId::from_collection(row).map(Self::Season),
+            "episode" => EpisodeId::from_collection(row).map(Self::Episode),
             _ => unreachable!("stored invalid collection media"),
         }
     }
@@ -441,10 +428,11 @@ impl std::fmt::Display for Sort {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Item {
-    Movie(Movie),
-    Show(Show),
-    Season(Season),
-    Episode(Episode),
+#[derive(Debug, Clone, Copy)]
+pub enum Items {
+    All,
+    Movies,
+    Shows,
+    Seasons,
+    Episodes,
 }

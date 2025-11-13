@@ -9,16 +9,17 @@ use iced_video_player::{Video, VideoPlayer};
 use std::path::PathBuf;
 
 use crate::db;
+use crate::error::Error;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
-    CollectionId, CollectionView, EpisodeId, ItemId, MovieId, SearchItem, SeasonId, ShowId,
-    collection,
+    CollectionId, CollectionView, Episode, EpisodeId, ItemId, Movie, MovieId, SearchItem, Season,
+    SeasonId, Show, ShowId, collection, collection::Items,
 };
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::toast;
 use crate::utils::{
-    Action, Filter, FilterMode, HomeAction, Layout, PlayItem, PlayerAction, Playlist, SearchFilter,
-    Sort, VideoSettings, load_fonts,
+    Action, Filter, FilterMode, HomeAction, Layout, PlayId, PlayItem, PlayerAction, Playlist,
+    SearchFilter, Sort, VideoSettings, load_fonts,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -53,8 +54,12 @@ pub enum Message {
     Home(HomeMessage),
     Player(PlayerMessage),
     Action(Action),
-    PlayItem(PlayItem),
-    PlayItems(Vec<PlayItem>),
+    PlayItem(ItemId),
+    PlayItems(Vec<ItemId>),
+    PlayCollectionItems {
+        id: CollectionId,
+        items: Items,
+    },
     FetchMemberShip(ItemId),
     LoadSearch(String, Option<SearchFilter>),
     Animate,
@@ -171,7 +176,8 @@ impl App {
                 Task::none()
             }
             Message::CloseToast(idx) => {
-                self.toasts.remove(idx);
+                self.toasts
+                    .remove(idx.min(self.toasts.len().saturating_sub(1)));
 
                 Task::none()
             }
@@ -183,8 +189,28 @@ impl App {
 
                 player.update(psg, now)
             }
-            Message::PlayItem(item) => self.play_item(std::iter::once(item)),
-            Message::PlayItems(items) => self.play_item(items.into_iter()),
+            Message::PlayItem(item) => self.play_items(std::iter::once(item)),
+            Message::PlayItems(items) => self.play_items(items.into_iter()),
+            Message::PlayCollectionItems { id, items } => {
+                let items = match self.db.get_collection_items(id) {
+                    Ok(items) => items,
+                    Err(error) => {
+                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        return Task::done(msg);
+                    }
+                }
+                .into_iter()
+                .filter(|item| match (item, items) {
+                    (_, Items::All) => true,
+                    (ItemId::Movie(_), Items::Movies) => true,
+                    (ItemId::Show(_), Items::Shows) => true,
+                    (ItemId::Season(_), Items::Seasons) => true,
+                    (ItemId::Episode(_), Items::Episodes) => true,
+                    _ => false,
+                });
+
+                self.play_items(items)
+            }
             Message::Action(action) => match (self.screen, action) {
                 // todo: update last refresh
                 (Screen::Home, Action::Home(action)) => self.home.action(action, now),
@@ -274,7 +300,7 @@ impl App {
                     self.home.fetched_recents(movies, shows)
                 }
                 FetchId::Show(id) => {
-                    let show = match self.db.get_show(id, shared::Thumbnail::new) {
+                    let show = match self.db.get_show(id, show_map) {
                         Ok(show) => show,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -282,14 +308,10 @@ impl App {
                         }
                     };
 
-                    let seasons = match self.db.get_show_seasons(
-                        id,
-                        limit,
-                        offset,
-                        filter,
-                        sort,
-                        shared::Thumbnail::new,
-                    ) {
+                    let seasons = match self
+                        .db
+                        .get_show_seasons(id, limit, offset, filter, sort, season_map)
+                    {
                         Ok(seasons) => seasons,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -300,7 +322,7 @@ impl App {
                     self.home.fetched_show(show, seasons)
                 }
                 FetchId::Season(id) => {
-                    let season = match self.db.get_season(id, shared::Thumbnail::new) {
+                    let season = match self.db.get_season(id, season_map) {
                         Ok(season) => season,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -314,7 +336,7 @@ impl App {
                         offset,
                         filter,
                         sort,
-                        shared::Thumbnail::new,
+                        episode_map,
                     ) {
                         Ok(episodes) => episodes,
                         Err(error) => {
@@ -326,7 +348,7 @@ impl App {
                     self.home.fetched_season(season, episodes)
                 }
                 FetchId::Episode(id) => {
-                    let episode = match self.db.get_episode(id, shared::Thumbnail::new) {
+                    let episode = match self.db.get_episode(id, episode_map) {
                         Ok(episode) => episode,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -337,7 +359,7 @@ impl App {
                     self.home.fetched_episode(episode)
                 }
                 FetchId::Movie(id) => {
-                    let movie = match self.db.get_movie(id, shared::Thumbnail::new) {
+                    let movie = match self.db.get_movie(id, movie_map) {
                         Ok(movie) => movie,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -360,16 +382,16 @@ impl App {
                     self.home.fetched_collections(collections, state)
                 }
                 FetchId::Collection(key) => {
-                    let items = match self.db.get_collection_items(
+                    let items = match self.db.get_collection_members(
                         key,
                         limit,
                         offset,
                         filter,
                         sort,
-                        shared::Thumbnail::new,
-                        shared::Thumbnail::new,
-                        shared::Thumbnail::new,
-                        shared::Thumbnail::new,
+                        movie_map,
+                        show_map,
+                        season_map,
+                        episode_map,
                     ) {
                         Ok(items) => items,
                         Err(error) => {
@@ -487,19 +509,143 @@ impl App {
         self.toasts.push(toast);
     }
 
-    pub fn push_toasts(&mut self, toasts: impl Iterator<Item = toast::Toast>) {
+    fn push_toasts(&mut self, toasts: impl Iterator<Item = toast::Toast>) {
         for toast in toasts {
             self.push_toast(toast)
         }
     }
 
-    fn play_item(&mut self, items: impl Iterator<Item = PlayItem>) -> Task<Message> {
-        let playlist = Playlist::new(items);
-        let (player, tasks) = Player::boot(self.window, VideoSettings::default(), playlist);
+    fn play_season(&self, season: SeasonId) -> Result<(Playlist, Vec<String>), Error> {
+        let recent = self.db.get_season(season, EpisodeId::from_recents)?;
+        let items = self.db.get_season_episodes(
+            season,
+            None,
+            None,
+            Filter::none(),
+            Sort::release(),
+            PlayItem::from_episode,
+        )?;
+
+        let pos = recent
+            .and_then(|recent| {
+                items
+                    .iter()
+                    .position(|item| item.id == PlayId::Episode(recent))
+            })
+            .unwrap_or_default();
+
+        let (valid, invalid): (Vec<_>, Vec<_>) = items
+            .into_iter()
+            .map(|item| match item.path.try_exists() {
+                Ok(true) => Ok(item),
+                Ok(false) => Err(Error::Raw(format!(
+                    "{} does not exist",
+                    item.path.to_string_lossy()
+                ))),
+                Err(error) => Err(Error::IO(error)),
+            })
+            .partition(Result::is_ok);
+
+        let valid = valid.into_iter().map(Result::unwrap);
+        let mut playlist = Playlist::new(valid);
+        playlist.position(pos);
+
+        let invalid = invalid
+            .into_iter()
+            .map(|error| error.unwrap_err().to_string())
+            .collect::<Vec<_>>();
+
+        Ok((playlist, invalid))
+    }
+
+    fn play_show(&self, show: ShowId) -> Result<(Playlist, Vec<String>), Error> {
+        let recent = self.db.get_show(show, SeasonId::from_recents)?;
+        let seasons = self.db.get_show_seasons(
+            show,
+            None,
+            None,
+            Filter::none(),
+            Sort::release(),
+            SeasonId::from_row,
+        )?;
+
+        let mut errors = vec![];
+        let mut playlist = Playlist::empty();
+
+        for season in seasons {
+            let (season_playlist, mut season_errors) = self.play_season(season)?;
+            errors.append(&mut season_errors);
+            playlist = playlist.merge(season_playlist, recent == Some(season));
+        }
+
+        Ok((playlist, errors))
+    }
+
+    fn play_item(&mut self, item: ItemId) -> Result<(Playlist, Vec<String>), Error> {
+        match item {
+            ItemId::Movie(id) => {
+                let item = self.db.get_movie(id, PlayItem::from_movie)?;
+                if item.path.try_exists()? {
+                    Ok((Playlist::single(item), vec![]))
+                } else {
+                    Err(Error::Raw(format!(
+                        "{} does not exist",
+                        item.path.to_string_lossy()
+                    )))
+                }
+            }
+            ItemId::Episode(id) => {
+                let item = self.db.get_episode(id, PlayItem::from_episode)?;
+                if item.path.try_exists()? {
+                    Ok((Playlist::single(item), vec![]))
+                } else {
+                    Err(Error::Raw(format!(
+                        "{} does not exist",
+                        item.path.to_string_lossy()
+                    )))
+                }
+            }
+            ItemId::Season(id) => self.play_season(id),
+            ItemId::Show(id) => self.play_show(id),
+        }
+    }
+
+    fn play_items(&mut self, items: impl Iterator<Item = ItemId>) -> Task<Message> {
+        let mut errors = vec![];
+        let mut playlist = Playlist::empty();
+
+        for item in items {
+            let (item_playlist, invalid_paths) = match self.play_item(item) {
+                Ok(list) => list,
+                Err(error) => {
+                    let msg = (error.to_string(), toast::Status::Error);
+                    errors.push(msg);
+                    continue;
+                }
+            };
+            if item_playlist.is_empty() {
+                let invalids = invalid_paths
+                    .into_iter()
+                    .map(|message| (message, toast::Status::Error));
+
+                errors.extend(invalids)
+            } else {
+                let invalids = invalid_paths
+                    .into_iter()
+                    .map(|message| (message, toast::Status::Warn));
+                errors.extend(invalids);
+                playlist = playlist.merge(item_playlist, false)
+            }
+        }
+
+        let (player, player_tasks) = Player::boot(self.window, VideoSettings::default(), playlist);
         self.player = Some(player);
         self.screen = Screen::Player;
 
-        tasks.map(Message::Player)
+        Task::batch([
+            player_tasks.map(Message::Player),
+            Task::done(Message::PushToasts(errors)),
+        ])
     }
 }
 
@@ -561,4 +707,20 @@ fn player_keypress(key: Key, modifiers: Modifiers) -> Option<PlayerAction> {
     };
 
     Some(action)
+}
+
+fn movie_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Movie>> {
+    Movie::from_row(row).map(shared::Thumbnail::new)
+}
+
+fn show_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Show>> {
+    Show::from_row(row).map(shared::Thumbnail::new)
+}
+
+fn season_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Season>> {
+    Season::from_row(row).map(shared::Thumbnail::new)
+}
+
+fn episode_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Episode>> {
+    Episode::from_row(row).map(shared::Thumbnail::new)
 }

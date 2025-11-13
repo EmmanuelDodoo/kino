@@ -22,6 +22,14 @@ impl Sort {
         new
     }
 
+    pub fn release() -> Self {
+        let mut new = Self::new();
+        new.push(SortKind::Release);
+
+        new
+
+    }
+
     pub fn clear(&mut self) {
         self.count = 0;
         self.sorts = [None; SORTS];
