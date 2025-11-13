@@ -1,4 +1,4 @@
-#![allow(unused_imports, dead_code)]
+// #![allow(unused_imports, dead_code)]
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef};

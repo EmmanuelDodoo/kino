@@ -1,5 +1,5 @@
 use super::{HomeMessage, PageKind, PageUpdate, shared::*};
-use crate::models::{CollectionId, CollectionView};
+use crate::models::CollectionId;
 use crate::utils::filter::*;
 use crate::utils::{Layout, Sort};
 use iced::{
@@ -118,9 +118,5 @@ impl Collections {
         .padding(10);
 
         content.into()
-    }
-
-    pub fn name(&self) -> &'static str {
-        "Collections"
     }
 }

@@ -12,7 +12,6 @@ use iced::{
     window,
 };
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 
 mod collection;
 mod collections;
@@ -26,15 +25,15 @@ pub mod shared;
 mod shows;
 
 use crate::models::{
-    self, Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, SearchItem,
-    Season, SeasonId, Show, ShowId, collection::ItemId, collection::Items,
+    Collection, CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
+    collection::Items,
 };
 
 use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
-    self, HomeAction, Layout, PlayId, PlayItem, Sort, SortKind, empty, filter::*, icons, icons::*,
-    load_fonts, loading_animation, loading_svg, typo::*,
+    self, HomeAction, Layout, Sort, SortKind, empty, filter::*, icons, icons::*, loading_animation,
+    loading_svg, typo::*,
 };
 use crate::widgets::{
     menu::{Position, menu},
@@ -313,7 +312,6 @@ pub enum HomeMessage {
     None,
     Scroll(scrollable::Viewport),
     RefreshContent,
-    Refresh,
     Hovered(ItemId, bool),
     HoveredCollection(CollectionId, bool),
     FetchedCollections(bool, Vec<CollectionThumbnail>),
@@ -1001,7 +999,6 @@ impl Home {
                 todo!("Random");
             }
             HomeMessage::RefreshContent => self.content_refresh(now),
-            HomeMessage::Refresh => self.refresh(now),
             HomeMessage::Play(item) => {
                 self.view = None;
                 Task::done(Message::PlayItem(item))
@@ -2220,6 +2217,7 @@ impl Home {
         )
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn fetched_collection(
         &mut self,
         id: CollectionId,
@@ -2245,7 +2243,7 @@ impl Home {
 
     pub fn fetched_memberships(&mut self, memberships: Vec<CollectionId>) -> Task<Message> {
         if let Some(View::CollectionAdd(CollectionAddState { selected, .. })) = self.view.as_mut() {
-            selected.extend(memberships.into_iter());
+            selected.extend(memberships);
         }
 
         self.update_page_scroll()
@@ -2549,7 +2547,7 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
     let items = state.items.iter().map(|item| {
         item.view(
             now,
-            &theme,
+            theme,
             HomeMessage::Play,
             primary.clone(),
             |id, hovered| HomeMessage::SearchMessage(SearchMessage::Hovered(id, hovered)),

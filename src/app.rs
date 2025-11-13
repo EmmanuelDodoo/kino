@@ -1,19 +1,16 @@
 use iced::{
-    Element, Length, Subscription, Task, Theme, font,
+    Element, Subscription, Task, Theme, font,
     keyboard::{self, Key, Modifiers},
     time::{self, Duration, Instant},
-    widget::{Container, Slider, Text, center, column, image, row, text_input},
     window,
 };
-use iced_video_player::{Video, VideoPlayer};
-use std::path::PathBuf;
 
 use crate::db;
 use crate::error::Error;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
-    CollectionId, CollectionView, Episode, EpisodeId, ItemId, Movie, MovieId, SearchItem, Season,
-    SeasonId, Show, ShowId, collection, collection::Items,
+    CollectionId, Episode, EpisodeId, ItemId, Movie, MovieId, Season, SeasonId, Show, ShowId,
+    collection, collection::Items,
 };
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::toast;
@@ -200,13 +197,15 @@ impl App {
                     }
                 }
                 .into_iter()
-                .filter(|item| match (item, items) {
-                    (_, Items::All) => true,
-                    (ItemId::Movie(_), Items::Movies) => true,
-                    (ItemId::Show(_), Items::Shows) => true,
-                    (ItemId::Season(_), Items::Seasons) => true,
-                    (ItemId::Episode(_), Items::Episodes) => true,
-                    _ => false,
+                .filter(|item| {
+                    matches!(
+                        (item, items),
+                        (_, Items::All)
+                            | (ItemId::Movie(_), Items::Movies)
+                            | (ItemId::Show(_), Items::Shows)
+                            | (ItemId::Season(_), Items::Seasons)
+                            | (ItemId::Episode(_), Items::Episodes)
+                    )
                 });
 
                 self.play_items(items)

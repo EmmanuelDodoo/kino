@@ -1,4 +1,4 @@
-use crate::models::{Collection, CollectionId, CollectionView, ItemId, Media, SearchItem};
+use crate::models::{Collection, CollectionId, ItemId, Media, SearchItem};
 use crate::utils::empty;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
@@ -761,6 +761,7 @@ impl SearchView {
         self.animation.is_animating(now)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn view<'a, Message: 'a + Clone>(
         &'a self,
         now: Instant,

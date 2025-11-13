@@ -1,11 +1,9 @@
-#![allow(dead_code)]
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
-use std::path::PathBuf;
 use uuid::Uuid;
 
-use super::{DirectoryId, Episode, EpisodeId, Media, SeasonId, datetime_to_sql, naivedate_to_sql};
+use super::{DirectoryId, Media, SeasonId, datetime_to_sql, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -301,83 +299,6 @@ impl Show {
 
         let query = new.insert();
         (new, query)
-    }
-
-    pub fn dummy<'a>(directory: DirectoryId) -> (Self, Query<'a>) {
-        let path = "dummy_show".to_owned();
-        let name = "Testing dummy".to_owned();
-        let backdrop = None;
-        let poster = None;
-        let tags = ["test", "hope", "growth"]
-            .into_iter()
-            .map(ToOwned::to_owned)
-            .collect();
-        let synopsis = "A test dummy which is partially adequate".to_owned();
-        let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
-
-        Self::new(
-            directory,
-            path,
-            name.clone(),
-            name,
-            backdrop,
-            poster,
-            tags,
-            synopsis,
-            release,
-        )
-    }
-
-    pub fn testing() -> Self {
-        let path = "dummy_show".to_owned();
-        let name = "Testing dummy".to_owned();
-        let backdrop = Some("assets/show2.png".into());
-        let poster = Some("assets/show.png".into());
-        let tags = vec!["Comedy", "Space", "Engineers"]
-            .into_iter()
-            .map(ToOwned::to_owned)
-            .collect();
-        let  synopsis= "Physicists Leonard and Sheldon find their nerd-centric social circle with pals Howard and Raj expanding when aspiring actress Penny moves in next door.".to_owned();
-        let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
-
-        Self::new(
-            DirectoryId(Uuid::now_v7()),
-            path,
-            name.clone(),
-            name,
-            backdrop,
-            poster,
-            tags,
-            synopsis,
-            release,
-        )
-        .0
-    }
-
-    pub fn testing1() -> Self {
-        let path = "dummy_show".to_owned();
-        let name = "Testing dummy".to_owned();
-        let backdrop = Some("assets/show3.png".into());
-        let poster = Some("assets/show1.png".into());
-        let tags = vec!["Drama", "Mystery", "Sci-Fi", "Fantasy"]
-            .into_iter()
-            .map(ToOwned::to_owned)
-            .collect();
-        let synopsis= "When they were boys, Sam and Dean Winchester lost their mother to a mysterious and demonic supernatural force. Subsequently, their father raised them to be soldiers. He taught them about the paranormal evil that lives in the dark corners and on the back roads of America ... and he taught them how to kill it. Now, the Winchester brothers crisscross the country in their '67 Chevy Impala, battling every kind of supernatural threat they encounter along the way.".to_owned();
-        let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
-
-        Self::new(
-            DirectoryId(Uuid::now_v7()),
-            path,
-            name.clone(),
-            name,
-            backdrop,
-            poster,
-            tags,
-            synopsis,
-            release,
-        )
-        .0
     }
 }
 

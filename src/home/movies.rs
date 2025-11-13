@@ -89,10 +89,6 @@ impl Movies {
         self.filter = filters;
     }
 
-    pub fn name(&self) -> &str {
-        "Movies"
-    }
-
     fn grid<'a>(
         &self,
         now: Instant,

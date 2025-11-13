@@ -1,5 +1,5 @@
 use super::{HomeMessage, ViewMessage, shared::*};
-use crate::models::{Episode, EpisodeId, ItemId, Media, shows::*};
+use crate::models::{Episode, EpisodeId, ItemId, Media};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use iced::widget::Space;

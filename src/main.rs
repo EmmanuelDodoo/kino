@@ -15,7 +15,6 @@ use iced::{
     },
     window,
 };
-use std::{collections::HashMap, ops::Deref};
 
 mod app;
 mod db;

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use iced::{
     Font, alignment, font,
     widget::{Button, Text, text},

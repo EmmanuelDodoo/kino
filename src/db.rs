@@ -1,18 +1,14 @@
 // #![allow(unused_imports, dead_code)]
 use crate::models::{
-    Collection, CollectionId, Directory, DirectoryId, EComment, ECommentId, Episode, EpisodeId,
-    MComment, MCommentId, Movie, MovieId, SearchItem, Season, SeasonId, Show, ShowId,
+    Collection, CollectionId, Directory, DirectoryId, EComment, ECommentId, EpisodeId, MComment,
+    MCommentId, Movie, MovieId, SearchItem, SeasonId, Show, ShowId,
     collection::{self},
 };
 
 use crate::filter::{self, Filter, search::SearchFilter};
 use crate::sort::{self, Sort};
 
-use chrono::{DateTime, Local};
-use rusqlite::{
-    Connection, Result, Row, Transaction, params_from_iter,
-    types::{ToSqlOutput, Value},
-};
+use rusqlite::{Connection, Result, Row, params_from_iter, types::ToSqlOutput};
 use std::ops::Deref;
 use uuid::Uuid;
 

@@ -3,7 +3,7 @@ use super::{
     view_unicode,
 };
 use crate::models::{
-    Collection, CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
+    CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
     collection::Items,
 };
 use crate::utils::filter::*;

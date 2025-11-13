@@ -1,13 +1,9 @@
-#![allow(dead_code)]
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
-use std::path::PathBuf;
 use uuid::Uuid;
 
-use super::{
-    DirectoryId, Episode, EpisodeId, Media, Show, ShowId, datetime_to_sql, naivedate_to_sql,
-};
+use super::{EpisodeId, Media, Show, ShowId, datetime_to_sql, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -296,26 +292,6 @@ impl Season {
         let query = new.insert();
 
         (new, query)
-    }
-
-    pub fn dummy<'a>(show: &Show) -> (Self, Query<'a>) {
-        let name = "Test Season".to_owned();
-        let path = "Test Season 1".to_owned();
-        let poster = None;
-        let synopsis = "A dummy season for testing purposes only".to_owned();
-        let release = NaiveDate::parse_from_str("2019-09-05", "%Y-%m-%d").unwrap();
-        let season_number = 5;
-
-        Self::new(
-            show,
-            name.clone(),
-            name,
-            path,
-            poster,
-            synopsis,
-            release,
-            season_number,
-        )
     }
 }
 

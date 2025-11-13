@@ -91,10 +91,6 @@ impl TvShows {
         self.filters = filters;
     }
 
-    pub fn name(&self) -> &str {
-        "Tv Shows"
-    }
-
     pub fn update_scroll(&mut self) -> Task<()> {
         operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
     }

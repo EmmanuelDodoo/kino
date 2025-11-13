@@ -395,74 +395,6 @@ impl Movie {
             duration,
         )
     }
-
-    pub fn testing() -> Self {
-        let duration = (crate::utils::rand_u32() as usize) as u64;
-
-        let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
-
-        let added = Local::now();
-
-        let id = MovieId(Uuid::now_v7());
-
-        let path = "assets/test.mkv";
-        let full_path = PathBuf::from(path);
-
-        Self {
-            id,
-            directory: DirectoryId(Uuid::now_v7()),
-            name: "Fantastic Beasts And Where To Find Them".to_owned(),
-            original_name: "Fantastic Beasts And Where To Find Them".to_owned(),
-            duration,
-            path: path.to_owned(), full_path,
-            rating: Some(3.85),
-            progress: 0.35,
-            poster: Some("assets/fantastic.png".into()),
-            release,
-            added ,
-            last_watched: None,
-            comments: 69,
-            watch_count: 57,
-            synopsis: "In 1926, Newt Scamander arrives at the Magical Congress of the United States of America with a magically expanded briefcase, which houses a number of dangerous creatures and their habitats. When the creatures escape from the briefcase, it sends the American wizarding authorities after Newt, and threatens to strain even further the state of magical and non-magical relations.".to_owned(),
-            tags: vec!["tag-1".into(), "tag-2".into(), "tag-team".into()],
-            backdrop: Some("assets/test.jpg".into())
-
-        }
-    }
-
-    pub fn testing2() -> Self {
-        let duration = (crate::utils::rand_u32() as usize) as u64;
-
-        let added = Local::now();
-        let release = NaiveDate::parse_from_str("2011-03-05", "%Y-%m-%d").unwrap();
-
-        let last_watched = DateTime::parse_from_rfc3339("2024-01-01T10:00:00Z").unwrap();
-        let last_watched = Some(last_watched.into());
-
-        let path = "assets/test2.mp4";
-        let full_path = PathBuf::from(path);
-
-        Self {
-            id: MovieId(Uuid::now_v7()),
-            directory: DirectoryId(Uuid::now_v7()),
-            name: "Ready Player One".to_owned(),
-            original_name: "Ready Player One".to_owned(),
-            path: path.to_owned(), full_path,
-            duration,
-            rating: Some(1.24),
-            progress: 0.95,
-            poster: Some("assets/ready.png".into()),
-            last_watched,
-            release,
-            added,
-            comments: 420,
-            watch_count: 1,
-            synopsis: "When the creator of a popular video game system dies, a virtual contest is created to compete for his fortune.".to_owned(),
-            tags: vec!["Adventure", "Action", "Science Fiction"].into_iter().map(ToOwned::to_owned).collect(),
-            backdrop: Some("assets/player1.jpg".into()),
-
-        }
-    }
 }
 
 impl Media for Movie {
@@ -680,12 +612,5 @@ impl MComment {
         let query = new.insert();
 
         (new, query)
-    }
-
-    pub fn dummy<'a>(movie: MovieId) -> (Self, Query<'a>) {
-        let content = "A dummy movie comment".to_owned();
-        let timestamp = None;
-
-        Self::new(movie, content, timestamp)
     }
 }

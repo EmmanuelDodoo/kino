@@ -4,7 +4,7 @@ use rusqlite::types::{ToSqlOutput, Value};
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use super::{DirectoryId, Media, Season, SeasonId, ShowId, datetime_to_sql, naivedate_to_sql};
+use super::{Media, Season, SeasonId, ShowId, datetime_to_sql, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -382,32 +382,6 @@ impl Episode {
 
         (new, query)
     }
-
-    pub fn dummy<'a>(season: &Season) -> (Self, Query<'a>) {
-        let name = "Test Episode".to_owned();
-        let path = "Test Episode.mkv".to_owned();
-        let full_path = PathBuf::from("test_full_path.mkv");
-        let poster = None;
-        let backdrop = None;
-        let synopsis = "A dummy episode for testing purposes only".to_owned();
-        let release = NaiveDate::parse_from_str("2022-09-02", "%Y-%m-%d").unwrap();
-        let episode_number = 12;
-        let duration = 3872;
-
-        Self::new(
-            season,
-            name.clone(),
-            name,
-            path,
-            full_path,
-            poster,
-            backdrop,
-            synopsis,
-            release,
-            duration,
-            episode_number,
-        )
-    }
 }
 
 impl Media for Episode {
@@ -629,12 +603,5 @@ impl EComment {
         let query = new.insert();
 
         (new, query)
-    }
-
-    pub(super) fn dummy<'a>(episode: EpisodeId) -> (Self, Query<'a>) {
-        let content = "A dummy episode comment".to_owned();
-        let timestamp = None;
-
-        Self::new(episode, content, timestamp)
     }
 }

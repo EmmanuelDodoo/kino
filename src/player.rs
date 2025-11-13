@@ -2,11 +2,11 @@ use iced::{
     Element, Font, Length, Size, Subscription, Task,
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
-    animation::{Animation, Easing},
+    animation::Animation,
     font,
-    time::{self, Instant},
+    time::Instant,
     widget::{
-        Svg, button, center, column, container, image, mouse_area, row, slider, space, stack, text,
+        button, center, column, container, image, mouse_area, row, slider, space, stack, text,
     },
     window,
 };
@@ -17,7 +17,7 @@ use std::time::Duration;
 use crate::app::Message;
 use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings,
-    icons::{self, sized_button, text_button},
+    icons::{self, sized_button},
     loading_animation, loading_svg,
     typo::*,
 };

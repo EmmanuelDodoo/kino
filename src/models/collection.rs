@@ -1,14 +1,10 @@
-use chrono::{DateTime, Local, NaiveDate};
+use chrono::{DateTime, Local};
 use rusqlite::Row;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef};
-use std::path::PathBuf;
 use uuid::Uuid;
 
-use super::{
-    DirectoryId, Episode, EpisodeId, Movie, MovieId, Season, SeasonId, Show, ShowId,
-    datetime_to_sql, naivedate_to_sql,
-};
-use crate::db::{Database, Operation, Query, Table};
+use super::{EpisodeId, MovieId, SeasonId, ShowId, datetime_to_sql};
+use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CollectionId(Uuid);
@@ -336,16 +332,6 @@ impl Collection {
         let query = new.insert();
 
         (new, query)
-    }
-
-    pub fn dummy<'a>() -> (Self, Query<'a>) {
-        let name = "Test Collection".into();
-        let description = Some("Dummy collection for testing".into());
-        let icon = None;
-        let custom = None;
-        let theme = None;
-
-        Self::new(name, description, icon, theme, custom)
     }
 }
 
