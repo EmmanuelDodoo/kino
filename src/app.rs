@@ -1,3 +1,4 @@
+use chrono::{DateTime, Local};
 use iced::{
     Element, Subscription, Task, Theme, font,
     keyboard::{self, Key, Modifiers},
@@ -5,12 +6,12 @@ use iced::{
     window,
 };
 
-use crate::db;
+use crate::db::{self, Query};
 use crate::error::Error;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
-    Collection, CollectionId, Episode, EpisodeId, ItemId, Movie, MovieId, Season, SeasonId, Show,
-    ShowId, SimpleCollection, collection, collection::Items,
+    self, Collection, CollectionId, Episode, EpisodeId, ItemId, Movie, MovieId, Season, SeasonId,
+    Show, ShowId, SimpleCollection, collection, collection::Items,
 };
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::toast;
@@ -58,7 +59,14 @@ pub enum Message {
         id: CollectionId,
         items: Items,
     },
-    FetchMemberShip(ItemId),
+    //todo
+    Query(Query<'static>),
+    FetchMembershipIds(ItemId),
+    FetchMemberships(ItemId),
+    ToggleMembership {
+        item: ItemId,
+        collections: Vec<(CollectionId, bool)>,
+    },
     LoadSearch(String, Option<SearchFilter>),
     Animate,
     Fetch {
@@ -69,7 +77,21 @@ pub enum Message {
         offset: Option<i32>,
     },
     Refresh(Instant),
+    LastWatched(PlayId),
+    VideoStats(PlayItem),
     None,
+}
+
+impl Message {
+    pub fn fetch_simple_collections() -> Self {
+        Message::Fetch {
+            id: FetchId::CollectionsSimple,
+            filters: Filter::none(),
+            sort: Sort::new(),
+            limit: None,
+            offset: None,
+        }
+    }
 }
 
 pub struct App {
@@ -187,6 +209,19 @@ impl App {
 
                 player.update(psg, now)
             }
+            Message::Query(query) => {
+                // todo
+                let _res = match query.execute(&self.db) {
+                    Ok(suc) => suc,
+                    Err(error) => {
+                        dbg!(&error.error);
+                        let msg = Message::PushToast(error.error.to_string(), toast::Status::Error);
+                        return Task::done(msg);
+                    }
+                };
+
+                Task::none()
+            }
             Message::PlayItem(item) => self.play_items(std::iter::once(item)),
             Message::PlayItems(items) => self.play_items(items.into_iter()),
             Message::PlayCollectionItems { id, items } => {
@@ -224,9 +259,15 @@ impl App {
                     .map(|player| player.action(action, now))
                     .unwrap_or_default(),
                 (Screen::Player, Action::Back) => {
-                    self.player.take();
                     self.screen = Screen::Home;
-                    Task::none()
+                    let stats = self
+                        .player
+                        .take()
+                        .as_mut()
+                        .and_then(|player| player.stats().map(Task::done))
+                        .unwrap_or_default();
+
+                    Task::batch([self.home.refresh(now), stats])
                 }
                 (Screen::Player, _) => Task::none(),
             },
@@ -249,7 +290,10 @@ impl App {
                         }
                     };
 
-                    self.home.fetch_collections_simple(collections)
+                    match self.player.as_mut() {
+                        Some(player) => player.fetched_collections(collections),
+                        None => self.home.fetch_collections_simple(collections),
+                    }
                 }
                 FetchId::Shows => {
                     let shows =
@@ -442,40 +486,104 @@ impl App {
 
                 self.home.loaded_search(items)
             }
-            Message::FetchMemberShip(item) => {
-                let memberships = match item {
-                    ItemId::Movie(id) => match self.db.get_movie_memberships(id) {
-                        Ok(memberships) => memberships,
-                        Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
-                            return Task::done(msg);
-                        }
-                    },
-                    ItemId::Show(id) => match self.db.get_show_memberships(id) {
-                        Ok(memberships) => memberships,
-                        Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
-                            return Task::done(msg);
-                        }
-                    },
-                    ItemId::Season(id) => match self.db.get_season_memberships(id) {
-                        Ok(memberships) => memberships,
-                        Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
-                            return Task::done(msg);
-                        }
-                    },
-                    ItemId::Episode(id) => match self.db.get_episode_memberships(id) {
-                        Ok(memberships) => memberships,
-                        Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
-                            return Task::done(msg);
-                        }
-                    },
+            Message::FetchMembershipIds(item) => {
+                let memberships = match self.db.get_item_membership_ids(item) {
+                    Ok(memberships) => memberships,
+                    Err(error) => {
+                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        return Task::done(msg);
+                    }
                 };
+
+                match self.player.as_mut() {
+                    Some(player) => player.fetched_membership_ids(memberships),
+
+                    None => self.home.fetched_memberships_ids(memberships),
+                }
+            }
+            Message::FetchMemberships(item) => {
+                let memberships =
+                    match self
+                        .db
+                        .get_item_membership_ids(item)
+                        .and_then(|collections| {
+                            self.db.get_memberships(
+                                collections,
+                                None,
+                                None,
+                                collection::Sort::default(),
+                                SimpleCollection::from_row,
+                            )
+                        }) {
+                        Ok(memberships) => memberships,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
 
                 self.home.fetched_memberships(memberships)
             }
+            Message::ToggleMembership { item, collections } => {
+                let msg = match self.db.toggle_membership(item, collections) {
+                    Ok(true) => Message::PushToast(
+                        "Collections Updated!".to_owned(),
+                        toast::Status::Success,
+                    ),
+                    Ok(false) => Message::None,
+                    Err(error) => Message::PushToast(error.to_string(), toast::Status::Error),
+                };
+
+                let refresh = self.home.content_refresh(now);
+                return Task::batch([Task::done(msg), refresh]);
+            }
+            Message::LastWatched(id) => {
+                let now = Local::now();
+                let now = models::datetime_to_sql(&now);
+
+                match id {
+                    PlayId::Movie(id) => match self.db.last_watched_movie(id, now) {
+                        Ok(_) => Task::none(),
+                        Err(error) => Task::done(Message::PushToast(
+                            dbg!(error).to_string(),
+                            toast::Status::Error,
+                        )),
+                    },
+                    PlayId::Episode(id) => match self.db.last_watched_episode(id, now) {
+                        Ok(_) => Task::none(),
+                        Err(error) => Task::done(Message::PushToast(
+                            dbg!(error).to_string(),
+                            toast::Status::Error,
+                        )),
+                    },
+                }
+            }
+            Message::VideoStats(item) => match item.id {
+                PlayId::Movie(id) => {
+                    match self
+                        .db
+                        .update_movie_stats(id, item.watch_count, item.progress)
+                    {
+                        Ok(_) => Task::none(),
+                        Err(error) => Task::done(Message::PushToast(
+                            dbg!(error).to_string(),
+                            toast::Status::Error,
+                        )),
+                    }
+                }
+                PlayId::Episode(id) => {
+                    match self
+                        .db
+                        .update_episode_stats(id, item.watch_count, item.progress)
+                    {
+                        Ok(_) => Task::none(),
+                        Err(error) => Task::done(Message::PushToast(
+                            dbg!(error).to_string(),
+                            toast::Status::Error,
+                        )),
+                    }
+                }
+            },
         }
     }
 
@@ -704,7 +812,7 @@ fn player_keypress(key: Key, modifiers: Modifiers) -> Option<PlayerAction> {
         Key::Named(Named::ArrowRight) if modifiers.command() => PlayerAction::PlayNext,
 
         Key::Named(Named::Enter) => PlayerAction::FullscreenToggle,
-        Key::Named(Named::Escape) => PlayerAction::FullscreenExit,
+        Key::Named(Named::Escape) => PlayerAction::Exit,
         Key::Character(char) if char.as_str() == "f" => PlayerAction::FullscreenToggle,
 
         Key::Named(Named::ArrowLeft) if modifiers.shift() => PlayerAction::SeekBackShift,

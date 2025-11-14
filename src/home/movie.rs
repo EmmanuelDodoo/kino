@@ -1,5 +1,5 @@
-use super::{HomeMessage, ViewMessage, shared::*};
-use crate::models::{ItemId, Media, Movie, MovieId};
+use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use crate::models::{CollectionId, ItemId, Media, Movie, MovieId, SimpleCollection};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use iced::widget::Space;
@@ -14,6 +14,8 @@ pub enum Message {
     Tab(Tab),
     Play,
     AddCollection,
+    Rate(Option<f32>),
+    Goto(CollectionId),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -54,10 +56,23 @@ impl MoviePage {
                 let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(self.id)));
                 Some(msg)
             }
+            Message::Rate(rating) => {
+                let msg =
+                    HomeMessage::OpenView(ViewMessage::Rating(ItemId::Movie(self.id), rating));
+                Some(msg)
+            }
+            Message::Goto(id) => {
+                let msg = HomeMessage::Goto(PageKind::Collection(id));
+                Some(msg)
+            }
         }
     }
 
-    pub fn overlay<'a>(&self, movie: &'a Thumbnail<Movie>) -> Element<'a, MoviePageMessage> {
+    pub fn overlay<'a>(
+        &self,
+        movie: &'a Thumbnail<Movie>,
+        memberships: impl Iterator<Item = &'a SimpleCollection>,
+    ) -> Element<'a, MoviePageMessage> {
         let id = self.id;
 
         let img: Element<'_, MoviePageMessage> = {
@@ -71,7 +86,13 @@ impl MoviePage {
 
             let title = text(movie.media.name()).size(H4);
             let duration = duration(&movie.media);
-            let rating = ratings(&movie.media);
+            let rating = button(ratings(&movie.media))
+                .on_press(MoviePageMessage {
+                    id,
+                    message: Message::Rate(movie.media.rating()),
+                })
+                .style(button::text)
+                .padding(0);
             let release = text(movie.media.release_year()).size(H7);
 
             let details = row!(release, separator(), duration)
@@ -151,11 +172,12 @@ impl MoviePage {
                 }
                 Tab::Data => data_tab(&movie.media, width),
                 Tab::Collections => {
-                    // todo
-                    let collections = ["Some Collection here: "; 7]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, collection)| Element::from(text(format!("{collection}{i}"))));
+                    let collections = memberships.map(|collection| {
+                        draw_collection_tab(collection, move |collection| MoviePageMessage {
+                            id,
+                            message: Message::Goto(collection),
+                        })
+                    });
 
                     let collections =
                         scrollable(column(collections).spacing(4.0).width(Length::Fill))
@@ -241,8 +263,12 @@ impl MoviePage {
             .into()
     }
 
-    pub fn view<'a>(&self, movie: &'a Thumbnail<Movie>) -> Element<'a, MoviePageMessage> {
-        let overlay = bottom_center(self.overlay(movie));
+    pub fn view<'a>(
+        &self,
+        movie: &'a Thumbnail<Movie>,
+        memberships: impl Iterator<Item = &'a SimpleCollection>,
+    ) -> Element<'a, MoviePageMessage> {
+        let overlay = bottom_center(self.overlay(movie, memberships));
 
         let img = movie.backdrop(Length::Fill, Length::FillPortion(3));
 

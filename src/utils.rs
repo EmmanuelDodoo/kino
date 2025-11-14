@@ -226,6 +226,7 @@ pub struct PlayItem {
     pub path: PathBuf,
     pub progress: f32,
     pub duration: u64,
+    pub watch_count: u32,
 }
 
 impl PlayItem {
@@ -261,6 +262,7 @@ impl PlayItem {
         let name = row.get::<_, String>("name")?;
         let progress = row.get::<_, f32>("progress")?;
         let duration = row.get::<_, u64>("duration")?;
+        let watch_count = row.get::<_, u32>("watch_count")?;
 
         Ok(Self {
             id,
@@ -268,6 +270,7 @@ impl PlayItem {
             path,
             progress,
             duration,
+            watch_count,
         })
     }
 
@@ -325,6 +328,15 @@ impl Playlist {
         self.current = position.min(self.items.len().saturating_sub(1));
     }
 
+    pub fn update_current(&mut self, update: &PlayItem) {
+        if let Some(old) = self.current_mut()
+            && old.id == update.id
+        {
+            old.progress = update.progress;
+            old.watch_count = update.watch_count;
+        }
+    }
+
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<&PlayItem> {
         self.current = (self.current + 1).min(self.items.len());
@@ -338,6 +350,10 @@ impl Playlist {
 
     pub fn current(&self) -> Option<&PlayItem> {
         self.items.get(self.current)
+    }
+
+    fn current_mut(&mut self) -> Option<&mut PlayItem> {
+        self.items.get_mut(self.current)
     }
 
     pub fn previous(&mut self) -> Option<&PlayItem> {
@@ -359,15 +375,11 @@ impl Playlist {
     }
 
     pub fn has_next(&self) -> bool {
-        self.current < self.items.len() - 1
+        self.current < self.items.len().saturating_sub(1)
     }
 
     pub fn has_previous(&self) -> bool {
         self.current != 0
-    }
-
-    pub fn is_done(&self) -> bool {
-        self.current >= self.items.len()
     }
 }
 
@@ -388,6 +400,10 @@ pub struct VideoSettings {
     pub auto_start: bool,
     /// Whether the next video in a playlist is automatically loaded and played.
     pub auto_next: bool,
+    /// The percentage at which a video is considered as 'watched'.
+    pub completion_point: f64,
+    /// The percentage watch time at which a video is considered 'watched'.
+    pub completion_watch_time: f64,
 }
 
 impl Default for VideoSettings {
@@ -406,6 +422,8 @@ impl Default for VideoSettings {
             muted: false,
             auto_start: true,
             auto_next: true,
+            completion_point: 0.95,
+            completion_watch_time: 0.75,
         }
     }
 }
@@ -444,7 +462,8 @@ pub enum PlayerAction {
     PlayNext,
     PlayPrevious,
     FullscreenToggle,
-    FullscreenExit,
+    /// Used for either exiting fullscreen or closing modal windows
+    Exit,
     SeekBack,
     SeekBackShift,
     SeekFront,
@@ -459,7 +478,6 @@ pub enum PlayerAction {
     VideoComment,
     SubtitlesToggle,
     Add,
-    Favorite,
 }
 
 #[derive(Debug, Clone, Copy)]

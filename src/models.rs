@@ -394,7 +394,7 @@ fn naivedate_to_sql<'a>(date: &NaiveDate) -> ToSqlOutput<'a> {
     ToSqlOutput::from(date_str)
 }
 
-fn datetime_to_sql<'a>(datetime: &DateTime<Local>) -> ToSqlOutput<'a> {
+pub fn datetime_to_sql<'a>(datetime: &DateTime<Local>) -> ToSqlOutput<'a> {
     let str_date = datetime
         .with_timezone(&chrono::Utc)
         .format("%F %T%.f%:z")

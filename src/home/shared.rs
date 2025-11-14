@@ -1,4 +1,4 @@
-use crate::models::{Collection, CollectionId, ItemId, Media, SearchItem};
+use crate::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
 use crate::utils::empty;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
@@ -56,26 +56,44 @@ pub fn duration<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
 }
 
 pub fn ratings<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
-    let rating = media
-        .rating()
-        .map(|rating| rating.round() as u8)
-        .unwrap_or_default();
+    let size = H7;
+    let color = |theme: &Theme| -> text::Style {
+        let color = theme.extended_palette().primary.strong.color;
+        text::Style { color: Some(color) }
+    };
 
-    let unstars = (5 - rating).clamp(0, 5);
-    let stars = (0..rating).map(|_| Element::from(icon(STAR).size(H7)));
-    let unstars = (0..unstars).map(|_| Element::from(icon(UNSTAR).size(H7)));
-    let ratings = row(stars.chain(unstars))
-        .spacing(2.0)
-        .align_y(Vertical::Center);
+    match media.rating() {
+        Some(value) => {
+            let rating = (value * 10.0).round() / 10.0;
+            let text = text(format!("{rating:.1}")).size(H8);
 
-    ratings.into()
+            let stars = (rating.trunc() as u8).clamp(0, 5);
+            let rem = 5 - stars;
+            let frac = rating.fract() >= 0.5;
+            let unstars = if frac { rem.saturating_sub(1) } else { rem };
+            let frac = rem - unstars;
+
+            let stars = (0..stars).map(|_| Element::from(icon(STAR).size(size).style(color)));
+            let frac = (0..frac).map(|_| Element::from(icon(HALF_STAR).size(size).style(color)));
+            let unstars = (0..unstars).map(|_| Element::from(icon(UNSTAR).size(size).style(color)));
+
+            let ratings = row(stars.chain(frac).chain(unstars))
+                .spacing(2.0)
+                .align_y(Vertical::Center);
+
+            let ratings = row!(text, ratings).align_y(Vertical::Center).spacing(6.0);
+
+            ratings.into()
+        }
+        None => row((0..5).map(|_| Element::from(icon(UNSTAR).size(size).style(color)))).into(),
+    }
 }
 
 pub fn progress<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
+    let progress = (media.progress() * 1000.0).round() / 10.0;
+    let text = text(format!("{}%", progress)).size(H7);
+
     let progress = media.progress_icon();
-
-    let text = text(format!("{}%", media.progress() * 100.0)).size(H7);
-
     let icon = icon(progress).size(H4);
 
     row!(icon, text)
@@ -153,11 +171,8 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
 
     let count = data("Watch Count", media.watch_count(), EYE);
 
-    let progress = data(
-        "Watch Progress",
-        format!("{}%", media.progress() * 100.0),
-        HOURGLASS,
-    );
+    let progress = (media.progress() * 1000.0).round() / 10.0;
+    let progress = data("Watch Progress", format!("{:.1}%", progress), HOURGLASS);
 
     let recent = data(
         "Recent Watch",
@@ -192,6 +207,35 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
     let content = column!(r1, r2).spacing(30.0);
 
     content.width(width).into()
+}
+
+pub fn draw_collection_tab<'a, Message: 'a + Clone>(
+    collection: &'a SimpleCollection,
+    on_press: impl Fn(CollectionId) -> Message + 'a,
+) -> Element<'a, Message> {
+    let size = P;
+    let unicode = Icon::new(collection.icon).unicode();
+    let icon = icon(unicode).size(size);
+    let text = container(text(&collection.name).size(size))
+        .max_height(48.0)
+        .max_width(275);
+
+    button(
+        row!(icon, text)
+            .align_y(Vertical::Center)
+            .width(Length::Fill)
+            .spacing(8.0),
+    )
+    .padding([8, 12])
+    .on_press((on_press)(collection.id))
+    .style(move |theme, status| {
+        let default = button::subtle(theme, status);
+
+        let border = default.border.rounded(5.0);
+
+        button::Style { border, ..default }
+    })
+    .into()
 }
 
 pub fn collection_collage<'a>(
@@ -897,5 +941,87 @@ impl Scroll {
             id: widget::Id::unique(),
             offset: operation::AbsoluteOffset::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Icons {
+    Default = 0,
+    Icon1 = 1,
+    Icon2 = 2,
+    Icon3 = 3,
+    Icon4 = 4,
+    Icon5 = 5,
+    Icon6 = 6,
+    Icon7 = 7,
+    Icon8 = 8,
+    Icon9 = 9,
+    Icon10 = 10,
+    Icon11 = 11,
+    Icon12 = 12,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Icon {
+    id: Icons,
+}
+
+impl Icon {
+    pub fn new(icon: Option<u32>) -> Self {
+        match icon {
+            Some(1) => Self { id: Icons::Icon1 },
+            Some(2) => Self { id: Icons::Icon2 },
+            Some(3) => Self { id: Icons::Icon3 },
+            Some(4) => Self { id: Icons::Icon4 },
+            Some(5) => Self { id: Icons::Icon5 },
+            Some(6) => Self { id: Icons::Icon6 },
+            Some(7) => Self { id: Icons::Icon7 },
+            Some(8) => Self { id: Icons::Icon8 },
+            Some(9) => Self { id: Icons::Icon9 },
+            Some(10) => Self { id: Icons::Icon10 },
+            Some(11) => Self { id: Icons::Icon11 },
+            Some(12) => Self { id: Icons::Icon12 },
+            _ => Self { id: Icons::Default },
+        }
+    }
+
+    pub fn unicode(self) -> char {
+        match self.id {
+            Icons::Default => COLLECTION_ICON,
+            Icons::Icon1 => UNFAVORITE,
+            Icons::Icon2 => MOVIE,
+            Icons::Icon3 => SHOW,
+            Icons::Icon4 => POPCORN,
+            Icons::Icon5 => FILM,
+            Icons::Icon6 => TODO,
+            Icons::Icon7 => SWORD,
+            Icons::Icon8 => HISTORY,
+            Icons::Icon9 => GHOST,
+            Icons::Icon10 => ALIEN,
+            Icons::Icon11 => CROWN,
+            Icons::Icon12 => MASKS,
+        }
+    }
+
+    pub fn to_u32(self) -> u32 {
+        self.id as u32
+    }
+
+    pub fn all() -> [Self; 13] {
+        [
+            Self { id: Icons::Default },
+            Self { id: Icons::Icon1 },
+            Self { id: Icons::Icon2 },
+            Self { id: Icons::Icon3 },
+            Self { id: Icons::Icon4 },
+            Self { id: Icons::Icon5 },
+            Self { id: Icons::Icon6 },
+            Self { id: Icons::Icon7 },
+            Self { id: Icons::Icon8 },
+            Self { id: Icons::Icon9 },
+            Self { id: Icons::Icon10 },
+            Self { id: Icons::Icon11 },
+            Self { id: Icons::Icon12 },
+        ]
     }
 }

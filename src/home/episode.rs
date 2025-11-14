@@ -1,5 +1,5 @@
-use super::{HomeMessage, ViewMessage, shared::*};
-use crate::models::{Episode, EpisodeId, ItemId, Media};
+use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use crate::models::{CollectionId, Episode, EpisodeId, ItemId, Media, SimpleCollection};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use iced::widget::Space;
@@ -13,7 +13,9 @@ use iced::{
 pub enum Message {
     Tab(Tab),
     AddCollection,
+    Rate(Option<f32>),
     Play,
+    Goto(CollectionId),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -54,10 +56,23 @@ impl EpisodePage {
                 let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Episode(self.id)));
                 Some(msg)
             }
+            Message::Rate(rating) => {
+                let msg =
+                    HomeMessage::OpenView(ViewMessage::Rating(ItemId::Episode(self.id), rating));
+                Some(msg)
+            }
+            Message::Goto(id) => {
+                let msg = HomeMessage::Goto(PageKind::Collection(id));
+                Some(msg)
+            }
         }
     }
 
-    fn overlay<'a>(&self, episode: &'a Thumbnail<Episode>) -> Element<'a, EpisodePageMessage> {
+    fn overlay<'a>(
+        &self,
+        episode: &'a Thumbnail<Episode>,
+        memberships: impl Iterator<Item = &'a SimpleCollection>,
+    ) -> Element<'a, EpisodePageMessage> {
         let id = self.id;
 
         let img: Element<'_, EpisodePageMessage> = {
@@ -71,7 +86,13 @@ impl EpisodePage {
 
             let title = text(episode.media.name()).size(H4);
             let duration = duration(&episode.media);
-            let rating = ratings(&episode.media);
+            let rating = button(ratings(&episode.media))
+                .on_press(EpisodePageMessage {
+                    id,
+                    message: Message::Rate(episode.media.rating()),
+                })
+                .style(button::text)
+                .padding(0);
             let release = text(episode.media.release_year()).size(H7);
 
             let details = row!(release, separator(), duration)
@@ -139,11 +160,12 @@ impl EpisodePage {
                 }
                 Tab::Data => data_tab(&episode.media, width),
                 Tab::Collections => {
-                    // todo
-                    let collections = ["Some Collection here: "; 7]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, collection)| Element::from(text(format!("{collection}{i}"))));
+                    let collections = memberships.map(|collection| {
+                        draw_collection_tab(collection, move |collection| EpisodePageMessage {
+                            id,
+                            message: Message::Goto(collection),
+                        })
+                    });
 
                     let collections =
                         scrollable(column(collections).spacing(4.0).width(Length::Fill))
@@ -229,8 +251,12 @@ impl EpisodePage {
             .into()
     }
 
-    pub fn view<'a>(&self, episode: &'a Thumbnail<Episode>) -> Element<'a, EpisodePageMessage> {
-        let overlay = bottom_center(self.overlay(episode));
+    pub fn view<'a>(
+        &self,
+        episode: &'a Thumbnail<Episode>,
+        memberships: impl Iterator<Item = &'a SimpleCollection>,
+    ) -> Element<'a, EpisodePageMessage> {
+        let overlay = bottom_center(self.overlay(episode, memberships));
 
         let img = episode.backdrop(Length::Fill, Length::FillPortion(3));
 

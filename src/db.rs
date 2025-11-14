@@ -2,13 +2,13 @@
 use crate::models::{
     Collection, CollectionId, Directory, DirectoryId, EComment, ECommentId, EpisodeId, MComment,
     MCommentId, Movie, MovieId, SearchItem, SeasonId, Show, ShowId,
-    collection::{self},
+    collection::{self, ItemId},
 };
 
 use crate::filter::{self, Filter, search::SearchFilter};
 use crate::sort::{self, Sort};
 
-use rusqlite::{Connection, Result, Row, params_from_iter, types::ToSqlOutput};
+use rusqlite::{Connection, Result, Row, ToSql, params_from_iter, types::ToSqlOutput};
 use std::ops::Deref;
 use uuid::Uuid;
 
@@ -430,6 +430,38 @@ impl Database {
         statement.query_map([], map)?.collect()
     }
 
+    pub fn get_memberships<T>(
+        &self,
+        collections: Vec<CollectionId>,
+        limit: Option<i32>,
+        offset: Option<i32>,
+        sort: collection::Sort,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
+        if collections.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let limit = limit.unwrap_or(-1);
+        let offset = offset.unwrap_or(-1);
+
+        let vars = repeat(collections.len());
+
+        let sql = format!(
+            "SELECT * FROM collection WHERE collection.id IN ({vars}) ORDER BY {} LIMIT {limit} OFFSET {offset}",
+            sort.query()
+        );
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_map(
+                params_from_iter(collections.into_iter().map(ToSqlOutput::from)),
+                map,
+            )?
+            .collect()
+    }
+
     pub fn get_collection<T>(
         &self,
         id: CollectionId,
@@ -455,16 +487,6 @@ impl Database {
         season_map: fn(&Row<'_>) -> rusqlite::Result<A>,
         episode_map: fn(&Row<'_>) -> rusqlite::Result<E>,
     ) -> rusqlite::Result<(Vec<M>, Vec<S>, Vec<A>, Vec<E>)> {
-        use collection::ItemId;
-
-        let repeat = |count: usize| -> String {
-            assert_ne!(count, 0);
-            let mut s = "?,".repeat(count);
-            // Remove trailing comma
-            s.pop();
-            s
-        };
-
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
@@ -582,11 +604,7 @@ impl Database {
         Ok((movies, shows, seasons, episodes))
     }
 
-    pub fn get_collection_items(
-        &self,
-        collection: CollectionId,
-    ) -> rusqlite::Result<Vec<collection::ItemId>> {
-        use collection::ItemId;
+    pub fn get_collection_items(&self, collection: CollectionId) -> rusqlite::Result<Vec<ItemId>> {
         let sql = "SELECT * FROM collection_item WHERE collection_id=:collection";
 
         let mut ids = self.prepare_cached(sql)?;
@@ -596,6 +614,76 @@ impl Database {
             ItemId::from_row,
         )?
         .collect()
+    }
+
+    pub fn toggle_membership(
+        &mut self,
+        item: ItemId,
+        collections: Vec<(CollectionId, bool)>,
+    ) -> rusqlite::Result<bool> {
+        if collections.is_empty() {
+            return Ok(false);
+        }
+
+        let (inserts, deletes): (Vec<(CollectionId, bool)>, Vec<_>) =
+            collections.iter().partition(|(_, insert)| *insert);
+
+        let trans = self.transaction()?;
+
+        let kind = item.name_str();
+
+        let mut rows = 0;
+
+        if !inserts.is_empty() {
+            let mut vars = "(?, ?, ?),".repeat(inserts.len());
+            // Remove trailing comma
+            vars.pop();
+
+            let insert = format!(
+                "INSERT OR IGNORE INTO collection_item (collection_id, media_type, media_id) VALUES {vars} "
+            );
+
+            let mut params = vec![];
+
+            for (insert, _) in inserts {
+                params.push(ToSqlOutput::from(insert));
+                params.push(ToSqlOutput::from(kind));
+                params.push(ToSqlOutput::from(item));
+            }
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += trans.execute(&insert, params.as_slice())?;
+        }
+
+        if !deletes.is_empty() {
+            let vars = repeat(deletes.len());
+
+            let delete = format!(
+                "DELETE FROM collection_item WHERE collection_id IN ({vars}) AND media_type='{kind}' AND media_id=?"
+            );
+
+            let mut params = deletes
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            params.push(ToSqlOutput::from(item));
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += trans.execute(&delete, params.as_slice())?;
+        }
+
+        trans.commit()?;
+
+        Ok(rows > 0)
     }
 
     pub fn search<T>(
@@ -631,59 +719,94 @@ impl Database {
             .collect()
     }
 
-    pub fn get_movie_memberships(&self, movie: MovieId) -> rusqlite::Result<Vec<CollectionId>> {
-        let sql = "SELECT collection_item.collection_id FROM collection_item WHERE media_type='movie' AND media_id=:id";
+    pub fn get_item_membership_ids(&self, item: ItemId) -> rusqlite::Result<Vec<CollectionId>> {
+        let kind = item.name_str();
+        let sql = format!(
+            "SELECT collection_item.collection_id FROM collection_item WHERE media_type='{kind}' AND media_id=:id"
+        );
 
-        let mut statement = self.prepare_cached(sql)?;
+        let mut statement = self.prepare_cached(&sql)?;
 
         statement
             .query_map(
-                &[(":id", &ToSqlOutput::from(movie))],
+                &[(":id", &ToSqlOutput::from(item))],
                 CollectionId::from_member,
             )?
             .collect()
     }
 
-    pub fn get_show_memberships(&self, show: ShowId) -> rusqlite::Result<Vec<CollectionId>> {
-        let sql = "SELECT collection_item.collection_id FROM collection_item WHERE media_type='show' AND media_id=:id";
-
-        let mut statement = self.prepare_cached(sql)?;
-
-        statement
-            .query_map(
-                &[(":id", &ToSqlOutput::from(show))],
-                CollectionId::from_member,
-            )?
-            .collect()
-    }
-
-    pub fn get_season_memberships(&self, season: SeasonId) -> rusqlite::Result<Vec<CollectionId>> {
-        let sql = "SELECT collection_item.collection_id FROM collection_item WHERE media_type='season' AND media_id=:id";
-
-        let mut statement = self.prepare_cached(sql)?;
-
-        statement
-            .query_map(
-                &[(":id", &ToSqlOutput::from(season))],
-                CollectionId::from_member,
-            )?
-            .collect()
-    }
-
-    pub fn get_episode_memberships(
+    pub fn last_watched_episode<'a>(
         &self,
-        episode: EpisodeId,
-    ) -> rusqlite::Result<Vec<CollectionId>> {
-        let sql = "SELECT collection_item.collection_id FROM collection_item WHERE media_type='episode' AND media_id=:id";
+        id: EpisodeId,
+        last_watched: ToSqlOutput<'a>,
+    ) -> rusqlite::Result<()> {
+        let sql = "UPDATE episode SET last_watched=:last_watched WHERE episode.id=:id";
 
         let mut statement = self.prepare_cached(sql)?;
 
-        statement
-            .query_map(
-                &[(":id", &ToSqlOutput::from(episode))],
-                CollectionId::from_member,
-            )?
-            .collect()
+        let _ = statement.execute(&[
+            (":id", &ToSqlOutput::from(id)),
+            (":last_watched", &last_watched),
+        ])?;
+
+        Ok(())
+    }
+
+    pub fn update_episode_stats(
+        &self,
+        id: EpisodeId,
+        watch_count: u32,
+        progress: f32,
+    ) -> rusqlite::Result<()> {
+        let sql =
+            "UPDATE episode SET watch_count=:watch_count, progress=:progress WHERE episode.id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        let _ = statement.execute(&[
+            (":id", &ToSqlOutput::from(id)),
+            (":watch_count", &ToSqlOutput::from(watch_count)),
+            (":progress", &ToSqlOutput::from(progress)),
+        ])?;
+
+        Ok(())
+    }
+
+    pub fn update_movie_stats(
+        &self,
+        id: MovieId,
+        watch_count: u32,
+        progress: f32,
+    ) -> rusqlite::Result<()> {
+        let sql =
+            "UPDATE movie SET watch_count=:watch_count, progress=:progress WHERE movie.id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        let _ = statement.execute(&[
+            (":id", &ToSqlOutput::from(id)),
+            (":watch_count", &ToSqlOutput::from(watch_count)),
+            (":progress", &ToSqlOutput::from(progress)),
+        ])?;
+
+        Ok(())
+    }
+
+    pub fn last_watched_movie<'a>(
+        &self,
+        id: MovieId,
+        last_watched: ToSqlOutput<'a>,
+    ) -> rusqlite::Result<()> {
+        let sql = "UPDATE movie SET last_watched=:last_watched WHERE movie.id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        let _ = statement.execute(&[
+            (":id", &ToSqlOutput::from(id)),
+            (":last_watched", &last_watched),
+        ])?;
+
+        Ok(())
     }
 
     pub(super) fn open_test_db() -> rusqlite::Result<Database> {
@@ -728,7 +851,7 @@ pub enum Operation {
     Delete = 2,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Query<'a> {
     pub id: Uuid,
     pub table: Table,
@@ -1414,4 +1537,12 @@ pub struct BatchError<'a> {
     pub successes: Vec<Success>,
     pub failures: Vec<Failure<'a>>,
     pub error: Box<rusqlite::Error>,
+}
+
+fn repeat(count: usize) -> String {
+    assert_ne!(count, 0);
+    let mut s = "?,".repeat(count);
+    // Remove trailing comma
+    s.pop();
+    s
 }

@@ -27,7 +27,6 @@ impl Sort {
         new.push(SortKind::Release);
 
         new
-
     }
 
     pub fn clear(&mut self) {
@@ -214,7 +213,9 @@ impl SortKind {
 
     pub fn cmp<T: Media>(&self, x: &T, y: &T) -> std::cmp::Ordering {
         match self {
-            Self::Name => alphanumeric_sort::compare_str(x.name(), y.name()),
+            Self::Name => {
+                alphanumeric_sort::compare_str(x.name().to_lowercase(), y.name().to_lowercase())
+            }
             Self::Duration => x.duration().cmp(&y.duration()),
             Self::Added => x.added().cmp(&y.added()),
             Self::Rating => match (x.rating(), y.rating()) {

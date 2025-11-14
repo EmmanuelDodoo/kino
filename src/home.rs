@@ -3,9 +3,10 @@ use iced::{
     alignment::{Horizontal, Vertical},
     animation::Animation,
     border::{Border, Radius},
+    mouse,
     time::{Duration, Instant},
     widget::{
-        self, Container, button, center, checkbox, column, container, grid,
+        self, Container, button, center, checkbox, column, container, grid, mouse_area,
         operation::{self, scroll_to},
         pick_list, row, rule, scrollable, space, text, text_editor, text_input,
     },
@@ -48,7 +49,7 @@ use pages::{Page, PageKind, PageUpdate};
 use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
 use shared::{
-    CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Scroll, SearchView, Thumbnail, filter_sort,
+    CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, Scroll, SearchView, Thumbnail, filter_sort,
 };
 use shows::{TvShows, TvShowsMessage};
 
@@ -89,6 +90,7 @@ pub enum ConfigMessage {
 
 #[derive(Debug, Clone)]
 pub struct CollectionConfig {
+    id: Option<CollectionId>,
     name: String,
     description: text_editor::Content,
     icon: Icon,
@@ -101,6 +103,7 @@ pub struct CollectionConfig {
 impl CollectionConfig {
     pub fn update(self, collection: &mut Collection) {
         let Self {
+            id: _id,
             name,
             description,
             icon,
@@ -122,87 +125,44 @@ impl CollectionConfig {
         collection.view = view;
         collection.custom = custom;
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Icons {
-    Default = 0,
-    Icon1 = 1,
-    Icon2 = 2,
-    Icon3 = 3,
-    Icon4 = 4,
-    Icon5 = 5,
-    Icon6 = 6,
-    Icon7 = 7,
-    Icon8 = 8,
-    Icon9 = 9,
-    Icon10 = 10,
-    Icon11 = 11,
-    Icon12 = 12,
-}
+    pub fn from_collection(collection: &Collection) -> (Self, widget::Id) {
+        let description =
+            text_editor::Content::with_text(collection.description.as_deref().unwrap_or_default());
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Icon {
-    id: Icons,
-}
+        let name_input = widget::Id::unique();
 
-impl Icon {
-    pub fn new(icon: Option<u32>) -> Self {
-        match icon {
-            Some(1) => Self { id: Icons::Icon1 },
-            Some(2) => Self { id: Icons::Icon2 },
-            Some(3) => Self { id: Icons::Icon3 },
-            Some(4) => Self { id: Icons::Icon4 },
-            Some(5) => Self { id: Icons::Icon5 },
-            Some(6) => Self { id: Icons::Icon6 },
-            Some(7) => Self { id: Icons::Icon7 },
-            Some(8) => Self { id: Icons::Icon8 },
-            Some(9) => Self { id: Icons::Icon9 },
-            Some(10) => Self { id: Icons::Icon10 },
-            Some(11) => Self { id: Icons::Icon11 },
-            Some(12) => Self { id: Icons::Icon12 },
-            _ => Self { id: Icons::Default },
-        }
+        (
+            Self {
+                id: Some(collection.id),
+                name: collection.name.clone(),
+                description,
+                view: collection.view,
+                icon: Icon::new(collection.icon),
+                theme: collection.theme,
+                custom: collection.custom.clone(),
+                name_input: name_input.clone(),
+            },
+            name_input,
+        )
     }
 
-    pub fn unicode(self) -> char {
-        match self.id {
-            Icons::Default => COLLECTION_ICON,
-            Icons::Icon1 => UNFAVORITE,
-            Icons::Icon2 => MOVIE,
-            Icons::Icon3 => SHOW,
-            Icons::Icon4 => POPCORN,
-            Icons::Icon5 => FILM,
-            Icons::Icon6 => TODO,
-            Icons::Icon7 => SWORD,
-            Icons::Icon8 => HISTORY,
-            Icons::Icon9 => GHOST,
-            Icons::Icon10 => ALIEN,
-            Icons::Icon11 => CROWN,
-            Icons::Icon12 => MASKS,
-        }
-    }
+    pub fn new() -> (Self, widget::Id) {
+        let name_input = widget::Id::unique();
 
-    pub fn to_u32(self) -> u32 {
-        self.id as u32
-    }
-
-    pub fn all() -> [Self; 13] {
-        [
-            Self { id: Icons::Default },
-            Self { id: Icons::Icon1 },
-            Self { id: Icons::Icon2 },
-            Self { id: Icons::Icon3 },
-            Self { id: Icons::Icon4 },
-            Self { id: Icons::Icon5 },
-            Self { id: Icons::Icon6 },
-            Self { id: Icons::Icon7 },
-            Self { id: Icons::Icon8 },
-            Self { id: Icons::Icon9 },
-            Self { id: Icons::Icon10 },
-            Self { id: Icons::Icon11 },
-            Self { id: Icons::Icon12 },
-        ]
+        (
+            Self {
+                id: None,
+                name: String::new(),
+                description: text_editor::Content::new(),
+                icon: Icon::new(None),
+                view: CollectionView::Shown,
+                theme: None,
+                custom: None,
+                name_input: name_input.clone(),
+            },
+            name_input,
+        )
     }
 }
 
@@ -226,6 +186,7 @@ pub enum SearchMessage {
 #[derive(Debug, Clone)]
 pub struct CollectionAddState {
     item: ItemId,
+    initial: HashSet<CollectionId>,
     selected: HashSet<CollectionId>,
 }
 
@@ -236,18 +197,34 @@ pub enum CollectionAddMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum Rating {
+    Value(f32),
+    Input { id: widget::Id, input: String },
+}
+
+#[derive(Debug, Clone)]
+pub enum RatingMessage {
+    Type,
+    Submit,
+    Star(u8),
+    Input(String),
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig,
     Add(ItemId),
     AddToCollection(CollectionId),
     Search,
+    Rating(ItemId, Option<f32>),
 }
 
 #[derive(Debug, Clone)]
 pub enum View {
-    CollectionConfig(CollectionConfig, CollectionId),
+    CollectionConfig(CollectionConfig),
     Search(SearchState, Option<CollectionId>),
     CollectionAdd(CollectionAddState),
+    Rating { id: ItemId, rating: Rating },
 }
 
 #[derive(Debug, Clone)]
@@ -260,16 +237,24 @@ enum State {
     Shows(Vec<Thumbnail<Show>>),
     Movies(Vec<Thumbnail<Movie>>),
     Collections(Vec<CollectionThumbnail>),
-    Movie(Thumbnail<Movie>),
+    Movie {
+        movie: Thumbnail<Movie>,
+        memberships: Vec<SimpleCollection>,
+    },
     Show {
         show: Thumbnail<Show>,
+        memberships: Vec<SimpleCollection>,
         seasons: Vec<Thumbnail<Season>>,
     },
     Season {
         season: Thumbnail<Season>,
+        memberships: Vec<SimpleCollection>,
         episodes: Vec<Thumbnail<Episode>>,
     },
-    Episode(Thumbnail<Episode>),
+    Episode {
+        episode: Thumbnail<Episode>,
+        memberships: Vec<SimpleCollection>,
+    },
     Collection {
         collection: Box<CollectionThumbnail>,
         shows: Vec<Thumbnail<Show>>,
@@ -300,7 +285,9 @@ pub enum HomeMessage {
     CollectionConfig(ConfigMessage),
     SearchMessage(SearchMessage),
     CollectionAdd(CollectionAddMessage),
+    Rating(RatingMessage),
     OpenView(ViewMessage),
+    AddCollection(ItemId, CollectionId),
     CloseView,
     Play(ItemId),
     PlayCollection {
@@ -404,7 +391,7 @@ impl Home {
     pub fn update(&mut self, message: HomeMessage, now: Instant) -> Task<Message> {
         match message {
             HomeMessage::None => Task::none(),
-            HomeMessage::Settings => Task::none(),
+            HomeMessage::Settings => todo!(),
             HomeMessage::FetchedCollections(collections) => {
                 self.state = State::Collections(collections);
 
@@ -627,27 +614,10 @@ impl Home {
                         return Task::none();
                     };
 
-                    let description = text_editor::Content::with_text(
-                        collection
-                            .collection
-                            .description
-                            .as_deref()
-                            .unwrap_or_default(),
-                    );
+                    let (config, name_input) =
+                        CollectionConfig::from_collection(&collection.collection);
 
-                    let name_input = widget::Id::unique();
-
-                    let config = CollectionConfig {
-                        name: collection.collection.name.clone(),
-                        description,
-                        view: collection.collection.view,
-                        icon: Icon::new(collection.collection.icon),
-                        theme: collection.collection.theme,
-                        custom: collection.collection.custom.clone(),
-                        name_input: name_input.clone(),
-                    };
-
-                    self.view = Some(View::CollectionConfig(config, collection.collection.id));
+                    self.view = Some(View::CollectionConfig(config));
                     let focus = operation::focus(name_input);
 
                     Task::batch([focus, self.update_page_scroll()])
@@ -656,16 +626,23 @@ impl Home {
                     let state = CollectionAddState {
                         item,
                         selected: HashSet::new(),
+                        initial: HashSet::new(),
                     };
                     self.view = Some(View::CollectionAdd(state));
 
-                    Task::done(Message::FetchMemberShip(item))
+                    Task::done(Message::FetchMembershipIds(item))
                 }
                 ViewMessage::AddToCollection(id) => self.toggle_search(Some(id)),
                 ViewMessage::Search => self.toggle_search(None),
+                ViewMessage::Rating(id, rating) => {
+                    let rating = Rating::Value(rating.unwrap_or_default());
+                    self.view = Some(View::Rating { id, rating });
+
+                    self.update_page_scroll()
+                }
             },
             HomeMessage::CollectionConfig(csg) => {
-                let Some(View::CollectionConfig(mut config, id)) = self.view.take() else {
+                let Some(View::CollectionConfig(mut config)) = self.view.take() else {
                     return Task::none();
                 };
 
@@ -689,7 +666,7 @@ impl Home {
                             config.custom = Some(script)
                         }
                     }
-                    ConfigMessage::Save => {
+                    ConfigMessage::Save if config.id.is_some() => {
                         let State::Collection { collection, .. } = &mut self.state else {
                             return Task::none();
                         };
@@ -709,12 +686,77 @@ impl Home {
                         sort_collections(&mut self.collections);
                         self.view = None;
 
-                        // todo: Save in DB
-                        return Task::none();
+                        let query = collection.collection.save();
+
+                        return Task::done(Message::Query(query));
+                    }
+                    ConfigMessage::Save => {
+                        let CollectionConfig {
+                            name,
+                            description,
+                            icon,
+                            view,
+                            theme,
+                            custom,
+                            id: _unused1,
+                            name_input: _unused2,
+                        } = config;
+
+                        let description = description.text();
+                        let description = if description.is_empty() {
+                            None
+                        } else {
+                            Some(description)
+                        };
+
+                        let (new, query) = Collection::new(
+                            name,
+                            description,
+                            view,
+                            Some(icon.to_u32()),
+                            theme,
+                            custom,
+                        );
+
+                        let new_id = new.id;
+                        let simple = SimpleCollection::from_collection(&new);
+                        self.collections.push(simple);
+                        sort_collections(&mut self.collections);
+
+                        self.view = None;
+                        self.state = State::Collection {
+                            collection: Box::new(CollectionThumbnail::new(new)),
+                            shows: vec![],
+                            movies: vec![],
+                            episodes: vec![],
+                            seasons: vec![],
+                        };
+
+                        if let Some(old) = self.current_page.replace(PageKind::Collection(new_id)) {
+                            self.backward.push(old)
+                        };
+                        self.forward.clear();
+
+                        let msg = {
+                            let (collection, tasks) =
+                                CollectionPage::boot(new_id, self.sort, self.filters, self.layout);
+
+                            self.pages.insert(
+                                PageKind::Collection(new_id),
+                                Page::Collection {
+                                    collection,
+                                    id: new_id,
+                                },
+                            );
+
+                            tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
+                        };
+
+                        return Task::batch([Task::done(Message::Query(query)), msg]);
                     }
                 }
 
-                self.view = Some(View::CollectionConfig(config, id));
+                self.view = Some(View::CollectionConfig(config));
 
                 Task::none()
             }
@@ -754,7 +796,8 @@ impl Home {
                     }
                     SearchMessage::ClearFilter => {
                         state.filter = None;
-                        Task::none()
+
+                        self.load()
                     }
                     SearchMessage::Load => self.load(),
                     SearchMessage::Searching => {
@@ -777,7 +820,7 @@ impl Home {
                 }
             }
             HomeMessage::CollectionAdd(csg) => {
-                let Some(View::CollectionAdd(state)) = self.view.as_mut() else {
+                let Some(View::CollectionAdd(mut state)) = self.view.take() else {
                     return Task::none();
                 };
 
@@ -789,9 +832,117 @@ impl Home {
                             state.selected.insert(id);
                         }
 
+                        self.view = Some(View::CollectionAdd(state));
                         Task::none()
                     }
-                    CollectionAddMessage::Save => todo!(),
+                    CollectionAddMessage::Save => {
+                        let mut new = state
+                            .selected
+                            .iter()
+                            .filter_map(|collection| {
+                                (!state.initial.contains(collection)).then_some((*collection, true))
+                            })
+                            .collect::<Vec<_>>();
+
+                        let remove = state.initial.iter().filter_map(|init| {
+                            let selected = state.selected.contains(init);
+                            if !selected {
+                                Some((*init, false))
+                            } else {
+                                None
+                            }
+                        });
+
+                        new.extend(remove);
+
+                        Task::done(Message::ToggleMembership {
+                            item: state.item,
+                            collections: new,
+                        })
+                    }
+                }
+            }
+            HomeMessage::Rating(rsg) => {
+                let Some(View::Rating { rating, id }) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match rsg {
+                    RatingMessage::Type => {
+                        let Rating::Value(value) = &rating else {
+                            return Task::none();
+                        };
+                        let id = widget::Id::unique();
+                        *rating = Rating::Input {
+                            id: id.clone(),
+                            input: value.to_string(),
+                        };
+
+                        operation::focus(id)
+                    }
+                    RatingMessage::Star(val) => {
+                        match rating {
+                            Rating::Value(old) => {
+                                *old = val as f32;
+                            }
+                            Rating::Input { input, .. } => {
+                                *input = val.to_string();
+                            }
+                        }
+
+                        Task::none()
+                    }
+                    RatingMessage::Submit => {
+                        let Rating::Input { input, .. } = &rating else {
+                            return Task::none();
+                        };
+
+                        let value = input.parse::<f32>().unwrap_or(0.0).clamp(0.0, 5.0);
+                        *rating = Rating::Value(value);
+
+                        match &mut self.state {
+                            State::Movie {
+                                movie: Thumbnail { media, .. },
+                                ..
+                            } if ItemId::Movie(media.id) == *id => {
+                                let query = media.set_rating(value);
+
+                                Task::done(Message::Query(query))
+                            }
+                            State::Show {
+                                show: Thumbnail { media, .. },
+                                ..
+                            } if ItemId::Show(media.id) == *id => {
+                                let query = media.set_rating(value);
+
+                                Task::done(Message::Query(query))
+                            }
+                            State::Season {
+                                season: Thumbnail { media, .. },
+                                ..
+                            } if ItemId::Season(media.id) == *id => {
+                                let query = media.set_rating(value);
+
+                                Task::done(Message::Query(query))
+                            }
+                            State::Episode {
+                                episode: Thumbnail { media, .. },
+                                ..
+                            } if ItemId::Episode(media.id) == *id => {
+                                let query = media.set_rating(value);
+
+                                Task::done(Message::Query(query))
+                            }
+                            _ => Task::none(),
+                        }
+                    }
+                    RatingMessage::Input(value) => {
+                        if let Rating::Input { input, .. } = rating {
+                            *input = value;
+                        }
+
+                        Task::none()
+                    }
                 }
             }
             HomeMessage::CloseView => {
@@ -819,6 +970,7 @@ impl Home {
                     page.page_update(update);
                 };
 
+                // todo: Persist changes
                 Task::none()
             }
             HomeMessage::ToggleSort => {
@@ -1001,9 +1153,18 @@ impl Home {
                 if let Some(page) = self.current_page_mut() {
                     page.page_update(update);
                 };
+
+                // todo: Persist changes
                 Task::none()
             }
-            HomeMessage::NewCollection => Task::none(),
+            HomeMessage::NewCollection => {
+                let (config, name_input) = CollectionConfig::new();
+
+                self.view = Some(View::CollectionConfig(config));
+                let focus = operation::focus(name_input);
+
+                Task::batch([focus, self.update_page_scroll()])
+            }
             HomeMessage::Random => {
                 todo!("Random");
             }
@@ -1033,8 +1194,8 @@ impl Home {
             }
             HomeMessage::Hovered(id, is_hovered) => match (&mut self.state, id) {
                 (State::Loading(_), _)
-                | (State::Episode(_), _)
-                | (State::Movie(_), _)
+                | (State::Episode { .. }, _)
+                | (State::Movie { .. }, _)
                 | (State::Collections(_), _) => Task::none(),
                 (State::Recent { shows, .. }, ItemId::Show(id)) => {
                     if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
@@ -1118,6 +1279,13 @@ impl Home {
             HomeMessage::Scroll(viewport) => {
                 self.scroll.offset = viewport.absolute_offset();
                 Task::none()
+            }
+            HomeMessage::AddCollection(item, collection) => {
+                self.view = None;
+                Task::done(Message::ToggleMembership {
+                    item,
+                    collections: vec![(collection, true)],
+                })
             }
         }
     }
@@ -1751,9 +1919,9 @@ impl Home {
             State::Shows(_) => "Shows",
             State::Movies(_) => "Movies",
             State::Show { show, .. } => show.media.name(),
-            State::Movie(movie) => movie.media.name(),
+            State::Movie { movie, .. } => movie.media.name(),
             State::Season { season, .. } => season.media.name(),
-            State::Episode(episode) => episode.media.name(),
+            State::Episode { episode, .. } => episode.media.name(),
             State::Loading(_) => "Loading",
             State::Collections(_) => "Collections",
             State::Collection { collection, .. } => &collection.collection.name,
@@ -1814,17 +1982,37 @@ impl Home {
                 .map(HomeMessage::Collections),
             // todo: Needed?
             (State::Collections(_), None) => center("Loading").into(),
-            (State::Episode(episode), Some(Page::Episode { page, .. })) => {
-                page.view(episode).map(HomeMessage::EpisodePage)
-            }
-            (State::Movie(movie), Some(Page::Movie { page, .. })) => {
-                page.view(movie).map(HomeMessage::MoviePage)
-            }
-            (State::Season { season, episodes }, Some(Page::Season { page, .. })) => page
-                .view(now, season, episodes.iter())
+            (
+                State::Episode {
+                    episode,
+                    memberships,
+                },
+                Some(Page::Episode { page, .. }),
+            ) => page
+                .view(episode, memberships.iter())
+                .map(HomeMessage::EpisodePage),
+            (State::Movie { movie, memberships }, Some(Page::Movie { page, .. })) => page
+                .view(movie, memberships.iter())
+                .map(HomeMessage::MoviePage),
+            (
+                State::Season {
+                    season,
+                    episodes,
+                    memberships,
+                },
+                Some(Page::Season { page, .. }),
+            ) => page
+                .view(now, season, episodes.iter(), memberships.iter())
                 .map(HomeMessage::SeasonPage),
-            (State::Show { show, seasons }, Some(Page::Show { page, .. })) => page
-                .view(now, show, seasons.iter())
+            (
+                State::Show {
+                    show,
+                    seasons,
+                    memberships,
+                },
+                Some(Page::Show { page, .. }),
+            ) => page
+                .view(now, show, seasons.iter(), memberships.iter())
                 .map(HomeMessage::ShowPage),
             (
                 State::Collection {
@@ -1861,30 +2049,26 @@ impl Home {
 
         match &self.view {
             None => content.into(),
-            Some(View::CollectionConfig(config, _id)) => {
-                let overlay = draw_config(config);
-
-                modal(content, overlay)
-                    .on_blur(HomeMessage::CloseView)
-                    .into()
-            }
-            Some(View::Search(state, None)) => {
-                let overlay = draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true);
-
-                modal(content, overlay)
-                    .on_blur(HomeMessage::CloseView)
-                    .into()
-            }
-            Some(View::Search(state, Some(_collection))) => {
-                // todo
-                let overlay = draw_search(state, |_| HomeMessage::None, theme, false);
-
-                modal(content, overlay)
-                    .on_blur(HomeMessage::CloseView)
-                    .into()
-            }
-            Some(View::CollectionAdd(state)) => {
-                let overlay = draw_collection_add(state, self.collections.iter());
+            Some(view) => {
+                let overlay: Element<'_, HomeMessage> = match view {
+                    View::CollectionConfig(config) => draw_config(config),
+                    View::Search(state, None) => {
+                        draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true)
+                    }
+                    View::Search(state, Some(collection)) => {
+                        // todo
+                        draw_search(
+                            state,
+                            |item| HomeMessage::AddCollection(item, *collection),
+                            theme,
+                            false,
+                        )
+                    }
+                    View::CollectionAdd(state) => {
+                        draw_collection_add(state, self.collections.iter())
+                    }
+                    View::Rating { rating, .. } => draw_rating(rating),
+                };
 
                 modal(content, overlay)
                     .on_blur(HomeMessage::CloseView)
@@ -1911,7 +2095,7 @@ impl Home {
             State::Collections(collections) => collections
                 .iter()
                 .any(|collection| collection.is_animating(now)),
-            State::Movie(_) | State::Episode(_) => false,
+            State::Movie { .. } | State::Episode { .. } => false,
             State::Collection {
                 shows,
                 movies,
@@ -2044,7 +2228,7 @@ impl Home {
         Task::batch([Task::done(msg), task])
     }
 
-    fn content_refresh(&mut self, now: Instant) -> Task<Message> {
+    pub fn content_refresh(&mut self, now: Instant) -> Task<Message> {
         let (id, limit) = match &self.state {
             State::Loading(_) => return Task::none(),
             State::Recent { .. } => (FetchId::Recents, self.recent_limit),
@@ -2052,8 +2236,8 @@ impl Home {
             State::Shows(_) => (FetchId::Shows, None),
             State::Show { show, .. } => (FetchId::Show(show.media.id), None),
             State::Season { season, .. } => (FetchId::Season(season.media.id), None),
-            State::Episode(episode) => (FetchId::Episode(episode.media.id), None),
-            State::Movie(movie) => (FetchId::Movie(movie.media.id), None),
+            State::Episode { episode, .. } => (FetchId::Episode(episode.media.id), None),
+            State::Movie { movie, .. } => (FetchId::Movie(movie.media.id), None),
             State::Collections(_) => (FetchId::Collections, None),
             State::Collection { collection, .. } => {
                 (FetchId::Collection(collection.collection.id), None)
@@ -2151,13 +2335,26 @@ impl Home {
         show: Thumbnail<Show>,
         seasons: Vec<Thumbnail<Season>>,
     ) -> Task<Message> {
-        self.state = State::Show { show, seasons };
-        self.update_page_scroll()
+        let memberships = Message::FetchMemberships(show.media.id.into());
+
+        self.state = State::Show {
+            show,
+            seasons,
+            memberships: vec![],
+        };
+
+        Task::batch([self.update_page_scroll(), Task::done(memberships)])
     }
 
     pub fn fetched_movie(&mut self, movie: Thumbnail<Movie>) -> Task<Message> {
-        self.state = State::Movie(movie);
-        self.update_page_scroll()
+        let memberships = Message::FetchMemberships(movie.media.id.into());
+
+        self.state = State::Movie {
+            movie,
+            memberships: vec![],
+        };
+
+        Task::batch([self.update_page_scroll(), Task::done(memberships)])
     }
 
     pub fn fetched_season(
@@ -2165,13 +2362,26 @@ impl Home {
         season: Thumbnail<Season>,
         episodes: Vec<Thumbnail<Episode>>,
     ) -> Task<Message> {
-        self.state = State::Season { season, episodes };
-        self.update_page_scroll()
+        let memberships = Message::FetchMemberships(season.media.id.into());
+
+        self.state = State::Season {
+            season,
+            episodes,
+            memberships: vec![],
+        };
+
+        Task::batch([self.update_page_scroll(), Task::done(memberships)])
     }
 
     pub fn fetched_episode(&mut self, episode: Thumbnail<Episode>) -> Task<Message> {
-        self.state = State::Episode(episode);
-        self.update_page_scroll()
+        let memberships = Message::FetchMemberships(episode.media.id.into());
+
+        self.state = State::Episode {
+            episode,
+            memberships: vec![],
+        };
+
+        Task::batch([self.update_page_scroll(), Task::done(memberships)])
     }
 
     pub fn fetched_collections(&mut self, collections: Vec<Collection>) -> Task<Message> {
@@ -2215,12 +2425,40 @@ impl Home {
         )
     }
 
-    pub fn fetched_memberships(&mut self, memberships: Vec<CollectionId>) -> Task<Message> {
-        if let Some(View::CollectionAdd(CollectionAddState { selected, .. })) = self.view.as_mut() {
-            selected.extend(memberships);
+    pub fn fetched_memberships_ids(&mut self, memberships: Vec<CollectionId>) -> Task<Message> {
+        if let Some(View::CollectionAdd(CollectionAddState {
+            selected, initial, ..
+        })) = self.view.as_mut()
+        {
+            for collection in memberships {
+                initial.insert(collection);
+                selected.insert(collection);
+            }
         }
 
         self.update_page_scroll()
+    }
+
+    pub fn fetched_memberships(&mut self, fetched: Vec<SimpleCollection>) -> Task<Message> {
+        match &mut self.state {
+            State::Movie { memberships, .. } => {
+                *memberships = fetched;
+                self.update_page_scroll()
+            }
+            State::Show { memberships, .. } => {
+                *memberships = fetched;
+                self.update_page_scroll()
+            }
+            State::Season { memberships, .. } => {
+                *memberships = fetched;
+                self.update_page_scroll()
+            }
+            State::Episode { memberships, .. } => {
+                *memberships = fetched;
+                self.update_page_scroll()
+            }
+            _ => Task::none(),
+        }
     }
 
     pub fn load(&mut self) -> Task<Message> {
@@ -2281,7 +2519,7 @@ fn icon_button<'a>(
             row!(icon, text)
                 .align_y(Vertical::Center)
                 .width(Length::Fill)
-                .spacing(16.0),
+                .spacing(12.0),
         )
         .style(move |theme, status| {
             use button::{Status, Style, background};
@@ -2607,9 +2845,10 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
 
 fn sort_collections(collections: &mut [SimpleCollection]) {
     collections.sort_by(|x, y| {
-        x.view
-            .cmp(&y.view)
-            .then(alphanumeric_sort::compare_str(&x.name, &y.name))
+        x.view.cmp(&y.view).then(alphanumeric_sort::compare_str(
+            &x.name.to_lowercase(),
+            &y.name.to_lowercase(),
+        ))
     });
 }
 
@@ -2668,6 +2907,25 @@ fn draw_collection_add<'a>(
             container::Style { border, ..default }
         });
 
+    let new = button(
+        row!(icons::icon(icons::ADD).size(H7), text("New").size(H7))
+            .align_y(Vertical::Center)
+            .spacing(8),
+    )
+    .padding([2, 4])
+    .on_press(HomeMessage::NewCollection)
+    .style(move |theme, status| {
+        let default = button::text(theme, status);
+
+        let border = default.border.rounded(5.0);
+
+        button::Style { border, ..default }
+    });
+
+    let collections = column!(new, collections)
+        .spacing(5.0)
+        .align_x(Horizontal::Right);
+
     let actions = {
         let save = button("Save")
             .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Save))
@@ -2681,7 +2939,83 @@ fn draw_collection_add<'a>(
     };
 
     let content = column!(title, collections, actions)
-        .spacing(20)
+        .spacing(24)
+        .align_x(Horizontal::Center);
+
+    modal_container(content).max_width(400).into()
+}
+
+fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
+    let title = text("Rating").size(H4);
+
+    let size = H6;
+
+    let value: Element<'_, HomeMessage> = {
+        let size = H6;
+        let extra = text("/5").size(H7);
+
+        let value: Element<'_, HomeMessage> = match state {
+            Rating::Value(value) => {
+                let rating = (value * 100.0).round() / 100.0;
+                mouse_area(text(format!("{rating:.2}")).size(size))
+                    .interaction(mouse::Interaction::Text)
+                    .on_press(HomeMessage::Rating(RatingMessage::Type))
+                    .into()
+            }
+            Rating::Input { id, input } => text_input("", &input)
+                .id(id.clone())
+                .size(size)
+                .width(48.0)
+                .on_submit(HomeMessage::Rating(RatingMessage::Submit))
+                .on_input(|input| HomeMessage::Rating(RatingMessage::Input(input)))
+                .into(),
+        };
+
+        row!(value, extra)
+            .spacing(2.0)
+            .align_y(Vertical::Center)
+            .into()
+    };
+
+    let ratings = {
+        let rating = match state {
+            Rating::Value(value) => *value,
+            Rating::Input { input, .. } => input.parse::<f32>().unwrap_or_default().clamp(0.0, 5.0),
+        };
+
+        let stars = (rating.trunc() as u8).clamp(0, 5);
+        let rem = 5 - stars;
+        let frac = rating.fract() >= 0.5;
+        let unstars = if frac { rem.saturating_sub(1) } else { rem };
+        let frac = rem - unstars;
+
+        let color = |theme: &Theme| -> text::Style {
+            let color = theme.extended_palette().primary.strong.color;
+            text::Style { color: Some(color) }
+        };
+
+        let stars = (0..stars).map(|_| Element::from(icon(STAR).size(size).style(color)));
+        let frac = (0..frac).map(|_| Element::from(icon(HALF_STAR).size(size).style(color)));
+        let unstars = (0..unstars).map(|_| Element::from(icon(UNSTAR).size(size).style(color)));
+
+        let stars = stars
+            .chain(frac)
+            .chain(unstars)
+            .enumerate()
+            .map(|(idx, elem)| {
+                Element::from(
+                    button(elem)
+                        .on_press(HomeMessage::Rating(RatingMessage::Star((idx + 1) as u8)))
+                        .padding(0)
+                        .style(button::text),
+                )
+            });
+
+        row(stars).spacing(6.0).align_y(Vertical::Center)
+    };
+
+    let content = column!(title, value, ratings)
+        .spacing(16.0)
         .align_x(Horizontal::Center);
 
     modal_container(content).max_width(400).into()

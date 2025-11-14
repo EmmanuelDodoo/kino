@@ -254,6 +254,26 @@ impl Season {
         }
     }
 
+    #[must_use]
+    pub fn set_rating<'a>(&mut self, rating: f32) -> Query<'a> {
+        debug_assert!(rating >= 0.0 && rating <= 5.0, "Season rating out of range");
+        self.rating = Some(rating);
+
+        let sql = "UPDATE season SET rating=:rating WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(self.id)),
+            (":rating", ToSqlOutput::from(rating)),
+        ];
+
+        Query {
+            id: self.id.0,
+            table: Table::Season,
+            sql,
+            params,
+            op: Operation::Update,
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
         show: &Show,

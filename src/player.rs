@@ -1,27 +1,47 @@
 use iced::{
-    Element, Font, Length, Size, Subscription, Task,
+    Element, Font, Length, Size, Subscription, Task, Theme,
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
     animation::Animation,
     font,
     time::Instant,
     widget::{
-        button, center, column, container, image, mouse_area, row, slider, space, stack, text,
+        Container, button, center, checkbox, column, container, image, mouse_area, row, scrollable,
+        slider, space, stack, text,
     },
     window,
 };
 use iced_video_player::{Button, Kind, MouseClick, Video, VideoPlayer};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::app::Message;
+use crate::home::shared::Icon;
+use crate::models::{CollectionId, ItemId, SimpleCollection};
 use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings,
     icons::{self, sized_button},
     loading_animation, loading_svg,
-    typo::*,
+    typo::{self, *},
 };
-use crate::widgets;
+use crate::widgets::{self, modal};
+
+#[derive(Debug)]
+enum View {
+    CollectionAdd {
+        item: PlayId,
+        collections: Vec<SimpleCollection>,
+        selected: HashSet<CollectionId>,
+        initial: HashSet<CollectionId>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum CollectionAddMessage {
+    Toggle(bool, CollectionId),
+    Save,
+}
 
 #[derive(Debug)]
 pub struct Player {
@@ -31,6 +51,8 @@ pub struct Player {
     thumbnails: Vec<image::Handle>,
     item: PlayItem,
     duration: f64,
+    watch_time: Duration,
+    last_frame: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -68,11 +90,12 @@ pub enum ManagerMessage {
     SeekFront(bool),
     SeekBack(bool),
     TogglePlay,
-    Favorite,
     Comment,
     ToggleFullscreen,
     EndOfStream,
     NewFrame,
+    CloseView,
+    CollectionAddMessage(CollectionAddMessage),
     None,
 }
 
@@ -88,6 +111,8 @@ pub struct Manager {
     is_fullscreen: bool,
     state: State,
     next: AutoState,
+
+    view: Option<View>,
 }
 
 impl Manager {
@@ -124,11 +149,11 @@ impl Manager {
             playlist,
             show_controls: true,
             settings,
-            // todo Probably best to get the initial value from app
             maximised: false,
             is_fullscreen: false,
             state,
             next: AutoState::Idle,
+            view: None,
         }
     }
 
@@ -147,6 +172,8 @@ impl Manager {
             muted,
             auto_start,
             auto_next: _autoplay,
+            completion_point: _completion,
+            completion_watch_time: _completion_watch,
         } = self.settings;
 
         if show_subtitles {
@@ -193,15 +220,19 @@ impl Manager {
                     move |res| ManagerMessage::Thumbnail(res.unwrap()),
                 );
 
-                if !is_next || matches!(&self.state, State::Idle) {
+                let last_watched = if !is_next || matches!(&self.state, State::Idle) {
+                    let task = Task::done(Message::LastWatched(player.item.id));
                     self.prep_video(&mut player);
                     self.state = State::Ready(Box::new(player));
+
+                    task
                 } else {
                     player.video.set_paused(true);
                     self.next = AutoState::Ready(Box::new(player));
-                }
+                    Task::none()
+                };
 
-                load_thumbnails.map(Message::Player)
+                Task::batch([load_thumbnails.map(Message::Player), last_watched])
             }
             ManagerMessage::Thumbnail((id, generated)) => {
                 let current = self
@@ -235,14 +266,42 @@ impl Manager {
                 Task::none()
             }
             ManagerMessage::EndOfStream => {
-                // update playlist
-                todo!("Send message to main with some video stats");
+                let stats = self.stats().map(Task::done).unwrap_or_default();
+
+                match std::mem::replace(&mut self.next, AutoState::Idle) {
+                    AutoState::Ready(mut player) => {
+                        self.prep_video(&mut player);
+                        player.video.set_paused(false);
+
+                        let last_watched = Message::LastWatched(player.item.id);
+
+                        self.state = State::Ready(player);
+
+                        Task::batch([stats, Task::done(last_watched)])
+                    }
+                    AutoState::Idle => {
+                        let Some(next) = self.playlist.next() else {
+                            return stats;
+                        };
+
+                        self.state = State::Loading(loading_animation(now));
+
+                        load_video(next.clone(), |video| ManagerMessage::Video(false, video))
+                            .map(Message::Player)
+                    }
+                    AutoState::Loading => stats,
+                }
             }
             ManagerMessage::NewFrame => {
                 if let State::Ready(player) = &mut self.state
                     && !player.is_dragging
                 {
                     player.position = player.video.position().as_secs_f64();
+                    player.watch_time += player
+                        .last_frame
+                        .map(|last| last.elapsed())
+                        .unwrap_or_default();
+                    player.last_frame = Some(Instant::now());
 
                     if (player.position) / (player.duration) >= 0.9
                         && self.playlist.has_next()
@@ -269,10 +328,12 @@ impl Manager {
                     video,
                     position,
                     is_dragging,
+                    last_frame,
                     ..
                 }) = self.player_mut()
                 {
                     *is_dragging = false;
+                    last_frame.take();
 
                     video
                         .seek(Duration::from_secs_f64(position.max(0.0)), false)
@@ -287,9 +348,11 @@ impl Manager {
                     video,
                     position,
                     is_dragging,
+                    last_frame,
                     ..
                 }) = self.player_mut()
                 {
+                    last_frame.take();
                     *position = pos.max(0.0);
                     *is_dragging = true;
                     if !video.paused() {
@@ -332,10 +395,67 @@ impl Manager {
             ManagerMessage::PlayNext => self.play_next(now),
             ManagerMessage::PlayPrevious => self.play_previous(now),
             ManagerMessage::AddCollection => self.collection_add(),
-            ManagerMessage::Favorite => self.collection_favorite(),
             ManagerMessage::Config => self.video_config(),
             ManagerMessage::Comment => self.video_comment(),
             ManagerMessage::SpeedReset => self.speed_reset(),
+            ManagerMessage::CloseView => self.close_view(),
+            ManagerMessage::CollectionAddMessage(csg) => {
+                let Some(View::CollectionAdd {
+                    item,
+                    collections,
+                    mut selected,
+                    initial,
+                }) = self.view.take()
+                else {
+                    return Task::none();
+                };
+
+                match csg {
+                    CollectionAddMessage::Toggle(toggle, id) => {
+                        if toggle {
+                            selected.remove(&id);
+                        } else {
+                            selected.insert(id);
+                        }
+
+                        self.view = Some(View::CollectionAdd {
+                            item,
+                            collections,
+                            selected,
+                            initial,
+                        });
+                        Task::none()
+                    }
+                    CollectionAddMessage::Save => {
+                        let mut new = selected
+                            .iter()
+                            .filter_map(|collection| {
+                                (!initial.contains(collection)).then_some((*collection, true))
+                            })
+                            .collect::<Vec<_>>();
+
+                        let remove = initial.iter().filter_map(|init| {
+                            let selected = selected.contains(init);
+                            if !selected {
+                                Some((*init, false))
+                            } else {
+                                None
+                            }
+                        });
+
+                        new.extend(remove);
+
+                        if let State::Ready(player) = &mut self.state {
+                            player.video.set_paused(false);
+                        }
+
+                        Task::done(Message::ToggleMembership {
+                            item: item.into(),
+                            collections: new,
+                        })
+                    }
+                }
+            }
         }
     }
 
@@ -351,13 +471,9 @@ impl Manager {
 
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
         let options = column!(
-            row!(
-                sized_button(icons::ADD_COLLECTION, icon_size)
-                    .on_press_maybe(self.is_ready(ManagerMessage::AddCollection)),
-                sized_button(icons::ELLIPSIS_VER, icon_size).on_press(ManagerMessage::Config)
-            )
-            .spacing(6.0)
-            .align_y(Vertical::Center)
+            row!(sized_button(icons::ELLIPSIS_VER, icon_size).on_press(ManagerMessage::Config))
+                .spacing(6.0)
+                .align_y(Vertical::Center)
         )
         .align_x(Horizontal::Right)
         .width(Self::WIDTH);
@@ -453,7 +569,7 @@ impl Manager {
             .width(125.0);
 
             let speed = text(format!("{:.02}x", self.settings.speed))
-                .size(icon_size / (1.125))
+                .size(icon_size / (typo::RATIO))
                 .font(Font {
                     family: font::Family::Monospace,
                     weight: font::Weight::Semibold,
@@ -492,7 +608,11 @@ impl Manager {
         .width(Self::WIDTH + 100.0);
 
         let middle = {
-            let size = if self.is_fullscreen { H1 * 1.125 } else { H1 };
+            let size = if self.is_fullscreen {
+                H2 * typo::RATIO
+            } else {
+                H2
+            };
             let play: Element<'_, ManagerMessage> = match &self.state {
                 State::Idle => sized_button(icons::PLAY, size).into(),
                 State::Loading(animation) => container(loading_svg(animation, now))
@@ -532,8 +652,8 @@ impl Manager {
 
         let right = column!(
             row!(
-                sized_button(icons::FAVORITE, icon_size)
-                    .on_press_maybe(self.is_ready(ManagerMessage::Favorite)),
+                sized_button(icons::ADD_COLLECTION, icon_size * typo::RATIO)
+                    .on_press_maybe(self.is_ready(ManagerMessage::AddCollection)),
                 sized_button(icons::COMMENT, icon_size)
                     .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
                 sized_button(
@@ -622,7 +742,16 @@ impl Manager {
                 ..Default::default()
             });
 
-        content.into()
+        match &self.view {
+            None => content.into(),
+            Some(View::CollectionAdd {
+                collections,
+                selected,
+                ..
+            }) => modal(content, draw_collection_add(selected, collections.iter()))
+                .on_blur(ManagerMessage::CloseView)
+                .into(),
+        }
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
@@ -692,6 +821,7 @@ impl Manager {
                 self.settings.seek_mult
             };
 
+            player.last_frame.take();
             player.position = (player.position - (self.settings.seek_change_amt * mult)).max(0.0);
             player
                 .video
@@ -711,6 +841,8 @@ impl Manager {
             } else {
                 self.settings.seek_mult
             };
+
+            player.last_frame.take();
             player.position =
                 (player.position + (self.settings.seek_change_amt * mult)).min(duration);
             player
@@ -787,7 +919,6 @@ impl Manager {
     }
 
     fn subtitles_toggle(&mut self) -> Task<Message> {
-        // todo: Video settings
         let shown = if let Some(player) = self.player_mut() {
             player.video.toggle_subtitle();
             player.video.subtitles()
@@ -804,6 +935,8 @@ impl Manager {
             return Task::none();
         }
 
+        let stats = self.stats().map(Task::done).unwrap_or_default();
+
         let Some(next) = self.playlist.next() else {
             return Task::none();
         };
@@ -812,12 +945,14 @@ impl Manager {
             AutoState::Idle => {
                 self.state = State::Loading(loading_animation(now));
 
-                load_video(next.clone(), |video| ManagerMessage::Video(false, video))
-                    .map(Message::Player)
+                let load = load_video(next.clone(), |video| ManagerMessage::Video(false, video))
+                    .map(Message::Player);
+
+                Task::batch([stats, load])
             }
             AutoState::Loading => {
                 self.state = State::Idle;
-                Task::none()
+                stats
             }
             ready => {
                 let player = std::mem::replace(ready, AutoState::Idle);
@@ -831,7 +966,7 @@ impl Manager {
 
                 self.state = State::Ready(player);
 
-                Task::none()
+                stats
             }
         }
     }
@@ -840,6 +975,8 @@ impl Manager {
         if !self.playlist.has_previous() {
             return Task::none();
         }
+
+        let stats = self.stats().map(Task::done).unwrap_or_default();
 
         let Some(previous) = self.playlist.previous() else {
             return Task::none();
@@ -850,18 +987,66 @@ impl Manager {
         self.state = State::Loading(loading_animation(now));
         self.next = AutoState::Idle;
 
-        load_video(previous.clone(), |video| {
+        let load = load_video(previous.clone(), |video| {
             ManagerMessage::Video(false, video)
         })
-        .map(Message::Player)
+        .map(Message::Player);
+
+        Task::batch([load, stats])
+    }
+
+    pub fn fetched_collections(&mut self, collections: Vec<SimpleCollection>) -> Task<Message> {
+        let Some(View::CollectionAdd {
+            collections: view, ..
+        }) = self.view.as_mut()
+        else {
+            return Task::none();
+        };
+
+        *view = collections;
+
+        Task::none()
+    }
+
+    pub fn fetched_membership_ids(&mut self, collections: Vec<CollectionId>) -> Task<Message> {
+        let Some(View::CollectionAdd {
+            selected, initial, ..
+        }) = self.view.as_mut()
+        else {
+            return Task::none();
+        };
+
+        selected.extend(collections.clone());
+        initial.extend(collections);
+
+        Task::none()
+    }
+
+    fn close_view(&mut self) -> Task<Message> {
+        self.view = None;
+        Task::none()
     }
 
     fn collection_add(&mut self) -> Task<Message> {
-        todo!()
-    }
+        let State::Ready(player) = &mut self.state else {
+            return Task::none();
+        };
 
-    fn collection_favorite(&mut self) -> Task<Message> {
-        todo!()
+        player.video.set_paused(true);
+        let id = player.item.id;
+        let view = View::CollectionAdd {
+            item: id,
+            collections: vec![],
+            selected: HashSet::default(),
+            initial: HashSet::default(),
+        };
+
+        self.view = Some(view);
+
+        let ids = Task::done(Message::FetchMembershipIds(id.into()));
+        let cols = Task::done(Message::fetch_simple_collections());
+
+        Task::batch([ids, cols])
     }
 
     fn video_config(&mut self) -> Task<Message> {
@@ -878,7 +1063,13 @@ impl Manager {
             PlayerAction::PlayNext => self.play_next(now),
             PlayerAction::PlayPrevious => self.play_previous(now),
             PlayerAction::FullscreenToggle => self.fullscreen_toggle(),
-            PlayerAction::FullscreenExit => self.fullscreen_exit(),
+            PlayerAction::Exit => {
+                if self.view.is_some() {
+                    self.close_view()
+                } else {
+                    self.fullscreen_exit()
+                }
+            }
             PlayerAction::SeekBack => self.seek_back(false),
             PlayerAction::SeekBackShift => self.seek_back(true),
             PlayerAction::SeekFront => self.seek_front(false),
@@ -891,10 +1082,34 @@ impl Manager {
             PlayerAction::SpeedReset => self.speed_reset(),
             PlayerAction::SubtitlesToggle => self.subtitles_toggle(),
             PlayerAction::Add => self.collection_add(),
-            PlayerAction::Favorite => self.collection_favorite(),
             PlayerAction::VideoConfig => self.video_config(),
             PlayerAction::VideoComment => self.video_comment(),
         }
+    }
+
+    pub fn stats(&mut self) -> Option<Message> {
+        let State::Ready(mut player) = std::mem::replace(&mut self.state, State::Idle) else {
+            return None;
+        };
+
+        let progress = player.position / player.duration;
+        let watch_time = player.watch_time.as_secs_f64();
+
+        let watch_count = if progress >= self.settings.completion_point
+            && (watch_time / player.duration >= self.settings.completion_watch_time)
+        {
+            player.item.watch_count + 1
+        } else {
+            player.item.watch_count
+        };
+
+        let progress = (progress * 1000.0).round() / 1000.0;
+        player.item.progress = progress as f32;
+        player.item.watch_count = watch_count;
+
+        self.playlist.update_current(&player.item);
+
+        Some(Message::VideoStats(player.item))
     }
 }
 
@@ -906,9 +1121,22 @@ fn load_video<Message: 'static + MaybeSend>(
         tokio::task::spawn_blocking(move || {
             let path = url::Url::from_file_path(item.path.canonicalize().unwrap()).unwrap();
             let mut video = Video::new(&path).unwrap();
-            video.set_paused(true);
-            let position = video.position().as_secs_f64();
             let duration = video.duration().as_secs_f64();
+
+            let progress = if item.progress >= 1.0 {
+                0.0
+            } else {
+                item.progress
+            };
+            let position = (duration * progress as f64).round().clamp(0.0, duration);
+
+            video.seek(Duration::from_secs_f64(position), true).unwrap();
+
+            // todo: There is a race condition when resuming a video. I can't quite pinpoint where
+            // so until I do, this is a temporary fix which seems to work.
+            std::thread::sleep(std::time::Duration::from_millis(150));
+
+            video.set_paused(true);
 
             Arc::new(Player {
                 item,
@@ -917,6 +1145,8 @@ fn load_video<Message: 'static + MaybeSend>(
                 position,
                 is_dragging: false,
                 duration,
+                watch_time: Duration::ZERO,
+                last_frame: None,
             })
         }),
         move |res| f(res.unwrap()),
@@ -930,4 +1160,96 @@ fn handle_clicks(click: MouseClick) -> ManagerMessage {
         Button::Right => ManagerMessage::Config,
         _ => ManagerMessage::None,
     }
+}
+
+fn draw_collection_add<'a>(
+    selected: &'a HashSet<CollectionId>,
+    collections: impl Iterator<Item = &'a SimpleCollection>,
+) -> Element<'a, ManagerMessage> {
+    let title = text("Collections").size(H6);
+
+    fn btn(collection: &SimpleCollection, selected: bool) -> Element<'_, ManagerMessage> {
+        let size = P;
+        let unicode = Icon::new(collection.icon).unicode();
+        let icon = icons::icon(unicode).size(size);
+        let text = container(text(&collection.name).size(size))
+            .max_height(48.0)
+            .max_width(275);
+        let check = checkbox("", selected).on_toggle(|value| {
+            ManagerMessage::CollectionAddMessage(CollectionAddMessage::Toggle(
+                !value,
+                collection.id,
+            ))
+        });
+
+        button(
+            row!(icon, text, space::horizontal(), check)
+                .align_y(Vertical::Center)
+                .width(Length::Fill)
+                .spacing(8.0),
+        )
+        .padding([8, 12])
+        .on_press(ManagerMessage::CollectionAddMessage(
+            CollectionAddMessage::Toggle(selected, collection.id),
+        ))
+        .style(move |theme, status| {
+            let default = button::subtle(theme, status);
+
+            let border = default.border.rounded(5.0);
+
+            button::Style { border, ..default }
+        })
+        .into()
+    }
+
+    let collections =
+        column(collections.map(|collection| btn(collection, selected.contains(&collection.id))))
+            .spacing(8.0);
+
+    let collections = scrollable(collections).spacing(16.0);
+
+    let collections = container(collections)
+        .padding([6, 8])
+        .style(|theme: &Theme| {
+            let color = theme.extended_palette().background.strong.color;
+            let default = container::transparent(theme);
+            let border = default.border.rounded(5).color(color).width(1.5);
+
+            container::Style { border, ..default }
+        });
+
+    let actions = {
+        let save = button("Save")
+            .on_press(ManagerMessage::CollectionAddMessage(
+                CollectionAddMessage::Save,
+            ))
+            .style(button::subtle);
+
+        let cancel = button("Cancel")
+            .on_press(ManagerMessage::CloseView)
+            .style(button::subtle);
+
+        row!(save, cancel).spacing(100)
+    };
+
+    let content = column!(title, collections, actions)
+        .spacing(24)
+        .align_x(Horizontal::Center);
+
+    modal_container(content).max_width(400).into()
+}
+
+fn modal_container<'a>(
+    content: impl Into<Element<'a, ManagerMessage>>,
+) -> Container<'a, ManagerMessage> {
+    container(content)
+        .padding([12, 16])
+        .style(|theme| {
+            let default = container::dark(theme);
+            let border = default.border.rounded(5.0);
+
+            container::Style { border, ..default }
+        })
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Center)
 }

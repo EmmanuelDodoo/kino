@@ -53,6 +53,39 @@ impl ItemId {
             _ => unreachable!("stored invalid collection media"),
         }
     }
+
+    pub fn name_str(&self) -> &'static str {
+        match self {
+            Self::Movie(_) => "movie",
+            Self::Show(_) => "show",
+            Self::Season(_) => "season",
+            Self::Episode(_) => "episode",
+        }
+    }
+}
+
+impl From<MovieId> for ItemId {
+    fn from(value: MovieId) -> Self {
+        Self::Movie(value)
+    }
+}
+
+impl From<ShowId> for ItemId {
+    fn from(value: ShowId) -> Self {
+        Self::Show(value)
+    }
+}
+
+impl From<SeasonId> for ItemId {
+    fn from(value: SeasonId) -> Self {
+        Self::Season(value)
+    }
+}
+
+impl From<EpisodeId> for ItemId {
+    fn from(value: EpisodeId) -> Self {
+        Self::Episode(value)
+    }
 }
 
 impl From<ItemId> for ToSqlOutput<'_> {
@@ -66,6 +99,7 @@ impl From<ItemId> for ToSqlOutput<'_> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SimpleCollection {
     pub id: CollectionId,
     pub name: String,
@@ -87,6 +121,15 @@ impl SimpleCollection {
             view,
             icon,
         })
+    }
+
+    pub fn from_collection(collection: &Collection) -> Self {
+        Self {
+            id: collection.id,
+            name: collection.name.clone(),
+            view: collection.view,
+            icon: collection.icon,
+        }
     }
 }
 
@@ -188,10 +231,69 @@ impl Collection {
         ]
     }
 
+    fn update_params<'a>(&self) -> Vec<(&'a str, ToSqlOutput<'a>)> {
+        let Self {
+            id,
+            name,
+            posters: _posters,
+            description,
+            view,
+            icon,
+            theme,
+            custom,
+            added: _added,
+        } = self;
+
+        let id = ToSqlOutput::from(*id);
+        let name = ToSqlOutput::from(name.clone());
+        let description = match description {
+            Some(description) => ToSqlOutput::from(description.clone()),
+            None => ToSqlOutput::Owned(Value::Null),
+        };
+        let view = ToSqlOutput::from(*view);
+        let icon = match icon {
+            Some(icon) => ToSqlOutput::from(*icon),
+            None => ToSqlOutput::Owned(Value::Null),
+        };
+        let theme = match theme {
+            Some(theme) => ToSqlOutput::from(*theme),
+            None => ToSqlOutput::Owned(Value::Null),
+        };
+
+        let custom = match custom {
+            Some(custom) => ToSqlOutput::from(custom.clone()),
+            None => ToSqlOutput::Owned(Value::Null),
+        };
+
+        vec![
+            (":id", id),
+            (":name", name),
+            (":description", description),
+            (":view", view),
+            (":icon", icon),
+            (":theme", theme),
+            (":custom", custom),
+        ]
+    }
+
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
         let sql = "INSERT INTO collection (id, name, description, view, icon, custom, created_at, theme) VALUES (:id, :name, :description, :view, :icon, :custom, :added, :theme)";
         let params = self.insert_params();
+
+        Query {
+            id: self.id.0,
+            table: Table::Collection,
+            sql,
+            params,
+            op: Operation::Insert,
+        }
+    }
+
+    #[must_use]
+    pub fn save<'a>(&self) -> Query<'a> {
+        let sql = "UPDATE collection SET name=:name, description=:description, view=:view, icon=:icon, custom=:custom, theme=:theme WHERE id=:id";
+        let params = self.update_params();
 
         Query {
             id: self.id.0,
@@ -342,6 +444,7 @@ impl Collection {
     pub fn new<'a>(
         name: String,
         description: Option<String>,
+        view: CollectionView,
         icon: Option<u32>,
         theme: Option<u32>,
         custom: Option<String>,
@@ -353,7 +456,7 @@ impl Collection {
             name,
             posters: vec![],
             description,
-            view: CollectionView::Shown,
+            view,
             icon,
             theme,
             custom,

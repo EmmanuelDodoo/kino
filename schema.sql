@@ -77,7 +77,7 @@ CREATE TABLE episode (
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
 	FOREIGN KEY ( season_id ) REFERENCES season( id ) ON DELETE CASCADE ,
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
-	CHECK ( 0 < rating AND rating < 6 )
+	CHECK ( 0 <= rating AND rating <= 5 )
 );
 
 CREATE INDEX idx_episode_season_id ON episode ( season_id );
@@ -112,7 +112,7 @@ CREATE TABLE movie (
 	duration	        INTEGER NOT NULL DEFAULT 0,
 	comment_count	    INTEGER NOT NULL DEFAULT 0
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
-	CHECK ( 0 < rating AND rating < 6 ),
+	CHECK ( 0 <= rating AND rating <= 5 ),
 	FOREIGN KEY ( directory ) REFERENCES directory( id ) ON DELETE CASCADE
 );
 

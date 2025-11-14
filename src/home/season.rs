@@ -1,5 +1,7 @@
 use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
-use crate::models::{Episode, EpisodeId, ItemId, Media, Season, SeasonId};
+use crate::models::{
+    CollectionId, Episode, EpisodeId, ItemId, Media, Season, SeasonId, SimpleCollection,
+};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
@@ -24,6 +26,8 @@ pub enum Message {
     Tab(Tab),
     Play(EpisodeId),
     Scroll(scrollable::Viewport),
+    Rate(Option<f32>),
+    Goto(CollectionId),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -115,6 +119,15 @@ impl SeasonPage {
             Message::Scroll(view) => {
                 self.scroll.offset = view.absolute_offset();
                 None
+            }
+            Message::Rate(rating) => {
+                let msg =
+                    HomeMessage::OpenView(ViewMessage::Rating(ItemId::Season(self.id), rating));
+                Some(msg)
+            }
+            Message::Goto(id) => {
+                let msg = HomeMessage::Goto(PageKind::Collection(id));
+                Some(msg)
             }
         }
     }
@@ -248,7 +261,13 @@ impl SeasonPage {
 
             let title = text(season.media.name()).size(H2);
             let duration = duration(&season.media);
-            let rating = ratings(&season.media);
+            let rating = button(ratings(&season.media))
+                .on_press(SeasonPageMessage {
+                    id,
+                    message: Message::Rate(season.media.rating()),
+                })
+                .style(button::text)
+                .padding(0);
             let release = text(season.media.release_year()).size(H7);
 
             let details = row!(release, separator(), duration)
@@ -380,9 +399,11 @@ impl SeasonPage {
         now: Instant,
         season: &'a Thumbnail<Season>,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
+        memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, SeasonPageMessage> {
         let content = {
             let width = 750.0;
+            let id = self.id;
 
             match self.tab {
                 Tab::Items => match self.layout {
@@ -403,11 +424,12 @@ impl SeasonPage {
                     column!(comments).spacing(8.0).width(width).into()
                 }
                 Tab::Collections => {
-                    // todo
-                    let collections = ["Some Collection here: "; 7]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, collection)| Element::from(text(format!("{collection}{i}"))));
+                    let collections = memberships.map(|collection| {
+                        draw_collection_tab(collection, move |collection| SeasonPageMessage {
+                            id,
+                            message: Message::Goto(collection),
+                        })
+                    });
 
                     let collections =
                         scrollable(column(collections).spacing(4.0).width(Length::Fill))

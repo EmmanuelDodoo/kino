@@ -15,13 +15,10 @@ INSERT INTO season (id, path, name, original_name, poster, synopsis, release, cr
 ('01933b6f-1a42-7000-8000-000000000001', 'season1', 'Digital Horizons - Season 1','Digital Horizons - Season 1', 'assets/show1.png', 'The awakening of the first truly sentient AI begins to reshape society.', '2023-05-05', '2023-01-01T00:00:00Z', '0199cff2-667c-7c73-b6c2-6e0f1276d32f', 1),
 ('01933b6f-1a42-7000-8000-000000000002', 'Season 2', 'Digital Horizons - Season 2','Digital Horizons - Season 2', 'assets/show1.png', 'Tensions rise as AI rights movements clash with human interests.', '2023-06-05', '2023-08-25T00:00:00Z', '0199cff2-667c-7c73-b6c2-6e0f1276d32f', 2),
 -- Mystery Manor Seasons
-('01933b6f-1a42-7000-8000-000000000003', 'Season 1', 'Mystery Manor - Season
-1','Mystery Manor - Season 1', 'assets/ready.png', 'Detective Chen arrives at the mysterious manor with a dark past.', '2023-06-06', '2023-03-05T00:00:00Z', '0199cffc-ead6-7ab3-a961-cc4c146e4fc8', 1),
-('01933b6f-1a42-7000-8000-000000000004', 'Season 2', 'Mystery Manor - Season 2',
-'Mystery Manor - Season 2', 'assets/ready.png', 'Secrets of the manors previous owners come to light.', '2024-07-07', '2024-03-10T00:00:00Z', '0199cffc-ead6-7ab3-a961-cc4c146e4fc8', 2),
+('01933b6f-1a42-7000-8000-000000000003', 'Season 1', 'Mystery Manor - Season 1','Mystery Manor - Season 1', 'assets/ready.png', 'Detective Chen arrives at the mysterious manor with a dark past.', '2023-06-06', '2023-03-05T00:00:00Z', '0199cffc-ead6-7ab3-a961-cc4c146e4fc8', 1),
+('01933b6f-1a42-7000-8000-000000000004', 'Season 2', 'Mystery Manor - Season 2', 'Mystery Manor - Season 2', 'assets/ready.png', 'Secrets of the manors previous owners come to light.', '2024-07-07', '2024-03-10T00:00:00Z', '0199cffc-ead6-7ab3-a961-cc4c146e4fc8', 2),
 -- Culinary Quest Season
-('01933b6f-1a42-7000-8000-000000000005', 'Season 1', 'Culinary Quest - Season
-1','Culinary Quest - Season 1', 'assets/ready.png', 'Ten chefs battle across five continents for culinary supremacy.', '2024-08-08', '2024-05-15T00:00:00Z', '0199cffd-c688-79d2-8018-bad6db895ff5', 1);
+('01933b6f-1a42-7000-8000-000000000005', 'Season 1', 'Culinary Quest - Season 1','Culinary Quest - Season 1', 'assets/ready.png', 'Ten chefs battle across five continents for culinary supremacy.', '2024-08-08', '2024-05-15T00:00:00Z', '0199cffd-c688-79d2-8018-bad6db895ff5', 1);
 
 -- Insert Episodes for Digital Horizons Season 1
 INSERT INTO episode (id, path, name, original_name, progress, synopsis, rating, poster, season_id, release, created_at, duration, last_watched, watch_count, episode_number) VALUES
@@ -41,9 +38,9 @@ INSERT INTO episode (id, path, name, original_name, progress, synopsis, rating, 
 
 -- Insert Episodes for Mystery Manor Season 1
 INSERT INTO episode (id, path, name, original_name, progress, synopsis, rating, poster, season_id, release, created_at, duration, last_watched, watch_count, episode_number) VALUES
-('01933b70-2a42-7000-8000-00000000000a', 'Episode 1', 'The Invitation','The Invitation', 1.0, 'Detective Chen receives a mysterious invitation to the manor.', 5, 'assets/show4.png', '01933b6f-1a42-7000-8000-000000000003', '2023-12-17', '2023-03-20T21:00:00Z', 3300, '2023-03-21T22:15:00Z', 3, 1),
+('01933b70-2a42-7000-8000-00000000000a', 'Episode 1', 'The Invitation','The Invitation', 1.0, 'Detective Chen receives a mysterious invitation to the manor.', 3.75, 'assets/show4.png', '01933b6f-1a42-7000-8000-000000000003', '2023-12-17', '2023-03-20T21:00:00Z', 3300, '2023-03-21T22:15:00Z', 3, 1),
 ('01933b70-2a42-7000-8000-00000000000b', 'Episode 2', 'Shadows in the Hall','Shadows in the Hall', 1.0, 'Strange occurrences plague Chens first night.', 5, 'assets/show4.png', '01933b6f-1a42-7000-8000-000000000003', '2023-12-18', '2023-03-27T21:00:00Z', 3240, '2023-03-28T21:50:00Z', 2, 2),
-('01933b70-2a42-7000-8000-00000000000c', 'Episode 3', 'The Portrait','The Portrait', 1.0, 'A painting holds clues to a decades-old murder.', 4, 'assets/show4.png', '01933b6f-1a42-7000-8000-000000000003', '2023-12-18', '2023-04-03T21:00:00Z', 3360, '2023-04-04T22:30:00Z', 2, 3),
+('01933b70-2a42-7000-8000-00000000000c', 'Episode 3', 'The Portrait','The Portrait', 1.0, 'A painting holds clues to a decades-old murder.', 2.4, 'assets/show4.png', '01933b6f-1a42-7000-8000-000000000003', '2023-12-18', '2023-04-03T21:00:00Z', 3360, '2023-04-04T22:30:00Z', 2, 3),
 ('01933b70-2a42-7000-8000-00000000000d', 'Episode 4', 'Hidden Rooms','Hidden Rooms', 0.9, 'Secret passages reveal the manors dark history.', 5, 'assets/show4.png', '01933b6f-1a42-7000-8000-000000000003', '2023-12-19', '2023-04-10T21:00:00Z', 3180, '2023-04-11T21:00:00Z', 1, 4),
 ('01933b70-2a42-7000-8000-00000000000e', 'Episode 5', 'The Diary','The Diary', 0.0, 'An old journal provides crucial evidence.', 4, 'assets/show4.png', '01933b6f-1a42-7000-8000-000000000003', '2023-12-20', '2023-04-17T21:00:00Z', 3300, NULL, 0, 5);
 
@@ -94,10 +91,10 @@ INSERT INTO episode_comment (id, created_at, content, episode_id, episode_timest
 ('01933b71-3a42-7000-8000-000000000015', '2024-06-23T20:00:00Z', 'NYC fusion food is next level!', '01933b70-2a42-7000-8000-000000000016', 2100);
 
 -- Insert Movies
-INSERT INTO movie (id, directory, name, original_name, path, poster, tags, synopsis, release, duration, backdrop) VALUES
-('0199dbbd-bef9-7b33-91c8-c7578f1f3262', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Free Guy','Free Guy', 'test.mkv', 'assets/fantastic.png', 'Video game, Action, Sci-fi', "Something happened. Good guys won", '2019-07-08', 3872, 'assets/player1.jpg'),
-('0199dbbd-bef9-7b33-91c8-c7650e578e7e', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Beetlejuice','Beetlejuice', 'test.mkv', 'assets/fantastic.png', 'Horror, Family, Supernatural', 'Ghost and shit', '2009-10-23', 8723, 'assets/test.jpg'),
-('0199dbbd-bef9-7b33-91c8-c77a82589eef', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Blended Family','Blended Family', 'test.mkv', 'assets/fantastic.png', 'Family, Africa, Unrealistic', 'Loved Terry Crews as usual', '2017-02-10', 7238, 'assets/player.png');
+INSERT INTO movie (id, directory, name, original_name, path, poster, tags, synopsis, release, duration, backdrop, progress) VALUES
+('0199dbbd-bef9-7b33-91c8-c7578f1f3262', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Free Guy','Free Guy', 'test.mkv', 'assets/fantastic.png', 'Video game, Action, Sci-fi', "Something happened. Good guys won", '2019-07-08', 3872, 'assets/player1.jpg', 0.54),
+('0199dbbd-bef9-7b33-91c8-c7650e578e7e', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Beetlejuice','Beetlejuice', 'test.mkv', 'assets/fantastic.png', 'Horror, Family, Supernatural', 'Ghost and shit', '2009-10-23', 8723, 'assets/test.jpg', 0.12),
+('0199dbbd-bef9-7b33-91c8-c77a82589eef', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Blended Family','Blended Family', 'test.mkv', 'assets/fantastic.png', 'Family, Africa, Unrealistic', 'Loved Terry Crews as usual', '2017-02-10', 7238, 'assets/player.png', 0.89);
 
 -- Insert Movie Comments
 INSERT INTO movie_comment (id, created_at, content, movie_id, movie_timestamp) VALUES 

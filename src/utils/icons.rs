@@ -83,9 +83,9 @@ pub const SHOW: char = '\u{e83e}';
 pub const MOVIE: char = '\u{e83f}';
 pub const SETTINGS: char = '\u{e840}';
 
-pub const STAR: char = '\u{e809}';
-pub const UNSTAR: char = '\u{e841}';
-pub const HALF_STAR: char = '\u{e82b}';
+pub const STAR: char = '\u{e84E}';
+pub const UNSTAR: char = '\u{e84F}';
+pub const HALF_STAR: char = '\u{f123}';
 
 pub const PROGRESS_10: char = '\u{e803}';
 pub const PROGRESS_20: char = '\u{e801}';

@@ -513,12 +513,7 @@ pub mod search {
         }
 
         pub fn query(&self) -> String {
-            let kind = match self {
-                Self::Movie => "movie",
-                Self::Show => "show",
-                Self::Season => "season",
-                Self::Episode => "episode",
-            };
+            let kind = self.to_str();
 
             format!("AND media_type = '{kind}'")
         }
