@@ -118,7 +118,7 @@ impl CollectionPage {
                 Some(msg)
             }
             Message::OpenConfig => {
-                let msg = HomeMessage::OpenView(ViewMessage::CollectionConfig(self.id));
+                let msg = HomeMessage::OpenView(ViewMessage::CollectionConfig);
 
                 Some(msg)
             }

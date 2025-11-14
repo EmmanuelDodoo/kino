@@ -11,7 +11,7 @@ pub mod seasons;
 pub mod shows;
 
 pub use collection::ItemId;
-pub use collection::{Collection, CollectionId, CollectionView};
+pub use collection::{Collection, CollectionId, CollectionView, SimpleCollection};
 pub use episodes::*;
 pub use movies::*;
 pub use seasons::*;

@@ -10,9 +10,17 @@ use crate::db::{Operation, Query, Table};
 pub struct CollectionId(Uuid);
 
 impl CollectionId {
-    /// Expects relevant column named "collection_id"
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        row.get::<_, String>("collection_id")
+        Self::from_row_heler("id", row)
+    }
+
+    /// Expects relevant column named "collection_id"
+    pub fn from_member(row: &Row<'_>) -> rusqlite::Result<Self> {
+        Self::from_row_heler("collection_id", row)
+    }
+
+    pub fn from_row_heler(column: &'static str, row: &Row<'_>) -> rusqlite::Result<Self> {
+        row.get::<_, String>(column)
             .map(|id| CollectionId(Uuid::try_parse(&id).unwrap()))
     }
 }
@@ -58,6 +66,30 @@ impl From<ItemId> for ToSqlOutput<'_> {
     }
 }
 
+pub struct SimpleCollection {
+    pub id: CollectionId,
+    pub name: String,
+    pub view: CollectionView,
+    pub icon: Option<u32>,
+}
+
+impl SimpleCollection {
+    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+        let id = CollectionId::from_row(row)?;
+
+        let name = row.get::<_, String>("name")?;
+        let view = row.get::<_, CollectionView>("view")?;
+        let icon = row.get::<_, Option<u32>>("icon")?;
+
+        Ok(Self {
+            id,
+            name,
+            view,
+            icon,
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Collection {
     pub id: CollectionId,
@@ -73,8 +105,7 @@ pub struct Collection {
 
 impl Collection {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        let id = row.get::<_, String>("id")?;
-        let id = CollectionId(Uuid::try_parse(&id).unwrap());
+        let id = CollectionId::from_row(row)?;
 
         let name = row.get::<_, String>("name")?;
         let description = row.get::<_, Option<String>>("description")?;

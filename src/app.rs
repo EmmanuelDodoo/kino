@@ -9,8 +9,8 @@ use crate::db;
 use crate::error::Error;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
-    CollectionId, Episode, EpisodeId, ItemId, Movie, MovieId, Season, SeasonId, Show, ShowId,
-    collection, collection::Items,
+    Collection, CollectionId, Episode, EpisodeId, ItemId, Movie, MovieId, Season, SeasonId, Show,
+    ShowId, SimpleCollection, collection, collection::Items,
 };
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::toast;
@@ -24,7 +24,8 @@ pub enum FetchId {
     Recents,
     Shows,
     Movies,
-    Collections(bool),
+    CollectionsSimple,
+    Collections,
     Movie(MovieId),
     Show(ShowId),
     Season(SeasonId),
@@ -236,6 +237,20 @@ impl App {
                 limit,
                 offset,
             } => match id {
+                FetchId::CollectionsSimple => {
+                    let collections = match self
+                        .db
+                        .get_collections(collection::Sort::View, SimpleCollection::from_row)
+                    {
+                        Ok(collection) => collection,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
+                    self.home.fetch_collections_simple(collections)
+                }
                 FetchId::Shows => {
                     let shows =
                         match self
@@ -368,9 +383,12 @@ impl App {
 
                     self.home.fetched_movie(movie)
                 }
-                FetchId::Collections(state) => {
+                FetchId::Collections => {
                     //todo: collection sorts
-                    let collections = match self.db.get_collections(collection::Sort::default()) {
+                    let collections = match self
+                        .db
+                        .get_collections(collection::Sort::default(), Collection::from_row)
+                    {
                         Ok(collection) => collection,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -378,11 +396,19 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_collections(collections, state)
+                    self.home.fetched_collections(collections)
                 }
-                FetchId::Collection(key) => {
+                FetchId::Collection(id) => {
+                    let collection = match self.db.get_collection(id, Collection::from_row) {
+                        Ok(collection) => collection,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
+
                     let items = match self.db.get_collection_members(
-                        key,
+                        id,
                         limit,
                         offset,
                         filter,
@@ -399,7 +425,7 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_collection(key, items)
+                    self.home.fetched_collection(collection, items)
                 }
             },
             Message::LoadSearch(search, filter) => {

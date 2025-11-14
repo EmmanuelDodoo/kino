@@ -214,6 +214,7 @@ pub fn collection_collage<'a>(
                         .ok()
                 })
         })
+        .take(3)
         .collect();
 
     if imgs.is_empty() {

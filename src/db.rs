@@ -418,20 +418,28 @@ impl Database {
         })
     }
 
-    pub fn get_collections(&self, sort: collection::Sort) -> rusqlite::Result<Vec<Collection>> {
+    pub fn get_collections<T>(
+        &self,
+        sort: collection::Sort,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
         let sql = format!("{} ORDER BY {}", Self::COLLECTION_QUERY, sort.query());
 
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_map([], Collection::from_row)?.collect()
+        statement.query_map([], map)?.collect()
     }
 
-    pub fn get_collection(&self, id: CollectionId) -> rusqlite::Result<Collection> {
+    pub fn get_collection<T>(
+        &self,
+        id: CollectionId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<T> {
         let sql = format!("{} WHERE id=:id", Self::COLLECTION_QUERY);
 
         let mut statement = self.prepare_cached(&sql)?;
 
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], Collection::from_row)
+        statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)
     }
 
     #[allow(clippy::type_complexity, clippy::too_many_arguments)]
@@ -631,7 +639,7 @@ impl Database {
         statement
             .query_map(
                 &[(":id", &ToSqlOutput::from(movie))],
-                CollectionId::from_row,
+                CollectionId::from_member,
             )?
             .collect()
     }
@@ -642,7 +650,10 @@ impl Database {
         let mut statement = self.prepare_cached(sql)?;
 
         statement
-            .query_map(&[(":id", &ToSqlOutput::from(show))], CollectionId::from_row)?
+            .query_map(
+                &[(":id", &ToSqlOutput::from(show))],
+                CollectionId::from_member,
+            )?
             .collect()
     }
 
@@ -654,7 +665,7 @@ impl Database {
         statement
             .query_map(
                 &[(":id", &ToSqlOutput::from(season))],
-                CollectionId::from_row,
+                CollectionId::from_member,
             )?
             .collect()
     }
@@ -670,7 +681,7 @@ impl Database {
         statement
             .query_map(
                 &[(":id", &ToSqlOutput::from(episode))],
-                CollectionId::from_row,
+                CollectionId::from_member,
             )?
             .collect()
     }
