@@ -5,7 +5,7 @@ use iced::{
     border::{Border, Radius},
     time::{Duration, Instant},
     widget::{
-        self, Container, button, center, column, container, grid,
+        self, Container, button, center, checkbox, column, container, grid,
         operation::{self, scroll_to},
         pick_list, row, rule, scrollable, space, text, text_editor, text_input,
     },
@@ -219,7 +219,6 @@ pub struct SearchState {
 pub enum SearchMessage {
     Load,
     Search(String),
-    Hovered(ItemId, bool),
     Searching,
     ClearFilter,
 }
@@ -272,7 +271,7 @@ enum State {
     },
     Episode(Thumbnail<Episode>),
     Collection {
-        collection: CollectionThumbnail,
+        collection: Box<CollectionThumbnail>,
         shows: Vec<Thumbnail<Show>>,
         movies: Vec<Thumbnail<Movie>>,
         seasons: Vec<Thumbnail<Season>>,
@@ -319,7 +318,7 @@ pub enum HomeMessage {
     HoveredCollection(CollectionId, bool),
     FetchedCollections(Vec<CollectionThumbnail>),
     FetchedCollection {
-        collection: CollectionThumbnail,
+        collection: Box<CollectionThumbnail>,
         movies: Vec<Thumbnail<Movie>>,
         shows: Vec<Thumbnail<Show>>,
         seasons: Vec<Thumbnail<Season>>,
@@ -725,13 +724,6 @@ impl Home {
                 };
 
                 match ssg {
-                    SearchMessage::Hovered(id, is_hovered) => {
-                        if let Some(item) = state.items.iter_mut().find(|view| view.item.id == id) {
-                            item.animation.go_mut(is_hovered, now);
-                        };
-
-                        Task::none()
-                    }
                     SearchMessage::Search(mut search) => {
                         state.last_edit = Some(now);
                         match search.find(":").and_then(|pos| {
@@ -1877,8 +1869,7 @@ impl Home {
                     .into()
             }
             Some(View::Search(state, None)) => {
-                let overlay =
-                    draw_search(state, |id| HomeMessage::Goto(id.into()), theme, now, true);
+                let overlay = draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true);
 
                 modal(content, overlay)
                     .on_blur(HomeMessage::CloseView)
@@ -1886,7 +1877,7 @@ impl Home {
             }
             Some(View::Search(state, Some(_collection))) => {
                 // todo
-                let overlay = draw_search(state, |_| HomeMessage::None, theme, now, false);
+                let overlay = draw_search(state, |_| HomeMessage::None, theme, false);
 
                 modal(content, overlay)
                     .on_blur(HomeMessage::CloseView)
@@ -1903,7 +1894,7 @@ impl Home {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        let state = match &self.state {
+        match &self.state {
             State::Loading(animation) => animation.is_animating(now),
             State::Recent { shows, movies } => {
                 let shows = shows.iter().any(|show| show.is_animating(now));
@@ -1935,14 +1926,7 @@ impl Home {
 
                 shows || movies || seasons || episodes
             }
-        };
-
-        let searching = match &self.view {
-            Some(View::Search(state, _)) => state.items.iter().any(|item| item.is_animating(now)),
-            _ => false,
-        };
-
-        searching || state
+        }
     }
 
     pub fn back(&mut self, now: Instant) -> Task<Message> {
@@ -2221,7 +2205,7 @@ impl Home {
             move |(collection, items)| {
                 let (movies, shows, seasons, episodes) = items;
                 Message::Home(HomeMessage::FetchedCollection {
-                    collection,
+                    collection: Box::new(collection),
                     movies,
                     shows,
                     seasons,
@@ -2377,47 +2361,11 @@ pub fn view_unicode(view: CollectionView) -> char {
     }
 }
 
-fn view_draw<'a>(view: CollectionView, selected: bool) -> Element<'a, HomeMessage> {
-    let unicode = view_unicode(view);
-
-    let content = center(icon(unicode).size(P));
-
-    button(content)
-        .on_press(HomeMessage::CollectionConfig(ConfigMessage::View(view)))
-        .style(move |theme, status| {
-            let default = if selected {
-                button::secondary(theme, status)
-            } else {
-                button::background(theme, status)
-            };
-            let border = default.border.rounded(10.0);
-
-            button::Style { border, ..default }
-        })
-        .into()
-}
-
-fn icon_draw<'a>(value: Icon, selected: bool) -> Element<'a, HomeMessage> {
-    let content = center(icon(value.unicode()).size(P));
-
-    button(content)
-        .on_press(HomeMessage::CollectionConfig(ConfigMessage::Icon(value)))
-        .style(move |theme, status| {
-            let default = if selected {
-                button::secondary(theme, status)
-            } else {
-                button::background(theme, status)
-            };
-            let border = default.border.rounded(10.0);
-
-            button::Style { border, ..default }
-        })
-        .into()
-}
-
 fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
-    let width = 500;
-    let height = 500;
+    let width = 550;
+    let height = 550;
+    let radius = 5.0;
+    let padding = Padding::from([6, 6]);
 
     let icon_height = 40.0;
     let icon_width = 40.0;
@@ -2430,6 +2378,13 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let input = text_input("", value)
             .id(config.name_input.clone())
             .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
+            .padding(padding)
+            .style(move |theme, status| {
+                let default = text_input::default(theme, status);
+                let border = default.border.rounded(radius);
+
+                text_input::Style { border, ..default }
+            })
             .width(Length::Fill);
 
         column!(label, input).spacing(2)
@@ -2442,6 +2397,13 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let editor = text_editor(content)
             .on_action(move |action| {
                 HomeMessage::CollectionConfig(ConfigMessage::Description(action))
+            })
+            .padding(padding)
+            .style(move |theme, status| {
+                let default = text_editor::default(theme, status);
+                let border = default.border.rounded(radius);
+
+                text_editor::Style { border, ..default }
             })
             .height(height as f32 * 0.2);
 
@@ -2459,12 +2421,41 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
             CollectionView::Hidden,
         ]
         .into_iter()
-        .map(|view| view_draw(view, view == selected));
+        .map(|view| {
+            let unicode = view_unicode(view);
+
+            let content = center(icon(unicode).size(P));
+
+            button(content)
+                .padding([0, 0])
+                .on_press(HomeMessage::CollectionConfig(ConfigMessage::View(view)))
+                .style(move |theme, status| {
+                    let default = if view == selected {
+                        button::secondary(theme, status)
+                    } else {
+                        button::background(theme, status)
+                    };
+                    let border = default.border.rounded(radius);
+
+                    button::Style { border, ..default }
+                })
+                .into()
+        });
 
         let views = grid(views)
             .spacing(16)
             .fluid(icon_width)
             .height(grid::aspect_ratio(icon_width, icon_height));
+
+        let views = container(views)
+            .padding(padding)
+            .style(move |theme: &Theme| {
+                let color = theme.extended_palette().background.strong.color;
+                let default = container::transparent(theme);
+                let border = default.border.rounded(radius).color(color).width(1.5);
+
+                container::Style { border, ..default }
+            });
 
         column!(label, views).spacing(2)
     };
@@ -2474,14 +2465,39 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
 
         let label = text("Icon");
 
-        let icons = Icon::all()
-            .into_iter()
-            .map(|icon| icon_draw(icon, icon == selected));
+        let icons = Icon::all().into_iter().map(|value| {
+            let content = center(icon(value.unicode()).size(P));
+
+            button(content)
+                .padding([0, 0])
+                .on_press(HomeMessage::CollectionConfig(ConfigMessage::Icon(value)))
+                .style(move |theme, status| {
+                    let default = if value == selected {
+                        button::secondary(theme, status)
+                    } else {
+                        button::background(theme, status)
+                    };
+                    let border = default.border.rounded(radius);
+
+                    button::Style { border, ..default }
+                })
+                .into()
+        });
 
         let icons = grid(icons)
             .spacing(16)
             .fluid(icon_width)
             .height(grid::aspect_ratio(icon_width, icon_height));
+
+        let icons = container(icons)
+            .padding(padding)
+            .style(move |theme: &Theme| {
+                let color = theme.extended_palette().background.strong.color;
+                let default = container::transparent(theme);
+                let border = default.border.rounded(radius).color(color).width(1.5);
+
+                container::Style { border, ..default }
+            });
 
         column!(label, icons).spacing(2)
     };
@@ -2516,7 +2532,7 @@ fn fetch_kind(kind: PageKind) -> FetchId {
 
 fn modal_container<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Container<'a, HomeMessage> {
     container(content)
-        .padding([12, 20])
+        .padding([12, 16])
         .style(|theme| {
             let default = container::dark(theme);
             let border = default.border.rounded(5.0);
@@ -2531,16 +2547,13 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
     state: &'a SearchState,
     primary: F,
     theme: &Theme,
-    now: Instant,
     set_play: bool,
 ) -> Element<'a, HomeMessage> {
     let items = state.items.iter().map(|item| {
         item.view(
-            now,
             theme,
             HomeMessage::Play,
             primary.clone(),
-            |id, hovered| HomeMessage::SearchMessage(SearchMessage::Hovered(id, hovered)),
             |_| HomeMessage::None,
             set_play,
         )
@@ -2587,7 +2600,7 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
     let content = column!(input).extend(items).spacing(16.0);
 
     modal_container(content)
-        .max_width(550)
+        .max_width(500)
         .height(Length::Shrink)
         .into()
 }
@@ -2604,47 +2617,56 @@ fn draw_collection_add<'a>(
     state: &'a CollectionAddState,
     collections: impl Iterator<Item = &'a SimpleCollection>,
 ) -> Element<'a, HomeMessage> {
-    let title = text("Add to Collection").size(H6);
+    let title = text("Collections").size(H6);
 
     fn btn(collection: &SimpleCollection, selected: bool) -> Element<'_, HomeMessage> {
-        button(container(text(&collection.name)))
-            .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(
-                selected,
-                collection.id,
-            )))
-            .style(move |theme, status| {
-                let default = if selected {
-                    button::secondary(theme, status)
-                } else {
-                    button::background(theme, status)
-                };
-                let border = default.border.rounded(5.0);
+        let size = P;
+        let unicode = Icon::new(collection.icon).unicode();
+        let icon = icons::icon(unicode).size(size);
+        let text = container(text(&collection.name).size(size))
+            .max_height(48.0)
+            .max_width(275);
+        let check = checkbox("", selected).on_toggle(|value| {
+            HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(!value, collection.id))
+        });
 
-                button::Style { border, ..default }
-            })
-            .into()
+        button(
+            row!(icon, text, space::horizontal(), check)
+                .align_y(Vertical::Center)
+                .width(Length::Fill)
+                .spacing(8.0),
+        )
+        .padding([8, 12])
+        .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(
+            selected,
+            collection.id,
+        )))
+        .style(move |theme, status| {
+            let default = button::subtle(theme, status);
+
+            let border = default.border.rounded(5.0);
+
+            button::Style { border, ..default }
+        })
+        .into()
     }
 
-    let collections =
-        collections.map(|collection| btn(collection, state.selected.contains(&collection.id)));
-
-    let collections = grid(collections)
-        .fluid(200)
-        .height(Length::Shrink)
-        .spacing(12);
-
-    let collections = scrollable(
-        container(collections)
-            .padding([6, 8])
-            .style(|theme: &Theme| {
-                let color = theme.extended_palette().background.strong.color;
-                let default = container::transparent(theme);
-                let border = default.border.rounded(5).color(color).width(2.0);
-
-                container::Style { border, ..default }
-            }),
+    let collections = column(
+        collections.map(|collection| btn(collection, state.selected.contains(&collection.id))),
     )
-    .spacing(16.0);
+    .spacing(8.0);
+
+    let collections = scrollable(collections).spacing(16.0);
+
+    let collections = container(collections)
+        .padding([6, 8])
+        .style(|theme: &Theme| {
+            let color = theme.extended_palette().background.strong.color;
+            let default = container::transparent(theme);
+            let border = default.border.rounded(5).color(color).width(1.5);
+
+            container::Style { border, ..default }
+        });
 
     let actions = {
         let save = button("Save")
@@ -2657,9 +2679,10 @@ fn draw_collection_add<'a>(
 
         row!(save, cancel).spacing(100)
     };
+
     let content = column!(title, collections, actions)
         .spacing(20)
         .align_x(Horizontal::Center);
 
-    modal_container(content).max_width(500).into()
+    modal_container(content).max_width(400).into()
 }
