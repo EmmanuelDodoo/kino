@@ -535,7 +535,7 @@ impl App {
                 };
 
                 let refresh = self.home.content_refresh(now);
-                return Task::batch([Task::done(msg), refresh]);
+                Task::batch([Task::done(msg), refresh])
             }
             Message::LastWatched(id) => {
                 let now = Local::now();

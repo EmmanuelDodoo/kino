@@ -263,7 +263,7 @@ impl Show {
 
     #[must_use]
     pub fn set_rating<'a>(&mut self, rating: f32) -> Query<'a> {
-        debug_assert!(rating >= 0.0 && rating <= 5.0, "Show rating out of range");
+        debug_assert!((0.0..=5.0).contains(&rating), "Show rating out of range");
         self.rating = Some(rating);
 
         let sql = "UPDATE tv_show SET rating=:rating WHERE id=:id";

@@ -2846,8 +2846,8 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
 fn sort_collections(collections: &mut [SimpleCollection]) {
     collections.sort_by(|x, y| {
         x.view.cmp(&y.view).then(alphanumeric_sort::compare_str(
-            &x.name.to_lowercase(),
-            &y.name.to_lowercase(),
+            x.name.to_lowercase(),
+            y.name.to_lowercase(),
         ))
     });
 }
@@ -2962,7 +2962,7 @@ fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
                     .on_press(HomeMessage::Rating(RatingMessage::Type))
                     .into()
             }
-            Rating::Input { id, input } => text_input("", &input)
+            Rating::Input { id, input } => text_input("", input)
                 .id(id.clone())
                 .size(size)
                 .width(48.0)
