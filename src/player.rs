@@ -7,7 +7,7 @@ use iced::{
     time::Instant,
     widget::{
         Container, button, center, checkbox, column, container, image, mouse_area, row, scrollable,
-        slider, space, stack, text,
+        slider, space, stack, text, tooltip as tp,
     },
     window,
 };
@@ -22,7 +22,7 @@ use crate::models::{CollectionId, ItemId, SimpleCollection};
 use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings,
     icons::{self, sized_button},
-    loading_animation, loading_svg,
+    loading_animation, loading_svg, tooltip,
     typo::{self, *},
 };
 use crate::widgets::{self, modal};
@@ -266,30 +266,10 @@ impl Manager {
                 Task::none()
             }
             ManagerMessage::EndOfStream => {
-                let stats = self.stats().map(Task::done).unwrap_or_default();
-
-                match std::mem::replace(&mut self.next, AutoState::Idle) {
-                    AutoState::Ready(mut player) => {
-                        self.prep_video(&mut player);
-                        player.video.set_paused(false);
-
-                        let last_watched = Message::LastWatched(player.item.id);
-
-                        self.state = State::Ready(player);
-
-                        Task::batch([stats, Task::done(last_watched)])
-                    }
-                    AutoState::Idle => {
-                        let Some(next) = self.playlist.next() else {
-                            return stats;
-                        };
-
-                        self.state = State::Loading(loading_animation(now));
-
-                        load_video(next.clone(), |video| ManagerMessage::Video(false, video))
-                            .map(Message::Player)
-                    }
-                    AutoState::Loading => stats,
+                if self.settings.auto_next {
+                    self.play_next(now)
+                } else {
+                    Task::none()
                 }
             }
             ManagerMessage::NewFrame => {
@@ -558,6 +538,8 @@ impl Manager {
 
     fn media_controls(&self, now: Instant) -> Element<'_, ManagerMessage> {
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
+        let tp = tp::Position::Top;
+
         let left = {
             let volume = slider(
                 0.0..=1.0,
@@ -575,21 +557,29 @@ impl Manager {
                     weight: font::Weight::Semibold,
                     ..Default::default()
                 });
-            let speed = button(speed)
-                .padding(0)
-                .style(button::text)
-                .on_press(ManagerMessage::SpeedReset);
+            let speed = tooltip(
+                button(speed)
+                    .padding(0)
+                    .style(button::text)
+                    .on_press(ManagerMessage::SpeedReset),
+                "Playback speed",
+                tp,
+            );
 
             row!(
-                sized_button(
-                    if self.settings.show_subtitles {
-                        icons::SUBTITLES_OFF
-                    } else {
-                        icons::SUBTITLES_ON
-                    },
-                    icon_size
-                )
-                .on_press(ManagerMessage::ToggleSubtitles),
+                tooltip(
+                    sized_button(
+                        if self.settings.show_subtitles {
+                            icons::SUBTITLES_OFF
+                        } else {
+                            icons::SUBTITLES_ON
+                        },
+                        icon_size
+                    )
+                    .on_press(ManagerMessage::ToggleSubtitles),
+                    "Subtitles",
+                    tp
+                ),
                 speed,
                 sized_button(
                     if self.settings.muted {
@@ -632,19 +622,35 @@ impl Manager {
                 }
             };
 
+            let previous: Element<'_, ManagerMessage> = match self.playlist.previous_peek() {
+                Some(previous) => tooltip(
+                    sized_button(icons::PREVIOUS_VIDEO, size)
+                        .on_press(ManagerMessage::PlayPrevious),
+                    &previous.name,
+                    tp,
+                )
+                .into(),
+                None => sized_button(icons::PREVIOUS_VIDEO, size).into(),
+            };
+
+            let next: Element<'_, ManagerMessage> = match self.playlist.next_peek() {
+                Some(next) => tooltip(
+                    sized_button(icons::NEXT_VIDEO, size).on_press(ManagerMessage::PlayNext),
+                    &next.name,
+                    tp,
+                )
+                .into(),
+                None => sized_button(icons::NEXT_VIDEO, size).into(),
+            };
+
             row!(
-                sized_button(icons::PREVIOUS_VIDEO, size).on_press_maybe(
-                    self.playlist
-                        .has_previous()
-                        .then_some(ManagerMessage::PlayPrevious)
-                ),
+                previous,
                 sized_button(icons::SEEK_BACK, size)
                     .on_press_maybe(self.is_ready(ManagerMessage::SeekBack(false))),
                 play,
                 sized_button(icons::SEEK_FRONT, size)
-                    .on_press_maybe(self.is_ready(ManagerMessage::SeekFront(false)),),
-                sized_button(icons::NEXT_VIDEO, size)
-                    .on_press_maybe(self.playlist.has_next().then_some(ManagerMessage::PlayNext))
+                    .on_press_maybe(self.is_ready(ManagerMessage::SeekFront(false))),
+                next,
             )
             .spacing(2.0)
             .align_y(Vertical::Center)
@@ -652,10 +658,18 @@ impl Manager {
 
         let right = column!(
             row!(
-                sized_button(icons::ADD_COLLECTION, icon_size * typo::RATIO)
-                    .on_press_maybe(self.is_ready(ManagerMessage::AddCollection)),
-                sized_button(icons::COMMENT, icon_size)
-                    .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
+                tooltip(
+                    sized_button(icons::ADD_COLLECTION, icon_size * typo::RATIO)
+                        .on_press_maybe(self.is_ready(ManagerMessage::AddCollection)),
+                    "Add to collection",
+                    tp
+                ),
+                tooltip(
+                    sized_button(icons::COMMENT, icon_size)
+                        .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
+                    "Comment",
+                    tp
+                ),
                 sized_button(
                     if self.is_fullscreen {
                         icons::MINIMIZE
@@ -961,12 +975,14 @@ impl Manager {
                     _ => unreachable!(),
                 };
 
+                let last_watched = Message::LastWatched(player.item.id);
+
                 self.prep_video(&mut player);
                 player.video.set_paused(false);
 
                 self.state = State::Ready(player);
 
-                stats
+                Task::batch([Task::done(last_watched), stats])
             }
         }
     }
@@ -1104,6 +1120,8 @@ impl Manager {
         };
 
         let progress = (progress * 1000.0).round() / 1000.0;
+        let progress = progress.clamp(0.0, 1.0);
+        let progress = if progress >= 0.99 { 0.0 } else { progress };
         player.item.progress = progress as f32;
         player.item.watch_count = watch_count;
 

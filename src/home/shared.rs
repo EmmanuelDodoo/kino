@@ -1003,6 +1003,24 @@ impl Icon {
         }
     }
 
+    pub fn label(self) -> &'static str {
+        match self.id {
+            Icons::Default => "Default",
+            Icons::Icon1 => "Favourites",
+            Icons::Icon2 => "Movies",
+            Icons::Icon3 => "Shows",
+            Icons::Icon4 => "Popcorn",
+            Icons::Icon5 => "Film",
+            Icons::Icon6 => "Todo list",
+            Icons::Icon7 => "Anime",
+            Icons::Icon8 => "Recent",
+            Icons::Icon9 => "Horror",
+            Icons::Icon10 => "Sci-Fi",
+            Icons::Icon11 => "Top Rated",
+            Icons::Icon12 => "Drama",
+        }
+    }
+
     pub fn to_u32(self) -> u32 {
         self.id as u32
     }

@@ -120,7 +120,32 @@ impl Playground {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let content = center("Playground");
+        let tip = container("tooltip")
+            .style(|theme: &Theme| {
+                let color = theme.extended_palette().secondary.weak.color;
+                let default = container::rounded_box(theme);
+                let border = default.border.rounded(5.0).width(1.0).color(color);
+                let shadow = Shadow {
+                    color,
+                    blur_radius: 8.0,
+                    offset: [0.0, 0.0].into(),
+                };
+
+                container::Style {
+                    border,
+                    shadow,
+                    ..default
+                }
+            })
+            .padding([3, 6]);
+        let content = tooltip(
+            container("Playground").style(container::dark),
+            tip,
+            tooltip::Position::Right,
+        )
+        .gap(2.0);
+
+        let content = center(content);
 
         content.into()
     }
@@ -130,6 +155,6 @@ impl Playground {
     }
 
     fn theme(&self) -> Option<Theme> {
-        Some(Theme::TokyoNight)
+        Some(Theme::Light)
     }
 }

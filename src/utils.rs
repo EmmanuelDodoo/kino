@@ -58,6 +58,39 @@ pub fn loading_animation(now: iced::time::Instant) -> Animation<bool> {
         .go(true, now)
 }
 
+pub fn tooltip<'a, Message: 'a>(
+    content: impl Into<iced::Element<'a, Message>>,
+    label: &'a str,
+    position: iced::widget::tooltip::Position,
+) -> iced::widget::Tooltip<'a, Message> {
+    use iced::widget::{container, text, tooltip};
+    use iced::{Shadow, Theme};
+
+    tooltip(
+        content,
+        container(text(label).size(H8))
+            .style(|theme: &Theme| {
+                let color = theme.extended_palette().secondary.weak.color;
+                let default = container::rounded_box(theme);
+                let border = default.border.rounded(5.0).width(1.0).color(color);
+                let shadow = Shadow {
+                    color,
+                    blur_radius: 8.0,
+                    offset: [0.0, 0.0].into(),
+                };
+
+                container::Style {
+                    border,
+                    shadow,
+                    ..default
+                }
+            })
+            .padding([3, 6]),
+        position,
+    )
+    .gap(2.0)
+}
+
 /// Far faster at generating multiple thumbnails than
 /// [`iced_video_player::Video::thumbnails`].
 ///
@@ -360,6 +393,12 @@ impl Playlist {
         self.current = self.current.saturating_sub(1);
 
         self.current()
+    }
+
+    pub fn previous_peek(&self) -> Option<&PlayItem> {
+        if self.current == 0 {return None};
+
+        self.items.get(self.current - 1)
     }
 
     pub fn restart(&mut self) {

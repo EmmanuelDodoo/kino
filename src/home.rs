@@ -8,7 +8,7 @@ use iced::{
     widget::{
         self, Container, button, center, checkbox, column, container, grid, mouse_area,
         operation::{self, scroll_to},
-        pick_list, row, rule, scrollable, space, text, text_editor, text_input,
+        pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
     },
     window,
 };
@@ -34,7 +34,7 @@ use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
     self, HomeAction, Layout, Sort, SortKind, empty, filter::*, icons, icons::*, loading_animation,
-    loading_svg, typo::*,
+    loading_svg, tooltip, typo::*,
 };
 use crate::widgets::{
     menu::{Position, menu},
@@ -890,7 +890,43 @@ impl Home {
                             }
                         }
 
-                        Task::none()
+                        let value = val as f32;
+
+                        match &mut self.state {
+                            State::Movie {
+                                movie: Thumbnail { media, .. },
+                                ..
+                            } if ItemId::Movie(media.id) == *id => {
+                                let query = media.set_rating(value);
+
+                                Task::done(Message::Query(query))
+                            }
+                            State::Show {
+                                show: Thumbnail { media, .. },
+                                ..
+                            } if ItemId::Show(media.id) == *id => {
+                                let query = media.set_rating(value);
+
+                                Task::done(Message::Query(query))
+                            }
+                            State::Season {
+                                season: Thumbnail { media, .. },
+                                ..
+                            } if ItemId::Season(media.id) == *id => {
+                                let query = media.set_rating(value);
+
+                                Task::done(Message::Query(query))
+                            }
+                            State::Episode {
+                                episode: Thumbnail { media, .. },
+                                ..
+                            } if ItemId::Episode(media.id) == *id => {
+                                let query = media.set_rating(value);
+
+                                Task::done(Message::Query(query))
+                            }
+                            _ => Task::none(),
+                        }
                     }
                     RatingMessage::Submit => {
                         let Rating::Input { input, .. } = &rating else {
@@ -1720,14 +1756,13 @@ impl Home {
 
         let mode = {
             let mode = text(self.filters.mode.to_string()).size(size);
-            let text = text("Combination mode:").size(size);
 
             let button = button(mode)
                 .style(button::background)
                 .padding(padding)
                 .on_press(HomeMessage::Filter(FilterMessage::Mode));
 
-            row!(text, button).spacing(5.0).align_y(Vertical::Center)
+            tooltip(button, "Filter combination mode", tp::Position::Bottom)
         };
 
         let clear = button(text("Clear").size(size))
@@ -1754,8 +1789,6 @@ impl Home {
         .align_y(Vertical::Center)
         .wrap();
 
-        let content = column!(text("Filters").size(size), content).spacing(5.0);
-
         content.into()
     }
 
@@ -1773,9 +1806,7 @@ impl Home {
             .style(button::text)
             .on_press(HomeMessage::Sort(SortMessage::ToggleReverse));
 
-        let base = row!(text("More").size(size), icon(ELLIPSIS_VER).size(size))
-            .spacing(2.0)
-            .align_y(Vertical::Center);
+        let base = icon(ELLIPSIS_HOR).size(size);
 
         let hidden = {
             container(
@@ -1796,7 +1827,7 @@ impl Home {
 
         let more = menu(base, hidden)
             .auto_close(false)
-            .position(Position::Right)
+            .position(Position::Bottom)
             .on_toggle(|_| HomeMessage::None);
 
         row!(
@@ -1836,14 +1867,18 @@ impl Home {
 
             let content = row!(text, icon).spacing(2.0).align_y(Vertical::Center);
 
-            button(content)
-                .style(if self.filters.is_any() {
-                    button::subtle
-                } else {
-                    button::background
-                })
-                .on_press(HomeMessage::ToggleFilter)
-                .padding([5, 5])
+            tooltip(
+                button(content)
+                    .style(if self.filters.is_any() {
+                        button::subtle
+                    } else {
+                        button::background
+                    })
+                    .on_press(HomeMessage::ToggleFilter)
+                    .padding([5, 5]),
+                "Filters",
+                tp::Position::Bottom,
+            )
         };
 
         let sort = {
@@ -1857,14 +1892,18 @@ impl Home {
 
             let content = row!(text, icon).spacing(2.0).align_y(Vertical::Center);
 
-            button(content)
-                .style(if self.sort.is_empty() {
-                    button::subtle
-                } else {
-                    button::background
-                })
-                .on_press(HomeMessage::ToggleSort)
-                .padding([5, 5])
+            tooltip(
+                button(content)
+                    .style(if self.sort.is_empty() {
+                        button::subtle
+                    } else {
+                        button::background
+                    })
+                    .on_press(HomeMessage::ToggleSort)
+                    .padding([5, 5]),
+                "Sort",
+                tp::Position::Bottom,
+            )
         };
 
         let curr_filters: Element<'_, HomeMessage> = if !self.show_filters {
@@ -1882,9 +1921,21 @@ impl Home {
         let left = row!(filter, sort).align_y(Vertical::Center).spacing(10.0);
 
         let right = row!(
-            icons::sized_button(icons::REFRESH, size).on_press(HomeMessage::RefreshContent),
-            icons::sized_button(icons::RAND, size).on_press(HomeMessage::Random),
-            icons::sized_button(self.layout.icon(), size).on_press(HomeMessage::ToggleLayout),
+            tooltip(
+                icons::sized_button(icons::REFRESH, size).on_press(HomeMessage::RefreshContent),
+                "Refresh",
+                tp::Position::Bottom
+            ),
+            tooltip(
+                icons::sized_button(icons::RAND, size).on_press(HomeMessage::Random),
+                "Random item",
+                tp::Position::Bottom
+            ),
+            tooltip(
+                icons::sized_button(self.layout.icon(), size).on_press(HomeMessage::ToggleLayout),
+                "Layout",
+                tp::Position::Bottom
+            ),
         )
         .align_y(Vertical::Center)
         .spacing(5.0);
@@ -2055,15 +2106,12 @@ impl Home {
                     View::Search(state, None) => {
                         draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true)
                     }
-                    View::Search(state, Some(collection)) => {
-                        // todo
-                        draw_search(
-                            state,
-                            |item| HomeMessage::AddCollection(item, *collection),
-                            theme,
-                            false,
-                        )
-                    }
+                    View::Search(state, Some(collection)) => draw_search(
+                        state,
+                        |item| HomeMessage::AddCollection(item, *collection),
+                        theme,
+                        false,
+                    ),
                     View::CollectionAdd(state) => {
                         draw_collection_add(state, self.collections.iter())
                     }
@@ -2663,21 +2711,30 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
             let unicode = view_unicode(view);
 
             let content = center(icon(unicode).size(P));
+            let label = match view {
+                CollectionView::Shown => "Shown",
+                CollectionView::Pinned => "Pinned",
+                CollectionView::Hidden => "Hidden",
+            };
 
-            button(content)
-                .padding([0, 0])
-                .on_press(HomeMessage::CollectionConfig(ConfigMessage::View(view)))
-                .style(move |theme, status| {
-                    let default = if view == selected {
-                        button::secondary(theme, status)
-                    } else {
-                        button::background(theme, status)
-                    };
-                    let border = default.border.rounded(radius);
+            tooltip(
+                button(content)
+                    .padding([0, 0])
+                    .on_press(HomeMessage::CollectionConfig(ConfigMessage::View(view)))
+                    .style(move |theme, status| {
+                        let default = if view == selected {
+                            button::secondary(theme, status)
+                        } else {
+                            button::background(theme, status)
+                        };
+                        let border = default.border.rounded(radius);
 
-                    button::Style { border, ..default }
-                })
-                .into()
+                        button::Style { border, ..default }
+                    }),
+                label,
+                tp::Position::Top,
+            )
+            .into()
         });
 
         let views = grid(views)
@@ -2706,20 +2763,24 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let icons = Icon::all().into_iter().map(|value| {
             let content = center(icon(value.unicode()).size(P));
 
-            button(content)
-                .padding([0, 0])
-                .on_press(HomeMessage::CollectionConfig(ConfigMessage::Icon(value)))
-                .style(move |theme, status| {
-                    let default = if value == selected {
-                        button::secondary(theme, status)
-                    } else {
-                        button::background(theme, status)
-                    };
-                    let border = default.border.rounded(radius);
+            tooltip(
+                button(content)
+                    .padding([0, 0])
+                    .on_press(HomeMessage::CollectionConfig(ConfigMessage::Icon(value)))
+                    .style(move |theme, status| {
+                        let default = if value == selected {
+                            button::secondary(theme, status)
+                        } else {
+                            button::background(theme, status)
+                        };
+                        let border = default.border.rounded(radius);
 
-                    button::Style { border, ..default }
-                })
-                .into()
+                        button::Style { border, ..default }
+                    }),
+                value.label(),
+                tp::Position::Top,
+            )
+            .into()
         });
 
         let icons = grid(icons)
