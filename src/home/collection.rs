@@ -11,6 +11,7 @@ use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Sort, empty};
 use crate::widgets::menu;
+use iced::Border;
 use iced::{
     Element, Length, Task,
     alignment::Vertical,
@@ -195,7 +196,21 @@ impl CollectionPage {
             let play = {
                 let play = btn(id, PLAY, "Play", Message::Play(Items::All));
 
-                let base = icon(ELLIPSIS_VER).size(H7);
+                let base = container(icon(ELLIPSIS_VER).size(H7))
+                    .style(|theme| {
+                        let pair = theme.extended_palette().background.weakest;
+                        let text = pair.text;
+                        let color = pair.color;
+                        let border = Border::default().rounded(2);
+
+                        container::Style {
+                            background: Some(color.into()),
+                            text_color: Some(text),
+                            border,
+                            ..Default::default()
+                        }
+                    })
+                    .padding([8, 3]);
 
                 let actions = column!(
                     btn(id, PLAY, "Play movies", Message::Play(Items::Movies)),

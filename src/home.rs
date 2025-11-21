@@ -53,6 +53,8 @@ use shared::{
 };
 use shows::{TvShows, TvShowsMessage};
 
+const SIDE_ICON_SPACING: f32 = 8.0;
+
 #[derive(Debug, Clone)]
 pub enum FilterMessage {
     Mode,
@@ -2096,7 +2098,7 @@ impl Home {
         let content = row!(self.side(), self.content_area(now))
             .width(Length::Fill)
             .height(Length::Fill)
-            .padding([6, 5]);
+            .padding(3);
 
         match &self.view {
             None => content.into(),
@@ -2567,7 +2569,7 @@ fn icon_button<'a>(
             row!(icon, text)
                 .align_y(Vertical::Center)
                 .width(Length::Fill)
-                .spacing(12.0),
+                .spacing(SIDE_ICON_SPACING),
         )
         .style(move |theme, status| {
             use button::{Status, Style, background};
@@ -2607,7 +2609,7 @@ fn collection_button<'a>(
         row!(icon, text, view)
             .align_y(Vertical::Center)
             .width(Length::Fill)
-            .spacing(16.0),
+            .spacing(SIDE_ICON_SPACING),
     )
     .style(move |theme, status| {
         use button::{Status, Style, background};

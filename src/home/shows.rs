@@ -168,9 +168,17 @@ impl TvShows {
 }
 
 pub fn unique<'a, Message: 'a>(show: &Show) -> Element<'a, Message> {
+    use iced::font::{Font, Weight};
+
     let seasons = show.seasons;
 
     let seasons = format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" });
 
-    text(seasons).size(H7).into()
+    text(seasons)
+        .size(H8)
+        .font(Font {
+            weight: Weight::Semibold,
+            ..Default::default()
+        })
+        .into()
 }

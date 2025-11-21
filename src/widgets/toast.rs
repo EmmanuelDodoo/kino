@@ -54,6 +54,22 @@ impl Toast {
             status,
         }
     }
+
+    pub fn success(message: impl Into<String>) -> Self {
+        Self::new(message, Status::Success)
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self::new(message, Status::Error)
+    }
+
+    pub fn warn(message: impl Into<String>) -> Self {
+        Self::new(message, Status::Warn)
+    }
+
+    pub fn info(message: impl Into<String>) -> Self {
+        Self::new(message, Status::Info)
+    }
 }
 
 pub fn manager<'a, Message>(
@@ -90,15 +106,16 @@ where
             .iter()
             .enumerate()
             .map(|(index, toast)| {
-                let side = container(space().height(Length::Fill).width(5.0)).style(|theme| {
-                    match toast.status {
+                let side = container(space())
+                    .style(|theme| match toast.status {
                         Status::Info => container::primary(theme),
                         Status::Warn => container::secondary(theme),
                         Status::Error => container::danger(theme),
                         Status::Success => container::success(theme),
-                    }
-                });
-                let content = text(toast.message.as_str()).size(H6);
+                    })
+                    .width(5.0)
+                    .height(Length::Fill);
+                let content = text(toast.message.as_str()).size(H7);
 
                 let close = button(icons::icon(icons::CANCEL))
                     .on_press((on_close)(index))
@@ -106,24 +123,23 @@ where
 
                 container(
                     row!(side, content, space::horizontal(), close)
+                        .width(Length::Shrink)
                         .align_y(Vertical::Center)
-                        .height(Length::Fill)
-                        .spacing(10),
+                        .spacing(5),
                 )
                 .style(|theme| {
                     let default = container::rounded_box(theme);
-
                     let border = default
                         .border
-                        .rounded(10)
+                        .rounded(5)
                         .width(0.5)
                         .color(default.text_color.unwrap_or_default());
 
                     container::Style { border, ..default }
                 })
-                .max_width(350)
-                .height(65)
-                .padding([6.0, 8.0])
+                .max_width(450)
+                .height(Length::Shrink)
+                .padding([5.0, 5.0])
                 .into()
             })
             .collect();

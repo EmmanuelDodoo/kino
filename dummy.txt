@@ -92,7 +92,7 @@ INSERT INTO episode_comment (id, created_at, content, episode_id, episode_timest
 
 -- Insert Movies
 INSERT INTO movie (id, directory, name, original_name, path, poster, tags, synopsis, release, duration, backdrop, progress) VALUES
-('0199dbbd-bef9-7b33-91c8-c7578f1f3262', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Free Guy','Free Guy', 'test.mkv', 'assets/fantastic.png', 'Video game, Action, Sci-fi', "Something happened. Good guys won", '2019-07-08', 3872, 'assets/player1.jpg', 0.54),
+('0199dbbd-bef9-7b33-91c8-c7578f1f3262', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Free Guy','Free Guy', 'test.mkv', 'assets/fantastic.png', 'Video game, Action, Sci-fi', "As an angry mob rises against the Wicked Witch, Glinda and Elphaba will need to come together one final time. With their singular friendship now the fulcrum of their futures, they will need to truly see each other, with honesty and empathy, if they are to change themselves, and all of Oz, for good.", '2019-07-08', 3872, 'assets/player1.jpg', 0.54),
 ('0199dbbd-bef9-7b33-91c8-c7650e578e7e', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Beetlejuice','Beetlejuice', 'test.mkv', 'assets/fantastic.png', 'Horror, Family, Supernatural', 'Ghost and shit', '2009-10-23', 8723, 'assets/test.jpg', 0.12),
 ('0199dbbd-bef9-7b33-91c8-c77a82589eef', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Blended Family','Blended Family', 'test.mkv', 'assets/fantastic.png', 'Family, Africa, Unrealistic', 'Loved Terry Crews as usual', '2017-02-10', 7238, 'assets/player.png', 0.89);
 

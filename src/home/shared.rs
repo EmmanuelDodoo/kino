@@ -18,10 +18,11 @@ use iced::{
 };
 use image::{DynamicImage, GenericImage, ImageBuffer, ImageReader, Rgba, imageops::FilterType};
 
-pub const CARD_HEIGHT: f32 = 350.0;
-pub const CARD_WIDTH: f32 = CARD_HEIGHT * 7.5 / 10.0;
-pub const LIST_HEIGHT: f32 = 175.0;
+pub const CARD_HEIGHT: f32 = 375.0;
+pub const CARD_WIDTH: f32 = CARD_HEIGHT * 0.7;
+pub const LIST_HEIGHT: f32 = 150.0;
 pub const LIST_WIDTH: f32 = LIST_HEIGHT * 5.5 / 10.0;
+pub const IMAGE_RADIUS: f32 = 7.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Tab {
@@ -46,7 +47,10 @@ impl Tab {
 }
 
 pub fn duration<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
-    let duration = text(media.duration_full()).size(H7);
+    let duration = text(media.duration_full()).size(H8).font(Font {
+        weight: Weight::Semibold,
+        ..Default::default()
+    });
     let icon = icon(HOURGLASS).size(H8);
 
     row!(icon, duration)
@@ -65,7 +69,10 @@ pub fn ratings<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
     match media.rating() {
         Some(value) => {
             let rating = (value * 10.0).round() / 10.0;
-            let text = text(format!("{rating:.1}")).size(H8);
+            let text = text(format!("{rating:.1}")).size(H8).font(Font {
+                weight: Weight::Semibold,
+                ..Default::default()
+            });
 
             let stars = (rating.trunc() as u8).clamp(0, 5);
             let rem = 5 - stars;
@@ -90,11 +97,16 @@ pub fn ratings<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
 }
 
 pub fn progress<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
+    let font = Font {
+        family: Family::Monospace,
+        weight: Weight::Semibold,
+        ..Default::default()
+    };
     let progress = (media.progress() * 1000.0).round() / 10.0;
-    let text = text(format!("{}%", progress)).size(H7);
+    let text = text(format!("{}%", progress)).size(H8).font(font);
 
     let progress = media.progress_icon();
-    let icon = icon(progress).size(H4);
+    let icon = icon(progress).size(H6);
 
     row!(icon, text)
         .spacing(3.0)
@@ -106,10 +118,12 @@ pub fn add_labelled<'a, T: Media, Message: 'a + Clone>(
     media: &T,
     on_press: impl Fn(T::Id) -> Message + 'a,
 ) -> Element<'a, Message> {
-    let size = H7;
-    let icon = icon(BOOKMARK).size(H6);
+    let icon = icon(BOOKMARK).size(P);
 
-    let label = text("Add to collection").size(size);
+    let label = text("Add to collection").size(H8).font(Font {
+        weight: Weight::Semibold,
+        ..Default::default()
+    });
 
     mouse_area(row!(icon, label).align_y(Vertical::Center).spacing(6.0))
         .interaction(mouse::Interaction::Pointer)
@@ -118,9 +132,12 @@ pub fn add_labelled<'a, T: Media, Message: 'a + Clone>(
 }
 
 pub fn synopsis<'a, T: Media, Message: 'a>(media: &'a T) -> Element<'a, Message> {
-    container(text(media.synopsis()).size(H7))
-        .max_height(52.0)
-        .into()
+    container(text(media.synopsis()).size(P).font(Font {
+        family: Family::Serif,
+        ..Default::default()
+    }))
+    .max_height(52.0)
+    .into()
 }
 
 pub fn data<'a, Message: 'a>(
@@ -231,7 +248,7 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
     .style(move |theme, status| {
         let default = button::subtle(theme, status);
 
-        let border = default.border.rounded(5.0);
+        let border = default.border.rounded(IMAGE_RADIUS);
 
         button::Style { border, ..default }
     })
@@ -355,11 +372,9 @@ impl<T: Media> Thumbnail<T> {
         width: impl Into<Length>,
         height: impl Into<Length>,
     ) -> Element<'a, Message> {
-        let radius = 10;
-
         match &self.poster {
             Some(handle) => widget::image(handle)
-                .border_radius(radius)
+                .border_radius(IMAGE_RADIUS)
                 .height(height)
                 .width(width)
                 .content_fit(ContentFit::Contain)
@@ -369,7 +384,7 @@ impl<T: Media> Thumbnail<T> {
                 .width(width)
                 .style(move |theme| {
                     let default = container::dark(theme);
-                    let border = default.border.rounded(radius);
+                    let border = default.border.rounded(IMAGE_RADIUS);
 
                     container::Style { border, ..default }
                 })
@@ -399,7 +414,7 @@ impl<T: Media> Thumbnail<T> {
     fn poster_helper<'a, Message: 'a>(&self) -> Element<'a, Message> {
         match &self.poster {
             Some(handle) => widget::image(handle)
-                .border_radius(10)
+                .border_radius(IMAGE_RADIUS)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .content_fit(ContentFit::Fill)
@@ -418,7 +433,10 @@ impl<T: Media> Thumbnail<T> {
         on_play: impl Fn(T::Id) -> Message + 'a,
         unique: impl Fn(&T) -> Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let title = text(self.media.name()).size(H5);
+        let title = text(self.media.name()).size(H5).font(Font {
+            weight: Weight::Semibold,
+            ..Default::default()
+        });
 
         let ratings = ratings(&self.media);
 
@@ -433,11 +451,11 @@ impl<T: Media> Thumbnail<T> {
             space::horizontal(),
             add_labelled(&self.media, on_add)
         )
-        .spacing(24.0)
+        .spacing(20.0)
         .align_y(Vertical::Center)
         .width(Length::Fill);
 
-        let details = row!(column!(title, ratings, synopsis, bottom).spacing(16))
+        let details = row!(column!(title, ratings, synopsis, bottom).spacing(10))
             .height(Length::Fill)
             .align_y(Vertical::Center);
 
@@ -449,7 +467,7 @@ impl<T: Media> Thumbnail<T> {
         let img = container(self.poster_helper()).width(LIST_WIDTH * 1.75);
 
         let overlay = {
-            let size = H1 * 1.75;
+            let size = H1 * 1.5;
             let play = icon(PLAY)
                 .size(size)
                 .align_x(Horizontal::Center)
@@ -463,7 +481,7 @@ impl<T: Media> Thumbnail<T> {
                         let background = default
                             .background
                             .map(|background| background.scale_alpha(0.8));
-                        let border = default.border.rounded(10.0);
+                        let border = default.border.rounded(IMAGE_RADIUS);
 
                         container::Style {
                             border,
@@ -490,7 +508,7 @@ impl<T: Media> Thumbnail<T> {
         let background_factor = 1.0 * self.zoom.interpolate(0.25, 1.0, now);
         let content = container(content).padding(8).style(move |theme| {
             let default = container::dark(theme);
-            let border = default.border.rounded(10.0);
+            let border = default.border.rounded(IMAGE_RADIUS);
             let background = default
                 .background
                 .map(|background| background.scale_alpha(background_factor));
@@ -536,10 +554,14 @@ impl<T: Media> Thumbnail<T> {
         };
 
         let details = {
-            let title = text(self.media.name()).size(H7).height(30.0);
+            let font = Font {
+                weight: Weight::Semibold,
+                ..Default::default()
+            };
+            let title = text(self.media.name()).font(font).size(H7).height(30.0);
             let ratings = ratings(&self.media);
             let release = {
-                let release = text(self.media.release_year()).size(H7);
+                let release = text(self.media.release_year()).size(H8).font(font);
                 let icon = icon(CALENDAR).size(H7);
 
                 row!(icon, release).align_y(Vertical::Center).spacing(3.0)
@@ -549,11 +571,16 @@ impl<T: Media> Thumbnail<T> {
                 .width(Length::Fill)
                 .align_y(Vertical::Center);
 
-            container(column!(title, details).width(Length::Fill).spacing(10.0)).padding(padding)
+            container(column!(title, details).width(Length::Fill).spacing(0.0)).padding(padding)
         };
 
         let bottom = {
-            let duration = text(self.media.duration_full()).size(H7);
+            let font = Font {
+                family: Family::Serif,
+                weight: Weight::Semibold,
+                ..Default::default()
+            };
+            let duration = text(self.media.duration_full()).size(H7).font(font);
             row!(space::horizontal(), duration)
                 .align_y(Vertical::Center)
                 .padding(padding)
@@ -575,7 +602,7 @@ impl<T: Media> Thumbnail<T> {
                     let background = default
                         .background
                         .map(|background| background.scale_alpha(0.8));
-                    let border = default.border.rounded(10.0);
+                    let border = default.border.rounded(IMAGE_RADIUS);
 
                     container::Style {
                         border,
@@ -607,9 +634,9 @@ impl<T: Media> Thumbnail<T> {
             .height(CARD_HEIGHT);
 
         let background_factor = 1.0 * self.zoom.interpolate(0.25, 1.0, now);
-        let content = container(content).padding(8).style(move |theme| {
+        let content = container(content).padding(5).style(move |theme| {
             let default = container::dark(theme);
-            let border = default.border.rounded(10.0);
+            let border = default.border.rounded(IMAGE_RADIUS);
             let background = default
                 .background
                 .map(|background| background.scale_alpha(background_factor));
@@ -667,11 +694,9 @@ impl CollectionThumbnail {
     }
 
     pub fn collage<'a, Message: 'a>(&'a self) -> Element<'a, Message> {
-        let radius = 10;
-
         match &self.collage {
             Some(handle) => widget::image(handle)
-                .border_radius(radius)
+                .border_radius(IMAGE_RADIUS)
                 .height(Self::HEIGHT)
                 .width(Self::WIDTH)
                 .content_fit(ContentFit::Contain)
@@ -693,7 +718,7 @@ impl CollectionThumbnail {
                     .width(Self::WIDTH)
                     .style(move |theme| {
                         let default = container::dark(theme);
-                        let border = default.border.rounded(radius);
+                        let border = default.border.rounded(IMAGE_RADIUS);
 
                         container::Style { border, ..default }
                     })
@@ -719,11 +744,9 @@ impl CollectionThumbnail {
         };
 
         let img: Element<'_, Message> = {
-            let radius = 10;
-
             match &self.collage {
                 Some(handle) => widget::image(handle)
-                    .border_radius(radius)
+                    .border_radius(IMAGE_RADIUS)
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .content_fit(ContentFit::Fill)
@@ -746,7 +769,7 @@ impl CollectionThumbnail {
                         .height(Length::Fill)
                         .style(move |theme| {
                             let default = container::dark(theme);
-                            let border = default.border.rounded(radius);
+                            let border = default.border.rounded(IMAGE_RADIUS);
 
                             container::Style { border, ..default }
                         })
@@ -762,7 +785,7 @@ impl CollectionThumbnail {
         let background_factor = 1.0 * self.zoom.interpolate(0.25, 1.0, now);
         let content = container(content).padding(8).style(move |theme| {
             let default = container::dark(theme);
-            let border = default.border.rounded(10.0);
+            let border = default.border.rounded(IMAGE_RADIUS);
             let background = default
                 .background
                 .map(|background| background.scale_alpha(background_factor));
@@ -919,7 +942,7 @@ impl SearchView {
         button(content)
             .style(|theme, status| {
                 let default = button::subtle(theme, status);
-                let border = default.border.rounded(5.0);
+                let border = default.border.rounded(IMAGE_RADIUS);
 
                 button::Style { border, ..default }
             })

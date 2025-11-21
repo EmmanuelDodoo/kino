@@ -166,7 +166,12 @@ impl Movies {
 }
 
 pub fn unique<'a, Message: 'a>(movie: &Movie) -> Element<'a, Message> {
-    let release = text(movie.release_year()).size(H7);
+    use iced::font::{Font, Weight};
+
+    let release = text(movie.release_year()).size(H8).font(Font {
+        weight: Weight::Semibold,
+        ..Default::default()
+    });
     let icon = icon(CALENDAR).size(H7);
 
     row!(icon, release)
