@@ -136,7 +136,8 @@ pub fn synopsis<'a, T: Media, Message: 'a>(media: &'a T) -> Element<'a, Message>
         family: Family::Serif,
         ..Default::default()
     }))
-    .max_height(52.0)
+    .clip(true)
+    .max_height(44.0)
     .into()
 }
 
@@ -558,7 +559,9 @@ impl<T: Media> Thumbnail<T> {
                 weight: Weight::Semibold,
                 ..Default::default()
             };
-            let title = text(self.media.name()).font(font).size(H7).height(30.0);
+            let title = container(text(self.media.name()).font(font).size(H7))
+                .max_height(20.0)
+                .clip(true);
             let ratings = ratings(&self.media);
             let release = {
                 let release = text(self.media.release_year()).size(H8).font(font);
@@ -571,7 +574,7 @@ impl<T: Media> Thumbnail<T> {
                 .width(Length::Fill)
                 .align_y(Vertical::Center);
 
-            container(column!(title, details).width(Length::Fill).spacing(0.0)).padding(padding)
+            container(column!(title, details).width(Length::Fill).spacing(4.0)).padding(padding)
         };
 
         let bottom = {
@@ -740,7 +743,10 @@ impl CollectionThumbnail {
         let name = {
             let title = text(&self.collection.name).size(H6);
 
-            container(title).padding(padding)
+            container(title)
+                .padding(padding)
+                .max_height(20.0)
+                .clip(true)
         };
 
         let img: Element<'_, Message> = {
@@ -826,7 +832,7 @@ impl SearchView {
         theme: &Theme,
         on_play: impl Fn(ItemId) -> Message,
         on_details: impl Fn(ItemId) -> Message,
-        on_url: impl Fn(url::Url) -> Message + 'a,
+        on_url: impl Fn(String) -> Message + 'a,
         set_play: bool,
     ) -> Element<'a, Message> {
         use iced::theme::palette::Pair;

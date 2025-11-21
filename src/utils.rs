@@ -69,6 +69,10 @@ pub fn tooltip<'a, Message: 'a>(
     tooltip(
         content,
         container(text(label).size(H8))
+            .clip(true)
+            .max_width(350)
+            .max_height(100)
+            .padding([3, 6])
             .style(|theme: &Theme| {
                 let color = theme.extended_palette().secondary.weak.color;
                 let default = container::rounded_box(theme);
@@ -84,8 +88,7 @@ pub fn tooltip<'a, Message: 'a>(
                     shadow,
                     ..default
                 }
-            })
-            .padding([3, 6]),
+            }),
         position,
     )
     .gap(2.0)
@@ -396,7 +399,9 @@ impl Playlist {
     }
 
     pub fn previous_peek(&self) -> Option<&PlayItem> {
-        if self.current == 0 {return None};
+        if self.current == 0 {
+            return None;
+        };
 
         self.items.get(self.current - 1)
     }

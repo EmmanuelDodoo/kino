@@ -11,7 +11,7 @@ use iced::{
     },
     window,
 };
-use iced_video_player::{Button, Kind, MouseClick, Video, VideoPlayer};
+use iced_video_player::{Button, Kind, MouseAction, MouseClick, Video, VideoPlayer};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,7 +20,7 @@ use crate::app::Message;
 use crate::home::shared::Icon;
 use crate::models::{CollectionId, ItemId, SimpleCollection};
 use crate::utils::{
-    self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings,
+    self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, empty,
     icons::{self, sized_button},
     loading_animation, loading_svg, tooltip,
     typo::{self, *},
@@ -444,9 +444,12 @@ impl Manager {
     }
 
     fn top(&self) -> Element<'_, ManagerMessage> {
-        let title = match &self.state {
-            State::Ready(player) => text(&player.item.name).size(H6),
-            State::Loading(_) | State::Idle => text(""),
+        let title: Element<'_, ManagerMessage> = match &self.state {
+            State::Ready(player) => container(text(&player.item.name).size(H6))
+                .max_height(24)
+                .clip(true)
+                .into(),
+            State::Loading(_) | State::Idle => empty(),
         };
 
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
@@ -471,6 +474,7 @@ impl Manager {
             space::horizontal(),
             options
         )
+        .spacing(5.0)
         .width(Length::Fill)
         .align_y(Vertical::Center);
 
@@ -1171,13 +1175,21 @@ fn load_video<Message: 'static + MaybeSend>(
     )
 }
 
-fn handle_clicks(click: MouseClick) -> ManagerMessage {
-    match click.button {
-        Button::Left if matches!(click.kind, Kind::Single) => ManagerMessage::TogglePlay,
-        Button::Left if matches!(click.kind, Kind::Double) => ManagerMessage::ToggleFullscreen,
-        Button::Right => ManagerMessage::Config,
-        _ => ManagerMessage::None,
-    }
+fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
+    let msg = match click.action {
+        MouseAction::Button { button, kind } => match button {
+            Button::Left if matches!(kind, Kind::Single) => ManagerMessage::TogglePlay,
+            Button::Left if matches!(kind, Kind::Double) => ManagerMessage::ToggleFullscreen,
+            Button::Right => ManagerMessage::Config,
+            _ => return None,
+        },
+        MouseAction::Scroll(_delta) => {
+            //todo
+            return None;
+        }
+    };
+
+    Some(msg)
 }
 
 fn draw_collection_add<'a>(

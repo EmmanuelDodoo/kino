@@ -1979,7 +1979,7 @@ impl Home {
             State::Collections(_) => "Collections",
             State::Collection { collection, .. } => &collection.collection.name,
         };
-        let title = container(text(title).size(H6)).height(30);
+        let title = container(text(title).size(H6)).clip(true).height(24);
 
         let search =
             sized_button(icons::SEARCH, H6).on_press(HomeMessage::OpenView(ViewMessage::Search));
@@ -1992,6 +1992,7 @@ impl Home {
                 space::horizontal(),
                 search,
             )
+            .spacing(5.0)
             .padding(Padding::ZERO.right(5))
             .align_y(Vertical::Center)
             .height(H2 * 1.50)

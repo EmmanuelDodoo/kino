@@ -169,11 +169,12 @@ impl CollectionPage {
         let img = collection.collage();
 
         let header = {
-            let title = text(&collection.collection.name).size(H3);
+            let title = text(&collection.collection.name).size(H4);
 
             let title = row!(title)
                 .align_y(Vertical::Center)
                 .width(Length::Fill)
+                .clip(true)
                 .spacing(10.0);
 
             let title = if matches!(collection.collection.view, CollectionView::Hidden) {
