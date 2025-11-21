@@ -442,7 +442,7 @@ impl Home {
                     return Task::none();
                 }
 
-                self.view = None;
+                let close_view = self.close_view();
                 self.backward.retain(|back| *back != kind);
 
                 if let Some(old) = self.current_page.replace(kind) {
@@ -471,7 +471,9 @@ impl Home {
 
                     let scroll = page.update_scroll().discard();
 
-                    return Task::done(msg).chain(scroll);
+                    let tsk = Task::done(msg).chain(scroll);
+
+                    return Task::batch([tsk, close_view]);
                 }
 
                 let task = match kind {
@@ -536,7 +538,7 @@ impl Home {
                     }
                 };
 
-                Task::batch([Task::done(msg), task])
+                Task::batch([Task::done(msg), close_view, task])
             }
             HomeMessage::Movies(message) => {
                 let Some(page) = self.current_page_mut() else {
@@ -669,6 +671,8 @@ impl Home {
                         }
                     }
                     ConfigMessage::Save if config.id.is_some() => {
+                        let close_view = self.close_view();
+
                         let State::Collection { collection, .. } = &mut self.state else {
                             return Task::none();
                         };
@@ -686,11 +690,10 @@ impl Home {
                         config.update(&mut collection.collection);
 
                         sort_collections(&mut self.collections);
-                        self.view = None;
 
                         let query = collection.collection.save();
 
-                        return Task::done(Message::Query(query));
+                        return Task::batch([Task::done(Message::Query(query)), close_view]);
                     }
                     ConfigMessage::Save => {
                         let CollectionConfig {
@@ -725,7 +728,7 @@ impl Home {
                         self.collections.push(simple);
                         sort_collections(&mut self.collections);
 
-                        self.view = None;
+                        let close_view = self.close_view();
                         self.state = State::Collection {
                             collection: Box::new(CollectionThumbnail::new(new)),
                             shows: vec![],
@@ -754,7 +757,7 @@ impl Home {
                             tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
                         };
 
-                        return Task::batch([Task::done(Message::Query(query)), msg]);
+                        return Task::batch([Task::done(Message::Query(query)), msg, close_view]);
                     }
                 }
 
@@ -983,10 +986,7 @@ impl Home {
                     }
                 }
             }
-            HomeMessage::CloseView => {
-                self.view = None;
-                self.update_page_scroll()
-            }
+            HomeMessage::CloseView => self.close_view(),
             HomeMessage::Back => self.back(now),
             HomeMessage::Forward => self.forward(now),
             HomeMessage::ToggleLayout => self.layout_toggle(),
@@ -1208,8 +1208,8 @@ impl Home {
             }
             HomeMessage::RefreshContent => self.content_refresh(now),
             HomeMessage::Play(item) => {
-                self.view = None;
-                Task::done(Message::PlayItem(item))
+                let close_view = self.close_view();
+                Task::batch([Task::done(Message::PlayItem(item)), close_view])
             }
             HomeMessage::PlayCollection { id, items } => {
                 Task::done(Message::PlayCollectionItems { id, items })
@@ -1935,7 +1935,7 @@ impl Home {
             ),
             tooltip(
                 icons::sized_button(self.layout.icon(), size).on_press(HomeMessage::ToggleLayout),
-                "Layout",
+                self.layout.str(),
                 tp::Position::Bottom
             ),
         )
@@ -2341,12 +2341,18 @@ impl Home {
         Task::none()
     }
 
+    fn close_view(&mut self) -> Task<Message> {
+        self.view.take();
+        self.update_page_scroll()
+    }
+
     pub fn action(&mut self, action: HomeAction, now: Instant) -> Task<Message> {
         match action {
             HomeAction::LayoutToggle => self.layout_toggle(),
             HomeAction::RefreshContent => self.content_refresh(now),
             HomeAction::Refresh => self.refresh(now),
             HomeAction::SearchToggle => self.toggle_search(None),
+            HomeAction::CloseModal => self.close_view(),
         }
     }
 

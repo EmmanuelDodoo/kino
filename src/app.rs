@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 use iced::{
-    Element, Subscription, Task, Theme, font,
+    Element, Subscription, Task, Theme, event, font,
     keyboard::{self, Key, Modifiers},
     time::{self, Duration, Instant},
     window,
@@ -16,8 +16,8 @@ use crate::models::{
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::toast;
 use crate::utils::{
-    Action, Filter, FilterMode, HomeAction, Layout, PlayId, PlayItem, PlayerAction, Playlist,
-    SearchFilter, Sort, VideoSettings, load_fonts,
+    Filter, FilterMode, HomeAction, Layout, PlayId, PlayItem, PlayerAction, Playlist, SearchFilter,
+    Sort, VideoSettings, load_fonts,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +42,26 @@ pub enum Screen {
     // Log,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Action {
+    Back(Screen),
+    Forward,
+    Home(HomeAction),
+    Player(PlayerAction),
+}
+
+impl From<PlayerAction> for Action {
+    fn from(value: PlayerAction) -> Self {
+        Self::Player(value)
+    }
+}
+
+impl From<HomeAction> for Action {
+    fn from(value: HomeAction) -> Self {
+        Self::Home(value)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Message {
     FontLoad(Result<(), font::Error>),
@@ -52,7 +72,6 @@ pub enum Message {
     PushToasts(Vec<(String, toast::Status)>),
     Home(HomeMessage),
     Player(PlayerMessage),
-    Action(Action),
     PlayItem(ItemId),
     PlayItems(Vec<ItemId>),
     PlayCollectionItems {
@@ -79,6 +98,12 @@ pub enum Message {
     Refresh(Instant),
     LastWatched(PlayId),
     VideoStats(PlayItem),
+    Key {
+        key: Key,
+        modifiers: Modifiers,
+        press: bool,
+    },
+    Back,
     None,
 }
 
@@ -246,31 +271,14 @@ impl App {
 
                 self.play_items(items)
             }
-            Message::Action(action) => match (self.screen, action) {
-                // todo: update last refresh
-                (Screen::Home, Action::Home(action)) => self.home.action(action, now),
-                (Screen::Home, Action::Back) => self.home.back(now),
-                (Screen::Home, Action::Forward) => self.home.forward(now),
-                (Screen::Home, _) => Task::none(),
-
-                (Screen::Player, Action::Player(action)) => self
-                    .player
-                    .as_mut()
-                    .map(|player| player.action(action, now))
-                    .unwrap_or_default(),
-                (Screen::Player, Action::Back) => {
-                    self.screen = Screen::Home;
-                    let stats = self
-                        .player
-                        .take()
-                        .as_mut()
-                        .and_then(|player| player.stats().map(Task::done))
-                        .unwrap_or_default();
-
-                    Task::batch([self.home.refresh(now), stats])
-                }
-                (Screen::Player, _) => Task::none(),
-            },
+            Message::Key {
+                key,
+                modifiers,
+                press,
+            } => key_action(key, modifiers, self.screen, press)
+                .map(|action| self.action(action, now))
+                .unwrap_or_default(),
+            Message::Back => self.action(Action::Back(self.screen), now),
             Message::Fetch {
                 id,
                 filters: filter,
@@ -619,7 +627,13 @@ impl App {
             Subscription::none()
         };
 
-        let keys = keyboard::on_key_press(key_action).map(Message::Action);
+        let keys = keyboard::on_key_press(|key, modifiers| {
+            Some(Message::Key {
+                key,
+                modifiers,
+                press: true,
+            })
+        });
 
         let exit = window::close_requests().map(Message::Exit);
 
@@ -780,36 +794,78 @@ impl App {
             Task::done(Message::PushToasts(errors)),
         ])
     }
-}
 
-fn key_action(key: Key, modifiers: Modifiers) -> Option<Action> {
-    match key {
-        Key::Named(keyboard::key::Named::ArrowLeft) if modifiers.alt() => Some(Action::Back),
-        Key::Named(keyboard::key::Named::ArrowRight) if modifiers.alt() => Some(Action::Forward),
-        key => player_keypress(key, modifiers).map(Action::Player),
+    fn action(&mut self, action: Action, now: Instant) -> Task<Message> {
+        match action {
+            Action::Home(hat) => self.home.action(hat, now),
+            Action::Player(pat) => self
+                .player
+                .as_mut()
+                .map(|player| player.action(pat, now))
+                .unwrap_or_default(),
+            Action::Forward => self.home.forward(now),
+            Action::Back(Screen::Home) => self.home.back(now),
+            Action::Back(Screen::Player) => {
+                self.screen = Screen::Home;
+                let stats = self
+                    .player
+                    .take()
+                    .as_mut()
+                    .and_then(|player| player.stats().map(Task::done))
+                    .unwrap_or_default();
+
+                Task::batch([self.home.refresh(now), stats])
+            }
+        }
     }
 }
 
-fn home_keypress(key: Key, modifiers: Modifiers) -> Option<HomeAction> {
+fn key_action(key: Key, modifiers: Modifiers, screen: Screen, press: bool) -> Option<Action> {
+    use keyboard::key::Named;
+    match key {
+        Key::Named(Named::ArrowLeft) if modifiers.alt() => Some(Action::Back(screen)),
+        Key::Named(Named::NavigateNext) | Key::Named(Named::BrowserForward) => {
+            Some(Action::Forward)
+        }
+        Key::Named(Named::NavigatePrevious) | Key::Named(Named::BrowserBack) => {
+            Some(Action::Back(screen))
+        }
+        Key::Named(Named::ArrowRight) if modifiers.alt() => Some(Action::Forward),
+        key => match screen {
+            Screen::Player => player_keypress(key, modifiers, press).map(Action::Player),
+            Screen::Home => home_keypress(key, modifiers, press).map(Action::Home),
+        },
+    }
+}
+
+fn home_keypress(key: Key, modifiers: Modifiers, _press: bool) -> Option<HomeAction> {
     use keyboard::key::Named;
 
     let action = match key {
         Key::Character(char) if char.as_str() == "l" => HomeAction::LayoutToggle,
         Key::Character(char) if char.as_str() == "r" && modifiers.shift() => HomeAction::Refresh,
         Key::Character(char) if char.as_str() == "r" => HomeAction::RefreshContent,
+        Key::Character(char) if char.as_str() == "s" => HomeAction::SearchToggle,
+        Key::Character(char) if char.as_str() == "f" && modifiers.command() => {
+            HomeAction::SearchToggle
+        }
+        Key::Named(Named::Escape) => HomeAction::CloseModal,
         _ => return None,
     };
 
     Some(action)
 }
 
-fn player_keypress(key: Key, modifiers: Modifiers) -> Option<PlayerAction> {
+fn player_keypress(key: Key, modifiers: Modifiers, _press: bool) -> Option<PlayerAction> {
     use keyboard::key::Named;
 
     let action = match key {
         Key::Named(Named::Space) => PlayerAction::PlayToggle,
+        Key::Named(Named::MediaPlayPause) => PlayerAction::PlayToggle,
         Key::Named(Named::ArrowLeft) if modifiers.command() => PlayerAction::PlayPrevious,
+        Key::Named(Named::MediaTrackPrevious) => PlayerAction::PlayPrevious,
         Key::Named(Named::ArrowRight) if modifiers.command() => PlayerAction::PlayNext,
+        Key::Named(Named::MediaTrackNext) => PlayerAction::PlayNext,
 
         Key::Named(Named::Enter) => PlayerAction::FullscreenToggle,
         Key::Named(Named::Escape) => PlayerAction::Exit,
@@ -825,14 +881,18 @@ fn player_keypress(key: Key, modifiers: Modifiers) -> Option<PlayerAction> {
         Key::Character(char) if char.as_str() == "m" => PlayerAction::MuteToggle,
 
         Key::Character(char) if char.as_str() == "c" => PlayerAction::SpeedIncrease,
+        Key::Named(Named::PlaySpeedUp) => PlayerAction::SpeedIncrease,
         Key::Character(char) if char.as_str() == "x" => PlayerAction::SpeedDecrease,
+        Key::Named(Named::PlaySpeedDown) => PlayerAction::SpeedDecrease,
         Key::Character(char) if char.as_str() == "z" => PlayerAction::SpeedReset,
+        Key::Named(Named::PlaySpeedReset) => PlayerAction::SpeedReset,
 
         Key::Character(char) if char.as_str() == "s" && modifiers.shift() => {
             PlayerAction::VideoConfig
         }
 
         Key::Character(char) if char.as_str() == "s" => PlayerAction::SubtitlesToggle,
+        Key::Named(Named::Subtitle) => PlayerAction::SubtitlesToggle,
 
         Key::Character(char) if char.as_str() == "b" => PlayerAction::VideoComment,
 

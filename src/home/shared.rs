@@ -865,7 +865,8 @@ impl SearchView {
                     })
                     .width(Length::Fill),
             )
-            .max_height(30.0)
+            .clip(true)
+            .max_height(24.0)
         };
 
         let snippet = {
@@ -877,8 +878,9 @@ impl SearchView {
         let top = {
             let size = H8;
             let font = Font {
-                family: font::Family::Fantasy,
+                family: font::Family::Serif,
                 style: font::Style::Italic,
+                weight: font::Weight::Semibold,
                 ..Default::default()
             };
 
@@ -919,7 +921,7 @@ impl SearchView {
             let vert: Element<'_, Message> = if self.item.tags.is_empty() {
                 empty()
             } else {
-                container(rule::vertical(2.0)).height(H8).into()
+                container(rule::vertical(2.0)).height(H8).clip(true).into()
             };
 
             row!(media, vert, tags)

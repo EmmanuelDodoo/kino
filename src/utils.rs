@@ -482,8 +482,15 @@ pub enum Layout {
 impl Layout {
     pub fn icon(&self) -> char {
         match self {
-            Self::Grid => icons::LIST,
-            Self::List => icons::GRID,
+            Self::Grid => icons::GRID,
+            Self::List => icons::LIST,
+        }
+    }
+
+    pub fn str(&self) -> &str {
+        match self {
+            Self::List => "list",
+            Self::Grid => "grid",
         }
     }
 }
@@ -492,7 +499,7 @@ impl Layout {
 pub enum HomeAction {
     // todo
     // SettingsOpen,
-    // Esc to exit modals
+    CloseModal,
     LayoutToggle,
     RefreshContent,
     /// Refreshes both content and the side menu
@@ -522,24 +529,4 @@ pub enum PlayerAction {
     VideoComment,
     SubtitlesToggle,
     Add,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Action {
-    Back,
-    Forward,
-    Home(HomeAction),
-    Player(PlayerAction),
-}
-
-impl From<PlayerAction> for Action {
-    fn from(value: PlayerAction) -> Self {
-        Self::Player(value)
-    }
-}
-
-impl From<HomeAction> for Action {
-    fn from(value: HomeAction) -> Self {
-        Self::Home(value)
-    }
 }
