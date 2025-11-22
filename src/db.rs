@@ -736,6 +736,35 @@ impl Database {
             .collect()
     }
 
+    pub fn get_random(&self) -> rusqlite::Result<ItemId> {
+        use rand::{seq::SliceRandom, thread_rng};
+
+        let mut rng = thread_rng();
+        let media = [0, 1, 2, 3].choose(&mut rng).unwrap();
+
+        let (getter, media) = match media {
+            0 => (Self::MOVIE_QUERY, "movie"),
+            1 => (Self::SHOW_QUERY, "show"),
+            2 => (Self::SEASON_QUERY, "season"),
+            3 => (Self::EPISODE_QUERY, "episode"),
+            _ => unreachable!(),
+        };
+
+        let table = match media {
+            "show" => "tv_show.".to_owned(),
+            "episode" => "".to_owned(),
+            _ => format!("{media}."),
+        };
+
+        let sql = format!(
+            "{getter} WHERE {table}progress < 0.85 ORDER BY RANDOM() * (6 - {table}rating) LIMIT 1",
+        );
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement.query_row([], |row| ItemId::from_random(row, media))
+    }
+
     pub fn last_watched_episode<'a>(
         &self,
         id: EpisodeId,

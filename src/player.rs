@@ -720,12 +720,13 @@ impl Manager {
                     "Add to collection",
                     tp
                 ),
-                tooltip(
-                    sized_button(icons::COMMENT, icon_size)
-                        .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
-                    "Comment",
-                    tp
-                ),
+                // todo
+                // tooltip(
+                //     sized_button(icons::COMMENT, icon_size)
+                //         .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
+                //     "Comment",
+                //     tp
+                // ),
                 tooltip(
                     sized_button(icons::PLAYLIST, icon_size).on_press_maybe(
                         self.is_ready(ManagerMessage::Playlist(PlaylistMessge::Toggle))

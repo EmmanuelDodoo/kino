@@ -104,6 +104,7 @@ pub enum Message {
         press: bool,
     },
     Back,
+    Random,
     None,
 }
 
@@ -592,6 +593,17 @@ impl App {
                     }
                 }
             },
+            Message::Random => {
+                let random = match self.db.get_random() {
+                    Ok(random) => random,
+                    Err(error) => {
+                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        return Task::done(msg);
+                    }
+                };
+
+                self.home.goto(random.into(), now)
+            }
         }
     }
 

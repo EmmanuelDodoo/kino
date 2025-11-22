@@ -435,111 +435,7 @@ impl Home {
 
                 Task::batch([Task::done(msg), scroll])
             }
-            HomeMessage::Goto(kind) => {
-                if let Some(current) = self.current_page
-                    && current == kind
-                {
-                    return Task::none();
-                }
-
-                let close_view = self.close_view();
-                self.backward.retain(|back| *back != kind);
-
-                if let Some(old) = self.current_page.replace(kind) {
-                    self.backward.push(old)
-                };
-                self.forward.clear();
-                self.state = State::Loading(loading_animation(now));
-
-                let fid = fetch_kind(kind);
-
-                let msg = Message::Fetch {
-                    id: fid,
-                    filters: self.filters,
-                    sort: self.sort,
-                    limit: None,
-                    offset: None,
-                };
-
-                if let Some(page) = self.pages.get_mut(&kind) {
-                    let update = PageUpdate {
-                        filters: self.filters,
-                        sort: self.sort,
-                        layout: self.layout,
-                    };
-                    page.page_update(update);
-
-                    let scroll = page.update_scroll().discard();
-
-                    let tsk = Task::done(msg).chain(scroll);
-
-                    return Task::batch([tsk, close_view]);
-                }
-
-                let task = match kind {
-                    PageKind::Movies => {
-                        let (movies, task) = Movies::boot(self.sort, self.filters, self.layout);
-
-                        self.pages.insert(kind, Page::Movies(movies));
-
-                        task.map(|msg| Message::Home(HomeMessage::Movies(msg)))
-                    }
-                    PageKind::Shows => {
-                        let (shows, tasks) = TvShows::boot(self.sort, self.filters, self.layout);
-
-                        self.pages.insert(kind, Page::Shows(shows));
-
-                        tasks.map(|ssg| Message::Home(HomeMessage::Shows(ssg)))
-                    }
-                    PageKind::Movie(id) => {
-                        let movie = MoviePage::new(id);
-
-                        self.pages.insert(kind, Page::Movie { page: movie, id });
-
-                        Task::none()
-                    }
-                    PageKind::Episode(id) => {
-                        let episode = EpisodePage::new(id);
-
-                        self.pages.insert(kind, Page::Episode { page: episode, id });
-
-                        Task::none()
-                    }
-                    PageKind::Show(id) => {
-                        let (show, task) = ShowPage::boot(id, self.sort, self.filters, self.layout);
-
-                        self.pages.insert(kind, Page::Show { id, page: show });
-
-                        task.map(|ssg| Message::Home(HomeMessage::ShowPage(ssg)))
-                    }
-                    PageKind::Season(id) => {
-                        let (season, task) =
-                            SeasonPage::boot(id, self.sort, self.filters, self.layout);
-
-                        self.pages.insert(kind, Page::Season { id, page: season });
-
-                        task.map(|ssg| Message::Home(HomeMessage::SeasonPage(ssg)))
-                    }
-                    PageKind::Collection(id) => {
-                        let (collection, tasks) =
-                            CollectionPage::boot(id, self.sort, self.filters, self.layout);
-
-                        self.pages.insert(kind, Page::Collection { collection, id });
-
-                        tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
-                    }
-                    PageKind::Collections => {
-                        let (collections, task) =
-                            Collections::boot(self.sort, self.filters, self.layout);
-
-                        self.pages.insert(kind, Page::Collections(collections));
-
-                        task.map(|csg| Message::Home(HomeMessage::Collections(csg)))
-                    }
-                };
-
-                Task::batch([Task::done(msg), close_view, task])
-            }
+            HomeMessage::Goto(kind) => self.goto(kind, now),
             HomeMessage::Movies(message) => {
                 let Some(page) = self.current_page_mut() else {
                     return Task::none();
@@ -1203,9 +1099,7 @@ impl Home {
 
                 Task::batch([focus, self.update_page_scroll()])
             }
-            HomeMessage::Random => {
-                todo!("Random");
-            }
+            HomeMessage::Random => Task::done(Message::Random),
             HomeMessage::RefreshContent => self.content_refresh(now),
             HomeMessage::Play(item) => {
                 let close_view = self.close_view();
@@ -1952,7 +1846,7 @@ impl Home {
             ),
             tooltip(
                 icons::sized_button(icons::RAND, size).on_press(HomeMessage::Random),
-                "Random item",
+                "Random media",
                 tp::Position::Bottom
             ),
             tooltip(
@@ -2366,6 +2260,110 @@ impl Home {
     fn close_view(&mut self) -> Task<Message> {
         self.view.take();
         self.update_page_scroll()
+    }
+
+    pub fn goto(&mut self, kind: PageKind, now: Instant) -> Task<Message> {
+        if let Some(current) = self.current_page
+            && current == kind
+        {
+            return Task::none();
+        }
+
+        let close_view = self.close_view();
+        self.backward.retain(|back| *back != kind);
+
+        if let Some(old) = self.current_page.replace(kind) {
+            self.backward.push(old)
+        };
+        self.forward.clear();
+        self.state = State::Loading(loading_animation(now));
+
+        let fid = fetch_kind(kind);
+
+        let msg = Message::Fetch {
+            id: fid,
+            filters: self.filters,
+            sort: self.sort,
+            limit: None,
+            offset: None,
+        };
+
+        if let Some(page) = self.pages.get_mut(&kind) {
+            let update = PageUpdate {
+                filters: self.filters,
+                sort: self.sort,
+                layout: self.layout,
+            };
+            page.page_update(update);
+
+            let scroll = page.update_scroll().discard();
+
+            let tsk = Task::done(msg).chain(scroll);
+
+            return Task::batch([tsk, close_view]);
+        }
+
+        let task = match kind {
+            PageKind::Movies => {
+                let (movies, task) = Movies::boot(self.sort, self.filters, self.layout);
+
+                self.pages.insert(kind, Page::Movies(movies));
+
+                task.map(|msg| Message::Home(HomeMessage::Movies(msg)))
+            }
+            PageKind::Shows => {
+                let (shows, tasks) = TvShows::boot(self.sort, self.filters, self.layout);
+
+                self.pages.insert(kind, Page::Shows(shows));
+
+                tasks.map(|ssg| Message::Home(HomeMessage::Shows(ssg)))
+            }
+            PageKind::Movie(id) => {
+                let movie = MoviePage::new(id);
+
+                self.pages.insert(kind, Page::Movie { page: movie, id });
+
+                Task::none()
+            }
+            PageKind::Episode(id) => {
+                let episode = EpisodePage::new(id);
+
+                self.pages.insert(kind, Page::Episode { page: episode, id });
+
+                Task::none()
+            }
+            PageKind::Show(id) => {
+                let (show, task) = ShowPage::boot(id, self.sort, self.filters, self.layout);
+
+                self.pages.insert(kind, Page::Show { id, page: show });
+
+                task.map(|ssg| Message::Home(HomeMessage::ShowPage(ssg)))
+            }
+            PageKind::Season(id) => {
+                let (season, task) = SeasonPage::boot(id, self.sort, self.filters, self.layout);
+
+                self.pages.insert(kind, Page::Season { id, page: season });
+
+                task.map(|ssg| Message::Home(HomeMessage::SeasonPage(ssg)))
+            }
+            PageKind::Collection(id) => {
+                let (collection, tasks) =
+                    CollectionPage::boot(id, self.sort, self.filters, self.layout);
+
+                self.pages.insert(kind, Page::Collection { collection, id });
+
+                tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
+            }
+            PageKind::Collections => {
+                let (collections, task) = Collections::boot(self.sort, self.filters, self.layout);
+
+                self.pages.insert(kind, Page::Collections(collections));
+
+                task.map(|csg| Message::Home(HomeMessage::Collections(csg)))
+            }
+        };
+
+        Task::batch([Task::done(msg), close_view, task])
     }
 
     pub fn action(&mut self, action: HomeAction, now: Instant) -> Task<Message> {

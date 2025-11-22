@@ -54,6 +54,16 @@ impl ItemId {
         }
     }
 
+    pub fn from_random(row: &Row<'_>, media: &str) -> rusqlite::Result<Self> {
+        match media {
+            "movie" => MovieId::from_row(row).map(Self::Movie),
+            "show" => ShowId::from_row(row).map(Self::Show),
+            "season" => SeasonId::from_row(row).map(Self::Season),
+            "episode" => EpisodeId::from_row(row).map(Self::Episode),
+            _ => unreachable!("invalid media"),
+        }
+    }
+
     pub fn name_str(&self) -> &'static str {
         match self {
             Self::Movie(_) => "movie",
