@@ -326,10 +326,6 @@ impl Media for Season {
         &self.name
     }
 
-    fn path(&self) -> &str {
-        &self.path
-    }
-
     fn added(&self) -> DateTime<Local> {
         self.added
     }

@@ -144,6 +144,7 @@ impl CollectionPage {
         let content = match self.layout {
             Layout::List => self.list(now, movies, shows, seasons, episodes),
             Layout::Grid => self.grid(now, movies, shows, seasons, episodes),
+            Layout::Compact => self.compact(movies, shows, seasons, episodes),
         };
 
         let content = scrollable(content)
@@ -385,6 +386,122 @@ impl CollectionPage {
                             move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
                             move |id| play(collection, ItemId::Episode(id)),
                             |_| empty(),
+                        )
+                    });
+
+                    column(content).spacing(16.0).into()
+                };
+                column!(label, episodes).spacing(10.0)
+            };
+            content.push(episodes)
+        };
+
+        let content = content;
+
+        content.into()
+    }
+
+    fn compact<'a>(
+        &self,
+        mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
+        mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
+        mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
+    ) -> Element<'a, CollectionMessage> {
+        let label = |label: &'a str| -> Element<'a, CollectionMessage> {
+            let label = text(label).size(H4);
+            column!(label, rule::horizontal(2.0)).spacing(4.0).into()
+        };
+        let collection = self.id;
+
+        let content = Column::new().spacing(40);
+
+        let content = if movies.peek().is_none() {
+            content
+        } else {
+            let movies = {
+                let label = label("Movies");
+                let movies = filter_sort(movies, &self.filters, &self.sort);
+
+                let movies: Element<'_, CollectionMessage> = {
+                    let content = movies.map(|thumbnail| {
+                        thumbnail.compact(
+                            move |id| add(collection, ItemId::Movie(id)),
+                            move |id| select(collection, ItemId::Movie(id)),
+                            move |id| play(collection, ItemId::Movie(id)),
+                        )
+                    });
+
+                    column(content).spacing(16.0).into()
+                };
+
+                column!(label, movies).spacing(10.0)
+            };
+
+            content.push(movies)
+        };
+
+        let content = if shows.peek().is_none() {
+            content
+        } else {
+            let shows = {
+                let label = label("Shows");
+                let shows = filter_sort(shows, &self.filters, &self.sort);
+
+                let shows: Element<'_, CollectionMessage> = {
+                    let content = shows.map(|thumbnail| {
+                        thumbnail.compact(
+                            move |id| add(collection, ItemId::Show(id)),
+                            move |id| select(collection, ItemId::Show(id)),
+                            move |id| play(collection, ItemId::Show(id)),
+                        )
+                    });
+
+                    column(content).spacing(16.0).into()
+                };
+                column!(label, shows).spacing(10.0)
+            };
+
+            content.push(shows)
+        };
+
+        let content = if seasons.peek().is_none() {
+            content
+        } else {
+            let seasons = {
+                let label = label("Seasons");
+                let seasons = filter_sort(seasons, &self.filters, &self.sort);
+
+                let seasons: Element<'_, CollectionMessage> = {
+                    let content = seasons.map(|thumbnail| {
+                        thumbnail.compact(
+                            move |id| add(collection, ItemId::Season(id)),
+                            move |id| select(collection, ItemId::Season(id)),
+                            move |id| play(collection, ItemId::Season(id)),
+                        )
+                    });
+
+                    column(content).spacing(16.0).into()
+                };
+                column!(label, seasons).spacing(10.0)
+            };
+
+            content.push(seasons)
+        };
+
+        let content = if episodes.peek().is_none() {
+            content
+        } else {
+            let episodes = {
+                let label = label("Episodes");
+                let episodes = filter_sort(episodes, &self.filters, &self.sort);
+
+                let episodes: Element<'_, CollectionMessage> = {
+                    let content = episodes.map(|thumbnail| {
+                        thumbnail.compact(
+                            move |id| add(collection, ItemId::Episode(id)),
+                            move |id| select(collection, ItemId::Episode(id)),
+                            move |id| play(collection, ItemId::Episode(id)),
                         )
                     });
 

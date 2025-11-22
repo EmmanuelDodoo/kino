@@ -395,10 +395,6 @@ impl Media for Episode {
         &self.name
     }
 
-    fn path(&self) -> &str {
-        &self.path
-    }
-
     fn added(&self) -> DateTime<Local> {
         self.added
     }

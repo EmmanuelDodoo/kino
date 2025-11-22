@@ -1518,6 +1518,17 @@ impl Home {
 
                     column(content).spacing(16.0).into()
                 }
+                Layout::Compact => {
+                    let content = movies.map(|thumbnail| {
+                        thumbnail.compact(
+                            |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
+                            |id| HomeMessage::Goto(PageKind::Movie(id)),
+                            |id| HomeMessage::Play(ItemId::Movie(id)),
+                        )
+                    });
+
+                    column(content).spacing(16.0).into()
+                }
             };
 
             column!(label, movies).spacing(10.0)
@@ -1556,6 +1567,17 @@ impl Home {
                             |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
                             |id| HomeMessage::Play(ItemId::Show(id)),
                             shows::unique,
+                        )
+                    });
+
+                    column(content).spacing(16.0).into()
+                }
+                Layout::Compact => {
+                    let content = shows.map(|thumbnail| {
+                        thumbnail.compact(
+                            |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
+                            |id| HomeMessage::Goto(PageKind::Show(id)),
+                            |id| HomeMessage::Play(ItemId::Show(id)),
                         )
                     });
 
@@ -2322,11 +2344,11 @@ impl Home {
     }
 
     fn layout_toggle(&mut self) -> Task<Message> {
-        if self.layout == Layout::Grid {
-            self.layout = Layout::List
-        } else {
-            self.layout = Layout::Grid
-        }
+        self.layout = match self.layout {
+            Layout::Grid => Layout::List,
+            Layout::List => Layout::Compact,
+            Layout::Compact => Layout::Grid,
+        };
 
         let update = PageUpdate {
             layout: self.layout,

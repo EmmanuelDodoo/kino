@@ -149,6 +149,31 @@ impl Movies {
         content.into()
     }
 
+    fn compact<'a>(
+        &self,
+        thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
+    ) -> Element<'a, MoviesMessage> {
+        let content = filter_sort(thumbnails, &self.filter, &self.sort).map(|thumbnail| {
+            thumbnail.compact(
+                MoviesMessage::Add,
+                MoviesMessage::Details,
+                MoviesMessage::Play,
+            )
+        });
+
+        let content = column(content).spacing(16);
+
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(MoviesMessage::Scroll),
+        )
+        .padding(10);
+
+        content.into()
+    }
+
     pub fn view<'a>(
         &self,
         now: Instant,
@@ -157,6 +182,7 @@ impl Movies {
         match self.layout {
             Layout::Grid => self.grid(now, thumbnails),
             Layout::List => self.list(now, thumbnails),
+            Layout::Compact => self.compact(thumbnails),
         }
     }
 

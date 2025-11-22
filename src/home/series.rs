@@ -204,6 +204,44 @@ impl ShowPage {
         content.into()
     }
 
+    fn compact<'a>(
+        &self,
+        thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
+    ) -> Element<'a, ShowPageMessage> {
+        let show = self.id;
+
+        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+            thumbnail.compact(
+                move |id| ShowPageMessage {
+                    id: show,
+                    message: Message::Add(id),
+                },
+                move |id| ShowPageMessage {
+                    id: show,
+                    message: Message::Details(id),
+                },
+                move |id| ShowPageMessage {
+                    id: show,
+                    message: Message::Play(id),
+                },
+            )
+        });
+
+        let content = column(content).spacing(16);
+
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(move |viewport| ShowPageMessage {
+                    id: show,
+                    message: Message::Scroll(viewport),
+                }),
+        );
+
+        content.into()
+    }
+
     fn grid<'a>(
         &self,
         now: Instant,
@@ -429,6 +467,7 @@ impl ShowPage {
                 Tab::Items => match self.layout {
                     Layout::Grid => self.grid(now, thumbnails),
                     Layout::List => self.list(now, thumbnails),
+                    Layout::Compact => self.compact(thumbnails),
                 },
                 Tab::Data => data_tab(&show.media, width),
                 Tab::Comments => {

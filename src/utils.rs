@@ -544,6 +544,7 @@ pub enum Layout {
     #[default]
     Grid,
     List,
+    Compact,
 }
 
 impl Layout {
@@ -551,13 +552,15 @@ impl Layout {
         match self {
             Self::Grid => icons::GRID,
             Self::List => icons::LIST,
+            Self::Compact => icons::COMPACT_LIST,
         }
     }
 
     pub fn str(&self) -> &str {
         match self {
-            Self::List => "list",
-            Self::Grid => "grid",
+            Self::List => "List",
+            Self::Grid => "Grid",
+            Self::Compact => "Compact list",
         }
     }
 }

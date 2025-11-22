@@ -28,8 +28,6 @@ pub trait Media {
 
     fn duration(&self) -> u64;
 
-    fn path(&self) -> &str;
-
     fn added(&self) -> DateTime<Local>;
 
     fn release(&self) -> NaiveDate;
@@ -50,20 +48,6 @@ pub trait Media {
 
     fn backdrop(&self) -> Option<&str>;
 
-    fn progress_icon(&self) -> char {
-        use crate::utils::icons::*;
-
-        match self.progress() {
-            ..0.15 => PROGRESS_10,
-            0.15..0.3 => PROGRESS_20,
-            0.3..0.5 => PROGRESS_40,
-            0.5..0.7 => PROGRESS_60,
-            0.7..0.85 => PROGRESS_80,
-            x if x < 1.0 => PROGRESS_90,
-            _ => PROGRESS_100,
-        }
-    }
-
     fn release_year(&self) -> String {
         use chrono::Datelike;
 
@@ -82,13 +66,14 @@ pub trait Media {
         format!("{}", added.format("%b, %Y"))
     }
 
-    fn added_full(&self) -> String {
-        todo!()
-    }
-
     /// Duration in `(hrs) hours (mins) minutes` format.
     fn duration_full(&self) -> String {
         let duration = self.duration();
+
+        if duration < 60 {
+            return format!("{duration:02}seconds");
+        }
+
         let hrs = duration / 3600;
         let hrs = if hrs > 0 {
             format!("{hrs}:")
@@ -105,6 +90,11 @@ pub trait Media {
     /// Duration in the `(hrs)h (mins)m` format.
     fn duration_short(&self) -> String {
         let duration = self.duration();
+
+        if duration < 60 {
+            return format!("{duration:02}s");
+        }
+
         let hrs = duration / 3600;
         let hrs = if hrs > 0 {
             format!("{hrs}h")
@@ -126,10 +116,6 @@ pub trait Media {
         let recent = self.recent();
 
         recent.map(|recent| format!("{}", recent.format("%b %d, %Y")))
-    }
-
-    fn recent_long(&self) -> String {
-        todo!()
     }
 }
 

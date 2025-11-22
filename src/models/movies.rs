@@ -408,10 +408,6 @@ impl Media for Movie {
         &self.name
     }
 
-    fn path(&self) -> &str {
-        &self.path
-    }
-
     fn added(&self) -> DateTime<Local> {
         self.added
     }

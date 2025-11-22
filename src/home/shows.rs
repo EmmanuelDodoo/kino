@@ -124,6 +124,31 @@ impl TvShows {
         content.into()
     }
 
+    fn compact<'a>(
+        &self,
+        thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
+    ) -> Element<'a, TvShowsMessage> {
+        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+            thumbnail.compact(
+                TvShowsMessage::Add,
+                TvShowsMessage::Details,
+                TvShowsMessage::Play,
+            )
+        });
+
+        let content = column(content).spacing(16);
+
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(TvShowsMessage::Scroll),
+        )
+        .padding(10);
+
+        content.into()
+    }
+
     fn grid<'a>(
         &self,
         now: Instant,
@@ -163,6 +188,7 @@ impl TvShows {
         match self.layout {
             Layout::Grid => self.grid(now, thumbnails),
             Layout::List => self.list(now, thumbnails),
+            Layout::Compact => self.compact(thumbnails),
         }
     }
 }

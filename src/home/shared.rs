@@ -96,6 +96,18 @@ pub fn ratings<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
     }
 }
 
+fn progress_icon<T: Media>(media: &T) -> char {
+    match media.progress() {
+        ..0.15 => PROGRESS_10,
+        0.15..0.3 => PROGRESS_20,
+        0.3..0.5 => PROGRESS_40,
+        0.5..0.7 => PROGRESS_60,
+        0.7..0.85 => PROGRESS_80,
+        x if x < 1.0 => PROGRESS_90,
+        _ => PROGRESS_100,
+    }
+}
+
 pub fn progress<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
     let font = Font {
         family: Family::Monospace,
@@ -105,7 +117,7 @@ pub fn progress<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
     let progress = (media.progress() * 1000.0).round() / 10.0;
     let text = text(format!("{}%", progress)).size(H8).font(font);
 
-    let progress = media.progress_icon();
+    let progress = progress_icon(media);
     let icon = icon(progress).size(H6);
 
     row!(icon, text)
@@ -658,6 +670,139 @@ impl<T: Media> Thumbnail<T> {
             .on_enter((on_hover)(self.media.id(), true));
 
         content.into()
+    }
+
+    pub fn compact<'a, Message: 'a + Clone>(
+        &'a self,
+        on_add: impl Fn(T::Id) -> Message + 'a,
+        on_select: impl Fn(T::Id) -> Message + 'a,
+        on_play: impl Fn(T::Id) -> Message + 'a,
+    ) -> Element<'a, Message> {
+        let width = 56.0;
+        let size = P;
+
+        let font = Font {
+            family: font::Family::Serif,
+            weight: font::Weight::Semibold,
+            ..Default::default()
+        };
+
+        let img: Element<'a, Message> = match &self.poster {
+            Some(handle) => widget::image(handle)
+                .border_radius(IMAGE_RADIUS)
+                .width(width)
+                .height(width)
+                .content_fit(ContentFit::Cover)
+                .into(),
+
+            None => container(empty()).style(container::dark).into(),
+        };
+
+        let img = button(img)
+            .style(button::text)
+            .padding(0)
+            .on_press((on_play)(self.media.id()));
+
+        let name = button(
+            text(self.media.name())
+                .size(size)
+                .font(Font {
+                    weight: font::Weight::Semibold,
+                    ..Default::default()
+                })
+                .width(Length::Fill),
+        )
+        .on_press((on_select)(self.media.id()))
+        .padding(0)
+        .style(button::text);
+
+        let name = container(name)
+            .clip(true)
+            .align_y(Vertical::Center)
+            .height(24.0);
+
+        let ratings: Element<'_, Message> = {
+            let color = |theme: &Theme| -> text::Style {
+                let color = theme.extended_palette().primary.strong.color;
+                text::Style { color: Some(color) }
+            };
+
+            match self.media.rating() {
+                Some(value) => {
+                    let rating = (value * 10.0).round() / 10.0;
+
+                    let stars = (rating.trunc() as u8).clamp(0, 5);
+                    let rem = 5 - stars;
+                    let frac = rating.fract() >= 0.5;
+                    let unstars = if frac { rem.saturating_sub(1) } else { rem };
+                    let frac = rem - unstars;
+
+                    let stars =
+                        (0..stars).map(|_| Element::from(icon(STAR).size(size).style(color)));
+                    let frac =
+                        (0..frac).map(|_| Element::from(icon(HALF_STAR).size(size).style(color)));
+                    let unstars =
+                        (0..unstars).map(|_| Element::from(icon(UNSTAR).size(size).style(color)));
+
+                    let ratings = row(stars.chain(frac).chain(unstars))
+                        .spacing(2.0)
+                        .align_y(Vertical::Center);
+
+                    let ratings = container(ratings).align_y(Vertical::Center);
+
+                    ratings.into()
+                }
+                None => {
+                    row((0..5).map(|_| Element::from(icon(UNSTAR).size(size).style(color)))).into()
+                }
+            }
+        };
+
+        let progress = {
+            let font = Font {
+                family: font::Family::Monospace,
+                weight: font::Weight::Semibold,
+                ..Default::default()
+            };
+            let progress = (0.789f32 * 1000.0).round() / 10.0;
+            let text = text(format!("{}%", progress)).size(size).font(font);
+
+            container(text).align_y(Vertical::Center).width(40.0)
+        };
+
+        let duration = container(text(self.media.duration_short()).size(size).font(font))
+            .width(56.0)
+            .height(24.0)
+            .align_x(Horizontal::Right)
+            .align_y(Vertical::Center);
+
+        let recent = self
+            .media
+            .recent_short()
+            .unwrap_or(String::from("--:--:--"));
+        let recent = container(text(recent).size(size).font(font))
+            .height(24.0)
+            .width(100.0)
+            .align_x(Horizontal::Right)
+            .align_y(Vertical::Center);
+
+        let add = sized_button(ADD_COLLECTION, P)
+            .on_press((on_add)(self.media.id()))
+            .padding(0);
+
+        container(
+            row!(img, name, ratings, progress, duration, recent, add)
+                .spacing(20.0)
+                .align_y(Vertical::Center),
+        )
+        .padding([6, 6])
+        .style(|theme| {
+            let default = container::bordered_box(theme);
+            let border = default.border.rounded(IMAGE_RADIUS).width(0);
+
+            container::Style { border, ..default }
+        })
+        .into()
     }
 }
 

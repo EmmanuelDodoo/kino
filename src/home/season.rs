@@ -198,6 +198,45 @@ impl SeasonPage {
         content.into()
     }
 
+    fn compact<'a>(
+        &self,
+        thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
+    ) -> Element<'a, SeasonPageMessage> {
+        let season = self.id;
+
+        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+            thumbnail.compact(
+                move |id| SeasonPageMessage {
+                    id: season,
+                    message: Message::Add(id),
+                },
+                move |id| SeasonPageMessage {
+                    id: season,
+                    message: Message::Details(id),
+                },
+                move |id| SeasonPageMessage {
+                    id: season,
+                    message: Message::Play(id),
+                },
+            )
+        });
+
+        let content = column(content).spacing(16);
+
+        let content = container(
+            scrollable(content)
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(move |viewpport| SeasonPageMessage {
+                    id: season,
+
+                    message: Message::Scroll(viewpport),
+                }),
+        );
+
+        content.into()
+    }
+
     fn grid<'a>(
         &self,
         now: Instant,
@@ -409,6 +448,7 @@ impl SeasonPage {
                 Tab::Items => match self.layout {
                     Layout::Grid => self.grid(now, thumbnails),
                     Layout::List => self.list(now, thumbnails),
+                    Layout::Compact => self.compact(thumbnails),
                 },
                 Tab::Data => data_tab(&season.media, width),
                 Tab::Comments => {
