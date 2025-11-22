@@ -2618,7 +2618,8 @@ fn icon_button<'a>(
         })
         .on_press(message),
     )
-    .max_height(60.0)
+    .clip(true)
+    .max_height(48.0)
     .into()
 }
 
@@ -2631,7 +2632,9 @@ fn collection_button<'a>(
 ) -> Element<'a, HomeMessage> {
     let size = H6;
     let icon = icons::icon(icon).size(size);
-    let text = container(text(value).size(size)).max_height(60.0);
+    let text = container(text(value).size(size))
+        .max_height(48.0)
+        .clip(true);
     let view = icons::icon(view).size(size);
 
     button(

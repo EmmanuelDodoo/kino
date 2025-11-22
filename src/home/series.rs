@@ -272,7 +272,7 @@ impl ShowPage {
         });
 
         let content = grid(content)
-            .spacing(16)
+            .spacing(12)
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
@@ -293,7 +293,7 @@ impl ShowPage {
     fn top<'a>(&self, show: &'a Thumbnail<Show>) -> Element<'a, ShowPageMessage> {
         let id = self.id;
 
-        let img_height = CARD_HEIGHT * 0.85;
+        let img_height = CARD_HEIGHT * 0.65;
         let img: Element<'_, ShowPageMessage> = {
             let ratio = 2.0 / 3.0;
             show.poster(img_height * ratio, img_height)

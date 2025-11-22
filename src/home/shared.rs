@@ -817,8 +817,8 @@ impl CollectionThumbnail {
     pub const HEIGHT: u32 = 200;
     pub const WIDTH: u32 = 200;
 
-    pub const CARD_WIDTH: f32 = CARD_WIDTH;
-    pub const CARD_HEIGHT: f32 = CARD_HEIGHT * 0.85;
+    pub const CARD_HEIGHT: f32 = CARD_HEIGHT * 0.80;
+    pub const CARD_WIDTH: f32 = Self::CARD_HEIGHT;
 
     pub fn new(collection: Collection) -> Self {
         let paths = collection
@@ -890,7 +890,7 @@ impl CollectionThumbnail {
 
             container(title)
                 .padding(padding)
-                .max_height(24.0)
+                .max_height(48.0)
                 .clip(true)
         };
 
@@ -931,7 +931,7 @@ impl CollectionThumbnail {
 
         let img = container(img).width(width);
 
-        let content = column!(img, name).width(width).height(height);
+        let content = column!(img, name).width(width).height(height).spacing(8);
 
         let background_factor = 1.0 * self.zoom.interpolate(0.25, 1.0, now);
         let content = container(content).padding(8).style(move |theme| {
@@ -975,7 +975,7 @@ impl SearchView {
         }
     }
 
-    fn poster<'a, Message: 'a>(&self) -> Element<'a, Message>{
+    fn poster<'a, Message: 'a>(&self) -> Element<'a, Message> {
         match &self.poster {
             Some(handle) => widget::image(handle)
                 .border_radius(IMAGE_RADIUS)
@@ -1104,7 +1104,9 @@ impl SearchView {
             empty()
         };
 
-        let content = row!(self.poster(), content, play).align_y(Vertical::Center).spacing(10);
+        let content = row!(self.poster(), content, play)
+            .align_y(Vertical::Center)
+            .spacing(10);
 
         let content = container(content).width(Length::Fill);
 
