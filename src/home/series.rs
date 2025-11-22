@@ -381,8 +381,8 @@ impl ShowPage {
             column!(
                 title,
                 details,
-                space::vertical().height(3),
                 synopsis,
+                space::vertical().height(3),
                 actions
             )
             .height(img_height)

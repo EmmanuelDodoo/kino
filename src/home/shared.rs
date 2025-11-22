@@ -962,13 +962,29 @@ impl CollectionThumbnail {
 pub struct SearchView {
     pub item: SearchItem,
     snippet: Vec<markdown::Item>,
+    poster: Option<Handle>,
 }
 
 impl SearchView {
     pub fn new(item: SearchItem) -> Self {
+        let poster = item.poster.as_ref().map(Handle::from_path);
         Self {
             snippet: markdown::parse(&item.snippet).collect(),
             item,
+            poster,
+        }
+    }
+
+    fn poster<'a, Message: 'a>(&self) -> Element<'a, Message>{
+        match &self.poster {
+            Some(handle) => widget::image(handle)
+                .border_radius(IMAGE_RADIUS)
+                .width(56)
+                .height(56)
+                .content_fit(ContentFit::Fill)
+                .into(),
+
+            None => container(empty()).style(container::dark).into(),
         }
     }
 
@@ -1088,7 +1104,7 @@ impl SearchView {
             empty()
         };
 
-        let content = row!(content, play).align_y(Vertical::Center);
+        let content = row!(self.poster(), content, play).align_y(Vertical::Center).spacing(10);
 
         let content = container(content).width(Length::Fill);
 

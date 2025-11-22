@@ -2930,7 +2930,7 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
     let content = column!(input).extend(items).spacing(16.0);
 
     modal_container(content)
-        .max_width(500)
+        .max_width(550)
         .height(Length::Shrink)
         .into()
 }

@@ -346,6 +346,7 @@ pub struct SearchItem {
     pub name: String,
     pub snippet: String,
     pub tags: Vec<String>,
+    pub poster: Option<String>,
 }
 
 impl SearchItem {
@@ -355,6 +356,8 @@ impl SearchItem {
         let name = row.get::<_, String>("name")?;
 
         let snippet = row.get::<_, String>("snippet")?;
+
+        let poster = row.get::<_, Option<String>>("poster")?;
 
         let tags = row.get::<_, Option<String>>("tags")?;
         let tags = {
@@ -371,6 +374,7 @@ impl SearchItem {
             name,
             snippet,
             tags,
+            poster,
         })
     }
 }

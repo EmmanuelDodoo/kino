@@ -232,7 +232,8 @@ CREATE VIRTUAL TABLE media_fts USING fts5(
 CREATE TABLE media_fts_index (
 	rowid INTEGER PRIMARY KEY,
 	media_type TEXT NOT NULL,
-	media_id TEXT NOT NULL
+	media_id TEXT NOT NULL,
+    poster TEXT
 );
 
 CREATE TRIGGER fts_movie_insert_tr AFTER INSERT ON movie
@@ -240,8 +241,8 @@ BEGIN
 	INSERT INTO media_fts (name, synopsis, tags)
 	VALUES (NEW.name, NEW.synopsis, NEW.tags);
 
-	INSERT INTO media_fts_index (rowid, media_type, media_id)
-	VALUES (last_insert_rowid(), 'movie', NEW.id);
+	INSERT INTO media_fts_index (rowid, media_type, media_id, poster)
+	VALUES (last_insert_rowid(), 'movie', NEW.id, NEW.poster);
 END;
 
 CREATE TRIGGER fts_show_insert_tr AFTER INSERT ON tv_show
@@ -249,8 +250,8 @@ BEGIN
 	INSERT INTO media_fts (name, synopsis, tags)
 	VALUES (NEW.name, NEW.synopsis, NEW.tags);
 
-	INSERT INTO media_fts_index (rowid, media_type, media_id)
-	VALUES (last_insert_rowid(), 'show', NEW.id);
+	INSERT INTO media_fts_index (rowid, media_type, media_id, poster)
+	VALUES (last_insert_rowid(), 'show', NEW.id, NEW.poster);
 END;
 
 CREATE TRIGGER fts_season_insert_tr AFTER INSERT ON season
@@ -258,8 +259,8 @@ BEGIN
 	INSERT INTO media_fts (name, synopsis)
 	VALUES (NEW.name, NEW.synopsis);
 
-	INSERT INTO media_fts_index (rowid, media_type, media_id)
-	VALUES (last_insert_rowid(), 'season', NEW.id);
+	INSERT INTO media_fts_index (rowid, media_type, media_id, poster)
+	VALUES (last_insert_rowid(), 'season', NEW.id, NEW.poster);
 END;
 
 CREATE TRIGGER fts_episode_insert_tr AFTER INSERT ON episode
@@ -267,8 +268,8 @@ BEGIN
 	INSERT INTO media_fts (name, synopsis)
 	VALUES (NEW.name, NEW.synopsis);
 
-	INSERT INTO media_fts_index (rowid, media_type, media_id)
-	VALUES (last_insert_rowid(), 'episode', NEW.id);
+	INSERT INTO media_fts_index (rowid, media_type, media_id, poster)
+	VALUES (last_insert_rowid(), 'episode', NEW.id, NEW.poster);
 END;
 
 CREATE TRIGGER fts_movie_update_tr
@@ -279,6 +280,11 @@ BEGIN
 	synopsis = NEW.synopsis,
 	tags = NEW.tags
 	WHERE rowid = (SELECT rowid FROM media_fts_index WHERE media_type = 'movie' AND media_id = NEW.id);
+
+    UPDATE media_fts_index
+    SET poster = NEW.poster
+    WHERE media_type = 'movie' AND media_id = NEW.id;
+
 END;
 
 CREATE TRIGGER fts_show_update_tr
@@ -289,6 +295,10 @@ BEGIN
 	synopsis = NEW.synopsis,
 	tags = NEW.tags
 	WHERE rowid = (SELECT rowid FROM media_fts_index WHERE media_type = 'show' AND media_id = NEW.id);
+
+    UPDATE media_fts_index
+    SET poster = NEW.poster
+    WHERE media_type = 'show' AND media_id = NEW.id;
 END;
 
 CREATE TRIGGER fts_season_update_tr
@@ -298,6 +308,10 @@ BEGIN
 	SET name = NEW.name,
 	synopsis = NEW.synopsis
 	WHERE rowid = (SELECT rowid FROM media_fts_index WHERE media_type = 'season' AND media_id = NEW.id);
+
+    UPDATE media_fts_index
+    SET poster = NEW.poster
+    WHERE media_type = 'season' AND media_id = NEW.id;
 END;
 
 CREATE TRIGGER fts_episode_update_tr
@@ -307,6 +321,10 @@ BEGIN
 	SET name = NEW.name,
 	synopsis = NEW.synopsis
 	WHERE rowid = (SELECT rowid FROM media_fts_index WHERE media_type = 'episode' AND media_id = NEW.id);
+
+    UPDATE media_fts_index
+    SET poster = NEW.poster
+    WHERE media_type = 'episode' AND media_id = NEW.id;
 END;
 
 CREATE TRIGGER fts_movie_delete_tr

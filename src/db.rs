@@ -700,6 +700,7 @@ impl Database {
             "SELECT
             i.media_type,
             i.media_id,
+            i.poster,
             f.name,
             snippet(media_fts, 1, '**', '**', '...', 16) as snippet,
             f.tags
