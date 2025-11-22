@@ -5,6 +5,7 @@ use gstreamer::{
 };
 use iced::animation::{Animation, Easing};
 use iced::widget::image;
+use rand::seq::IteratorRandom;
 use std::path::PathBuf;
 
 use crate::error::*;
@@ -318,6 +319,8 @@ impl PlayItem {
 
 #[derive(Debug, Clone)]
 pub struct Playlist {
+    pub shuffle: bool,
+    pub repeat: bool,
     current: usize,
     items: Vec<PlayItem>,
 }
@@ -325,6 +328,8 @@ pub struct Playlist {
 impl Playlist {
     pub fn empty() -> Self {
         Self {
+            repeat: false,
+            shuffle: false,
             current: 0,
             items: vec![],
         }
@@ -332,6 +337,8 @@ impl Playlist {
 
     pub fn new(items: impl Iterator<Item = PlayItem>) -> Self {
         Self {
+            repeat: false,
+            shuffle: false,
             current: 0,
             items: items.collect(),
         }
@@ -339,6 +346,8 @@ impl Playlist {
 
     pub fn single(item: PlayItem) -> Self {
         Self {
+            repeat: false,
+            shuffle: false,
             current: 0,
             items: vec![item],
         }
@@ -355,6 +364,8 @@ impl Playlist {
         self.items.append(&mut other.items);
 
         Self {
+            shuffle: self.shuffle && other.shuffle,
+            repeat: self.repeat && other.repeat,
             current,
             items: self.items,
         }
@@ -362,6 +373,15 @@ impl Playlist {
 
     pub fn position(&mut self, position: usize) {
         self.current = position.min(self.items.len().saturating_sub(1));
+    }
+
+    pub fn set_current(&mut self, current: usize) -> bool {
+        if self.current == current {
+            return false;
+        }
+
+        self.current = current.min(self.items.len().saturating_sub(1));
+        true
     }
 
     pub fn update_current(&mut self, update: &PlayItem) {
@@ -373,14 +393,49 @@ impl Playlist {
         }
     }
 
+    pub fn repeat(&mut self, repeat: bool) {
+        self.repeat = repeat;
+    }
+
+    pub fn shuffle(&mut self, shuffle: bool) {
+        self.shuffle = shuffle;
+    }
+
+    pub fn items(&self) -> impl Iterator<Item = (usize, &PlayItem, bool)> {
+        self.items
+            .iter()
+            .enumerate()
+            .map(|(idx, item)| (idx, item, idx == self.current))
+    }
+
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<&PlayItem> {
+        if self.shuffle && !self.is_empty() {
+            use rand::{seq::SliceRandom, thread_rng};
+
+            let mut rng = thread_rng();
+            let new = (0..self.items.len())
+                .choose(&mut rng)
+                .expect("Playlist shuffle");
+
+            self.current = new;
+            return self.current();
+        }
+
         self.current = (self.current + 1).min(self.items.len());
+
+        if self.repeat && self.current == self.items.len() {
+            self.current = 0
+        }
 
         self.current()
     }
 
     pub fn next_peek(&self) -> Option<&PlayItem> {
+        if self.repeat && self.current == self.len().saturating_sub(1) {
+            return self.items.get(0);
+        }
+
         self.items.get(self.current + 1)
     }
 
@@ -393,6 +448,18 @@ impl Playlist {
     }
 
     pub fn previous(&mut self) -> Option<&PlayItem> {
+        if self.shuffle && !self.is_empty() {
+            use rand::{seq::SliceRandom, thread_rng};
+
+            let mut rng = thread_rng();
+            let new = (0..self.items.len())
+                .choose(&mut rng)
+                .expect("Playlist shuffle");
+
+            self.current = new;
+            return self.current();
+        }
+
         self.current = self.current.saturating_sub(1);
 
         self.current()
@@ -419,7 +486,7 @@ impl Playlist {
     }
 
     pub fn has_next(&self) -> bool {
-        self.current < self.items.len().saturating_sub(1)
+        self.current < self.items.len().saturating_sub(1) || (!self.is_empty() && self.repeat)
     }
 
     pub fn has_previous(&self) -> bool {
@@ -427,7 +494,7 @@ impl Playlist {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct VideoSettings {
     pub thumbnail_interval: u32,
     pub volume: f64,
@@ -529,4 +596,5 @@ pub enum PlayerAction {
     VideoComment,
     SubtitlesToggle,
     Add,
+    CloseView,
 }

@@ -6,8 +6,8 @@ use iced::{
     font,
     time::Instant,
     widget::{
-        Container, button, center, checkbox, column, container, image, mouse_area, row, scrollable,
-        slider, space, stack, text, tooltip as tp,
+        Container, button, center, checkbox, column, container, image, mouse_area, row, rule,
+        scrollable, slider, space, stack, text, toggler, tooltip as tp,
     },
     window,
 };
@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::app::Message;
 use crate::home::shared::Icon;
 use crate::models::{CollectionId, ItemId, SimpleCollection};
 use crate::utils::{
@@ -26,15 +25,30 @@ use crate::utils::{
     typo::{self, *},
 };
 use crate::widgets::{self, modal};
+use crate::{app::Message, utils::CANCEL};
 
 #[derive(Debug)]
-enum View {
+enum Modal {
     CollectionAdd {
         item: PlayId,
         collections: Vec<SimpleCollection>,
         selected: HashSet<CollectionId>,
         initial: HashSet<CollectionId>,
     },
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Panel {
+    Playlist,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PlaylistMessge {
+    Toggle,
+    ToggleShuffle(bool),
+    ToggleRepeat(bool),
+    ToggleAutoNext(bool),
+    PlayItem(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +110,8 @@ pub enum ManagerMessage {
     NewFrame,
     CloseView,
     CollectionAddMessage(CollectionAddMessage),
+    Playlist(PlaylistMessge),
+    ClosePanel,
     None,
 }
 
@@ -112,7 +128,8 @@ pub struct Manager {
     state: State,
     next: AutoState,
 
-    view: Option<View>,
+    modal: Option<Modal>,
+    panel: Option<Panel>,
 }
 
 impl Manager {
@@ -153,7 +170,8 @@ impl Manager {
             is_fullscreen: false,
             state,
             next: AutoState::Idle,
-            view: None,
+            modal: None,
+            panel: None,
         }
     }
 
@@ -227,6 +245,7 @@ impl Manager {
 
                     task
                 } else {
+                    self.prep_video(&mut player);
                     player.video.set_paused(true);
                     self.next = AutoState::Ready(Box::new(player));
                     Task::none()
@@ -285,6 +304,7 @@ impl Manager {
 
                     if (player.position) / (player.duration) >= 0.9
                         && self.playlist.has_next()
+                        && !self.playlist.shuffle
                         && matches!(&self.next, AutoState::Idle)
                         && self.settings.auto_next
                     {
@@ -376,12 +396,12 @@ impl Manager {
             ManagerMessage::SpeedReset => self.speed_reset(),
             ManagerMessage::CloseView => self.close_view(),
             ManagerMessage::CollectionAddMessage(csg) => {
-                let Some(View::CollectionAdd {
+                let Some(Modal::CollectionAdd {
                     item,
                     collections,
                     mut selected,
                     initial,
-                }) = self.view.take()
+                }) = self.modal.take()
                 else {
                     return Task::none();
                 };
@@ -394,7 +414,7 @@ impl Manager {
                             selected.insert(id);
                         }
 
-                        self.view = Some(View::CollectionAdd {
+                        self.modal = Some(Modal::CollectionAdd {
                             item,
                             collections,
                             selected,
@@ -432,6 +452,42 @@ impl Manager {
                     }
                 }
             }
+            ManagerMessage::Playlist(psg) => match psg {
+                PlaylistMessge::Toggle => {
+                    if matches!(self.panel, Some(Panel::Playlist)) {
+                        self.close_panel()
+                    } else {
+                        self.panel = Some(Panel::Playlist);
+                        Task::none()
+                    }
+                }
+                PlaylistMessge::ToggleAutoNext(play) => {
+                    self.settings.auto_next = play;
+                    Task::none()
+                }
+                PlaylistMessge::ToggleShuffle(shuffle) => {
+                    self.playlist.shuffle(shuffle);
+                    self.next = AutoState::Idle;
+                    Task::none()
+                }
+                PlaylistMessge::ToggleRepeat(repeat) => {
+                    self.playlist.repeat(repeat);
+                    Task::none()
+                }
+                PlaylistMessge::PlayItem(item) => {
+                    if !self.playlist.set_current(item) {
+                        return Task::none();
+                    };
+
+                    let load_video = match self.playlist.current().cloned() {
+                        Some(item) => load_video(item, |video| ManagerMessage::Video(false, video)),
+                        None => Task::none(),
+                    };
+
+                    load_video.map(Message::Player)
+                }
+            },
+            ManagerMessage::ClosePanel => self.close_panel(),
         }
     }
 
@@ -670,6 +726,13 @@ impl Manager {
                     "Comment",
                     tp
                 ),
+                tooltip(
+                    sized_button(icons::PLAYLIST, icon_size).on_press_maybe(
+                        self.is_ready(ManagerMessage::Playlist(PlaylistMessge::Toggle))
+                    ),
+                    "Playlist",
+                    tp
+                ),
                 sized_button(
                     if self.is_fullscreen {
                         icons::MINIMIZE
@@ -756,9 +819,19 @@ impl Manager {
                 ..Default::default()
             });
 
-        match &self.view {
+        let content: Element<'_, ManagerMessage> = match self.panel {
+            Some(Panel::Playlist) => row!(
+                content,
+                draw_playlist(&self.playlist, self.settings.auto_next)
+            )
+            .height(Length::Fill)
+            .into(),
             None => content.into(),
-            Some(View::CollectionAdd {
+        };
+
+        match &self.modal {
+            None => content.into(),
+            Some(Modal::CollectionAdd {
                 collections,
                 selected,
                 ..
@@ -1012,9 +1085,9 @@ impl Manager {
     }
 
     pub fn fetched_collections(&mut self, collections: Vec<SimpleCollection>) -> Task<Message> {
-        let Some(View::CollectionAdd {
+        let Some(Modal::CollectionAdd {
             collections: view, ..
-        }) = self.view.as_mut()
+        }) = self.modal.as_mut()
         else {
             return Task::none();
         };
@@ -1025,9 +1098,9 @@ impl Manager {
     }
 
     pub fn fetched_membership_ids(&mut self, collections: Vec<CollectionId>) -> Task<Message> {
-        let Some(View::CollectionAdd {
+        let Some(Modal::CollectionAdd {
             selected, initial, ..
-        }) = self.view.as_mut()
+        }) = self.modal.as_mut()
         else {
             return Task::none();
         };
@@ -1038,8 +1111,13 @@ impl Manager {
         Task::none()
     }
 
-    fn close_view(&mut self) -> Task<Message> {
-        self.view = None;
+    pub fn close_view(&mut self) -> Task<Message> {
+        self.modal = None;
+        Task::none()
+    }
+
+    pub fn close_panel(&mut self) -> Task<Message> {
+        self.panel = None;
         Task::none()
     }
 
@@ -1050,14 +1128,14 @@ impl Manager {
 
         player.video.set_paused(true);
         let id = player.item.id;
-        let view = View::CollectionAdd {
+        let view = Modal::CollectionAdd {
             item: id,
             collections: vec![],
             selected: HashSet::default(),
             initial: HashSet::default(),
         };
 
-        self.view = Some(view);
+        self.modal = Some(view);
 
         let ids = Task::done(Message::FetchMembershipIds(id.into()));
         let cols = Task::done(Message::fetch_simple_collections());
@@ -1080,7 +1158,7 @@ impl Manager {
             PlayerAction::PlayPrevious => self.play_previous(now),
             PlayerAction::FullscreenToggle => self.fullscreen_toggle(),
             PlayerAction::Exit => {
-                if self.view.is_some() {
+                if self.modal.is_some() {
                     self.close_view()
                 } else {
                     self.fullscreen_exit()
@@ -1100,6 +1178,7 @@ impl Manager {
             PlayerAction::Add => self.collection_add(),
             PlayerAction::VideoConfig => self.video_config(),
             PlayerAction::VideoComment => self.video_comment(),
+            PlayerAction::CloseView => self.close_view(),
         }
     }
 
@@ -1179,13 +1258,161 @@ fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
             Button::Right => ManagerMessage::Config,
             _ => return None,
         },
-        MouseAction::Scroll(_delta) => {
-            //todo
-            return None;
-        }
+        MouseAction::Scroll(delta) => match delta {
+            iced::mouse::ScrollDelta::Lines { y, .. } => ManagerMessage::ChangeVolume(y as f64),
+            _ => return None,
+        },
     };
 
     Some(msg)
+}
+
+fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, ManagerMessage> {
+    let width = 325.0;
+    let rule_height = 1.0;
+    let padding = [6, 12];
+
+    let title = {
+        let font = Font {
+            family: font::Family::Serif,
+            weight: font::Weight::Semibold,
+            ..Default::default()
+        };
+
+        let content = row!(
+            text("Playlist").font(font).size(H7),
+            space::horizontal(),
+            button(icons::icon(CANCEL).size(H6))
+                .on_press(ManagerMessage::ClosePanel)
+                .style(button::text)
+                .padding(0),
+        )
+        .padding(padding)
+        .align_y(Vertical::Center);
+
+        column!(content, rule::horizontal(rule_height))
+    };
+
+    let items = playlist.items().map(|(idx, item, current)| {
+        let size = H8;
+
+        let duration = item.duration;
+        let hrs = duration / 3600;
+
+        let mins = (duration % 3600) / 60;
+
+        let secs = duration % 60;
+
+        let font = Font {
+            family: font::Family::Serif,
+            ..Default::default()
+        };
+
+        let color = move |theme: &Theme| {
+            let color = theme.extended_palette().primary.base.color;
+
+            text::Style {
+                color: current.then_some(color),
+            }
+        };
+
+        let name = container(
+            text(&item.name)
+                .font(font)
+                .size(size)
+                .height(16)
+                .style(color),
+        )
+        .max_width(width * 0.80);
+        let duration = format!("{hrs:02}:{mins:02}:{secs:02}");
+        let duration = text(duration).size(size).font(font).height(16).style(color);
+
+        button(
+            row!(name, space::horizontal(), duration)
+                .spacing(4)
+                .clip(true)
+                .align_y(Vertical::Center),
+        )
+        .on_press(ManagerMessage::Playlist(PlaylistMessge::PlayItem(idx)))
+        .padding(0)
+        .style(button::text)
+        .into()
+    });
+
+    let items = container(column(items).spacing(5)).padding(padding);
+
+    let actions = {
+        let position = tp::Position::Top;
+        let color = |theme: &Theme, active: bool| {
+            let color = theme.extended_palette().primary.base.color;
+
+            text::Style {
+                color: active.then_some(color),
+            }
+        };
+
+        let repeat = tooltip(
+            button(
+                icons::icon(icons::LOOP)
+                    .size(H6)
+                    .style(move |theme| color(theme, playlist.repeat)),
+            )
+            .padding(0)
+            .style(button::text)
+            .on_press(ManagerMessage::Playlist(PlaylistMessge::ToggleRepeat(
+                !playlist.repeat,
+            ))),
+            "Loop",
+            position,
+        );
+
+        let shuffle = tooltip(
+            button(
+                icons::icon(icons::SHUFFLE)
+                    .size(H6)
+                    .style(move |theme| color(theme, playlist.shuffle)),
+            )
+            .padding(0)
+            .style(button::text)
+            .on_press(ManagerMessage::Playlist(PlaylistMessge::ToggleShuffle(
+                !playlist.shuffle,
+            ))),
+            "Shuffle",
+            position,
+        );
+
+        let auto_next = tooltip(
+            toggler(auto_next).size(H7).on_toggle(|toggle| {
+                ManagerMessage::Playlist(PlaylistMessge::ToggleAutoNext(toggle))
+            }),
+            "Play next media",
+            position,
+        );
+
+        let content = row!(
+            space::horizontal(),
+            repeat,
+            space::horizontal(),
+            shuffle,
+            space::horizontal(),
+            auto_next,
+            space::horizontal()
+        )
+        .align_y(Vertical::Center)
+        .spacing(8)
+        .width(Length::Fill)
+        .padding(padding);
+
+        column!(rule::horizontal(rule_height), content)
+    };
+
+    let content = scrollable(items).spacing(6);
+
+    let content = column!(title, content, space::vertical(), actions).spacing(12);
+
+    let content = container(content).width(width).padding([3, 0]);
+
+    content.into()
 }
 
 fn draw_collection_add<'a>(

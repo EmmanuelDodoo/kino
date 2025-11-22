@@ -745,7 +745,7 @@ impl CollectionThumbnail {
 
             container(title)
                 .padding(padding)
-                .max_height(20.0)
+                .max_height(24.0)
                 .clip(true)
         };
 
@@ -990,6 +990,10 @@ enum Icons {
     Icon10 = 10,
     Icon11 = 11,
     Icon12 = 12,
+    Icon13 = 13,
+    Icon14 = 14,
+    Icon15 = 15,
+    Icon16 = 16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1012,6 +1016,10 @@ impl Icon {
             Some(10) => Self { id: Icons::Icon10 },
             Some(11) => Self { id: Icons::Icon11 },
             Some(12) => Self { id: Icons::Icon12 },
+            Some(13) => Self { id: Icons::Icon13 },
+            Some(14) => Self { id: Icons::Icon14 },
+            Some(15) => Self { id: Icons::Icon15 },
+            Some(16) => Self { id: Icons::Icon16 },
             _ => Self { id: Icons::Default },
         }
     }
@@ -1031,6 +1039,10 @@ impl Icon {
             Icons::Icon10 => ALIEN,
             Icons::Icon11 => CROWN,
             Icons::Icon12 => MASKS,
+            Icons::Icon13 => TELESCOPE,
+            Icons::Icon14 => SOUP,
+            Icons::Icon15 => SPARKLES,
+            Icons::Icon16 => HAMBURGER,
         }
     }
 
@@ -1042,13 +1054,17 @@ impl Icon {
             Icons::Icon3 => "Shows",
             Icons::Icon4 => "Popcorn",
             Icons::Icon5 => "Film",
-            Icons::Icon6 => "Todo list",
+            Icons::Icon6 => "Watchlist",
             Icons::Icon7 => "Anime",
             Icons::Icon8 => "Recent",
             Icons::Icon9 => "Horror",
             Icons::Icon10 => "Sci-Fi",
             Icons::Icon11 => "Top Rated",
             Icons::Icon12 => "Drama",
+            Icons::Icon13 => "Discovery",
+            Icons::Icon14 => "Comfort",
+            Icons::Icon15 => "Magical",
+            Icons::Icon16 => "Casual",
         }
     }
 
@@ -1056,7 +1072,7 @@ impl Icon {
         self.id as u32
     }
 
-    pub fn all() -> [Self; 13] {
+    pub fn all() -> [Self; 17] {
         [
             Self { id: Icons::Default },
             Self { id: Icons::Icon1 },
@@ -1071,6 +1087,10 @@ impl Icon {
             Self { id: Icons::Icon10 },
             Self { id: Icons::Icon11 },
             Self { id: Icons::Icon12 },
+            Self { id: Icons::Icon13 },
+            Self { id: Icons::Icon14 },
+            Self { id: Icons::Icon15 },
+            Self { id: Icons::Icon16 },
         ]
     }
 }

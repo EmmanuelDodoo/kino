@@ -845,7 +845,7 @@ fn home_keypress(key: Key, modifiers: Modifiers, _press: bool) -> Option<HomeAct
         Key::Character(char) if char.as_str() == "l" => HomeAction::LayoutToggle,
         Key::Character(char) if char.as_str() == "r" && modifiers.shift() => HomeAction::Refresh,
         Key::Character(char) if char.as_str() == "r" => HomeAction::RefreshContent,
-        Key::Character(char) if char.as_str() == "s" => HomeAction::SearchToggle,
+        Key::Character(char) if char.as_str() == "/" => HomeAction::SearchToggle,
         Key::Character(char) if char.as_str() == "f" && modifiers.command() => {
             HomeAction::SearchToggle
         }

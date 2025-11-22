@@ -32,6 +32,7 @@ pub const SORT: char = '\u{e817}';
 pub const GRID: char = '\u{e818}';
 pub const LIST: char = '\u{e825}';
 pub const RAND: char = '\u{e826}';
+pub const COMPACT_LIST: char = '\u{e80a}';
 
 pub const ADD_COLLECTION: char = '\u{e807}';
 // pub const REM_COLLECTION: char = '\u{e23c}';
@@ -51,6 +52,10 @@ pub const GHOST: char = '\u{e84a}';
 pub const ALIEN: char = '\u{e84b}';
 pub const CROWN: char = '\u{e84c}';
 pub const MASKS: char = '\u{e84d}';
+pub const TELESCOPE: char = '\u{e855}';
+pub const SOUP: char = '\u{e854}';
+pub const SPARKLES: char = '\u{e853}';
+pub const HAMBURGER: char = '\u{e809}';
 
 pub const VIDEO_CONFIG: char = '\u{e82c}';
 
@@ -71,6 +76,8 @@ pub const PAUSE: char = '\u{e820}';
 pub const REPLAY: char = '\u{e81a}';
 pub const REFRESH: char = '\u{e827}';
 pub const LOADING: char = '\u{e845}';
+pub const PLAYLIST: char = '\u{e856}';
+pub const SHUFFLE: char = '\u{e858}';
 
 pub const FAVORITE: char = '\u{e821}';
 pub const UNFAVORITE: char = '\u{e81b}';
