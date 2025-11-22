@@ -94,6 +94,7 @@ pub enum ConfigMessage {
 pub struct CollectionConfig {
     id: Option<CollectionId>,
     name: String,
+    empty_name: bool,
     description: text_editor::Content,
     icon: Icon,
     view: CollectionView,
@@ -113,6 +114,7 @@ impl CollectionConfig {
             theme,
             custom,
             name_input: _text_input,
+            empty_name: _empty_name,
         } = self;
 
         collection.name = name;
@@ -138,6 +140,7 @@ impl CollectionConfig {
             Self {
                 id: Some(collection.id),
                 name: collection.name.clone(),
+                empty_name: collection.name.is_empty(),
                 description,
                 view: collection.view,
                 icon: Icon::new(collection.icon),
@@ -156,6 +159,7 @@ impl CollectionConfig {
             Self {
                 id: None,
                 name: String::new(),
+                empty_name: true,
                 description: text_editor::Content::new(),
                 icon: Icon::new(None),
                 view: CollectionView::Shown,
@@ -548,6 +552,7 @@ impl Home {
 
                 match csg {
                     ConfigMessage::Name(name) => {
+                        config.empty_name = name.is_empty();
                         config.name = name;
                     }
                     ConfigMessage::Description(action) => {
@@ -573,6 +578,12 @@ impl Home {
                             return Task::none();
                         };
 
+                        if config.empty_name {
+                            let focus = operation::focus(config.name_input.clone());
+                            self.view = Some(View::CollectionConfig(config));
+                            return focus;
+                        }
+
                         if let Some(collection) = self
                             .collections
                             .iter_mut()
@@ -592,6 +603,12 @@ impl Home {
                         return Task::batch([Task::done(Message::Query(query)), close_view]);
                     }
                     ConfigMessage::Save => {
+                        if config.empty_name {
+                            let focus = operation::focus(config.name_input.clone());
+                            self.view = Some(View::CollectionConfig(config));
+                            return focus;
+                        }
+
                         let CollectionConfig {
                             name,
                             description,
@@ -601,6 +618,7 @@ impl Home {
                             custom,
                             id: _unused1,
                             name_input: _unused2,
+                            empty_name: _empty_name,
                         } = config;
 
                         let description = description.text();
@@ -2692,14 +2710,21 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let label = text("Name");
 
         let value = config.name.as_str();
+        let is_empty = config.empty_name;
 
         let input = text_input("", value)
             .id(config.name_input.clone())
             .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
             .padding(padding)
-            .style(move |theme, status| {
+            .style(move |theme: &Theme, status| {
+                let error = theme.extended_palette().danger.strong.color;
                 let default = text_input::default(theme, status);
                 let border = default.border.rounded(radius);
+                let border = if is_empty {
+                    border.color(error)
+                } else {
+                    border
+                };
 
                 text_input::Style { border, ..default }
             })
