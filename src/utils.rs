@@ -433,7 +433,7 @@ impl Playlist {
 
     pub fn next_peek(&self) -> Option<&PlayItem> {
         if self.repeat && self.current == self.len().saturating_sub(1) {
-            return self.items.get(0);
+            return self.items.first();
         }
 
         self.items.get(self.current + 1)

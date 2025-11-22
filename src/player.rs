@@ -830,7 +830,7 @@ impl Manager {
         };
 
         match &self.modal {
-            None => content.into(),
+            None => content,
             Some(Modal::CollectionAdd {
                 collections,
                 selected,
