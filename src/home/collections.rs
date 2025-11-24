@@ -10,7 +10,6 @@ use iced::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum CollectionsMessage {
-    Hovered(CollectionId, bool),
     Details(CollectionId),
     Scroll(scrollable::Viewport),
 }
@@ -48,11 +47,6 @@ impl Collections {
 
     pub fn update(&mut self, message: CollectionsMessage) -> Option<HomeMessage> {
         match message {
-            CollectionsMessage::Hovered(key, is_hovered) => {
-                let msg = HomeMessage::HoveredCollection(key, is_hovered);
-
-                Some(msg)
-            }
             CollectionsMessage::Details(key) => {
                 let msg = HomeMessage::Goto(PageKind::Collection(key));
                 Some(msg)
@@ -66,10 +60,9 @@ impl Collections {
 
     pub fn view<'a>(
         &self,
-        now: Instant,
         thumbnails: impl Iterator<Item = &'a CollectionThumbnail>,
     ) -> Element<'a, CollectionsMessage> {
-        self.grid(now, thumbnails)
+        self.grid(thumbnails)
     }
 
     pub fn page_update(&mut self, update: PageUpdate) {
@@ -90,16 +83,9 @@ impl Collections {
 
     fn grid<'a>(
         &self,
-        now: Instant,
         thumbnails: impl Iterator<Item = &'a CollectionThumbnail>,
     ) -> Element<'a, CollectionsMessage> {
-        let content = thumbnails.map(|thumbnail| {
-            thumbnail.view(
-                now,
-                CollectionsMessage::Details,
-                CollectionsMessage::Hovered,
-            )
-        });
+        let content = thumbnails.map(|thumbnail| thumbnail.view(CollectionsMessage::Details));
 
         let content = grid(content)
             .spacing(16)

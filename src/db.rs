@@ -702,7 +702,7 @@ impl Database {
             i.media_id,
             i.poster,
             f.name,
-            snippet(media_fts, 1, '**', '**', '...', 16) as snippet,
+            snippet(media_fts, 1, '***', '***', '...', 16) as snippet,
             f.tags
             FROM media_fts f
             INNER JOIN media_fts_index i on f.rowid = i.rowid

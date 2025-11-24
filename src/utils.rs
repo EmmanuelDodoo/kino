@@ -23,6 +23,9 @@ pub use filter::{
 };
 pub mod sort;
 pub use sort::{Sort, SortKind};
+pub mod styles;
+pub mod image_ops;
+pub use image_ops::*;
 
 /// Returns an empty [`iced::Element`].
 pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
@@ -76,7 +79,7 @@ pub fn tooltip<'a, Message: 'a>(
             .padding([3, 6])
             .style(|theme: &Theme| {
                 let color = theme.extended_palette().secondary.weak.color;
-                let default = container::rounded_box(theme);
+                let default = styles::container::bw(theme);
                 let border = default.border.rounded(5.0).width(1.0).color(color);
                 let shadow = Shadow {
                     color,

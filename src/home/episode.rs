@@ -1,6 +1,7 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{CollectionId, Episode, EpisodeId, ItemId, Media, SimpleCollection};
 use crate::utils::icons::*;
+use crate::utils::styles;
 use crate::utils::typo::*;
 use iced::widget::Space;
 use iced::{
@@ -86,12 +87,12 @@ impl EpisodePage {
 
             let title = text(episode.media.name()).size(H4);
             let duration = duration(&episode.media);
-            let rating = button(ratings(&episode.media))
+            let rating = button(ratings(&episode.media, true))
                 .on_press(EpisodePageMessage {
                     id,
                     message: Message::Rate(episode.media.rating()),
                 })
-                .style(button::text)
+                .style(styles::button::text)
                 .padding(0);
             let release = text(episode.media.release_year()).size(H7);
 
@@ -114,17 +115,17 @@ impl EpisodePage {
                             message: Message::Tab(tab)
                         })
                         .style(|theme, status| {
-                            let default = button::text(theme, status);
+                            let default = styles::button::text_white(theme, status);
 
                             button::Style {
                                 border: iced::Border::default(),
                                 ..default
                             }
                         }),
-                    container(Space::new().width(68).height(4)).style(if is_selected {
-                        container::primary
+                    container(Space::new().width(68).height(2)).style(if is_selected {
+                        styles::container::pb
                     } else {
-                        container::transparent
+                        styles::container::transparent
                     }),
                 )
                 .align_x(Horizontal::Center)
@@ -167,11 +168,9 @@ impl EpisodePage {
                         })
                     });
 
-                    let collections =
-                        scrollable(column(collections).spacing(4.0).width(Length::Fill))
-                            .spacing(4.0);
-
-                    column!(collections).spacing(8.0).width(width).into()
+                    scrollable(column(collections).spacing(4.0).width(Length::Fill))
+                        .spacing(4.0)
+                        .into()
                 }
             }
         };
@@ -189,7 +188,7 @@ impl EpisodePage {
                     message: Message::Play
                 })
                 .style(|theme, status| {
-                    let default = button::subtle(theme, status);
+                    let default = styles::button::subtlest(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -208,7 +207,7 @@ impl EpisodePage {
                     message: Message::AddCollection
                 })
                 .style(|theme, status| {
-                    let default = button::subtle(theme, status);
+                    let default = styles::button::subtlest(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -230,7 +229,7 @@ impl EpisodePage {
             .align_x(Horizontal::Center)
             .width(Length::Fill)
             .style(|theme| {
-                let default = container::dark(theme);
+                let default = styles::container::dark(theme);
                 let background = default
                     .background
                     .map(|background| background.scale_alpha(0.75));
@@ -260,7 +259,7 @@ impl EpisodePage {
 
         let img = episode.backdrop(Length::Fill, Length::FillPortion(3));
 
-        let content = container(column!(img,)).style(container::dark);
+        let content = container(column!(img,)).style(styles::container::dark);
 
         let content = stack![content, overlay];
 

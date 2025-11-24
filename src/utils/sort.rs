@@ -157,58 +157,25 @@ pub enum SortKind {
 const SORTS: usize = 9;
 
 impl SortKind {
-    pub const VISIBLE: [SortKind; 6] = [
+    pub const VISIBLE: [SortKind; 8] = [
         Self::Name,
         Self::Duration,
         Self::Progress,
         Self::Rating,
         Self::Added,
         Self::Recent,
+        Self::Watch,
+        Self::Release,
     ];
 
-    pub const HIDDEN: [SortKind; 3] = [Self::Release, Self::Comments, Self::Watch];
+    pub const HIDDEN: [SortKind; 0] = [];
 
-    pub fn view<'a, Message, A, R>(
-        &'a self,
-        on_add: A,
-        on_remove: R,
-        order: Option<usize>,
-    ) -> iced::Element<'a, Message>
-    where
-        Message: Clone + 'a,
-        A: Fn(SortKind) -> Message + 'a,
-        R: Fn(SortKind) -> Message + 'a,
-    {
-        use iced::{
-            Border,
-            widget::{button, text},
-        };
-
-        let enable = order.is_none();
-        let msg = if enable {
-            on_add(*self)
-        } else {
-            on_remove(*self)
-        };
-
+    pub fn view(&self, order: Option<usize>) -> String {
         let order = order
             .map(|order| (order + 1).to_string())
             .unwrap_or_default();
-        let content = text(format!("{self} {}", order)).size(H7);
 
-        button(content)
-            .on_press(msg)
-            .style(move |theme, status| {
-                let default = if enable {
-                    button::background(theme, status)
-                } else {
-                    button::secondary(theme, status)
-                };
-                let border = Border::default().width(2.0).rounded(5.0);
-
-                button::Style { border, ..default }
-            })
-            .into()
+        format!("{self} {}", order)
     }
 
     pub fn cmp<T: Media>(&self, x: &T, y: &T) -> std::cmp::Ordering {

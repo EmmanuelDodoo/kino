@@ -5,7 +5,7 @@ use crate::models::{
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort};
+use crate::utils::{Layout, Sort, styles};
 use iced::widget::Space;
 use iced::{
     Element, Length, Task,
@@ -304,12 +304,12 @@ impl ShowPage {
 
             let title = text(show.media.name()).size(H2);
             let duration = duration(&show.media);
-            let rating = button(ratings(&show.media))
+            let rating = button(ratings(&show.media, true))
                 .on_press(ShowPageMessage {
                     id,
                     message: Message::Rate(show.media.rating()),
                 })
-                .style(button::text)
+                .style(styles::button::text)
                 .padding(0);
             let release = text(show.media.release_year()).size(H7);
 
@@ -348,7 +348,7 @@ impl ShowPage {
                     message: Message::Resume
                 })
                 .style(|theme, status| {
-                    let default = button::subtle(theme, status);
+                    let default = styles::button::subtlest(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -367,7 +367,7 @@ impl ShowPage {
                     message: Message::AddSelf
                 })
                 .style(|theme, status| {
-                    let default = button::subtle(theme, status);
+                    let default = styles::button::subtlest(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -410,17 +410,17 @@ impl ShowPage {
                             message: Message::Tab(tab)
                         })
                         .style(|theme, status| {
-                            let default = button::text(theme, status);
+                            let default = styles::button::text_white(theme, status);
 
                             button::Style {
                                 border: iced::Border::default(),
                                 ..default
                             }
                         }),
-                    container(Space::new().width(68).height(4)).style(if is_selected {
-                        container::primary
+                    container(Space::new().width(68).height(2)).style(if is_selected {
+                        styles::container::pb
                     } else {
-                        container::transparent
+                        styles::container::transparent
                     }),
                 )
                 .align_x(Horizontal::Center)
@@ -437,7 +437,7 @@ impl ShowPage {
             .height(Length::Fill)
             .padding([4, 6])
             .style(|theme| {
-                let default = container::dark(theme);
+                let default = styles::container::dark(theme);
 
                 container::Style {
                     background: default
@@ -490,11 +490,9 @@ impl ShowPage {
                         })
                     });
 
-                    let collections =
-                        scrollable(column(collections).spacing(4.0).width(Length::Fill))
-                            .spacing(4.0);
-
-                    column!(collections).spacing(8.0).width(width).into()
+                    scrollable(column(collections).spacing(4.0).width(Length::Fill))
+                        .spacing(4.0)
+                        .into()
                 }
             }
         };

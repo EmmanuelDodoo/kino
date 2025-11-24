@@ -21,7 +21,7 @@ use crate::models::{CollectionId, ItemId, SimpleCollection};
 use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, empty,
     icons::{self, sized_button},
-    loading_animation, loading_svg, tooltip,
+    loading_animation, loading_svg, styles, tooltip,
     typo::{self, *},
 };
 use crate::widgets::{self, modal};
@@ -498,6 +498,7 @@ impl Manager {
     fn top(&self) -> Element<'_, ManagerMessage> {
         let title: Element<'_, ManagerMessage> = match &self.state {
             State::Ready(player) => container(text(&player.item.name).size(H6))
+                .style(styles::container::text)
                 .max_height(24)
                 .clip(true)
                 .into(),
@@ -506,14 +507,20 @@ impl Manager {
 
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
         let options = column!(
-            row!(sized_button(icons::ELLIPSIS_VER, icon_size).on_press(ManagerMessage::Config))
-                .spacing(6.0)
-                .align_y(Vertical::Center)
+            row!(
+                sized_button(icons::ELLIPSIS_VER, icon_size)
+                    .on_press(ManagerMessage::Config)
+                    .style(styles::button::text_slate)
+            )
+            .spacing(6.0)
+            .align_y(Vertical::Center)
         )
         .align_x(Horizontal::Right)
         .width(Self::WIDTH);
         let back = container(
-            sized_button(icons::BACK, icon_size).on_press(ManagerMessage::PreviousScreen),
+            sized_button(icons::BACK, icon_size)
+                .on_press(ManagerMessage::PreviousScreen)
+                .style(styles::button::text_slate),
         )
         .align_x(Horizontal::Left)
         .align_y(Vertical::Center)
@@ -558,6 +565,7 @@ impl Manager {
                     *position as u64 / 60,
                     *position as u64 % 60,
                 );
+                let spent = container(text(spent)).style(styles::container::text);
 
                 let remaining = duration.as_secs().saturating_sub(*position as u64);
                 let total = format!(
@@ -566,6 +574,7 @@ impl Manager {
                     remaining / 60,
                     remaining % 60,
                 );
+                let total = container(text(total)).style(styles::container::text);
 
                 let slider = widgets::slider::VideoSlider::new(
                     0.0..=duration.as_secs_f64(),
@@ -578,7 +587,7 @@ impl Manager {
                 .step(0.1)
                 .on_release(ManagerMessage::SeekRelease);
 
-                row!(text(spent), slider, text(total))
+                row!(spent, slider, total)
                     .spacing(20.0)
                     .align_y(Vertical::Center)
                     .width(Length::Fill)
@@ -606,17 +615,20 @@ impl Manager {
             .shift_step(0.1)
             .width(125.0);
 
-            let speed = text(format!("{:.02}x", self.settings.speed))
-                .size(icon_size / (typo::RATIO))
-                .font(Font {
-                    family: font::Family::Monospace,
-                    weight: font::Weight::Semibold,
-                    ..Default::default()
-                });
+            let speed = container(
+                text(format!("{:.02}x", self.settings.speed))
+                    .size(icon_size / (typo::RATIO))
+                    .font(Font {
+                        family: font::Family::Monospace,
+                        weight: font::Weight::Semibold,
+                        ..Default::default()
+                    }),
+            )
+            .style(styles::container::text);
             let speed = tooltip(
                 button(speed)
                     .padding(0)
-                    .style(button::text)
+                    .style(styles::button::text_slate)
                     .on_press(ManagerMessage::SpeedReset),
                 "Playback speed",
                 tp,
@@ -632,7 +644,8 @@ impl Manager {
                         },
                         icon_size
                     )
-                    .on_press(ManagerMessage::ToggleSubtitles),
+                    .on_press(ManagerMessage::ToggleSubtitles)
+                    .style(styles::button::text_slate),
                     "Subtitles",
                     tp
                 ),
@@ -645,7 +658,8 @@ impl Manager {
                     },
                     icon_size
                 )
-                .on_press(ManagerMessage::ToggleMute),
+                .on_press(ManagerMessage::ToggleMute)
+                .style(styles::button::text_slate),
                 volume
             )
             .spacing(4.0)
@@ -660,8 +674,11 @@ impl Manager {
                 H2
             };
             let play: Element<'_, ManagerMessage> = match &self.state {
-                State::Idle => sized_button(icons::PLAY, size).into(),
+                State::Idle => sized_button(icons::PLAY, size)
+                    .style(styles::button::text_slate)
+                    .into(),
                 State::Loading(animation) => container(loading_svg(animation, now))
+                    .style(styles::container::text)
                     .width(size)
                     .height(size)
                     .into(),
@@ -674,37 +691,49 @@ impl Manager {
                         (icons::PAUSE, ManagerMessage::TogglePlay)
                     };
 
-                    sized_button(icon, size).on_press(message).into()
+                    sized_button(icon, size)
+                        .on_press(message)
+                        .style(styles::button::text_slate)
+                        .into()
                 }
             };
 
             let previous: Element<'_, ManagerMessage> = match self.playlist.previous_peek() {
                 Some(previous) => tooltip(
                     sized_button(icons::PREVIOUS_VIDEO, size)
+                        .style(styles::button::text_slate)
                         .on_press(ManagerMessage::PlayPrevious),
                     &previous.name,
                     tp,
                 )
                 .into(),
-                None => sized_button(icons::PREVIOUS_VIDEO, size).into(),
+                None => sized_button(icons::PREVIOUS_VIDEO, size)
+                    .style(styles::button::text_slate)
+                    .into(),
             };
 
             let next: Element<'_, ManagerMessage> = match self.playlist.next_peek() {
                 Some(next) => tooltip(
-                    sized_button(icons::NEXT_VIDEO, size).on_press(ManagerMessage::PlayNext),
+                    sized_button(icons::NEXT_VIDEO, size)
+                        .style(styles::button::text_slate)
+                        .on_press(ManagerMessage::PlayNext),
                     &next.name,
                     tp,
                 )
                 .into(),
-                None => sized_button(icons::NEXT_VIDEO, size).into(),
+                None => sized_button(icons::NEXT_VIDEO, size)
+                    .style(styles::button::text_slate)
+                    .into(),
             };
 
             row!(
                 previous,
                 sized_button(icons::SEEK_BACK, size)
+                    .style(styles::button::text_slate)
                     .on_press_maybe(self.is_ready(ManagerMessage::SeekBack(false))),
                 play,
                 sized_button(icons::SEEK_FRONT, size)
+                    .style(styles::button::text_slate)
                     .on_press_maybe(self.is_ready(ManagerMessage::SeekFront(false))),
                 next,
             )
@@ -716,6 +745,7 @@ impl Manager {
             row!(
                 tooltip(
                     sized_button(icons::ADD_COLLECTION, icon_size * typo::RATIO)
+                        .style(styles::button::text_slate)
                         .on_press_maybe(self.is_ready(ManagerMessage::AddCollection)),
                     "Add to collection",
                     tp
@@ -723,14 +753,17 @@ impl Manager {
                 // todo
                 // tooltip(
                 //     sized_button(icons::COMMENT, icon_size)
+                //         .style(styles::button::text_slate)
                 //         .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
                 //     "Comment",
                 //     tp
                 // ),
                 tooltip(
-                    sized_button(icons::PLAYLIST, icon_size).on_press_maybe(
-                        self.is_ready(ManagerMessage::Playlist(PlaylistMessge::Toggle))
-                    ),
+                    sized_button(icons::PLAYLIST, icon_size)
+                        .style(styles::button::text_slate)
+                        .on_press_maybe(
+                            self.is_ready(ManagerMessage::Playlist(PlaylistMessge::Toggle))
+                        ),
                     "Playlist",
                     tp
                 ),
@@ -742,6 +775,7 @@ impl Manager {
                     },
                     icon_size
                 )
+                .style(styles::button::text_slate)
                 .on_press(ManagerMessage::ToggleFullscreen)
             )
             .spacing(2.0)
@@ -1113,6 +1147,9 @@ impl Manager {
     }
 
     pub fn close_view(&mut self) -> Task<Message> {
+        if let State::Ready(player) = &mut self.state {
+            player.video.set_paused(false);
+        }
         self.modal = None;
         Task::none()
     }
@@ -1285,7 +1322,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
             space::horizontal(),
             button(icons::icon(CANCEL).size(H6))
                 .on_press(ManagerMessage::ClosePanel)
-                .style(button::text)
+                .style(styles::button::text)
                 .padding(0),
         )
         .padding(padding)
@@ -1336,7 +1373,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         )
         .on_press(ManagerMessage::Playlist(PlaylistMessge::PlayItem(idx)))
         .padding(0)
-        .style(button::text)
+        .style(styles::button::text)
         .into()
     });
 
@@ -1359,7 +1396,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
                     .style(move |theme| color(theme, playlist.repeat)),
             )
             .padding(0)
-            .style(button::text)
+            .style(styles::button::text)
             .on_press(ManagerMessage::Playlist(PlaylistMessge::ToggleRepeat(
                 !playlist.repeat,
             ))),
@@ -1374,7 +1411,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
                     .style(move |theme| color(theme, playlist.shuffle)),
             )
             .padding(0)
-            .style(button::text)
+            .style(styles::button::text)
             .on_press(ManagerMessage::Playlist(PlaylistMessge::ToggleShuffle(
                 !playlist.shuffle,
             ))),
@@ -1447,7 +1484,11 @@ fn draw_collection_add<'a>(
             CollectionAddMessage::Toggle(selected, collection.id),
         ))
         .style(move |theme, status| {
-            let default = button::subtle(theme, status);
+            let default = if selected {
+                styles::button::subtle(theme, status)
+            } else {
+                styles::button::subtlest(theme, status)
+            };
 
             let border = default.border.rounded(5.0);
 
@@ -1465,8 +1506,8 @@ fn draw_collection_add<'a>(
     let collections = container(collections)
         .padding([6, 8])
         .style(|theme: &Theme| {
-            let color = theme.extended_palette().background.strong.color;
-            let default = container::transparent(theme);
+            let color = theme.extended_palette().secondary.strong.color;
+            let default = styles::container::transparent(theme);
             let border = default.border.rounded(5).color(color).width(1.5);
 
             container::Style { border, ..default }
@@ -1477,11 +1518,11 @@ fn draw_collection_add<'a>(
             .on_press(ManagerMessage::CollectionAddMessage(
                 CollectionAddMessage::Save,
             ))
-            .style(button::subtle);
+            .style(styles::button::primary);
 
         let cancel = button("Cancel")
             .on_press(ManagerMessage::CloseView)
-            .style(button::subtle);
+            .style(styles::button::primary);
 
         row!(save, cancel).spacing(100)
     };
@@ -1497,9 +1538,9 @@ fn modal_container<'a>(
     content: impl Into<Element<'a, ManagerMessage>>,
 ) -> Container<'a, ManagerMessage> {
     container(content)
-        .padding([12, 16])
+        .padding([8, 12])
         .style(|theme| {
-            let default = container::dark(theme);
+            let default = styles::container::bw(theme);
             let border = default.border.rounded(5.0);
 
             container::Style { border, ..default }

@@ -9,7 +9,7 @@ use crate::models::{
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, empty};
+use crate::utils::{Layout, Sort, empty, styles};
 use crate::widgets::menu;
 use iced::Border;
 use iced::{
@@ -193,6 +193,7 @@ impl CollectionPage {
                 .as_deref()
                 .unwrap_or_default();
             let description = container(text(description))
+                .clip(true)
                 .max_width(750)
                 .height(Length::Fill);
 
@@ -224,7 +225,7 @@ impl CollectionPage {
                 .spacing(8);
 
                 let overlay = container(actions).padding([8, 12]).style(|theme| {
-                    let default = container::rounded_box(theme);
+                    let default = styles::container::bordered(theme);
                     let border = default.border.rounded(8);
 
                     container::Style { border, ..default }
@@ -258,17 +259,7 @@ impl CollectionPage {
         let content = container(content)
             .padding(20)
             .width(Length::Fill)
-            .style(|theme| {
-                let default = container::dark(theme);
-                let background = default
-                    .background
-                    .map(|background| background.scale_alpha(0.45));
-
-                container::Style {
-                    background,
-                    ..default
-                }
-            });
+            .style(styles::container::bordered);
 
         content.into()
     }
@@ -684,7 +675,7 @@ fn btn<'a>(
     .padding([6, 12])
     .on_press(CollectionMessage { id, message })
     .style(|theme, status| {
-        let default = button::subtle(theme, status);
+        let default = styles::button::subtlest(theme, status);
         let border = default.border.rounded(5);
 
         button::Style { border, ..default }

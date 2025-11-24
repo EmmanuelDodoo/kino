@@ -35,7 +35,7 @@ use utils::sort;
 use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Layout, SearchFilter, Sort, SortKind, empty};
+use utils::{Layout, SearchFilter, Sort, SortKind, empty, styles};
 use widgets::*;
 
 // fn _test_main() {
@@ -89,6 +89,7 @@ enum Message {
 struct Playground {
     now: Instant,
     db: db::Database,
+    content: markdown::Content,
 }
 
 impl Playground {
@@ -97,10 +98,12 @@ impl Playground {
         // let load = Task::done(Message::Load);
 
         let now = Instant::now();
+        let content = markdown::Content::parse("w***ale***s");
 
         let new = Self {
             now,
             db: db::Database::open_test_db().unwrap(),
+            content,
         };
 
         (new, Task::batch([fonts]))
@@ -120,30 +123,22 @@ impl Playground {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let tip = container("tooltip")
-            .style(|theme: &Theme| {
-                let color = theme.extended_palette().secondary.weak.color;
-                let default = container::rounded_box(theme);
-                let border = default.border.rounded(5.0).width(1.0).color(color);
-                let shadow = Shadow {
-                    color,
-                    blur_radius: 8.0,
-                    offset: [0.0, 0.0].into(),
-                };
-
-                container::Style {
-                    border,
-                    shadow,
-                    ..default
-                }
+        let w = span("w").link(());
+        let ale = span("ale")
+            .font(Font {
+                family: font::Family::SansSerif,
+                weight: font::Weight::Bold,
+                stretch: font::Stretch::Normal,
+                style: font::Style::Italic,
             })
-            .padding([3, 6]);
-        let content = tooltip(
-            container("Playground").style(container::dark),
-            tip,
-            tooltip::Position::Right,
-        )
-        .gap(2.0);
+            .link(());
+        let s = span("s").link(());
+
+        // let theme = self.theme().unwrap();
+        // let settings = markdown::Settings::with_text_size(H7, theme);
+        // let content = markdown::view(self.content.items(), settings).map(|_| Message::None);
+
+        let content = rich_text([w, ale, s]).on_link_click(|_: ()| Message::None);
 
         let content = center(content);
 

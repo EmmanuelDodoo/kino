@@ -5,6 +5,7 @@ use iced::{
 
 use std::sync::LazyLock;
 
+use super::styles;
 use super::typo::*;
 
 static ICONS: &[u8] = include_bytes!("../../assets/kino-icons.ttf");
@@ -140,18 +141,18 @@ pub fn icon<'a>(unicode: char) -> Text<'a> {
 
 /// Returns a text button
 pub fn text_button<'a, Message>(unicode: char) -> Button<'a, Message> {
-    use iced::widget::{button, button::text};
+    use iced::widget::button;
 
-    button(icon(unicode)).style(text)
+    button(icon(unicode)).style(styles::button::text)
 }
 
 pub fn sized_button<'a, Message>(
     unicode: char,
     size: impl Into<iced::Pixels>,
 ) -> Button<'a, Message> {
-    use iced::widget::{button, button::text};
+    use iced::widget::button;
 
-    button(icon(unicode).size(size)).style(text)
+    button(icon(unicode).size(size)).style(styles::button::text)
 }
 
 pub fn alt<'a>(unicode: u32) -> Text<'a> {

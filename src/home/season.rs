@@ -5,7 +5,7 @@ use crate::models::{
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, empty};
+use crate::utils::{Layout, Sort, empty, styles};
 use iced::widget::Space;
 use iced::{
     Element, Length, Task,
@@ -300,12 +300,12 @@ impl SeasonPage {
 
             let title = text(season.media.name()).size(H2);
             let duration = duration(&season.media);
-            let rating = button(ratings(&season.media))
+            let rating = button(ratings(&season.media, true))
                 .on_press(SeasonPageMessage {
                     id,
                     message: Message::Rate(season.media.rating()),
                 })
-                .style(button::text)
+                .style(styles::button::text)
                 .padding(0);
             let release = text(season.media.release_year()).size(H7);
 
@@ -329,7 +329,7 @@ impl SeasonPage {
                     message: Message::Resume
                 })
                 .style(|theme, status| {
-                    let default = button::subtle(theme, status);
+                    let default = styles::button::subtlest(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -348,7 +348,7 @@ impl SeasonPage {
                     message: Message::AddSelf
                 })
                 .style(|theme, status| {
-                    let default = button::subtle(theme, status);
+                    let default = styles::button::subtlest(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -391,17 +391,17 @@ impl SeasonPage {
                             message: Message::Tab(tab)
                         })
                         .style(|theme, status| {
-                            let default = button::text(theme, status);
+                            let default = styles::button::text_white(theme, status);
 
                             button::Style {
                                 border: iced::Border::default(),
                                 ..default
                             }
                         }),
-                    container(Space::new().width(68).height(4)).style(if is_selected {
-                        container::primary
+                    container(Space::new().width(68).height(2)).style(if is_selected {
+                        styles::container::pb
                     } else {
-                        container::transparent
+                        styles::container::transparent
                     }),
                 )
                 .align_x(Horizontal::Center)
@@ -418,7 +418,7 @@ impl SeasonPage {
             .height(Length::Fill)
             .padding([4, 6])
             .style(|theme| {
-                let default = container::dark(theme);
+                let default = styles::container::dark(theme);
 
                 container::Style {
                     background: default
@@ -471,11 +471,9 @@ impl SeasonPage {
                         })
                     });
 
-                    let collections =
-                        scrollable(column(collections).spacing(4.0).width(Length::Fill))
-                            .spacing(4.0);
-
-                    column!(collections).spacing(8.0).width(width).into()
+                    scrollable(column(collections).spacing(4.0).width(Length::Fill))
+                        .spacing(4.0)
+                        .into()
                 }
             }
         };

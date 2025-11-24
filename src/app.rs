@@ -162,7 +162,7 @@ impl App {
             screen: Screen::Home,
             now: Instant::now(),
             last_refresh: Instant::now(),
-            refresh_interval: Duration::from_secs(75),
+            refresh_interval: Duration::from_secs(600),
             toasts: vec![],
             window: None,
             player: None,

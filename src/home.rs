@@ -34,7 +34,7 @@ use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
     self, HomeAction, Layout, Sort, SortKind, empty, filter::*, icons, icons::*, loading_animation,
-    loading_svg, tooltip, typo::*,
+    loading_svg, styles, tooltip, typo::*,
 };
 use crate::widgets::{
     menu::{Position, menu},
@@ -172,7 +172,7 @@ impl CollectionConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SearchState {
     items: Vec<SearchView>,
     search: String,
@@ -225,7 +225,7 @@ pub enum ViewMessage {
     Rating(ItemId, Option<f32>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum View {
     CollectionConfig(CollectionConfig),
     Search(SearchState, Option<CollectionId>),
@@ -308,7 +308,6 @@ pub enum HomeMessage {
     Scroll(scrollable::Viewport),
     RefreshContent,
     Hovered(ItemId, bool),
-    HoveredCollection(CollectionId, bool),
     FetchedCollections(Vec<CollectionThumbnail>),
     FetchedCollection {
         collection: Box<CollectionThumbnail>,
@@ -1126,22 +1125,6 @@ impl Home {
             HomeMessage::PlayCollection { id, items } => {
                 Task::done(Message::PlayCollectionItems { id, items })
             }
-            HomeMessage::HoveredCollection(key, is_hovered) => {
-                let State::Collections(collections) = &mut self.state else {
-                    return Task::none();
-                };
-
-                let Some(collection) = collections
-                    .iter_mut()
-                    .find(|thumbnail| thumbnail.collection.id == key)
-                else {
-                    return Task::none();
-                };
-
-                collection.zoom.go_mut(is_hovered, now);
-
-                Task::none()
-            }
             HomeMessage::Hovered(id, is_hovered) => match (&mut self.state, id) {
                 (State::Loading(_), _)
                 | (State::Episode { .. }, _)
@@ -1394,7 +1377,7 @@ impl Home {
     ) -> Element<'a, HomeMessage> {
         let movies = {
             let label = text("Recent Movies").size(H4);
-            let label = column!(label, rule::horizontal(2.0)).spacing(4.0);
+            let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
             let movies = filter_sort(movies.iter(), &self.filters, &self.sort);
 
@@ -1448,7 +1431,7 @@ impl Home {
 
         let shows = {
             let label = text("Recent Shows").size(H4);
-            let label = column!(label, rule::horizontal(2.0)).spacing(4.0);
+            let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
             let shows = filter_sort(shows.iter(), &self.filters, &self.sort);
 
@@ -1525,14 +1508,15 @@ impl Home {
     }
 
     fn filters_view(&self) -> Element<'_, HomeMessage> {
-        let size = H7;
-        let padding = Padding::new(2.0).left(5.0).right(5.0);
+        let size = H8;
+        let padding = Padding::new(2.0).horizontal(5.0);
+        let spacing = 2.0;
 
         let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
         let comp = |icon: char, msg: FilterMessage| {
-            icons::sized_button(icon, size)
+            icons::sized_button(icon, size * RATIO)
                 .padding([5, 5])
-                .style(button::background)
+                .style(styles::button::background)
                 .on_press(HomeMessage::Filter(msg))
         };
 
@@ -1575,7 +1559,7 @@ impl Home {
             );
 
             row!(text, comp, progress)
-                .spacing(5.0)
+                .spacing(spacing)
                 .align_y(Vertical::Center)
         };
 
@@ -1594,7 +1578,7 @@ impl Home {
             let comp = comp(self.filters.rating.comp.icon(), FilterMessage::RatingComp);
 
             row!(text, comp, rating)
-                .spacing(5.0)
+                .spacing(spacing)
                 .align_y(Vertical::Center)
         };
 
@@ -1619,7 +1603,7 @@ impl Home {
                 .on_input(|input| HomeMessage::Filter(FilterMessage::CommentsNum(input)));
 
             row!(text, comp, input)
-                .spacing(5.0)
+                .spacing(spacing)
                 .align_y(Vertical::Center)
         };
 
@@ -1644,7 +1628,7 @@ impl Home {
                 .on_input(|input| HomeMessage::Filter(FilterMessage::ReleaseYear(input)));
 
             row!(text, comp, input)
-                .spacing(5.0)
+                .spacing(spacing)
                 .align_y(Vertical::Center)
         };
 
@@ -1686,7 +1670,7 @@ impl Home {
                 .align_y(Vertical::Center);
 
             row!(text, comp, duration)
-                .spacing(5.0)
+                .spacing(spacing)
                 .align_y(Vertical::Center)
         };
 
@@ -1694,7 +1678,7 @@ impl Home {
             let mode = text(self.filters.mode.to_string()).size(size);
 
             let button = button(mode)
-                .style(button::background)
+                .style(styles::button::background)
                 .padding(padding)
                 .on_press(HomeMessage::Filter(FilterMessage::Mode));
 
@@ -1703,7 +1687,7 @@ impl Home {
 
         let clear = button(text("Clear").size(size))
             .padding(padding)
-            .style(button::text)
+            .style(styles::button::text)
             .on_press(HomeMessage::Filter(FilterMessage::Clear));
 
         let content = row!(
@@ -1721,7 +1705,7 @@ impl Home {
             vertical_rule(),
             clear,
         )
-        .spacing(10.0)
+        .spacing(8.0)
         .align_y(Vertical::Center)
         .wrap();
 
@@ -1729,63 +1713,88 @@ impl Home {
     }
 
     fn sort_view(&self) -> Element<'_, HomeMessage> {
-        let size = H7;
+        let size = H8;
         let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
+        let view_sort = |sort: SortKind, order: Option<usize>| {
+            let enable = order.is_none();
+            let msg = if enable {
+                HomeMessage::Sort(SortMessage::AddSort(sort))
+            } else {
+                HomeMessage::Sort(SortMessage::RemoveSort(sort))
+            };
+
+            let label = sort.view(order);
+            let content = text(label).size(size);
+
+            Element::from(button(content).on_press(msg).style(move |theme, status| {
+                let default = if enable {
+                    styles::button::background(theme, status)
+                } else if SortKind::HIDDEN.is_empty() {
+                    styles::button::subtler(theme, status)
+                } else {
+                    styles::button::subtle_primary(theme, status)
+                };
+                let border = Border::default().width(2.0).rounded(5.0);
+
+                button::Style { border, ..default }
+            }))
+        };
 
         let clear = button(text("Clear").size(size))
             .padding([2, 5])
-            .style(button::text)
+            .style(styles::button::text)
             .on_press(HomeMessage::Sort(SortMessage::Clear));
 
         let reverse = button(text("Reverse").size(size))
             .padding([2, 5])
-            .style(button::text)
+            .style(styles::button::text)
             .on_press(HomeMessage::Sort(SortMessage::ToggleReverse));
 
         let base = icon(ELLIPSIS_HOR).size(size);
 
-        let hidden = {
-            container(
-                column(SortKind::HIDDEN.iter().map(|kind| {
-                    let order = self.sort.position(*kind);
-
-                    kind.view(
-                        |kind| HomeMessage::Sort(SortMessage::AddSort(kind)),
-                        |kind| HomeMessage::Sort(SortMessage::RemoveSort(kind)),
-                        order,
-                    )
+        let more: Element<'_, HomeMessage> = if SortKind::HIDDEN.is_empty() {
+            empty()
+        } else {
+            let hidden = container(
+                column(SortKind::HIDDEN.iter().map(|sort| {
+                    let order = self.sort.position(*sort);
+                    view_sort(*sort, order)
                 }))
                 .spacing(8),
             )
-            .style(container::bordered_box)
-            .padding([3, 6])
-        };
+            .style(styles::container::bw)
+            .padding([3, 6]);
 
-        let more = menu(base, hidden)
-            .auto_close(false)
-            .position(Position::Bottom)
-            .on_toggle(|_| HomeMessage::None);
+            menu(base, hidden)
+                .auto_close(false)
+                .position(Position::Bottom)
+                .on_toggle(|_| HomeMessage::None)
+                .into()
+        };
 
         row!(
             text("Sort by: ").size(size),
             row(SortKind::VISIBLE.iter().map(|sort| {
                 let order = self.sort.position(*sort);
-
-                sort.view(
-                    |kind| HomeMessage::Sort(SortMessage::AddSort(kind)),
-                    |kind| HomeMessage::Sort(SortMessage::RemoveSort(kind)),
-                    order,
-                )
+                view_sort(*sort, order)
             }))
             .spacing(5.0),
-            vertical_rule(),
-            more,
+            if !SortKind::HIDDEN.is_empty() {
+                vertical_rule().into()
+            } else {
+                empty()
+            },
+            if !SortKind::HIDDEN.is_empty() {
+                more
+            } else {
+                empty()
+            },
             vertical_rule(),
             reverse,
             clear,
         )
         .align_y(Vertical::Center)
-        .spacing(10.0)
+        .spacing(8.0)
         .into()
     }
 
@@ -1806,9 +1815,9 @@ impl Home {
             tooltip(
                 button(content)
                     .style(if self.filters.is_any() {
-                        button::subtle
+                        styles::button::background
                     } else {
-                        button::background
+                        styles::button::subtler
                     })
                     .on_press(HomeMessage::ToggleFilter)
                     .padding([5, 5]),
@@ -1831,9 +1840,9 @@ impl Home {
             tooltip(
                 button(content)
                     .style(if self.sort.is_empty() {
-                        button::subtle
+                        styles::button::background
                     } else {
-                        button::background
+                        styles::button::subtler
                     })
                     .on_press(HomeMessage::ToggleSort)
                     .padding([5, 5]),
@@ -1879,23 +1888,25 @@ impl Home {
         let tools = row!(left, space::horizontal(), right).width(Length::Fill);
 
         let sorts_rule = if self.show_sorts {
-            rule::horizontal(2.0).into()
+            rule::horizontal(1.0).into()
         } else {
             empty()
         };
 
         let filters_rule = if self.show_filters {
-            rule::horizontal(2.0).into()
+            rule::horizontal(1.0).into()
         } else {
             empty()
         };
 
         let tools = column!(tools, sorts_rule, curr_sorts, filters_rule, curr_filters)
             .width(Length::Fill)
-            .spacing(5.0)
-            .padding(Padding::default().top(5.0).right(5.0).bottom(8.0).left(5.0));
+            .spacing(2.0)
+            .padding([2, 5]);
 
-        let content = container(tools).width(Length::Fill).style(container_style);
+        let tools = column!(tools, rule::horizontal(1.0));
+
+        let content = container(tools).width(Length::Fill);
 
         content.into()
     }
@@ -1918,24 +1929,22 @@ impl Home {
         let search =
             sized_button(icons::SEARCH, H6).on_press(HomeMessage::OpenView(ViewMessage::Search));
 
-        let top = container(
-            row!(
-                self.navigation(),
-                space::horizontal(),
-                title,
-                space::horizontal(),
-                search,
-            )
-            .spacing(5.0)
-            .padding(Padding::ZERO.right(5))
-            .align_y(Vertical::Center)
-            .height(H2 * 1.50)
-            .width(Length::Fill),
+        let top = row!(
+            self.navigation(),
+            space::horizontal(),
+            title,
+            space::horizontal(),
+            search,
         )
-        .style(container_style);
+        .spacing(5.0)
+        .padding(Padding::ZERO.right(5))
+        .align_y(Vertical::Center)
+        .height(H2 * RATIO)
+        .width(Length::Fill);
+
+        let top = container(column!(top, rule::horizontal(1.0),));
 
         let content_area = container(self.content(now))
-            .style(container_style)
             .height(Length::Fill)
             .width(Length::Fill);
 
@@ -1944,11 +1953,13 @@ impl Home {
             .map(|page| page.show_tools())
             .unwrap_or(true);
 
-        let content = column!(
+        let content = container(column!(
             top,
             if show_tools { self.toolbar() } else { empty() },
             content_area
-        )
+        ))
+        .clip(true)
+        .style(styles::container::bb)
         .height(Length::Fill)
         .width(Length::Fill);
 
@@ -1965,9 +1976,9 @@ impl Home {
             (State::Movies(movies), Some(Page::Movies(page))) => {
                 page.view(now, movies.iter()).map(HomeMessage::Movies)
             }
-            (State::Collections(collections), Some(Page::Collections(page))) => page
-                .view(now, collections.iter())
-                .map(HomeMessage::Collections),
+            (State::Collections(collections), Some(Page::Collections(page))) => {
+                page.view(collections.iter()).map(HomeMessage::Collections)
+            }
             // todo: Needed?
             (State::Collections(_), None) => center("Loading").into(),
             (
@@ -2030,10 +2041,13 @@ impl Home {
     }
 
     pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, HomeMessage> {
-        let content = row!(self.side(), self.content_area(now))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(3);
+        let content = container(
+            row!(self.side(), self.content_area(now))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(3),
+        )
+        .style(styles::container::bw);
 
         match &self.view {
             None => content.into(),
@@ -2077,9 +2091,7 @@ impl Home {
             State::Season { episodes, .. } => {
                 episodes.iter().any(|episode| episode.is_animating(now))
             }
-            State::Collections(collections) => collections
-                .iter()
-                .any(|collection| collection.is_animating(now)),
+            State::Collections(_) => false,
             State::Movie { .. } | State::Episode { .. } => false,
             State::Collection {
                 shows,
@@ -2284,6 +2296,7 @@ impl Home {
         if let Some(current) = self.current_page
             && current == kind
         {
+            self.view = None;
             return Task::none();
         }
 
@@ -2617,19 +2630,10 @@ fn icon_button<'a>(
                 .spacing(SIDE_ICON_SPACING),
         )
         .style(move |theme, status| {
-            use button::{Status, Style, background};
-            let default = background(theme, status);
-
-            match status {
-                Status::Active if current => {
-                    let background = theme.extended_palette().background.weakest;
-                    Style {
-                        background: Some(background.color.into()),
-                        text_color: background.text,
-                        ..default
-                    }
-                }
-                _ => default,
+            if current {
+                styles::button::subtle_primary(theme, status)
+            } else {
+                styles::button::subtler(theme, status)
             }
         })
         .on_press(message),
@@ -2660,33 +2664,14 @@ fn collection_button<'a>(
             .spacing(SIDE_ICON_SPACING),
     )
     .style(move |theme, status| {
-        use button::{Status, Style, background};
-        let default = background(theme, status);
-
-        match status {
-            Status::Active if current => {
-                let background = theme.extended_palette().background.weakest;
-                Style {
-                    background: Some(background.color.into()),
-                    text_color: background.text,
-                    ..default
-                }
-            }
-            _ => default,
+        if current {
+            styles::button::subtle_primary(theme, status)
+        } else {
+            styles::button::subtler(theme, status)
         }
     })
     .on_press(message)
     .into()
-}
-
-fn container_style(theme: &Theme) -> container::Style {
-    let style = container::bordered_box(theme);
-    let border = Border {
-        radius: Radius::default(),
-        ..style.border
-    };
-
-    container::Style { border, ..style }
 }
 
 pub fn view_unicode(view: CollectionView) -> char {
@@ -2706,6 +2691,33 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let icon_height = 40.0;
     let icon_width = 40.0;
 
+    fn icon_btn<'a>(
+        content: impl Into<Element<'a, HomeMessage>>,
+        selected: bool,
+        message: ConfigMessage,
+        label: &'a str,
+    ) -> Element<'a, HomeMessage> {
+        let radius = 5.0;
+        tooltip(
+            button(content)
+                .padding([0, 0])
+                .on_press(HomeMessage::CollectionConfig(message))
+                .style(move |theme, status| {
+                    let default = if selected {
+                        styles::button::subtle_primary(theme, status)
+                    } else {
+                        styles::button::subtle(theme, status)
+                    };
+                    let border = default.border.rounded(radius);
+
+                    button::Style { border, ..default }
+                }),
+            label,
+            tp::Position::Top,
+        )
+        .into()
+    }
+
     let name = {
         let label = text("Name");
 
@@ -2720,7 +2732,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
                 let error = theme.extended_palette().danger.strong.color;
                 let default = text_input::default(theme, status);
                 let border = default.border.rounded(radius);
-                let border = if is_empty {
+                let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {
                     border.color(error)
                 } else {
                     border
@@ -2774,24 +2786,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
                 CollectionView::Hidden => "Hidden",
             };
 
-            tooltip(
-                button(content)
-                    .padding([0, 0])
-                    .on_press(HomeMessage::CollectionConfig(ConfigMessage::View(view)))
-                    .style(move |theme, status| {
-                        let default = if view == selected {
-                            button::secondary(theme, status)
-                        } else {
-                            button::background(theme, status)
-                        };
-                        let border = default.border.rounded(radius);
-
-                        button::Style { border, ..default }
-                    }),
-                label,
-                tp::Position::Top,
-            )
-            .into()
+            icon_btn(content, view == selected, ConfigMessage::View(view), label)
         });
 
         let views = grid(views)
@@ -2802,8 +2797,8 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let views = container(views)
             .padding(padding)
             .style(move |theme: &Theme| {
-                let color = theme.extended_palette().background.strong.color;
-                let default = container::transparent(theme);
+                let color = theme.extended_palette().secondary.strong.color;
+                let default = styles::container::transparent(theme);
                 let border = default.border.rounded(radius).color(color).width(1.5);
 
                 container::Style { border, ..default }
@@ -2820,24 +2815,12 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let icons = Icon::all().into_iter().map(|value| {
             let content = center(icon(value.unicode()).size(P));
 
-            tooltip(
-                button(content)
-                    .padding([0, 0])
-                    .on_press(HomeMessage::CollectionConfig(ConfigMessage::Icon(value)))
-                    .style(move |theme, status| {
-                        let default = if value == selected {
-                            button::secondary(theme, status)
-                        } else {
-                            button::background(theme, status)
-                        };
-                        let border = default.border.rounded(radius);
-
-                        button::Style { border, ..default }
-                    }),
+            icon_btn(
+                content,
+                value == selected,
+                ConfigMessage::Icon(value),
                 value.label(),
-                tp::Position::Top,
             )
-            .into()
         });
 
         let icons = grid(icons)
@@ -2848,8 +2831,8 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let icons = container(icons)
             .padding(padding)
             .style(move |theme: &Theme| {
-                let color = theme.extended_palette().background.strong.color;
-                let default = container::transparent(theme);
+                let color = theme.extended_palette().secondary.strong.color;
+                let default = styles::container::transparent(theme);
                 let border = default.border.rounded(radius).color(color).width(1.5);
 
                 container::Style { border, ..default }
@@ -2859,9 +2842,13 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     };
 
     let actions = {
-        let save = button("Save").on_press(HomeMessage::CollectionConfig(ConfigMessage::Save));
+        let save = button("Save")
+            .on_press(HomeMessage::CollectionConfig(ConfigMessage::Save))
+            .style(styles::button::primary);
 
-        let cancel = button("Cancel").on_press(HomeMessage::CloseView);
+        let cancel = button("Cancel")
+            .on_press(HomeMessage::CloseView)
+            .style(styles::button::primary);
 
         column!(row!(save, cancel).spacing(80))
             .align_x(Horizontal::Center)
@@ -2888,9 +2875,9 @@ fn fetch_kind(kind: PageKind) -> FetchId {
 
 fn modal_container<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Container<'a, HomeMessage> {
     container(content)
-        .padding([12, 16])
+        .padding([8, 12])
         .style(|theme| {
-            let default = container::dark(theme);
+            let default = styles::container::bw(theme);
             let border = default.border.rounded(5.0);
 
             container::Style { border, ..default }
@@ -2925,7 +2912,7 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
                 button(content)
                     .on_press(HomeMessage::SearchMessage(SearchMessage::ClearFilter))
                     .style(|theme, status| {
-                        let default = button::primary(theme, status);
+                        let default = styles::button::subtle_primary(theme, status);
                         let border = default.border.rounded(5);
 
                         button::Style { border, ..default }
@@ -2999,7 +2986,11 @@ fn draw_collection_add<'a>(
             collection.id,
         )))
         .style(move |theme, status| {
-            let default = button::subtle(theme, status);
+            let default = if selected {
+                styles::button::subtle(theme, status)
+            } else {
+                styles::button::subtlest(theme, status)
+            };
 
             let border = default.border.rounded(5.0);
 
@@ -3018,8 +3009,8 @@ fn draw_collection_add<'a>(
     let collections = container(collections)
         .padding([6, 8])
         .style(|theme: &Theme| {
-            let color = theme.extended_palette().background.strong.color;
-            let default = container::transparent(theme);
+            let color = theme.extended_palette().secondary.strong.color;
+            let default = styles::container::transparent(theme);
             let border = default.border.rounded(5).color(color).width(1.5);
 
             container::Style { border, ..default }
@@ -3033,7 +3024,7 @@ fn draw_collection_add<'a>(
     .padding([2, 4])
     .on_press(HomeMessage::NewCollection)
     .style(move |theme, status| {
-        let default = button::text(theme, status);
+        let default = styles::button::text(theme, status);
 
         let border = default.border.rounded(5.0);
 
@@ -3047,11 +3038,11 @@ fn draw_collection_add<'a>(
     let actions = {
         let save = button("Save")
             .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Save))
-            .style(button::subtle);
+            .style(styles::button::primary);
 
         let cancel = button("Cancel")
             .on_press(HomeMessage::CloseView)
-            .style(button::subtle);
+            .style(styles::button::primary);
 
         row!(save, cancel).spacing(100)
     };
@@ -3125,7 +3116,7 @@ fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
                     button(elem)
                         .on_press(HomeMessage::Rating(RatingMessage::Star((idx + 1) as u8)))
                         .padding(0)
-                        .style(button::text),
+                        .style(styles::button::text),
                 )
             });
 
