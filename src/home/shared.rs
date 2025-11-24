@@ -313,7 +313,8 @@ pub struct Thumbnail<T: Media> {
     poster: Option<Handle>,
     backdrop: Option<Handle>,
     sample_color: Option<iced::Color>,
-    pub zoom: Animation<bool>,
+    pub background: Animation<bool>,
+    pub icon: Animation<bool>,
     pub media: T,
 }
 
@@ -325,9 +326,12 @@ impl<T: Media> Thumbnail<T> {
         let backdrop = media.backdrop().map(Handle::from_path);
 
         Self {
-            zoom: Animation::new(false)
-                .duration(iced::time::Duration::from_millis(100))
+            background: Animation::new(false)
+                .duration(iced::time::Duration::from_millis(200))
                 .easing(Easing::EaseInOut),
+            icon: Animation::new(false)
+                .duration(iced::time::Duration::from_millis(100))
+                .easing(Easing::EaseOut),
             poster,
             sample_color,
             backdrop,
@@ -336,7 +340,12 @@ impl<T: Media> Thumbnail<T> {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        self.zoom.is_animating(now)
+        self.background.is_animating(now) || self.icon.is_animating(now)
+    }
+
+    pub fn go_mut(&mut self, new_state: bool, at: Instant) {
+        self.background.go_mut(new_state, at);
+        self.icon.go_mut(new_state, at);
     }
 
     pub fn id(&self) -> T::Id {
@@ -449,18 +458,26 @@ impl<T: Media> Thumbnail<T> {
 
         let overlay = {
             let size = H1 * 1.5;
+
+            let factor = self.icon.interpolate(0.0, 1.0, now);
             let play = icon(PLAY)
                 .size(size)
                 .align_x(Horizontal::Center)
-                .height(size * self.zoom.interpolate(0.0, 1.0, now));
+                .height(size)
+                .style(move |_| {
+                    let color = iced::Color::WHITE.scale_alpha(factor);
+                    text::Style { color: Some(color) }
+                });
+
+            let factor = self.background.interpolate(0.0, 1.0, now);
             let play = center(play)
-                .width(1.00 * size * self.zoom.interpolate(0.0, 1.0, now))
-                .height(1.0 * size * self.zoom.interpolate(0.0, 1.0, now))
-                .style(|theme| {
+                .width(factor * size)
+                .height(factor * size)
+                .style(move |theme| {
                     let default = styles::container::dark(theme);
                     let background = default
                         .background
-                        .map(|background| background.scale_alpha(0.8));
+                        .map(|background| background.scale_alpha(factor));
                     let border = default.border.rounded(IMAGE_RADIUS);
 
                     container::Style {
@@ -571,19 +588,25 @@ impl<T: Media> Thumbnail<T> {
         let play = {
             let size = CARD_HEIGHT * 0.135;
 
+            let factor = self.icon.interpolate(0.0, 1.0, now);
             let play = icon(PLAY)
                 .size(size)
                 .align_x(Horizontal::Center)
-                .height(size * self.zoom.interpolate(0.0, 1.0, now));
+                .height(size)
+                .style(move |_| {
+                    let color = iced::Color::WHITE.scale_alpha(factor);
+                    text::Style { color: Some(color) }
+                });
 
+            let factor = self.background.interpolate(0.0, 1.0, now);
             let play = center(play)
-                .width(1.25 * size * self.zoom.interpolate(0.0, 1.0, now))
-                .height(1.1 * size * self.zoom.interpolate(0.0, 1.0, now))
-                .style(|theme| {
+                .width(size * factor)
+                .height(size * factor)
+                .style(move |theme| {
                     let default = styles::container::dark(theme);
                     let background = default
                         .background
-                        .map(|background| background.scale_alpha(0.8));
+                        .map(|background| background.scale_alpha(factor));
                     let border = default.border.rounded(IMAGE_RADIUS);
 
                     container::Style {

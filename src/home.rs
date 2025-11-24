@@ -1132,14 +1132,14 @@ impl Home {
                 | (State::Collections(_), _) => Task::none(),
                 (State::Recent { shows, .. }, ItemId::Show(id)) => {
                     if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
-                        show.zoom.go_mut(is_hovered, now);
+                        show.go_mut(is_hovered, now);
                     };
 
                     Task::none()
                 }
                 (State::Recent { movies, .. }, ItemId::Movie(id)) => {
                     if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
-                        movie.zoom.go_mut(is_hovered, now);
+                        movie.go_mut(is_hovered, now);
                     }
 
                     Task::none()
@@ -1147,7 +1147,7 @@ impl Home {
                 (State::Recent { .. }, _) => Task::none(),
                 (State::Shows(shows), ItemId::Show(id)) => {
                     if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
-                        show.zoom.go_mut(is_hovered, now);
+                        show.go_mut(is_hovered, now);
                     };
 
                     Task::none()
@@ -1155,7 +1155,7 @@ impl Home {
                 (State::Shows(_), _) => Task::none(),
                 (State::Movies(movies), ItemId::Movie(id)) => {
                     if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
-                        movie.zoom.go_mut(is_hovered, now);
+                        movie.go_mut(is_hovered, now);
                     }
 
                     Task::none()
@@ -1163,7 +1163,7 @@ impl Home {
                 (State::Movies(_), _) => Task::none(),
                 (State::Show { seasons, .. }, ItemId::Season(id)) => {
                     if let Some(season) = seasons.iter_mut().find(|season| season.media.id == id) {
-                        season.zoom.go_mut(is_hovered, now);
+                        season.go_mut(is_hovered, now);
                     }
                     Task::none()
                 }
@@ -1172,7 +1172,7 @@ impl Home {
                     if let Some(episode) =
                         episodes.iter_mut().find(|episode| episode.media.id == id)
                     {
-                        episode.zoom.go_mut(is_hovered, now);
+                        episode.go_mut(is_hovered, now);
                     }
 
                     Task::none()
@@ -1180,21 +1180,21 @@ impl Home {
                 (State::Season { .. }, _) => Task::none(),
                 (State::Collection { shows, .. }, ItemId::Show(id)) => {
                     if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
-                        show.zoom.go_mut(is_hovered, now);
+                        show.go_mut(is_hovered, now);
                     };
 
                     Task::none()
                 }
                 (State::Collection { movies, .. }, ItemId::Movie(id)) => {
                     if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
-                        movie.zoom.go_mut(is_hovered, now);
+                        movie.go_mut(is_hovered, now);
                     }
 
                     Task::none()
                 }
                 (State::Collection { seasons, .. }, ItemId::Season(id)) => {
                     if let Some(season) = seasons.iter_mut().find(|show| show.media.id == id) {
-                        season.zoom.go_mut(is_hovered, now);
+                        season.go_mut(is_hovered, now);
                     };
 
                     Task::none()
@@ -1203,7 +1203,7 @@ impl Home {
                     if let Some(episode) =
                         episodes.iter_mut().find(|episode| episode.media.id == id)
                     {
-                        episode.zoom.go_mut(is_hovered, now);
+                        episode.go_mut(is_hovered, now);
                     }
 
                     Task::none()
