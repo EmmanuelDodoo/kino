@@ -126,6 +126,8 @@ pub enum MediaType {
 }
 
 impl MediaType {
+    pub const ALL: [Self; 2] = [Self::Movies, Self::Shows];
+
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "movies" => Some(Self::Movies),

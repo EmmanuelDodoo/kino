@@ -5,7 +5,7 @@ use crate::models::{
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort, styles};
+use crate::utils::{Layout, Scroll, Sort, styles};
 use iced::widget::Space;
 use iced::{
     Element, Length, Task,

@@ -27,6 +27,7 @@ pub const CHEV_LEFT: char = '\u{e810}';
 pub const CHEV_RIGHT: char = '\u{e813}';
 pub const CANCEL: char = '\u{e814}';
 pub const EQUALS: char = '\u{e815}';
+pub const MINUS: char = '\u{e841}';
 
 pub const FILTER: char = '\u{e816}';
 pub const SORT: char = '\u{e817}';
@@ -90,6 +91,7 @@ pub const HOME: char = '\u{e824}';
 pub const SHOW: char = '\u{e83e}';
 pub const MOVIE: char = '\u{e83f}';
 pub const SETTINGS: char = '\u{e840}';
+pub const HELP: char = '\u{e82b}';
 
 pub const STAR: char = '\u{e84E}';
 pub const UNSTAR: char = '\u{e84F}';

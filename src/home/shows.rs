@@ -2,7 +2,7 @@ use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
 use crate::models::{ItemId, Show, ShowId};
 use crate::utils::filter::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort};
+use crate::utils::{Layout, Scroll, Sort};
 use iced::{
     Element, Task,
     time::Instant,
