@@ -1,7 +1,7 @@
 use super::{HomeMessage, PageKind, PageUpdate, shared::*};
 use crate::models::CollectionId;
 use crate::utils::filter::*;
-use crate::utils::{Layout, Sort};
+use crate::utils::{Layout, Scroll, Sort};
 use iced::{
     Element, Task,
     time::Instant,

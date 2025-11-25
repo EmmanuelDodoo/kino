@@ -21,7 +21,7 @@ use crate::models::{CollectionId, ItemId, SimpleCollection};
 use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, empty,
     icons::{self, sized_button},
-    loading_animation, loading_svg, styles, tooltip,
+    loading_animation, loading_svg, modal_container, styles, tooltip,
     typo::{self, *},
 };
 use crate::widgets::{self, modal};
@@ -181,9 +181,8 @@ impl Manager {
             volume,
             speed,
             gamma,
-            seek_mult: _seek,
-            seek_shift_mult: _seek_shift,
             seek_change_amt: _seek_amt,
+            seek_shift_change_amt: _seek_shift_amt,
             volume_change_amt: _volume,
             speed_change_amt: _speed,
             show_subtitles,
@@ -453,14 +452,7 @@ impl Manager {
                 }
             }
             ManagerMessage::Playlist(psg) => match psg {
-                PlaylistMessge::Toggle => {
-                    if matches!(self.panel, Some(Panel::Playlist)) {
-                        self.close_panel()
-                    } else {
-                        self.panel = Some(Panel::Playlist);
-                        Task::none()
-                    }
-                }
+                PlaylistMessge::Toggle => self.toggle_playlist(),
                 PlaylistMessge::ToggleAutoNext(play) => {
                     self.settings.auto_next = play;
                     Task::none()
@@ -937,14 +929,14 @@ impl Manager {
     fn seek_back(&mut self, shift: bool) -> Task<Message> {
         if let State::Ready(player) = &mut self.state {
             player.is_dragging = false;
-            let mult = if shift {
-                self.settings.seek_shift_mult
+            let amt = if shift {
+                self.settings.seek_shift_change_amt
             } else {
-                self.settings.seek_mult
+                self.settings.seek_change_amt
             };
 
             player.last_frame.take();
-            player.position = (player.position - (self.settings.seek_change_amt * mult)).max(0.0);
+            player.position = (player.position - amt).max(0.0);
             player
                 .video
                 .seek(Duration::from_secs_f64(player.position), false)
@@ -958,15 +950,14 @@ impl Manager {
         if let State::Ready(player) = &mut self.state {
             player.is_dragging = false;
             let duration = player.video.duration().as_secs_f64();
-            let mult = if shift {
-                self.settings.seek_shift_mult
+            let amt = if shift {
+                self.settings.seek_shift_change_amt
             } else {
-                self.settings.seek_mult
+                self.settings.seek_change_amt
             };
 
             player.last_frame.take();
-            player.position =
-                (player.position + (self.settings.seek_change_amt * mult)).min(duration);
+            player.position = (player.position + amt).min(duration);
             player
                 .video
                 .seek(Duration::from_secs_f64(player.position), false)
@@ -1217,6 +1208,8 @@ impl Manager {
             PlayerAction::VideoConfig => self.video_config(),
             PlayerAction::VideoComment => self.video_comment(),
             PlayerAction::CloseView => self.close_view(),
+            PlayerAction::Back => Task::done(Message::Back),
+            PlayerAction::PlaylistToggle => self.toggle_playlist(),
         }
     }
 
@@ -1245,6 +1238,15 @@ impl Manager {
         self.playlist.update_current(&player.item);
 
         Some(Message::VideoStats(player.item))
+    }
+
+    pub fn toggle_playlist(&mut self) -> Task<Message> {
+        if matches!(self.panel, Some(Panel::Playlist)) {
+            self.close_panel()
+        } else {
+            self.panel = Some(Panel::Playlist);
+            Task::none()
+        }
     }
 }
 
@@ -1532,19 +1534,4 @@ fn draw_collection_add<'a>(
         .align_x(Horizontal::Center);
 
     modal_container(content).max_width(400).into()
-}
-
-fn modal_container<'a>(
-    content: impl Into<Element<'a, ManagerMessage>>,
-) -> Container<'a, ManagerMessage> {
-    container(content)
-        .padding([8, 12])
-        .style(|theme| {
-            let default = styles::container::bw(theme);
-            let border = default.border.rounded(5.0);
-
-            container::Style { border, ..default }
-        })
-        .align_y(Vertical::Center)
-        .align_x(Horizontal::Center)
 }

@@ -22,6 +22,7 @@ mod error;
 mod home;
 mod models;
 mod player;
+mod settings;
 pub mod utils;
 mod widgets;
 
@@ -35,7 +36,7 @@ use utils::sort;
 use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Layout, SearchFilter, Sort, SortKind, empty, styles};
+use utils::{Layout, Sort, SortKind, empty, styles};
 use widgets::*;
 
 // fn _test_main() {

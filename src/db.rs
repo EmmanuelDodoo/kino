@@ -686,6 +686,78 @@ impl Database {
         Ok(rows > 0)
     }
 
+    pub fn toggle_directories(
+        &mut self,
+        directories: Vec<(Directory, bool)>,
+    ) -> rusqlite::Result<bool> {
+        if directories.is_empty() {
+            return Ok(false);
+        }
+
+        let mut inserts = vec![];
+        let mut deletes = vec![];
+
+        for (dir, insert) in directories {
+            if insert {
+                inserts.push(dir)
+            } else {
+                deletes.push(dir);
+            }
+        }
+
+        let trans = self.transaction()?;
+
+        let mut rows = 0;
+
+        if !inserts.is_empty() {
+            let mut vars = "(?, ?, ?, ?),".repeat(inserts.len());
+            // Remove trailing comma
+            vars.pop();
+
+            let insert = format!(
+                "INSERT OR IGNORE INTO directory (id, path, active, media_type) VALUES {vars}"
+            );
+
+            let mut params = vec![];
+
+            for dir in inserts {
+                params.push(ToSqlOutput::from(dir.id));
+                params.push(ToSqlOutput::from(dir.path));
+                params.push(ToSqlOutput::from(dir.active));
+                params.push(ToSqlOutput::from(dir.media_type));
+            }
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += trans.execute(&insert, params.as_slice())?;
+        }
+
+        if !deletes.is_empty() {
+            let vars = repeat(deletes.len());
+
+            let delete = format!("DELETE FROM directory WHERE id IN ({vars})");
+
+            let params = deletes
+                .into_iter()
+                .map(|dir| ToSqlOutput::from(dir.id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += trans.execute(&delete, params.as_slice())?;
+        }
+
+        trans.commit()?;
+
+        Ok(rows > 0)
+    }
+
     pub fn search<T>(
         &self,
         term: String,

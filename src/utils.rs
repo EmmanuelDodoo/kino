@@ -5,26 +5,27 @@ use gstreamer::{
 };
 use iced::animation::{Animation, Easing};
 use iced::widget::image;
-use rand::seq::IteratorRandom;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::error::*;
 use crate::models::ItemId;
 use crate::models::{EpisodeId, MovieId};
 
+pub mod config;
+pub use config::*;
+pub mod playlist;
+pub use playlist::*;
 pub mod icons;
 pub use icons::*;
 pub mod typo;
 pub use typo::*;
 pub mod filter;
-pub use filter::{
-    Comments, Comp, Duration, Filter, FilterMode, Progress, ProgressKind, Release,
-    search::SearchFilter,
-};
+pub use filter::Filter;
 pub mod sort;
 pub use sort::{Sort, SortKind};
-pub mod styles;
 pub mod image_ops;
+pub mod styles;
 pub use image_ops::*;
 
 /// Returns an empty [`iced::Element`].
@@ -96,6 +97,25 @@ pub fn tooltip<'a, Message: 'a>(
         position,
     )
     .gap(2.0)
+}
+
+pub fn modal_container<'a, Message: 'a>(
+    content: impl Into<iced::Element<'a, Message>>,
+) -> iced::widget::Container<'a, Message> {
+    use iced::alignment::{Horizontal, Vertical};
+    use iced::widget::container;
+
+    container(content)
+        .padding([8, 12])
+        .style(|theme| {
+            let default = styles::container::bw(theme);
+            let border = default.border.rounded(5.0);
+
+            container::Style { border, ..default }
+        })
+        .clip(true)
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Center)
 }
 
 /// Far faster at generating multiple thumbnails than
@@ -244,302 +264,27 @@ pub fn rand_u32() -> u32 {
         .subsec_millis()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PlayId {
-    Movie(MovieId),
-    Episode(EpisodeId),
-}
-
-impl From<PlayId> for ItemId {
-    fn from(value: PlayId) -> Self {
-        match value {
-            PlayId::Movie(id) => ItemId::Movie(id),
-            PlayId::Episode(id) => ItemId::Episode(id),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
-pub struct PlayItem {
-    pub id: PlayId,
-    pub name: String,
-    pub path: PathBuf,
-    pub progress: f32,
-    pub duration: u64,
-    pub watch_count: u32,
+pub struct Scroll {
+    pub id: iced::widget::Id,
+    pub offset: iced::widget::operation::AbsoluteOffset,
 }
 
-impl PlayItem {
-    pub fn from_episode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
-        let id = EpisodeId::from_row(row)?;
-        let id = PlayId::Episode(id);
-
-        let full_path: PathBuf = {
-            let path = row.get::<_, String>("path")?;
-            let directory = row.get::<_, String>("directory_path")?;
-            let show = row.get::<_, String>("show_path")?;
-            let season = row.get::<_, String>("season_path")?;
-            [&directory, &show, &season, &path].iter().collect()
-        };
-
-        Self::new(row, id, full_path)
-    }
-
-    pub fn from_movie(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
-        let id = MovieId::from_row(row)?;
-        let id = PlayId::Movie(id);
-
-        let full_path: PathBuf = {
-            let path = row.get::<_, String>("path")?;
-            let directory = row.get::<_, String>("directory_path")?;
-            [&directory, &path].iter().collect()
-        };
-
-        Self::new(row, id, full_path)
-    }
-
-    fn new(row: &rusqlite::Row<'_>, id: PlayId, path: PathBuf) -> rusqlite::Result<Self> {
-        let name = row.get::<_, String>("name")?;
-        let progress = row.get::<_, f32>("progress")?;
-        let duration = row.get::<_, u64>("duration")?;
-        let watch_count = row.get::<_, u32>("watch_count")?;
-
-        Ok(Self {
-            id,
-            name,
-            path,
-            progress,
-            duration,
-            watch_count,
-        })
-    }
-
-    pub fn progress(&mut self, progress: f32) {
-        assert!((0.0..1.0).contains(&progress), "Progress out of bounds");
-        self.progress = progress;
+impl Scroll {
+    pub fn new() -> Self {
+        Self {
+            id: iced::widget::Id::unique(),
+            offset: iced::widget::operation::AbsoluteOffset::default(),
+        }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Playlist {
-    pub shuffle: bool,
-    pub repeat: bool,
-    current: usize,
-    items: Vec<PlayItem>,
-}
-
-impl Playlist {
-    pub fn empty() -> Self {
-        Self {
-            repeat: false,
-            shuffle: false,
-            current: 0,
-            items: vec![],
-        }
-    }
-
-    pub fn new(items: impl Iterator<Item = PlayItem>) -> Self {
-        Self {
-            repeat: false,
-            shuffle: false,
-            current: 0,
-            items: items.collect(),
-        }
-    }
-
-    pub fn single(item: PlayItem) -> Self {
-        Self {
-            repeat: false,
-            shuffle: false,
-            current: 0,
-            items: vec![item],
-        }
-    }
-
-    pub fn merge(mut self, mut other: Self, flip: bool) -> Self {
-        let total = self.items.len() + other.items.len();
-        let current = if flip {
-            other.current.min(total.saturating_sub(1))
-        } else {
-            self.current
-        };
-
-        self.items.append(&mut other.items);
-
-        Self {
-            shuffle: self.shuffle && other.shuffle,
-            repeat: self.repeat && other.repeat,
-            current,
-            items: self.items,
-        }
-    }
-
-    pub fn position(&mut self, position: usize) {
-        self.current = position.min(self.items.len().saturating_sub(1));
-    }
-
-    pub fn set_current(&mut self, current: usize) -> bool {
-        if self.current == current {
-            return false;
-        }
-
-        self.current = current.min(self.items.len().saturating_sub(1));
-        true
-    }
-
-    pub fn update_current(&mut self, update: &PlayItem) {
-        if let Some(old) = self.current_mut()
-            && old.id == update.id
-        {
-            old.progress = update.progress;
-            old.watch_count = update.watch_count;
-        }
-    }
-
-    pub fn repeat(&mut self, repeat: bool) {
-        self.repeat = repeat;
-    }
-
-    pub fn shuffle(&mut self, shuffle: bool) {
-        self.shuffle = shuffle;
-    }
-
-    pub fn items(&self) -> impl Iterator<Item = (usize, &PlayItem, bool)> {
-        self.items
-            .iter()
-            .enumerate()
-            .map(|(idx, item)| (idx, item, idx == self.current))
-    }
-
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> Option<&PlayItem> {
-        if self.shuffle && !self.is_empty() {
-            use rand::{seq::SliceRandom, thread_rng};
-
-            let mut rng = thread_rng();
-            let new = (0..self.items.len())
-                .choose(&mut rng)
-                .expect("Playlist shuffle");
-
-            self.current = new;
-            return self.current();
-        }
-
-        self.current = (self.current + 1).min(self.items.len());
-
-        if self.repeat && self.current == self.items.len() {
-            self.current = 0
-        }
-
-        self.current()
-    }
-
-    pub fn next_peek(&self) -> Option<&PlayItem> {
-        if self.repeat && self.current == self.len().saturating_sub(1) {
-            return self.items.first();
-        }
-
-        self.items.get(self.current + 1)
-    }
-
-    pub fn current(&self) -> Option<&PlayItem> {
-        self.items.get(self.current)
-    }
-
-    fn current_mut(&mut self) -> Option<&mut PlayItem> {
-        self.items.get_mut(self.current)
-    }
-
-    pub fn previous(&mut self) -> Option<&PlayItem> {
-        if self.shuffle && !self.is_empty() {
-            use rand::{seq::SliceRandom, thread_rng};
-
-            let mut rng = thread_rng();
-            let new = (0..self.items.len())
-                .choose(&mut rng)
-                .expect("Playlist shuffle");
-
-            self.current = new;
-            return self.current();
-        }
-
-        self.current = self.current.saturating_sub(1);
-
-        self.current()
-    }
-
-    pub fn previous_peek(&self) -> Option<&PlayItem> {
-        if self.current == 0 {
-            return None;
-        };
-
-        self.items.get(self.current - 1)
-    }
-
-    pub fn restart(&mut self) {
-        self.current = 0;
-    }
-
-    pub fn len(&self) -> usize {
-        self.items.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
-
-    pub fn has_next(&self) -> bool {
-        self.current < self.items.len().saturating_sub(1) || (!self.is_empty() && self.repeat)
-    }
-
-    pub fn has_previous(&self) -> bool {
-        self.current != 0
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct VideoSettings {
-    pub thumbnail_interval: u32,
-    pub volume: f64,
-    pub speed: f64,
-    pub gamma: f64,
-    pub seek_mult: f64,
-    pub seek_shift_mult: f64,
-    pub volume_change_amt: f64,
-    pub seek_change_amt: f64,
-    pub speed_change_amt: f64,
-    pub show_subtitles: bool,
-    pub muted: bool,
-    /// Whether a loaded video automatically starts playing
-    pub auto_start: bool,
-    /// Whether the next video in a playlist is automatically loaded and played.
-    pub auto_next: bool,
-    /// The percentage at which a video is considered as 'watched'.
-    pub completion_point: f64,
-    /// The percentage watch time at which a video is considered 'watched'.
-    pub completion_watch_time: f64,
-}
-
-impl Default for VideoSettings {
-    fn default() -> Self {
-        Self {
-            thumbnail_interval: 10,
-            volume: 1.0,
-            speed: 1.0,
-            gamma: 1.5,
-            seek_mult: 1.0,
-            seek_shift_mult: 2.0,
-            volume_change_amt: 0.05,
-            seek_change_amt: 10.0,
-            speed_change_amt: 0.1,
-            show_subtitles: true,
-            muted: false,
-            auto_start: true,
-            auto_next: true,
-            completion_point: 0.95,
-            completion_watch_time: 0.75,
-        }
-    }
+#[derive(Clone, Debug, Copy)]
+pub enum Screen {
+    Home,
+    Player,
+    Settings,
+    // Log,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -551,6 +296,8 @@ pub enum Layout {
 }
 
 impl Layout {
+    pub const ALL: [Self; 3] = [Self::Grid, Self::List, Self::Compact];
+
     pub fn icon(&self) -> char {
         match self {
             Self::Grid => icons::GRID,
@@ -568,19 +315,65 @@ impl Layout {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HomeAction {
-    // todo
-    // SettingsOpen,
+    SettingsOpen,
     CloseModal,
     LayoutToggle,
     RefreshContent,
     /// Refreshes both content and the side menu
     Refresh,
     SearchToggle,
+    Back,
+    Forward,
 }
 
-#[derive(Debug, Clone, Copy)]
+impl HomeAction {
+    pub const ALL: &'static [Self] = &[
+        Self::SettingsOpen,
+        Self::CloseModal,
+        Self::LayoutToggle,
+        Self::RefreshContent,
+        Self::Refresh,
+        Self::SearchToggle,
+        Self::Back,
+        Self::Forward,
+    ];
+
+    pub fn descr(&self) -> &str {
+        match self {
+            Self::SettingsOpen => "Opens the settings screen",
+            Self::CloseModal => "Closes the current modal",
+            Self::LayoutToggle => "Toggles the content layout",
+            Self::RefreshContent => "Refreshes only the current content",
+            Self::Refresh => "Refreshes both the current content and collections",
+            Self::SearchToggle => "Opens the search dialog",
+            Self::Back => "Navigates back to the previous page",
+            Self::Forward => "Navigates forward to the next page",
+        }
+    }
+}
+
+impl std::fmt::Display for HomeAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Back => "Back",
+                Self::Forward => "Forward",
+                Self::SearchToggle => "Search Toggle",
+                Self::Refresh => "Refresh",
+                Self::RefreshContent => "Refresh Content",
+                Self::LayoutToggle => "Layout Toggle",
+                Self::CloseModal => "Close Modal",
+                Self::SettingsOpen => "Settings Open",
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlayerAction {
     PlayToggle,
     PlayNext,
@@ -603,4 +396,161 @@ pub enum PlayerAction {
     SubtitlesToggle,
     Add,
     CloseView,
+    Back,
+    PlaylistToggle,
+}
+
+impl PlayerAction {
+    pub const ALL: &'static [Self] = &[
+        Self::PlayToggle,
+        Self::PlayNext,
+        Self::PlayPrevious,
+        Self::FullscreenToggle,
+        Self::Exit,
+        Self::SeekBack,
+        Self::SeekBackShift,
+        Self::SeekFront,
+        Self::SeekFrontShift,
+        Self::VolumeIncrease,
+        Self::VolumeDecrease,
+        Self::MuteToggle,
+        Self::SpeedIncrease,
+        Self::SpeedDecrease,
+        Self::SpeedReset,
+        Self::VideoConfig,
+        Self::VideoComment,
+        Self::SubtitlesToggle,
+        Self::Add,
+        Self::CloseView,
+        Self::Back,
+        Self::PlaylistToggle,
+    ];
+
+    pub fn descr(&self) -> &str {
+        match self {
+            Self::PlayToggle => "Toggles Play/Pause",
+            Self::PlayNext => "Plays the next video",
+            Self::PlayPrevious => "Plays the previous video",
+            Self::FullscreenToggle => "Toggles full screen mode",
+            Self::Exit => "Exits either full screen mode or closes the current modal",
+            Self::SeekBack => "Rewind video",
+            Self::SeekBackShift => "Rewind video",
+            Self::SeekFront => "Fast forward video",
+            Self::SeekFrontShift => "Fast forward video",
+            Self::VolumeIncrease => "Increases the volume",
+            Self::VolumeDecrease => "Decreases the volume",
+            Self::MuteToggle => "Toggles mute",
+            Self::SpeedIncrease => "Increase playback rate",
+            Self::SpeedDecrease => "Decrease playback rate",
+            Self::SpeedReset => "Reset playback rate",
+            Self::VideoConfig => "Opens the video configuration menu",
+            Self::VideoComment => "Opens the video comment dialog",
+            Self::SubtitlesToggle => "Toggles video subtitles",
+            Self::Add => "Opens the add to collection dialog",
+            Self::CloseView => "Closes the current modal",
+            Self::Back => "Exits the video player",
+            Self::PlaylistToggle => "Toggles the playlist view",
+        }
+    }
+}
+
+impl std::fmt::Display for PlayerAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::PlayToggle => "Play Toggle",
+                Self::PlayNext => "Play Next",
+                Self::PlayPrevious => "Play Previous",
+                Self::FullscreenToggle => "Fullscreen Toggle",
+                Self::Exit => "Exit",
+                Self::SeekBack => "Seek Back",
+                Self::SeekBackShift => "Seek Back Shift",
+                Self::SeekFront => "Seek Front",
+                Self::SeekFrontShift => "Seek Front Shift",
+                Self::VolumeIncrease => "Volume Increase",
+                Self::VolumeDecrease => "Volume Decrease",
+                Self::MuteToggle => "Mute Toggle",
+                Self::SpeedIncrease => "Speed Increase",
+                Self::SpeedDecrease => "Speed Decrease",
+                Self::SpeedReset => "Speed Reset",
+                Self::VideoConfig => "Video Config",
+                Self::VideoComment => "Video Comment",
+                Self::SubtitlesToggle => "Subtitles Toggle",
+                Self::Add => "Add",
+                Self::CloseView => "Close View",
+                Self::Back => "Back",
+                Self::PlaylistToggle => "Playlist Toggle",
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SettingsAction {
+    Up,
+    Down,
+    Cancel,
+}
+
+impl SettingsAction {
+    pub const ALL: &'static [Self] = &[Self::Cancel, Self::Up, Self::Down];
+
+    pub fn descr(&self) -> &str {
+        match self {
+            Self::Cancel => "Discards changes and exits the settings screen",
+            Self::Up => "Navigates to the next sub-menu",
+            Self::Down => "Navigates to the previous sub-menu",
+        }
+    }
+}
+
+impl std::fmt::Display for SettingsAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Cancel => "Cancel",
+                Self::Down => "Down",
+                Self::Up => "Up",
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Action {
+    Home(HomeAction),
+    Player(PlayerAction),
+    Settings(SettingsAction),
+}
+
+impl Action {
+    pub fn descr(&self) -> &str {
+        match self {
+            Self::Home(action) => action.descr(),
+            Self::Player(action) => action.descr(),
+            Self::Settings(action) => action.descr(),
+        }
+    }
+}
+
+impl From<PlayerAction> for Action {
+    fn from(value: PlayerAction) -> Self {
+        Self::Player(value)
+    }
+}
+
+impl From<HomeAction> for Action {
+    fn from(value: HomeAction) -> Self {
+        Self::Home(value)
+    }
+}
+
+impl From<SettingsAction> for Action {
+    fn from(value: SettingsAction) -> Self {
+        Self::Settings(value)
+    }
 }

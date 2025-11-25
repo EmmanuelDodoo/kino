@@ -33,8 +33,8 @@ use crate::models::{
 use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
-    self, HomeAction, Layout, Sort, SortKind, empty, filter::*, icons, icons::*, loading_animation,
-    loading_svg, styles, tooltip, typo::*,
+    self, HomeAction, Layout, Scroll, Sort, SortKind, empty, filter::*, icons, icons::*,
+    loading_animation, loading_svg, modal_container, styles, tooltip, typo::*,
 };
 use crate::widgets::{
     menu::{Position, menu},
@@ -49,7 +49,7 @@ use pages::{Page, PageKind, PageUpdate};
 use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
 use shared::{
-    CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, Scroll, SearchView, Thumbnail, filter_sort,
+    CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, SearchView, Thumbnail, filter_sort,
 };
 use shows::{TvShows, TvShowsMessage};
 
@@ -396,7 +396,7 @@ impl Home {
     pub fn update(&mut self, message: HomeMessage, now: Instant) -> Task<Message> {
         match message {
             HomeMessage::None => Task::none(),
-            HomeMessage::Settings => todo!(),
+            HomeMessage::Settings => Task::done(Message::SettingsOpen),
             HomeMessage::FetchedCollections(collections) => {
                 self.state = State::Collections(collections);
 
@@ -921,7 +921,6 @@ impl Home {
                     page.page_update(update);
                 };
 
-                // todo: Persist changes
                 Task::none()
             }
             HomeMessage::ToggleSort => {
@@ -1010,7 +1009,7 @@ impl Home {
                                 duration.secs = hours + secs;
                             }
                             None => {
-                                self.filters.duration = Some(utils::Duration {
+                                self.filters.duration = Some(utils::filter::Duration {
                                     secs,
                                     comp: Comp::default(),
                                 });
@@ -1047,7 +1046,7 @@ impl Home {
                                 duration.secs = secs + minutes;
                             }
                             None => {
-                                self.filters.duration = Some(utils::Duration {
+                                self.filters.duration = Some(utils::filter::Duration {
                                     secs,
                                     comp: Comp::default(),
                                 });
@@ -1105,7 +1104,6 @@ impl Home {
                     page.page_update(update);
                 };
 
-                // todo: Persist changes
                 Task::none()
             }
             HomeMessage::NewCollection => {
@@ -1234,6 +1232,14 @@ impl Home {
         } else {
             Subscription::none()
         }
+    }
+
+    pub fn layout(&mut self, layout: Layout) {
+        self.layout = layout;
+    }
+
+    pub fn recents_limit(&mut self, recent_limit: Option<i32>) {
+        self.recent_limit = recent_limit;
     }
 
     fn update_scroll(&mut self) -> Task<()> {
@@ -2284,7 +2290,7 @@ impl Home {
             page.page_update(update);
         };
 
-        Task::none()
+        Task::done(Message::Layout(self.layout))
     }
 
     fn close_view(&mut self) -> Task<Message> {
@@ -2399,11 +2405,14 @@ impl Home {
 
     pub fn action(&mut self, action: HomeAction, now: Instant) -> Task<Message> {
         match action {
+            HomeAction::SettingsOpen => Task::done(Message::SettingsOpen),
             HomeAction::LayoutToggle => self.layout_toggle(),
             HomeAction::RefreshContent => self.content_refresh(now),
             HomeAction::Refresh => self.refresh(now),
             HomeAction::SearchToggle => self.toggle_search(None),
             HomeAction::CloseModal => self.close_view(),
+            HomeAction::Back => self.back(now),
+            HomeAction::Forward => self.forward(now),
         }
     }
 
@@ -2871,19 +2880,6 @@ fn fetch_kind(kind: PageKind) -> FetchId {
         PageKind::Movie(id) => FetchId::Movie(id),
         PageKind::Collection(id) => FetchId::Collection(id),
     }
-}
-
-fn modal_container<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Container<'a, HomeMessage> {
-    container(content)
-        .padding([8, 12])
-        .style(|theme| {
-            let default = styles::container::bw(theme);
-            let border = default.border.rounded(5.0);
-
-            container::Style { border, ..default }
-        })
-        .align_y(Vertical::Center)
-        .align_x(Horizontal::Center)
 }
 
 fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(

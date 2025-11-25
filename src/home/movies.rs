@@ -3,7 +3,7 @@ use crate::models::{ItemId, Media, Movie, MovieId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Sort};
+use crate::utils::{Layout, Scroll, Sort};
 use iced::{
     Element, Task,
     alignment::Vertical,

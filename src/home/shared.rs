@@ -577,7 +577,7 @@ impl<T: Media> Thumbnail<T> {
                 ..Default::default()
             };
             let duration = text(self.media.duration_full())
-                .size(H7)
+                .size(H8)
                 .font(font)
                 .style(color);
             row!(space::horizontal(), duration)
@@ -1041,21 +1041,6 @@ impl SearchView {
             .padding([4, 8])
             .on_press((on_details)(self.item.id))
             .into()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Scroll {
-    pub id: widget::Id,
-    pub offset: operation::AbsoluteOffset,
-}
-
-impl Scroll {
-    pub fn new() -> Self {
-        Self {
-            id: widget::Id::unique(),
-            offset: operation::AbsoluteOffset::default(),
-        }
     }
 }
 

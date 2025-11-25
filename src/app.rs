@@ -14,10 +14,11 @@ use crate::models::{
     Show, ShowId, SimpleCollection, collection, collection::Items,
 };
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
+use crate::settings::{Settings, SettingsMessage};
 use crate::toast;
 use crate::utils::{
-    Filter, FilterMode, HomeAction, Layout, PlayId, PlayItem, PlayerAction, Playlist, SearchFilter,
-    Sort, VideoSettings, load_fonts,
+    Action, Config, Filter, HomeAction, KeyPress, Layout, PlayId, PlayItem, PlayerAction, Playlist,
+    Screen, Sort, VideoSettings, filter::FilterMode, filter::SearchFilter, load_fonts,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -34,34 +35,6 @@ pub enum FetchId {
     Collection(CollectionId),
 }
 
-#[derive(Clone, Debug, Copy)]
-pub enum Screen {
-    Home,
-    Player,
-    // Settings,
-    // Log,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Action {
-    Back(Screen),
-    Forward,
-    Home(HomeAction),
-    Player(PlayerAction),
-}
-
-impl From<PlayerAction> for Action {
-    fn from(value: PlayerAction) -> Self {
-        Self::Player(value)
-    }
-}
-
-impl From<HomeAction> for Action {
-    fn from(value: HomeAction) -> Self {
-        Self::Home(value)
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum Message {
     FontLoad(Result<(), font::Error>),
@@ -72,6 +45,7 @@ pub enum Message {
     PushToasts(Vec<(String, toast::Status)>),
     Home(HomeMessage),
     Player(PlayerMessage),
+    Settings(SettingsMessage),
     PlayItem(ItemId),
     PlayItems(Vec<ItemId>),
     PlayCollectionItems {
@@ -95,16 +69,20 @@ pub enum Message {
         limit: Option<i32>,
         offset: Option<i32>,
     },
+    FetchDirectories,
     Refresh(Instant),
     LastWatched(PlayId),
     VideoStats(PlayItem),
     Key {
         key: Key,
         modifiers: Modifiers,
-        press: bool,
     },
     Back,
     Random,
+    SettingsOpen,
+    SaveSettings,
+    Layout(Layout),
+    CaptureKeys(bool),
     None,
 }
 
@@ -127,47 +105,53 @@ pub struct App {
 
     screen: Screen,
     home: Home,
-
+    settings: Option<Settings>,
     player: Option<Player>,
 
     last_refresh: Instant,
-    refresh_interval: Duration,
+
+    config: Config,
 
     db: db::Database,
+
+    is_capturing_keys: bool,
 }
 
 impl App {
     pub fn boot() -> (Self, Task<Message>) {
         let load_font = load_fonts().map(Message::FontLoad);
         let load_id = window::oldest().map(Message::WindowId);
+        let settings = Config::defaults();
 
         let (home, home_tasks) = Home::boot(
-            Layout::default(),
+            settings.layout(),
             Filter::new(FilterMode::default()),
             Sort::new_with_name(),
-            Some(5),
+            settings.general.recents_limit,
         );
 
-        let new = Self::new(home);
+        let new = Self::new(settings, home);
 
         let tasks = Task::batch([load_font, load_id, home_tasks]);
 
         (new, tasks)
     }
 
-    fn new(home: Home) -> Self {
+    fn new(settings: Config, home: Home) -> Self {
         let db = db::Database::open_test_db().expect("Failed to open DB");
 
         Self {
             screen: Screen::Home,
             now: Instant::now(),
             last_refresh: Instant::now(),
-            refresh_interval: Duration::from_secs(600),
             toasts: vec![],
             window: None,
             player: None,
+            settings: None,
+            config: settings,
             home,
             db,
+            is_capturing_keys: false,
         }
     }
 
@@ -188,7 +172,7 @@ impl App {
                 Task::none()
             }
             Message::Refresh(refresh) => {
-                if refresh.duration_since(self.last_refresh) >= self.refresh_interval {
+                if refresh.duration_since(self.last_refresh) >= self.config.refresh_interval() {
                     self.last_refresh = refresh;
                     self.home.refresh(now)
                 } else {
@@ -235,6 +219,13 @@ impl App {
 
                 player.update(psg, now)
             }
+            Message::Settings(ssg) => {
+                let Some(settings) = self.settings.as_mut() else {
+                    return Task::none();
+                };
+
+                settings.update(ssg)
+            }
             Message::Query(query) => {
                 // todo
                 let _res = match query.execute(&self.db) {
@@ -272,14 +263,47 @@ impl App {
 
                 self.play_items(items)
             }
-            Message::Key {
-                key,
-                modifiers,
-                press,
-            } => key_action(key, modifiers, self.screen, press)
-                .map(|action| self.action(action, now))
-                .unwrap_or_default(),
-            Message::Back => self.action(Action::Back(self.screen), now),
+            Message::Key { key, modifiers } => {
+                let keypress = KeyPress::new(key, modifiers.into());
+
+                if let Some(settings) = self.settings.as_mut()
+                    && self.is_capturing_keys
+                {
+                    settings.captured_key(keypress)
+                } else {
+                    self.config
+                        .keystore
+                        .action(keypress, self.screen)
+                        .map(|action| self.action(action, now))
+                        .unwrap_or_default()
+                }
+            }
+            Message::CaptureKeys(capture) => {
+                self.is_capturing_keys = capture;
+                Task::none()
+            }
+            Message::Back => match self.screen {
+                Screen::Home => self.home.back(now),
+                Screen::Player => {
+                    self.screen = Screen::Home;
+                    let stats = self
+                        .player
+                        .take()
+                        .as_mut()
+                        .and_then(|player| player.stats().map(Task::done))
+                        .unwrap_or_default();
+
+                    Task::batch([self.home.refresh(now), stats])
+                }
+                Screen::Settings => {
+                    self.settings.take();
+                    self.player.take();
+
+                    self.screen = Screen::Home;
+
+                    self.home.refresh(now)
+                }
+            },
             Message::Fetch {
                 id,
                 filters: filter,
@@ -481,11 +505,30 @@ impl App {
                     self.home.fetched_collection(collection, items)
                 }
             },
+            Message::FetchDirectories => {
+                let Some(settings) = self.settings.as_mut() else {
+                    return Task::none();
+                };
+
+                let dirs = match self.db.get_directories() {
+                    Ok(dirs) => dirs,
+                    Err(error) => {
+                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        return Task::done(msg);
+                    }
+                };
+
+                settings.fetched_directories(dirs);
+
+                Task::none()
+            }
             Message::LoadSearch(search, filter) => {
-                let items = match self
-                    .db
-                    .search(search, filter, Some(5), shared::SearchView::new)
-                {
+                let items = match self.db.search(
+                    search,
+                    filter,
+                    self.config.search_limit(),
+                    shared::SearchView::new,
+                ) {
                     Ok(items) => items,
                     Err(error) => {
                         let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -604,6 +647,40 @@ impl App {
 
                 self.home.goto(random.into(), now)
             }
+            Message::SettingsOpen => self.settings(),
+            Message::SaveSettings => {
+                // todo: Directories changes
+                self.screen = Screen::Home;
+
+                let Some(settings) = self.settings.take() else {
+                    return Task::none();
+                };
+
+                self.home.layout(settings.config.layout());
+                self.home
+                    .recents_limit(settings.config.general.recents_limit);
+                self.config = settings.config;
+
+                // todo: Scan dirs
+                let dirs = settings.directories;
+
+                let msg = match self.db.toggle_directories(dirs) {
+                    Ok(true) => Message::PushToast(
+                        "Directories Updated!".to_owned(),
+                        toast::Status::Success,
+                    ),
+                    Ok(false) => Message::None,
+                    Err(error) => Message::PushToast(error.to_string(), toast::Status::Error),
+                };
+
+                let refresh = self.home.refresh(now);
+
+                Task::batch([refresh, Task::done(msg)])
+            }
+            Message::Layout(layout) => {
+                self.config.general.layout = layout;
+                Task::none()
+            }
         }
     }
 
@@ -616,13 +693,20 @@ impl App {
 
                 player.view(self.now).map(Message::Player)
             }
+            Screen::Settings => {
+                let settings = self.settings.as_ref().unwrap();
+                settings.view().map(Message::Settings)
+            }
         };
 
         toast::manager(content, &self.toasts, Message::CloseToast).into()
     }
 
     pub fn theme(&self) -> Option<Theme> {
-        Some(Theme::TokyoNight)
+        match self.settings.as_ref() {
+            Some(settings) => Some(settings.config.theme()),
+            None => Some(self.config.theme()),
+        }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -639,21 +723,23 @@ impl App {
             Subscription::none()
         };
 
-        let keys = keyboard::on_key_press(|key, modifiers| {
-            Some(Message::Key {
-                key,
-                modifiers,
-                press: true,
-            })
-        });
+        let keys = keyboard::on_key_press(|key, modifiers| Some(Message::Key { key, modifiers }));
 
         let exit = window::close_requests().map(Message::Exit);
 
         let home = self.home.subscription();
 
-        let refresh = time::every(self.refresh_interval).map(Message::Refresh);
+        let refresh = time::every(self.config.refresh_interval()).map(Message::Refresh);
 
         Subscription::batch([animating, keys, exit, player, refresh, home])
+    }
+
+    fn settings(&mut self) -> Task<Message> {
+        let (settings, tasks) = Settings::boot(self.config.clone());
+        self.screen = Screen::Settings;
+        self.settings = Some(settings);
+
+        tasks
     }
 
     fn push_toast(&mut self, toast: toast::Toast) {
@@ -797,7 +883,7 @@ impl App {
             }
         }
 
-        let (player, player_tasks) = Player::boot(self.window, VideoSettings::default(), playlist);
+        let (player, player_tasks) = Player::boot(self.window, self.config.video, playlist);
         self.player = Some(player);
         self.screen = Screen::Player;
 
@@ -815,103 +901,13 @@ impl App {
                 .as_mut()
                 .map(|player| player.action(pat, now))
                 .unwrap_or_default(),
-            Action::Forward => self.home.forward(now),
-            Action::Back(Screen::Home) => self.home.back(now),
-            Action::Back(Screen::Player) => {
-                self.screen = Screen::Home;
-                let stats = self
-                    .player
-                    .take()
-                    .as_mut()
-                    .and_then(|player| player.stats().map(Task::done))
-                    .unwrap_or_default();
-
-                Task::batch([self.home.refresh(now), stats])
-            }
+            Action::Settings(sat) => self
+                .settings
+                .as_mut()
+                .map(|settings| settings.action(sat))
+                .unwrap_or_default(),
         }
     }
-}
-
-fn key_action(key: Key, modifiers: Modifiers, screen: Screen, press: bool) -> Option<Action> {
-    use keyboard::key::Named;
-    match key {
-        Key::Named(Named::ArrowLeft) if modifiers.alt() => Some(Action::Back(screen)),
-        Key::Named(Named::NavigateNext) | Key::Named(Named::BrowserForward) => {
-            Some(Action::Forward)
-        }
-        Key::Named(Named::NavigatePrevious) | Key::Named(Named::BrowserBack) => {
-            Some(Action::Back(screen))
-        }
-        Key::Named(Named::ArrowRight) if modifiers.alt() => Some(Action::Forward),
-        key => match screen {
-            Screen::Player => player_keypress(key, modifiers, press).map(Action::Player),
-            Screen::Home => home_keypress(key, modifiers, press).map(Action::Home),
-        },
-    }
-}
-
-fn home_keypress(key: Key, modifiers: Modifiers, _press: bool) -> Option<HomeAction> {
-    use keyboard::key::Named;
-
-    let action = match key {
-        Key::Character(char) if char.as_str() == "l" => HomeAction::LayoutToggle,
-        Key::Character(char) if char.as_str() == "r" && modifiers.shift() => HomeAction::Refresh,
-        Key::Character(char) if char.as_str() == "r" => HomeAction::RefreshContent,
-        Key::Character(char) if char.as_str() == "/" => HomeAction::SearchToggle,
-        Key::Character(char) if char.as_str() == "f" && modifiers.command() => {
-            HomeAction::SearchToggle
-        }
-        Key::Named(Named::Escape) => HomeAction::CloseModal,
-        _ => return None,
-    };
-
-    Some(action)
-}
-
-fn player_keypress(key: Key, modifiers: Modifiers, _press: bool) -> Option<PlayerAction> {
-    use keyboard::key::Named;
-
-    let action = match key {
-        Key::Named(Named::Space) => PlayerAction::PlayToggle,
-        Key::Named(Named::MediaPlayPause) => PlayerAction::PlayToggle,
-        Key::Named(Named::ArrowLeft) if modifiers.command() => PlayerAction::PlayPrevious,
-        Key::Named(Named::MediaTrackPrevious) => PlayerAction::PlayPrevious,
-        Key::Named(Named::ArrowRight) if modifiers.command() => PlayerAction::PlayNext,
-        Key::Named(Named::MediaTrackNext) => PlayerAction::PlayNext,
-
-        Key::Named(Named::Enter) => PlayerAction::FullscreenToggle,
-        Key::Named(Named::Escape) => PlayerAction::Exit,
-        Key::Character(char) if char.as_str() == "f" => PlayerAction::FullscreenToggle,
-
-        Key::Named(Named::ArrowLeft) if modifiers.shift() => PlayerAction::SeekBackShift,
-        Key::Named(Named::ArrowLeft) => PlayerAction::SeekBack,
-        Key::Named(Named::ArrowRight) if modifiers.shift() => PlayerAction::SeekFrontShift,
-        Key::Named(Named::ArrowRight) => PlayerAction::SeekFront,
-
-        Key::Named(Named::ArrowUp) => PlayerAction::VolumeIncrease,
-        Key::Named(Named::ArrowDown) => PlayerAction::VolumeDecrease,
-        Key::Character(char) if char.as_str() == "m" => PlayerAction::MuteToggle,
-
-        Key::Character(char) if char.as_str() == "c" => PlayerAction::SpeedIncrease,
-        Key::Named(Named::PlaySpeedUp) => PlayerAction::SpeedIncrease,
-        Key::Character(char) if char.as_str() == "x" => PlayerAction::SpeedDecrease,
-        Key::Named(Named::PlaySpeedDown) => PlayerAction::SpeedDecrease,
-        Key::Character(char) if char.as_str() == "z" => PlayerAction::SpeedReset,
-        Key::Named(Named::PlaySpeedReset) => PlayerAction::SpeedReset,
-
-        Key::Character(char) if char.as_str() == "s" && modifiers.shift() => {
-            PlayerAction::VideoConfig
-        }
-
-        Key::Character(char) if char.as_str() == "s" => PlayerAction::SubtitlesToggle,
-        Key::Named(Named::Subtitle) => PlayerAction::SubtitlesToggle,
-
-        Key::Character(char) if char.as_str() == "b" => PlayerAction::VideoComment,
-
-        _ => return None,
-    };
-
-    Some(action)
 }
 
 fn movie_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Movie>> {
