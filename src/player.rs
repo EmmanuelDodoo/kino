@@ -563,8 +563,8 @@ impl Manager {
                 let total = format!(
                     "{:02}:{:02}:{:02}",
                     remaining / 3600,
-                    remaining / 60,
-                    remaining % 60,
+                    (remaining % 3600) / 60,
+                    (remaining % 3600) % 60,
                 );
                 let total = container(text(total)).style(styles::container::text);
 

@@ -634,7 +634,7 @@ impl<T: Media> Thumbnail<T> {
 
         let img = self.poster_helper();
 
-        let content = stack![img, overlay].width(CARD_WIDTH);
+        let content = stack![img, overlay].width(CARD_WIDTH).height(Length::Fill);
 
         let content = column!(content, details)
             .width(CARD_WIDTH)

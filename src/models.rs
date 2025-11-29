@@ -71,7 +71,7 @@ pub trait Media {
         let duration = self.duration();
 
         if duration < 60 {
-            return format!("{duration:02}seconds");
+            return format!("{duration:02} seconds");
         }
 
         let hrs = duration / 3600;
