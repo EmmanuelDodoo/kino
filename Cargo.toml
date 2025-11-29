@@ -14,6 +14,7 @@ glib = "0.20" # gobject traits and error type
 gstreamer = "0.23"
 gstreamer-app = "0.23" # appsink
 gstreamer-base = "0.23" # basesrc
+gstreamer-pbutils = "0.23"
 
 iced = { git = "https://github.com/iced-rs/iced", rev = "c67f523", features = ["image", "svg", "hot", "tokio", "advanced", "wgpu", "markdown"] }
 iced_video_player = { git = "https://github.com/EmmanuelDodoo/iced_video_player" }

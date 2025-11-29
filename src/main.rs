@@ -15,6 +15,8 @@ use iced::{
     },
     window,
 };
+use std::io;
+use std::path::{Path, PathBuf};
 
 mod app;
 mod db;
@@ -22,12 +24,13 @@ mod error;
 mod home;
 mod models;
 mod player;
+mod scan;
 mod settings;
 pub mod utils;
 mod widgets;
 
 use app::App;
-use models::{ItemId, SearchItem};
+use models::{Directory, ItemId, Media, MediaType, SearchItem, Show};
 use utils::filter;
 use utils::filter::*;
 use utils::icons;
@@ -40,18 +43,7 @@ use utils::{Layout, Sort, SortKind, empty, styles};
 use widgets::*;
 
 // fn _test_main() {
-//     // fn main() {
-//     let temp = utils::ThumbnailGenerator::new("assets/test1.mp4", 500, 31, 8);
-//
-//     let total = temp.duration;
-//     dbg!(total);
-//     let unit = (total * 25) / 100;
-//
-//     for i in 1..4 {
-//         let time = unit * i;
-//         temp.generate(time);
-//         dbg!(i);
-//     }
+// fn main() {
 // }
 
 // fn test_main() -> iced::Result {
@@ -84,27 +76,41 @@ fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     FontLoad(Result<(), iced::font::Error>),
+    Scan,
+    Fetch,
+    ScanComplete,
     None,
 }
 
 struct Playground {
     now: Instant,
     db: db::Database,
-    content: markdown::Content,
+    dir: Directory,
+    items: Vec<Show>,
+    scanning: bool,
 }
 
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let fonts = utils::load_fonts().map(Message::FontLoad);
-        // let load = Task::done(Message::Load);
 
         let now = Instant::now();
-        let content = markdown::Content::parse("w***ale***s");
+
+        let db = db::Database::open_with_schema("test.db").unwrap();
+        let (dir, query) = Directory::new(
+            r"C:\Users\edodo\Desktop\Series".into(),
+            // r"C:\Users\edodo\Desktop\coding\Projects\kino\assets".into(),
+            MediaType::Shows,
+            true,
+        );
+        query.execute(&db).unwrap();
 
         let new = Self {
             now,
-            db: db::Database::open_test_db().unwrap(),
-            content,
+            db,
+            dir,
+            items: vec![],
+            scanning: false,
         };
 
         (new, Task::batch([fonts]))
@@ -120,26 +126,63 @@ impl Playground {
                 eprintln!("{error:?}");
                 Task::none()
             }
+            Message::Scan => {
+                self.scanning = true;
+                let dir = self.dir.clone();
+
+                Task::perform(
+                    // async move { scan::scan_dirs("test.db", vec![dir.clone(), dir]).unwrap() },
+                    async move { scan::scan_dir("test.db", dir, true) },
+                    |res| {
+                        if let Some(res) = res {
+                            println!("{}", res.successes.len());
+                            println!("{}", res.failures.len());
+                        }
+                        Message::ScanComplete
+                    },
+                )
+            }
+            Message::ScanComplete => {
+                self.scanning = false;
+                Task::none()
+            }
+            Message::Fetch => {
+                let items = self
+                    .db
+                    .get_shows(None, None, Filter::none(), Sort::default(), |item| item)
+                    .unwrap();
+
+                self.items = items;
+
+                Task::none()
+            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let w = span("w").link(());
-        let ale = span("ale")
-            .font(Font {
-                family: font::Family::SansSerif,
-                weight: font::Weight::Bold,
-                stretch: font::Stretch::Normal,
-                style: font::Style::Italic,
-            })
-            .link(());
-        let s = span("s").link(());
+        let items = self
+            .items
+            .iter()
+            .map(|item| text(item.name()).size(H7).into());
+        let items = column(items).spacing(10);
 
-        // let theme = self.theme().unwrap();
-        // let settings = markdown::Settings::with_text_size(H7, theme);
-        // let content = markdown::view(self.content.items(), settings).map(|_| Message::None);
+        let scanning: Element<'_, Message> = if self.scanning {
+            text("Scanning.....").into()
+        } else {
+            empty()
+        };
 
-        let content = rich_text([w, ale, s]).on_link_click(|_: ()| Message::None);
+        let dir = text(&self.dir.path);
+
+        let actions = row!(
+            button("Scan").on_press(Message::Scan),
+            button("Fetch").on_press(Message::Fetch)
+        )
+        .spacing(50.0);
+
+        let content = column!(dir, actions, scanning, items)
+            .spacing(8.0)
+            .align_x(Horizontal::Center);
 
         let content = center(content);
 
@@ -151,6 +194,6 @@ impl Playground {
     }
 
     fn theme(&self) -> Option<Theme> {
-        Some(Theme::Light)
+        Some(Theme::Nord)
     }
 }

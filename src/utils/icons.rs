@@ -92,6 +92,7 @@ pub const SHOW: char = '\u{e83e}';
 pub const MOVIE: char = '\u{e83f}';
 pub const SETTINGS: char = '\u{e840}';
 pub const HELP: char = '\u{e82b}';
+pub const SCAN: char = '\u{e848}';
 
 pub const STAR: char = '\u{e84E}';
 pub const UNSTAR: char = '\u{e84F}';

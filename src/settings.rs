@@ -113,6 +113,8 @@ pub enum SettingsMessage {
     Subtitles(bool),
     AutoStart(bool),
     AutoNext(bool),
+    ScanDiscoverer(bool),
+    ToggleScanDiscover,
     ToggleSubtitles,
     ToggleAutoStart,
     ToggleAutoNext,
@@ -522,6 +524,16 @@ impl Settings {
 
                 Task::done(Message::CaptureKeys(false))
             }
+
+            SettingsMessage::ToggleScanDiscover => {
+                self.config.general.scan_discoverer = !self.config.general.scan_discoverer;
+                Task::none()
+            }
+            SettingsMessage::ScanDiscoverer(enable) => {
+                self.config.general.scan_discoverer = enable;
+
+                Task::none()
+            }
         }
     }
 
@@ -662,6 +674,7 @@ impl Settings {
             recents_limit,
             search_limit,
             theme,
+            scan_discoverer,
         } = &self.config.general;
 
         let refresh = {
@@ -803,9 +816,42 @@ impl Settings {
             row!(label, dirs).spacing(spacing)
         };
 
-        let content = column!(refresh, recents_limit, search_limit, layouts, theme, dirs)
-            .spacing(36.0)
-            .height(Length::Fill);
+        let discoverer = {
+            let label = label_maker("Enable Discovery Scan ");
+            let icon = help(
+                "More information is collected on videos but directory scanning is slower as a result ",
+                size,
+            );
+            let label = button(label)
+                .padding(0)
+                .on_press(SettingsMessage::ToggleScanDiscover)
+                .style(styles::button::text);
+
+            let label = row!(label, icon)
+                .spacing(2)
+                .align_y(Vertical::Center)
+                .width(width);
+
+            let toggle = toggler(*scan_discoverer)
+                .on_toggle(SettingsMessage::ScanDiscoverer)
+                .size(size);
+
+            row!(label, toggle)
+                .align_y(Vertical::Center)
+                .spacing(spacing)
+        };
+
+        let content = column!(
+            refresh,
+            recents_limit,
+            search_limit,
+            layouts,
+            theme,
+            dirs,
+            discoverer
+        )
+        .spacing(36.0)
+        .height(Length::Fill);
 
         content.into()
     }

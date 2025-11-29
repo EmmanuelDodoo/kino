@@ -153,6 +153,7 @@ impl Playlist {
         if let Some(old) = self.current_mut()
             && old.id == update.id
         {
+            old.duration = update.duration;
             old.progress = update.progress;
             old.watch_count = update.watch_count;
         }

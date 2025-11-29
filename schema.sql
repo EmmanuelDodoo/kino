@@ -29,6 +29,8 @@ CREATE TABLE tv_show (
 	recent_season        TEXT     ,
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
+	fetched		     BOOLEAN DEFAULT FALSE,
+	UNIQUE(directory, path),
 	FOREIGN KEY ( directory ) REFERENCES directory( id ) ON DELETE CASCADE
 );
 
@@ -53,6 +55,8 @@ CREATE TABLE season (
 	recent_episode       TEXT     ,
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
+	fetched		     BOOLEAN DEFAULT FALSE,
+	UNIQUE(show_id, path),
 	FOREIGN KEY ( show_id ) REFERENCES tv_show( id ) ON DELETE CASCADE 
 );
 
@@ -75,6 +79,8 @@ CREATE TABLE episode (
 	watch_count          INT NOT NULL DEFAULT 0   ,
 	episode_number       INT NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
+	fetched		     BOOLEAN DEFAULT FALSE,
+	UNIQUE(season_id, path),
 	FOREIGN KEY ( season_id ) REFERENCES season( id ) ON DELETE CASCADE ,
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
 	CHECK ( 0 <= rating AND rating <= 5 )
@@ -110,7 +116,9 @@ CREATE TABLE movie (
 	rating		        FLOAT(2,1),
 	last_watched	    DATETIME,
 	duration	        INTEGER NOT NULL DEFAULT 0,
-	comment_count	    INTEGER NOT NULL DEFAULT 0
+	comment_count	    INTEGER NOT NULL DEFAULT 0,
+	fetched		     BOOLEAN DEFAULT FALSE,
+	UNIQUE(directory, path),
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
 	CHECK ( 0 <= rating AND rating <= 5 ),
 	FOREIGN KEY ( directory ) REFERENCES directory( id ) ON DELETE CASCADE

@@ -10,16 +10,19 @@ use crate::db::{self, Query};
 use crate::error::Error;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
-    self, Collection, CollectionId, Episode, EpisodeId, ItemId, Movie, MovieId, Season, SeasonId,
-    Show, ShowId, SimpleCollection, collection, collection::Items,
+    self, Collection, CollectionId, DirectoryId, Episode, EpisodeId, ItemId, Movie, MovieId,
+    Season, SeasonId, Show, ShowId, SimpleCollection, collection, collection::Items,
 };
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
+use crate::scan;
 use crate::settings::{Settings, SettingsMessage};
 use crate::toast;
 use crate::utils::{
     Action, Config, Filter, HomeAction, KeyPress, Layout, PlayId, PlayItem, PlayerAction, Playlist,
     Screen, Sort, VideoSettings, filter::FilterMode, filter::SearchFilter, load_fonts,
 };
+
+const DB_PATH: &str = "test.db";
 
 #[derive(Debug, Clone, Copy)]
 pub enum FetchId {
@@ -83,6 +86,8 @@ pub enum Message {
     SaveSettings,
     Layout(Layout),
     CaptureKeys(bool),
+    Scan,
+    ScanComplete(Vec<DirectoryId>),
     None,
 }
 
@@ -138,7 +143,7 @@ impl App {
     }
 
     fn new(settings: Config, home: Home) -> Self {
-        let db = db::Database::open_test_db().expect("Failed to open DB");
+        let db = db::Database::open_test_db(DB_PATH).expect("Failed to open DB");
 
         Self {
             screen: Screen::Home,
@@ -231,7 +236,6 @@ impl App {
                 let _res = match query.execute(&self.db) {
                     Ok(suc) => suc,
                     Err(error) => {
-                        dbg!(&error.error);
                         let msg = Message::PushToast(error.error.to_string(), toast::Status::Error);
                         return Task::done(msg);
                     }
@@ -596,43 +600,43 @@ impl App {
                 match id {
                     PlayId::Movie(id) => match self.db.last_watched_movie(id, now) {
                         Ok(_) => Task::none(),
-                        Err(error) => Task::done(Message::PushToast(
-                            dbg!(error).to_string(),
-                            toast::Status::Error,
-                        )),
+                        Err(error) => {
+                            Task::done(Message::PushToast(error.to_string(), toast::Status::Error))
+                        }
                     },
                     PlayId::Episode(id) => match self.db.last_watched_episode(id, now) {
                         Ok(_) => Task::none(),
-                        Err(error) => Task::done(Message::PushToast(
-                            dbg!(error).to_string(),
-                            toast::Status::Error,
-                        )),
+                        Err(error) => {
+                            Task::done(Message::PushToast(error.to_string(), toast::Status::Error))
+                        }
                     },
                 }
             }
             Message::VideoStats(item) => match item.id {
                 PlayId::Movie(id) => {
-                    match self
-                        .db
-                        .update_movie_stats(id, item.watch_count, item.progress)
-                    {
+                    match self.db.update_movie_stats(
+                        id,
+                        item.watch_count,
+                        item.progress,
+                        item.duration,
+                    ) {
                         Ok(_) => Task::none(),
-                        Err(error) => Task::done(Message::PushToast(
-                            dbg!(error).to_string(),
-                            toast::Status::Error,
-                        )),
+                        Err(error) => {
+                            Task::done(Message::PushToast(error.to_string(), toast::Status::Error))
+                        }
                     }
                 }
                 PlayId::Episode(id) => {
-                    match self
-                        .db
-                        .update_episode_stats(id, item.watch_count, item.progress)
-                    {
+                    match self.db.update_episode_stats(
+                        id,
+                        item.watch_count,
+                        item.progress,
+                        item.duration,
+                    ) {
                         Ok(_) => Task::none(),
-                        Err(error) => Task::done(Message::PushToast(
-                            dbg!(error).to_string(),
-                            toast::Status::Error,
-                        )),
+                        Err(error) => {
+                            Task::done(Message::PushToast(error.to_string(), toast::Status::Error))
+                        }
                     }
                 }
             },
@@ -680,6 +684,49 @@ impl App {
             Message::Layout(layout) => {
                 self.config.general.layout = layout;
                 Task::none()
+            }
+            Message::Scan => {
+                let dirs = match self.db.get_directories() {
+                    Ok(dirs) => dirs,
+                    Err(error) => {
+                        return Task::done(Message::PushToast(
+                            error.to_string(),
+                            toast::Status::Error,
+                        ));
+                    }
+                };
+
+                let discoverer = self.config.general.scan_discoverer;
+                let home_task = self.home.scanning(true, now);
+
+                let scan = Task::perform(
+                    async move { scan::scan_dirs(DB_PATH, dirs, discoverer) },
+                    |(todo, res)| {
+                        if let Some(res) = todo {
+                            dbg!(res.successes.len());
+                            dbg!(res.failures.len());
+                        }
+                        Message::ScanComplete(res)
+                    },
+                );
+
+                Task::batch([home_task, scan])
+            }
+            Message::ScanComplete(scanned) => {
+                let last_scan = Local::now();
+                let last_scan = models::datetime_to_sql(&last_scan);
+
+                let _todo = match self.db.last_scans(scanned, last_scan) {
+                    Ok(rows) => rows,
+                    Err(error) => {
+                        return Task::done(Message::PushToast(
+                            error.to_string(),
+                            toast::Status::Error,
+                        ));
+                    }
+                };
+
+                self.home.scanning(false, now)
             }
         }
     }
@@ -751,7 +798,7 @@ impl App {
         //     Status::Error => error!(toast.body),
         // }
 
-        self.toasts.push(toast);
+        self.toasts.push(dbg!(toast));
     }
 
     fn push_toasts(&mut self, toasts: impl Iterator<Item = toast::Toast>) {

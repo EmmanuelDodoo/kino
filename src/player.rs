@@ -1234,6 +1234,7 @@ impl Manager {
         let progress = if progress >= 0.99 { 0.0 } else { progress };
         player.item.progress = progress as f32;
         player.item.watch_count = watch_count;
+        player.item.duration = player.duration as u64;
 
         self.playlist.update_current(&player.item);
 
@@ -1271,7 +1272,7 @@ fn load_video<Message: 'static + MaybeSend>(
 
             // todo: There is a race condition when resuming a video. I can't quite pinpoint where
             // so until I do, this is a temporary fix which seems to work.
-            std::thread::sleep(std::time::Duration::from_millis(150));
+            std::thread::sleep(std::time::Duration::from_millis(200));
 
             video.set_paused(true);
 

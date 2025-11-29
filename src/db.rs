@@ -72,7 +72,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query}"))
+            .map(|query| format!("ORDER BY {query} NULLS LAST"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -128,7 +128,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query}"))
+            .map(|query| format!("ORDER BY {query} NULLS LAST"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -164,7 +164,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(Some("season"))
-            .map(|query| format!("ORDER BY {query}"))
+            .map(|query| format!("ORDER BY {query} NULLS LAST"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -215,7 +215,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query}"))
+            .map(|query| format!("ORDER BY {query} NULLS LAST"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -265,7 +265,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query}"))
+            .map(|query| format!("ORDER BY {query} NULLS LAST"))
             .unwrap_or_default();
 
         let sql =
@@ -298,7 +298,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(Some("episode_comment"))
-            .map(|query| format!("ORDER BY {query}"))
+            .map(|query| format!("ORDER BY {query} NULLS LAST"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -350,7 +350,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query}"))
+            .map(|query| format!("ORDER BY {query} NULLS LAST"))
             .unwrap_or_default();
 
         let sql =
@@ -383,7 +383,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(Some("movie_comment"))
-            .map(|query| format!("ORDER BY {query}"))
+            .map(|query| format!("ORDER BY {query} NULLS LAST"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -423,7 +423,11 @@ impl Database {
         sort: collection::Sort,
         map: fn(&Row<'_>) -> rusqlite::Result<T>,
     ) -> rusqlite::Result<Vec<T>> {
-        let sql = format!("{} ORDER BY {}", Self::COLLECTION_QUERY, sort.query());
+        let sql = format!(
+            "{} ORDER BY {} NULLS LAST",
+            Self::COLLECTION_QUERY,
+            sort.query()
+        );
 
         let mut statement = self.prepare_cached(&sql)?;
 
@@ -448,7 +452,7 @@ impl Database {
         let vars = repeat(collections.len());
 
         let sql = format!(
-            "SELECT * FROM collection WHERE collection.id IN ({vars}) ORDER BY {} LIMIT {limit} OFFSET {offset}",
+            "SELECT * FROM collection WHERE collection.id IN ({vars}) ORDER BY {} NULLS LAST LIMIT {limit} OFFSET {offset}",
             sort.query()
         );
 
@@ -515,7 +519,7 @@ impl Database {
                 .unwrap_or_default();
             let sort = sort
                 .query(Some("movie"))
-                .map(|query| format!("ORDER BY {query}"))
+                .map(|query| format!("ORDER BY {query} NULLS LAST"))
                 .unwrap_or_default();
             let sql = format!(
                 "{} WHERE movie.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
@@ -536,7 +540,7 @@ impl Database {
                 .unwrap_or_default();
             let sort = sort
                 .query(Some("tv_show"))
-                .map(|query| format!("ORDER BY {query}"))
+                .map(|query| format!("ORDER BY {query} NULLS LAST"))
                 .unwrap_or_default();
 
             let vars = repeat(shows.len());
@@ -559,7 +563,7 @@ impl Database {
                 .unwrap_or_default();
             let sort = sort
                 .query(Some("season"))
-                .map(|query| format!("ORDER BY {query}"))
+                .map(|query| format!("ORDER BY {query} NULLS LAST"))
                 .unwrap_or_default();
 
             let vars = repeat(seasons.len());
@@ -582,7 +586,7 @@ impl Database {
                 .unwrap_or_default();
             let sort = sort
                 .query(None)
-                .map(|query| format!("ORDER BY {query}"))
+                .map(|query| format!("ORDER BY {query} NULLS LAST"))
                 .unwrap_or_default();
 
             let vars = repeat(episodes.len());
@@ -666,12 +670,11 @@ impl Database {
                 "DELETE FROM collection_item WHERE collection_id IN ({vars}) AND media_type='{kind}' AND media_id=?"
             );
 
-            let mut params = deletes
+            let params = deletes
                 .into_iter()
                 .map(|(id, _)| ToSqlOutput::from(id))
+                .chain(std::iter::once(ToSqlOutput::from(item)))
                 .collect::<Vec<_>>();
-
-            params.push(ToSqlOutput::from(item));
 
             let params = params
                 .iter()
@@ -859,9 +862,9 @@ impl Database {
         id: EpisodeId,
         watch_count: u32,
         progress: f32,
+        duration: u64,
     ) -> rusqlite::Result<()> {
-        let sql =
-            "UPDATE episode SET watch_count=:watch_count, progress=:progress WHERE episode.id=:id";
+        let sql = "UPDATE episode SET watch_count=:watch_count, duration=:duration, progress=:progress WHERE episode.id=:id";
 
         let mut statement = self.prepare_cached(sql)?;
 
@@ -869,6 +872,7 @@ impl Database {
             (":id", &ToSqlOutput::from(id)),
             (":watch_count", &ToSqlOutput::from(watch_count)),
             (":progress", &ToSqlOutput::from(progress)),
+            (":duration", &ToSqlOutput::from(duration as isize)),
         ])?;
 
         Ok(())
@@ -879,19 +883,20 @@ impl Database {
         id: MovieId,
         watch_count: u32,
         progress: f32,
-    ) -> rusqlite::Result<()> {
-        let sql =
-            "UPDATE movie SET watch_count=:watch_count, progress=:progress WHERE movie.id=:id";
+        duration: u64,
+    ) -> rusqlite::Result<usize> {
+        let sql = "UPDATE movie SET watch_count=:watch_count, duration=:duration, progress=:progress WHERE movie.id=:id";
 
         let mut statement = self.prepare_cached(sql)?;
 
-        let _ = statement.execute(&[
+        let rows = statement.execute(&[
             (":id", &ToSqlOutput::from(id)),
             (":watch_count", &ToSqlOutput::from(watch_count)),
             (":progress", &ToSqlOutput::from(progress)),
+            (":duration", &ToSqlOutput::from(duration as isize)),
         ])?;
 
-        Ok(())
+        Ok(rows)
     }
 
     pub fn last_watched_movie<'a>(
@@ -911,18 +916,66 @@ impl Database {
         Ok(())
     }
 
-    pub(super) fn open_test_db() -> rusqlite::Result<Database> {
+    pub fn last_scan<'a>(
+        &self,
+        id: DirectoryId,
+        last_scan: ToSqlOutput<'a>,
+    ) -> rusqlite::Result<usize> {
+        let sql = "UPDATE directory SET last_scan=:last_scan WHERE directory.id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement.execute(&[
+            (":id", &ToSqlOutput::from(id)),
+            (":last_watched", &last_scan),
+        ])
+    }
+
+    pub fn last_scans<'a>(
+        &self,
+        ids: Vec<DirectoryId>,
+        last_scan: ToSqlOutput<'a>,
+    ) -> rusqlite::Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        let vars = repeat(ids.len());
+        let sql = format!("UPDATE directory SET last_scan=? WHERE id IN ({vars})");
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        let params = std::iter::once(last_scan)
+            .chain(ids.into_iter().map(ToSqlOutput::from))
+            .collect::<Vec<_>>();
+
+        let params = params
+            .iter()
+            .map(|param| param as &dyn ToSql)
+            .collect::<Vec<_>>();
+
+        statement.execute(params.as_slice())
+    }
+
+    pub fn open_test_db(path: &str) -> rusqlite::Result<Database> {
+        let conn = Database::open(path)?;
+
         let schema = include_str!("../schema.sql");
-
-        let conn = rusqlite::Connection::open_in_memory()?;
-
         conn.execute_batch(schema)?;
 
         let dummy = include_str!("../dummy.txt");
 
         conn.execute_batch(dummy)?;
 
-        Ok(Database { conn })
+        Ok(conn)
+    }
+
+    pub fn open_with_schema(path: &str) -> rusqlite::Result<Database> {
+        let conn = Database::open(path)?;
+        let schema = include_str!("../schema.sql");
+        conn.execute_batch(schema)?;
+
+        Ok(conn)
     }
 
     pub fn open(path: &str) -> rusqlite::Result<Database> {
@@ -973,8 +1026,13 @@ impl<'a> Query<'a> {
         } = self;
 
         match db.prepare_cached(sql) {
-            Ok(mut statement) => match statement.execute(params.as_slice()).map(|_| ()) {
-                Ok(_) => Ok(Success { id, table, op }),
+            Ok(mut statement) => match statement.execute(params.as_slice()) {
+                Ok(rows) => Ok(Success {
+                    id,
+                    table,
+                    op,
+                    rows,
+                }),
                 Err(error) => Err(Failure {
                     query: Query {
                         id,
@@ -1005,6 +1063,7 @@ pub struct Success {
     pub id: Uuid,
     pub table: Table,
     pub op: Operation,
+    pub rows: usize,
 }
 
 #[derive(Debug, PartialEq)]
@@ -1624,6 +1683,18 @@ pub struct BatchResult<'a> {
 }
 
 impl BatchResult<'_> {
+    pub fn empty() -> Self {
+        Self {
+            successes: vec![],
+            failures: vec![],
+        }
+    }
+
+    pub fn merge(&mut self, other: Self) {
+        self.successes.extend(other.successes);
+        self.failures.extend(other.failures);
+    }
+
     pub fn has_failures(&self) -> bool {
         !self.failures.is_empty()
     }

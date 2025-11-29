@@ -128,6 +128,7 @@ pub struct GeneralSettings {
     pub recents_limit: Option<i32>,
     pub search_limit: Option<i32>,
     pub theme: AppTheme,
+    pub scan_discoverer: bool,
 }
 
 impl GeneralSettings {
@@ -138,6 +139,7 @@ impl GeneralSettings {
             theme: AppTheme::default(),
             recents_limit: Some(5),
             search_limit: Some(5),
+            scan_discoverer: true,
         }
     }
 }

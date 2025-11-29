@@ -198,7 +198,7 @@ impl Show {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO tv_show (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added)";
+        let sql = "INSERT INTO tv_show (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added) ON CONFLICT(directory, path) DO NOTHING";
 
         let params = self.insert_params();
 
@@ -281,19 +281,19 @@ impl Show {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,
         name: String,
-        original_name: String,
-        backdrop: Option<String>,
-        poster: Option<String>,
-        tags: Vec<String>,
-        synopsis: String,
-        release: NaiveDate,
+        seasons: u16,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
+        let backdrop = None;
+        let poster = None;
+        let tags = vec![];
+        let synopsis = String::default();
+        let release = NaiveDate::parse_from_str("1970-01-01", "%Y-%m-%d").unwrap();
+        let original_name = name.clone();
 
         let new = Self {
             id: ShowId(Uuid::now_v7()),
@@ -308,7 +308,7 @@ impl Show {
             release,
             added,
             watch_count: 0,
-            seasons: 0,
+            seasons,
             rating: None,
             progress: 0.0,
             last_watched: None,

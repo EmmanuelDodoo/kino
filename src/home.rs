@@ -316,6 +316,7 @@ pub enum HomeMessage {
         seasons: Vec<Thumbnail<Season>>,
         episodes: Vec<Thumbnail<Episode>>,
     },
+    Scan,
 }
 
 pub struct Home {
@@ -341,6 +342,8 @@ pub struct Home {
     pending: Vec<Task<HomeMessage>>,
 
     recent_limit: Option<i32>,
+
+    scanning: Option<Animation<bool>>,
 }
 
 impl Home {
@@ -390,6 +393,7 @@ impl Home {
             collections: Vec::default(),
             view: None,
             recent_limit,
+            scanning: None,
         }
     }
 
@@ -1218,6 +1222,9 @@ impl Home {
                     collections: vec![(collection, true)],
                 })
             }
+            HomeMessage::Scan => {
+                Task::done(Message::Scan)
+            }
         }
     }
 
@@ -1265,7 +1272,7 @@ impl Home {
             .and_then(|kind| self.pages.get_mut(kind))
     }
 
-    fn side(&self) -> Element<'_, HomeMessage> {
+    fn side(&self, now: Instant) -> Element<'_, HomeMessage> {
         let header = {
             let icon = icons::icon(icons::LOGO).size(H2);
             let text = text("Kino").size(H2);
@@ -1343,7 +1350,25 @@ impl Home {
             .width(Length::Fill)
             .height(Length::Fill);
 
+        let scanning: Element<'_, HomeMessage> = match &self.scanning {
+            Some(scanning) => {
+                let size = H6;
+                let svg = loading_svg(scanning, now)
+                    .height(size * RATIO)
+                    .width(size * RATIO);
+                let label = text("Scanning Directories").size(size);
+
+                row!(svg, label)
+                    .padding([5, 10])
+                    .spacing(SIDE_ICON_SPACING)
+                    .align_y(Vertical::Center)
+                    .into()
+            }
+            None => icon_button(icons::SCAN, "Scan Directories", HomeMessage::Scan, false),
+        };
+
         let bottom = column!(
+            scanning,
             icon_button(
                 icons::LIBRARY,
                 "Collections",
@@ -1362,7 +1387,7 @@ impl Home {
             // ),
             icon_button(icons::SETTINGS, "Settings", HomeMessage::Settings, false)
         )
-        .spacing(16.0);
+        .spacing(12.0);
 
         let content = column!(collections, bottom,)
             .padding([0, 5])
@@ -2048,7 +2073,7 @@ impl Home {
 
     pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, HomeMessage> {
         let content = container(
-            row!(self.side(), self.content_area(now))
+            row!(self.side(now), self.content_area(now))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(3),
@@ -2083,7 +2108,7 @@ impl Home {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        match &self.state {
+        let state = match &self.state {
             State::Loading(animation) => animation.is_animating(now),
             State::Recent { shows, movies } => {
                 let shows = shows.iter().any(|show| show.is_animating(now));
@@ -2113,7 +2138,15 @@ impl Home {
 
                 shows || movies || seasons || episodes
             }
-        }
+        };
+
+        let scan = self
+            .scanning
+            .as_ref()
+            .map(|scan| scan.is_animating(now))
+            .unwrap_or_default();
+
+        state || scan
     }
 
     pub fn back(&mut self, now: Instant) -> Task<Message> {
@@ -2618,6 +2651,17 @@ impl Home {
         let focus = operation::focus(text_input);
 
         Task::batch([focus, self.update_page_scroll()])
+    }
+
+    pub fn scanning(&mut self, scanning: bool, now: Instant) -> Task<Message> {
+        if scanning {
+            self.scanning = Some(loading_animation(now));
+            Task::none()
+        } else {
+            self.scanning.take();
+            self.content_refresh(now)
+        }
+
     }
 }
 

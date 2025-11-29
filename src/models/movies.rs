@@ -52,7 +52,6 @@ pub struct Movie {
     original_name: String,
     pub directory: DirectoryId,
     path: String,
-    pub full_path: PathBuf,
     poster: Option<String>,
     backdrop: Option<String>,
     pub tags: Vec<String>,
@@ -105,18 +104,12 @@ impl Movie {
 
         let comments = row.get::<_, u32>("comment_count")?;
 
-        let full_path: PathBuf = {
-            let directory = row.get::<_, String>("directory_path")?;
-            [&directory, &path].iter().collect()
-        };
-
         Ok(Self {
             id,
             directory,
             name,
             original_name,
             path,
-            full_path,
             poster,
             backdrop,
             tags,
@@ -139,7 +132,6 @@ impl Movie {
             original_name,
             directory,
             path,
-            full_path: _full_path,
             poster,
             backdrop,
             tags,
@@ -198,7 +190,7 @@ impl Movie {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO movie (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration)";
+        let sql = "INSERT INTO movie (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration) ON CONFLICT(directory, path) DO NOTHING";
 
         let params = self.insert_params();
 
@@ -325,27 +317,24 @@ impl Movie {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,
-        full_path: PathBuf,
         name: String,
-        original_name: String,
-        backdrop: Option<String>,
-        poster: Option<String>,
-        tags: Vec<String>,
-        synopsis: String,
-        release: NaiveDate,
         duration: u64,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
+        let backdrop = None;
+        let poster = None;
+        let tags = vec![];
+        let synopsis = String::default();
+        let release = NaiveDate::parse_from_str("1970-01-01", "%Y-%m-%d").unwrap();
+        let original_name = name.clone();
 
         let new = Self {
             id: MovieId(Uuid::now_v7()),
             directory,
             path,
-            full_path,
             name,
             original_name,
             backdrop,
@@ -365,35 +354,6 @@ impl Movie {
         let query = new.insert();
 
         (new, query)
-    }
-
-    pub fn dummy<'a>(directory: DirectoryId) -> (Self, Query<'a>) {
-        let path = "dummy_movie".to_owned();
-        let full_path = ["movies", &path].iter().collect();
-        let name = "Test Movie".to_owned();
-        let backdrop = None;
-        let poster = None;
-        let tags = ["test", "hope", "growth"]
-            .into_iter()
-            .map(ToOwned::to_owned)
-            .collect();
-        let synopsis = "A test dummy which is partially adequate".to_owned();
-        let release = NaiveDate::parse_from_str("2015-09-05", "%Y-%m-%d").unwrap();
-        let duration = 3600;
-
-        Self::new(
-            directory,
-            path,
-            full_path,
-            name.clone(),
-            name,
-            backdrop,
-            poster,
-            tags,
-            synopsis,
-            release,
-            duration,
-        )
     }
 }
 

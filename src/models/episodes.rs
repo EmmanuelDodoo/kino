@@ -57,7 +57,6 @@ pub struct Episode {
     name: String,
     original_name: String,
     path: String,
-    pub full_path: PathBuf,
     poster: Option<String>,
     // Join from show
     backdrop: Option<String>,
@@ -65,9 +64,7 @@ pub struct Episode {
     release: NaiveDate,
     added: DateTime<Local>,
     watch_count: u32,
-    pub show: ShowId,
     pub season: SeasonId,
-    pub number: u16,
     progress: f32,
     rating: Option<f32>,
     last_watched: Option<DateTime<Local>>,
@@ -97,8 +94,6 @@ impl Episode {
 
         let watch_count = row.get::<_, u32>("watch_count")?;
 
-        let number = row.get::<_, u16>("episode_number")?;
-
         let progress = row.get::<_, f32>("progress")?;
 
         let rating = row.get::<_, Option<f32>>("rating")?;
@@ -106,35 +101,24 @@ impl Episode {
         let last_watched = row.get::<_, Option<DateTime<Local>>>("last_watched")?;
 
         // todo
-        let show = ShowId::from_child(row)?;
         let season = SeasonId::from_child(row)?;
 
         let duration = row.get::<_, u64>("duration")?;
 
         let comments = row.get::<_, u32>("comment_count")?;
 
-        let full_path: PathBuf = {
-            let directory = row.get::<_, String>("directory_path")?;
-            let show = row.get::<_, String>("show_path")?;
-            let season = row.get::<_, String>("season_path")?;
-            [&directory, &show, &season, &path].iter().collect()
-        };
-
         Ok(Self {
             id,
             name,
             original_name,
             path,
-            full_path,
             poster,
             backdrop,
             synopsis,
             release,
             added,
             watch_count,
-            show,
             season,
-            number,
             progress,
             rating,
             last_watched,
@@ -149,16 +133,13 @@ impl Episode {
             name,
             original_name,
             path,
-            full_path: _full_path,
             poster,
             backdrop: _backdrop,
             synopsis,
             release,
             added,
             watch_count,
-            show: _show,
             season,
-            number,
             progress,
             rating,
             last_watched,
@@ -178,7 +159,6 @@ impl Episode {
         let release = naivedate_to_sql(release);
         let added = datetime_to_sql(added);
         let watch_count = ToSqlOutput::from(*watch_count);
-        let number = ToSqlOutput::from(*number);
 
         let rating = ToSqlOutput::Owned(Value::from(*rating));
         let progress = ToSqlOutput::from(*progress);
@@ -206,13 +186,12 @@ impl Episode {
             (":last_watched", last_watched),
             (":duration", duration),
             (":comments", comments),
-            (":number", number),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO episode (id, season_id, name, original_name, path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :number)";
+        let sql = "INSERT INTO episode (id, season_id, name, original_name, path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments) ON CONFLICT(season_id, path) DO NOTHING";
 
         let params = self.insert_params();
 
@@ -340,30 +319,25 @@ impl Episode {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn new<'a>(
-        season: &Season,
+        season: SeasonId,
         name: String,
-        original_name: String,
         path: String,
-        full_path: PathBuf,
-        poster: Option<String>,
-        backdrop: Option<String>,
-        synopsis: String,
-        release: NaiveDate,
         duration: u64,
-        episode_number: u16,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
+        let backdrop = None;
+        let poster = None;
+        let synopsis = String::default();
+        let release = NaiveDate::parse_from_str("1970-01-01", "%Y-%m-%d").unwrap();
+        let original_name = name.clone();
 
         let new = Self {
             id: EpisodeId(Uuid::now_v7()),
             name,
             original_name,
             path,
-            full_path,
-            season: season.id,
-            show: season.show,
+            season,
             backdrop,
             poster,
             synopsis,
@@ -375,7 +349,6 @@ impl Episode {
             progress: 0.0,
             last_watched: None,
             comments: 0,
-            number: episode_number,
         };
 
         let query = new.insert();
