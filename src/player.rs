@@ -121,7 +121,7 @@ pub struct Manager {
     playlist: Playlist,
     show_controls: bool,
 
-    settings: VideoSettings,
+    pub settings: VideoSettings,
 
     maximised: bool,
     is_fullscreen: bool,

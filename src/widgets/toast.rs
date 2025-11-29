@@ -125,7 +125,7 @@ where
                     .height(Length::Fill);
                 let content = text(toast.message.as_str()).size(H7);
 
-                let close = button(icons::icon(icons::CANCEL))
+                let close = button(icons::icon(icons::CANCEL).size(P))
                     .on_press((on_close)(index))
                     .style(iced::widget::button::text);
 
@@ -145,7 +145,8 @@ where
 
                     container::Style { border, ..default }
                 })
-                .max_width(450)
+                .clip(true)
+                .max_width(500)
                 .height(Length::Shrink)
                 .padding([5.0, 5.0])
                 .into()

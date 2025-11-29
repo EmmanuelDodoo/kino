@@ -34,7 +34,7 @@ use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
     self, HomeAction, Layout, Scroll, Sort, SortKind, empty, filter::*, icons, icons::*,
-    loading_animation, loading_svg, modal_container, styles, tooltip, typo::*,
+    loading_animation, loading_svg, modal_container, picklist_handle, styles, tooltip, typo::*,
 };
 use crate::widgets::{
     menu::{Position, menu},
@@ -925,7 +925,7 @@ impl Home {
                     page.page_update(update);
                 };
 
-                Task::none()
+                self.content_refresh(now)
             }
             HomeMessage::ToggleSort => {
                 self.show_sorts = !self.show_sorts;
@@ -1108,7 +1108,7 @@ impl Home {
                     page.page_update(update);
                 };
 
-                Task::none()
+                self.content_refresh(now)
             }
             HomeMessage::NewCollection => {
                 let (config, name_input) = CollectionConfig::new();
@@ -1222,9 +1222,7 @@ impl Home {
                     collections: vec![(collection, true)],
                 })
             }
-            HomeMessage::Scan => {
-                Task::done(Message::Scan)
-            }
+            HomeMessage::Scan => Task::done(Message::Scan),
         }
     }
 
@@ -1551,27 +1549,6 @@ impl Home {
                 .on_press(HomeMessage::Filter(msg))
         };
 
-        let up = pick_list::Icon {
-            font: icons::FONT,
-            code_point: icons::CHEV_UP,
-            size: Some(size.into()),
-            line_height: text::LineHeight::Relative(1.0),
-            shaping: text::Shaping::Basic,
-        };
-
-        let down = pick_list::Icon {
-            font: icons::FONT,
-            code_point: icons::CHEV_DOWN,
-            size: Some(size.into()),
-            line_height: text::LineHeight::Relative(1.0),
-            shaping: text::Shaping::Basic,
-        };
-
-        let handle = pick_list::Handle::Dynamic {
-            closed: down,
-            open: up,
-        };
-
         let progress = {
             let text = text("Progress:").size(size);
             let progress = pick_list(
@@ -1581,7 +1558,7 @@ impl Home {
             )
             .padding(padding)
             .width(60.0)
-            .handle(handle.clone())
+            .handle(picklist_handle(size))
             .text_size(size);
 
             let comp = comp(
@@ -1603,7 +1580,7 @@ impl Home {
             )
             .padding(padding)
             .width(52.0)
-            .handle(handle)
+            .handle(picklist_handle(size))
             .text_size(size);
 
             let comp = comp(self.filters.rating.comp.icon(), FilterMessage::RatingComp);
@@ -2661,7 +2638,6 @@ impl Home {
             self.scanning.take();
             self.content_refresh(now)
         }
-
     }
 }
 

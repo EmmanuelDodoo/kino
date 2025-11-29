@@ -1,7 +1,7 @@
 use chrono::Datelike;
 
-pub use search::SearchFilter;
 use crate::models::Media;
+pub use search::SearchFilter;
 use std::fmt::{self, Display};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -66,8 +66,8 @@ impl Comp {
         use super::icons::{CHEV_LEFT, CHEV_RIGHT, EQUALS};
         match self {
             Self::Equal => EQUALS,
-            Self::Greater => CHEV_RIGHT,
-            Self::Less => CHEV_LEFT,
+            Self::Greater => CHEV_LEFT,
+            Self::Less => CHEV_RIGHT,
         }
     }
 
@@ -81,9 +81,9 @@ impl Comp {
 
     pub fn compare<T: PartialEq + PartialOrd>(&self, x: T, y: T) -> bool {
         match self {
-            Self::Less => x > y,
+            Self::Less => x < y,
             Self::Equal => x == y,
-            Self::Greater => x < y,
+            Self::Greater => x > y,
         }
     }
 }
@@ -153,13 +153,8 @@ impl Progress {
     }
 
     pub fn compare(&self, value: f32) -> bool {
-        let comp = match self.kind {
-            ProgressKind::Any => return true,
-            ProgressKind::Zero => 0.,
-            ProgressKind::TwentyFive => 0.25,
-            ProgressKind::Fifty => 0.5,
-            ProgressKind::SeventyFive => 0.75,
-            ProgressKind::Complete => 1.0,
+        let Some(comp) = self.f32() else {
+            return true;
         };
 
         self.comp.compare(value, comp)
@@ -230,16 +225,9 @@ impl Rating {
     }
 
     pub fn compare(&self, value: f32) -> bool {
-        let comp = match self.kind {
-            RatingKind::Any => return true,
-            RatingKind::One => 1.0,
-            RatingKind::Two => 2.0,
-            RatingKind::Three => 3.0,
-            RatingKind::Four => 4.0,
-            RatingKind::Five => 5.0,
-        };
+        let Some(comp) = self.u8() else { return true };
 
-        self.comp.compare(value, comp)
+        self.comp.compare(value, comp as f32)
     }
 
     pub fn u8(&self) -> Option<u8> {

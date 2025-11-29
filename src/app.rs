@@ -290,12 +290,18 @@ impl App {
                 Screen::Home => self.home.back(now),
                 Screen::Player => {
                     self.screen = Screen::Home;
-                    let stats = self
-                        .player
-                        .take()
-                        .as_mut()
-                        .and_then(|player| player.stats().map(Task::done))
-                        .unwrap_or_default();
+                    let stats = match self.player.take() {
+                        Some(mut player) => {
+                            self.config.video.speed = player.settings.speed;
+                            self.config.video.show_subtitles = player.settings.show_subtitles;
+                            self.config.video.volume = player.settings.volume;
+
+                            player.stats()
+                        }
+                        None => None,
+                    };
+
+                    let stats = stats.map(Task::done).unwrap_or_default();
 
                     Task::batch([self.home.refresh(now), stats])
                 }

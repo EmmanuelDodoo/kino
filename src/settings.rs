@@ -2,8 +2,8 @@ use crate::app::Message;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
     self, AppTheme, Config, GeneralSettings, HomeAction, KeyModifier, KeyPress, Layout,
-    PlayerAction, Scroll, SettingsAction, VideoSettings, icons, modal_container, sized_button,
-    styles, tooltip, typo::*,
+    PlayerAction, Scroll, SettingsAction, VideoSettings, icons, modal_container, picklist_handle,
+    sized_button, styles, tooltip, typo::*,
 };
 use crate::widgets::{modal, toast};
 use iced::{
@@ -779,7 +779,7 @@ impl Settings {
         };
 
         let theme = {
-            let handle = handle(size);
+            let handle = picklist_handle(size);
 
             let label = label_maker("Theme: ").width(width);
 
@@ -1505,7 +1505,7 @@ fn draw_folder_selection<'a>(
     };
 
     let kind = {
-        let handle = handle(size);
+        let handle = picklist_handle(size);
         let label = text("Media type: ").size(size).font(font).width(100.0);
 
         let lst = pick_list(MediaType::ALL, Some(*kind), |kind| {
@@ -1571,7 +1571,7 @@ fn draw_capture_key<'a>(
                 pick_list(HomeAction::ALL, selected.clone(), |action| {
                     SettingsMessage::KeyAction(KeyAction::General(Some(action)))
                 })
-                .handle(handle(size))
+                .handle(picklist_handle(size))
                 .padding(padding)
                 .text_size(size)
                 .into(),
@@ -1581,7 +1581,7 @@ fn draw_capture_key<'a>(
                 pick_list(PlayerAction::ALL, selected.clone(), |action| {
                     SettingsMessage::KeyAction(KeyAction::Video(Some(action)))
                 })
-                .handle(handle(size))
+                .handle(picklist_handle(size))
                 .padding(padding)
                 .text_size(size)
                 .into(),
@@ -1591,7 +1591,7 @@ fn draw_capture_key<'a>(
                 pick_list(SettingsAction::ALL, selected.clone(), |action| {
                     SettingsMessage::KeyAction(KeyAction::Settings(Some(action)))
                 })
-                .handle(handle(size))
+                .handle(picklist_handle(size))
                 .padding(padding)
                 .text_size(size)
                 .into(),
@@ -1618,29 +1618,6 @@ fn draw_capture_key<'a>(
     let content = column!(key, action, btns).spacing(16);
 
     modal_container(content).width(300).into()
-}
-
-fn handle(size: f32) -> pick_list::Handle<Font> {
-    let up = pick_list::Icon {
-        font: icons::FONT,
-        code_point: icons::CHEV_UP,
-        size: Some(size.into()),
-        line_height: text::LineHeight::Relative(1.0),
-        shaping: text::Shaping::Basic,
-    };
-
-    let down = pick_list::Icon {
-        font: icons::FONT,
-        code_point: icons::CHEV_DOWN,
-        size: Some(size.into()),
-        line_height: text::LineHeight::Relative(1.0),
-        shaping: text::Shaping::Basic,
-    };
-
-    pick_list::Handle::Dynamic {
-        closed: down,
-        open: up,
-    }
 }
 
 fn label_font() -> Font {

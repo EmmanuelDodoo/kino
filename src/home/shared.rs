@@ -320,9 +320,11 @@ pub struct Thumbnail<T: Media> {
 
 impl<T: Media> Thumbnail<T> {
     pub fn new(media: T) -> Self {
-        // todo: Probabily combine these two
         let sample_color = media.poster().and_then(sample_complement);
-        let poster = media.poster().map(Handle::from_path);
+
+        //todo: Sample color is not great for current default poster
+        let poster = media.poster().unwrap_or("assets/images/default.png");
+        let poster = Some(Handle::from_path(poster));
         let backdrop = media.backdrop().map(Handle::from_path);
 
         Self {

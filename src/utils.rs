@@ -118,6 +118,31 @@ pub fn modal_container<'a, Message: 'a>(
         .align_x(Horizontal::Center)
 }
 
+pub fn picklist_handle(size: f32) -> iced::widget::pick_list::Handle<iced::Font> {
+    use iced::widget::{pick_list, text};
+
+    let up = pick_list::Icon {
+        font: icons::FONT,
+        code_point: icons::CHEV_UP,
+        size: Some(size.into()),
+        line_height: text::LineHeight::Relative(1.0),
+        shaping: text::Shaping::Basic,
+    };
+
+    let down = pick_list::Icon {
+        font: icons::FONT,
+        code_point: icons::CHEV_DOWN,
+        size: Some(size.into()),
+        line_height: text::LineHeight::Relative(1.0),
+        shaping: text::Shaping::Basic,
+    };
+
+    pick_list::Handle::Dynamic {
+        closed: down,
+        open: up,
+    }
+}
+
 /// Far faster at generating multiple thumbnails than
 /// [`iced_video_player::Video::thumbnails`].
 ///
