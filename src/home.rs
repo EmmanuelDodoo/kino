@@ -690,9 +690,12 @@ impl Home {
                 match ssg {
                     SearchMessage::Search(mut search) => {
                         state.last_edit = Some(now);
-                        match search.find(":").and_then(|pos| {
+
+                        let filter = search.find(":").and_then(|pos| {
                             SearchFilter::new(&search[0..pos]).map(|filter| (pos, filter))
-                        }) {
+                        });
+
+                        match filter {
                             Some((pos, filter)) => {
                                 search.replace_range(0..=pos, "");
                                 state.filter = Some(filter);

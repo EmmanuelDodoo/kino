@@ -16,7 +16,7 @@ gstreamer-app = "0.23" # appsink
 gstreamer-base = "0.23" # basesrc
 gstreamer-pbutils = "0.23"
 
-iced = { git = "https://github.com/iced-rs/iced", rev = "c566845", features = ["image", "svg", "hot", "tokio", "advanced", "wgpu", "markdown"] }
+iced = { git = "https://github.com/iced-rs/iced", rev = "cfd06b4", features = ["image", "svg", "hot", "tokio", "advanced", "wgpu", "markdown"] }
 iced_video_player = { git = "https://github.com/EmmanuelDodoo/iced_video_player" }
 # iced_video_player = { path = "../ivp_fork" }
 
