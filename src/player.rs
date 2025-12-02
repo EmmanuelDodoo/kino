@@ -1469,7 +1469,7 @@ fn draw_collection_add<'a>(
         let text = container(text(&collection.name).size(size))
             .max_height(48.0)
             .max_width(275);
-        let check = checkbox("", selected).on_toggle(|value| {
+        let check = checkbox(selected).on_toggle(|value| {
             ManagerMessage::CollectionAddMessage(CollectionAddMessage::Toggle(
                 !value,
                 collection.id,

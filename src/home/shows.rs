@@ -29,7 +29,7 @@ pub struct TvShows {
 impl TvShows {
     pub fn boot(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<TvShowsMessage>) {
         let (new, id) = Self::new(sort, filters, layout);
-        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::default());
+        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
 
         (new, scroll)
     }

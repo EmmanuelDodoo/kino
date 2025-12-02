@@ -54,7 +54,7 @@ impl ShowPage {
         layout: Layout,
     ) -> (Self, Task<ShowPageMessage>) {
         let (new, id) = Self::new(show, sort, filters, layout);
-        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::default());
+        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
 
         (new, scroll)
     }

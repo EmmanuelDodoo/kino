@@ -776,7 +776,13 @@ impl App {
             Subscription::none()
         };
 
-        let keys = keyboard::on_key_press(|key, modifiers| Some(Message::Key { key, modifiers }));
+        let keys = keyboard::listen().map(|event| {
+            let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+                return Message::None;
+            };
+
+            Message::Key { key, modifiers }
+        });
 
         let exit = window::close_requests().map(Message::Exit);
 

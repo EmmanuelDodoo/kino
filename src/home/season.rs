@@ -54,7 +54,7 @@ impl SeasonPage {
         layout: Layout,
     ) -> (Self, Task<SeasonPageMessage>) {
         let (new, id) = Self::new(season, sort, filters, layout);
-        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::default());
+        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
 
         (new, scroll)
     }

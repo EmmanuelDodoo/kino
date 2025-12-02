@@ -31,7 +31,7 @@ pub struct Movies {
 impl Movies {
     pub fn boot(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<MoviesMessage>) {
         let (new, id) = Self::new(sort, layout, filters);
-        let scroll = operation::scroll_to(id, operation::AbsoluteOffset::default());
+        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
 
         (new, scroll)
     }

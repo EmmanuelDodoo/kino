@@ -63,9 +63,11 @@ impl CollectionPage {
 
         let new = Self::new(collection, sort, filter, layout);
 
-        let scroll =
-            operation::scroll_to(new.scroll.id.clone(), operation::AbsoluteOffset::default())
-                .map(move |message| CollectionMessage { id, message });
+        let scroll = operation::scroll_to(
+            new.scroll.id.clone(),
+            scrollable::AbsoluteOffset::<f32>::default(),
+        )
+        .map(move |message| CollectionMessage { id, message });
 
         (new, scroll)
     }
