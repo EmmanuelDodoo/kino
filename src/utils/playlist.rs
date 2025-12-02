@@ -1,9 +1,6 @@
 use crate::models::{EpisodeId, ItemId, MovieId};
 
-use rand::{
-    seq::{IteratorRandom, SliceRandom},
-    thread_rng,
-};
+use rand::{seq::IteratorRandom, thread_rng};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

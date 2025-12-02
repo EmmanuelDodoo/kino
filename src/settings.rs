@@ -1,9 +1,9 @@
 use crate::app::Message;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
-    self, AppTheme, Config, GeneralSettings, HomeAction, KeyModifier, KeyPress, Layout,
-    PlayerAction, Scroll, SettingsAction, VideoSettings, icons, modal_container, picklist_handle,
-    sized_button, styles, tooltip, typo::*,
+    AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
+    SettingsAction, VideoSettings, icons, modal_container, picklist_handle, sized_button, styles,
+    tooltip, typo::*,
 };
 use crate::widgets::{modal, toast};
 use iced::{
@@ -11,13 +11,12 @@ use iced::{
     alignment::{Horizontal, Vertical},
     font::{self, Font},
     widget::{
-        bottom_center, button, center, center_x, checkbox, column, container, operation, pick_list,
-        rich_text, row, rule, scrollable, slider, space, span, table, text, text_input, toggler,
-        tooltip::Tooltip,
+        button, center_x, column, container, operation, pick_list, rich_text, row, rule,
+        scrollable, slider, space, span, table, text, text_input, toggler, tooltip::Tooltip,
     },
 };
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const TEXT_SIZE: f32 = P;
@@ -1467,10 +1466,7 @@ fn pick_task() -> Task<Message> {
     })
 }
 
-fn draw_folder_selection<'a>(
-    path: &'a PathBuf,
-    kind: &'a MediaType,
-) -> Element<'a, SettingsMessage> {
+fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a, SettingsMessage> {
     let size = TEXT_SIZE;
     let font = label_font();
 
@@ -1568,7 +1564,7 @@ fn draw_capture_key<'a>(
 
         let (lst, set): (Element<'_, SettingsMessage>, bool) = match action {
             KeyAction::General(selected) => (
-                pick_list(HomeAction::ALL, selected.clone(), |action| {
+                pick_list(HomeAction::ALL, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::General(Some(action)))
                 })
                 .handle(picklist_handle(size))
@@ -1578,7 +1574,7 @@ fn draw_capture_key<'a>(
                 selected.is_some(),
             ),
             KeyAction::Video(selected) => (
-                pick_list(PlayerAction::ALL, selected.clone(), |action| {
+                pick_list(PlayerAction::ALL, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::Video(Some(action)))
                 })
                 .handle(picklist_handle(size))
@@ -1588,7 +1584,7 @@ fn draw_capture_key<'a>(
                 selected.is_some(),
             ),
             KeyAction::Settings(selected) => (
-                pick_list(SettingsAction::ALL, selected.clone(), |action| {
+                pick_list(SettingsAction::ALL, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::Settings(Some(action)))
                 })
                 .handle(picklist_handle(size))
@@ -1658,7 +1654,7 @@ fn table_description<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
     })
 }
 
-fn table_keys<'a>(page: Page, keys: &Vec<KeyPress>) -> Element<'a, SettingsMessage> {
+fn table_keys<'a>(page: Page, keys: &[KeyPress]) -> Element<'a, SettingsMessage> {
     let keys = keys.iter().map(|key| {
         let key = button(table_key(key))
             .padding(0)

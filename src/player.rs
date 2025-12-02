@@ -6,8 +6,8 @@ use iced::{
     font,
     time::Instant,
     widget::{
-        Container, button, center, checkbox, column, container, image, mouse_area, row, rule,
-        scrollable, slider, space, stack, text, toggler, tooltip as tp,
+        button, center, checkbox, column, container, image, mouse_area, row, rule, scrollable,
+        slider, space, stack, text, toggler, tooltip as tp,
     },
     window,
 };
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::home::shared::Icon;
-use crate::models::{CollectionId, ItemId, SimpleCollection};
+use crate::models::{CollectionId, SimpleCollection};
 use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, empty,
     icons::{self, sized_button},

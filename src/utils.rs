@@ -1,16 +1,12 @@
-use glib::object::{Cast, ObjectExt};
+use glib::object::Cast;
 use gstreamer::{
     self as gst,
-    prelude::{ElementExt, ElementExtManual, GstBinExt, GstBinExtManual, PadExt},
+    prelude::{ElementExt, ElementExtManual, GstBinExt},
 };
 use iced::animation::{Animation, Easing};
 use iced::widget::image;
-use std::collections::HashMap;
-use std::path::PathBuf;
 
 use crate::error::*;
-use crate::models::ItemId;
-use crate::models::{EpisodeId, MovieId};
 
 pub mod config;
 pub use config::*;
@@ -301,6 +297,12 @@ impl Scroll {
             id: iced::widget::Id::unique(),
             offset: iced::widget::operation::AbsoluteOffset::default(),
         }
+    }
+}
+
+impl Default for Scroll {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

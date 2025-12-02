@@ -1,7 +1,6 @@
-// #![allow(unused_imports, dead_code)]
 use crate::models::{
-    Collection, CollectionId, Directory, DirectoryId, EComment, ECommentId, EpisodeId, MComment,
-    MCommentId, Movie, MovieId, SearchItem, SeasonId, Show, ShowId,
+    CollectionId, Directory, DirectoryId, EComment, ECommentId, EpisodeId, MComment, MCommentId,
+    Movie, MovieId, SearchItem, SeasonId, Show, ShowId,
     collection::{self, ItemId},
 };
 

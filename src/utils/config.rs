@@ -259,7 +259,7 @@ mod keys {
 
     impl std::fmt::Display for KeyPress {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            use keyboard::key::{Key, Named};
+            use keyboard::key::Key;
 
             let has_modifiers = !matches!(self.modifiers, KeyModifier::None);
             let modifiers = if has_modifiers {
@@ -320,10 +320,10 @@ mod keys {
         }
 
         fn insert(&mut self, key: KeyPress, action: A) {
-            if let Some(previous) = self.keys.insert(key.clone(), action) {
-                if let Some(keys) = self.actions.get_mut(&previous) {
-                    keys.retain(|curr| key != *curr);
-                }
+            if let Some(previous) = self.keys.insert(key.clone(), action)
+                && let Some(keys) = self.actions.get_mut(&previous)
+            {
+                keys.retain(|curr| key != *curr);
             }
 
             let keys = self.actions.entry(action).or_default();
@@ -337,10 +337,10 @@ mod keys {
         }
 
         fn remove(&mut self, key: KeyPress) {
-            if let Some(action) = self.keys.remove(&key) {
-                if let Some(keys) = self.actions.get_mut(&action) {
-                    keys.retain(|curr| key != *curr)
-                }
+            if let Some(action) = self.keys.remove(&key)
+                && let Some(keys) = self.actions.get_mut(&action)
+            {
+                keys.retain(|curr| key != *curr)
             }
         }
 

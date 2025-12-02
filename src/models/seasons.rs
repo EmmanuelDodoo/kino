@@ -3,7 +3,7 @@ use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
-use super::{EpisodeId, Media, Show, ShowId, datetime_to_sql, naivedate_to_sql};
+use super::{EpisodeId, Media, ShowId, datetime_to_sql, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]

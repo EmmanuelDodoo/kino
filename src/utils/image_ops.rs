@@ -3,8 +3,8 @@ use image::{
     imageops::{self, FilterType},
 };
 
+use iced::Color;
 use iced::widget::image::Handle;
-use iced::{Color, color};
 
 fn open(path: &str) -> Option<DynamicImage> {
     ImageReader::open(path)
@@ -162,7 +162,6 @@ fn adaptive_sample_color_compl(img: &DynamicImage) -> [u8; 3] {
 
     // overlay.s = overlay.s.clamp(0.5, 0.9);
     sample.s = sample.s.min(0.9);
-
 
     hsl_to_rgb(sample)
 }

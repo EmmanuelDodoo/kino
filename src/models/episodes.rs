@@ -1,10 +1,9 @@
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
-use std::path::PathBuf;
 use uuid::Uuid;
 
-use super::{Media, Season, SeasonId, ShowId, datetime_to_sql, naivedate_to_sql};
+use super::{Media, SeasonId, datetime_to_sql, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]

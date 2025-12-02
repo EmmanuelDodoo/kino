@@ -1,10 +1,9 @@
-use crate::db::{Batch, BatchError, BatchResult, Database};
+use crate::db::{BatchResult, Database};
 use crate::error;
 use crate::models::{
     Directory, DirectoryId, Episode, MediaType, Movie, Season, SeasonId, Show, ShowId,
 };
 use gstreamer_pbutils::Discoverer;
-use std::io;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
 
 #[rustfmt::skip]
@@ -155,7 +154,7 @@ pub fn scan_dir_helper<'a>(
                 let show = if new {
                     show.id
                 } else {
-                    match get_existing_show(&db, &dir, &path) {
+                    match get_existing_show(db, &dir, &path) {
                         Ok(id) => id,
                         Err(error) => {
                             eprintln!("{error}");
@@ -183,7 +182,7 @@ pub fn scan_dir_helper<'a>(
                     let season = if new {
                         season.id
                     } else {
-                        match get_existing_season(&db, show, &path) {
+                        match get_existing_season(db, show, &path) {
                             Ok(id) => id,
                             Err(error) => {
                                 eprintln!("{error}");
@@ -310,8 +309,6 @@ fn scan_video_dir(
     depth: usize,
     prefix: Option<String>,
 ) -> Option<Vec<Video>> {
-    use std::path::MAIN_SEPARATOR_STR;
-
     let path = path.as_ref();
     let path = path
         .canonicalize()
@@ -409,7 +406,7 @@ fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<(String, 
     Some((path, name, duration))
 }
 
-fn path_name<'a>(path: &'a Path) -> &'a str {
+fn path_name(path: &Path) -> &str {
     path.file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("Invalid UTF8 name")

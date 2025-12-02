@@ -2,11 +2,11 @@ use iced::{
     Element, Length, Padding, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
     animation::Animation,
-    border::{Border, Radius},
+    border::Border,
     mouse,
     time::{Duration, Instant},
     widget::{
-        self, Container, button, center, checkbox, column, container, grid, mouse_area,
+        self, button, center, checkbox, column, container, grid, mouse_area,
         operation::{self, scroll_to},
         pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
     },
@@ -1720,6 +1720,7 @@ impl Home {
         content.into()
     }
 
+    #[allow(clippy::const_is_empty)]
     fn sort_view(&self) -> Element<'_, HomeMessage> {
         let size = H8;
         let vertical_rule = || container(rule::vertical(2.0)).height(20.0);

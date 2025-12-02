@@ -1,4 +1,3 @@
-// #![allow(unused_imports, dead_code)]
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef};
@@ -331,14 +330,6 @@ impl Directory {
         let query = new.insert();
 
         (new, query)
-    }
-
-    pub(super) fn dummy<'a>() -> (Self, Query<'a>) {
-        let path = "file://some/path/for/testing/only".to_owned();
-        let active = true;
-        let media_type = MediaType::Shows;
-
-        Self::new(path, media_type, active)
     }
 }
 

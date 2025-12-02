@@ -12,8 +12,8 @@ use iced::{
     mouse,
     time::Instant,
     widget::{
-        self, button, center, column, container, image::Handle, markdown, mouse_area, operation,
-        row, rule, space, stack, text,
+        self, button, center, column, container, image::Handle, markdown, mouse_area, row, rule,
+        space, stack, text,
     },
 };
 
@@ -919,8 +919,6 @@ impl SearchView {
         on_url: impl Fn(String) -> Message + 'a,
         set_play: bool,
     ) -> Element<'a, Message> {
-        use iced::theme::palette::Pair;
-
         fn pair(theme: &Theme) -> iced::Color {
             theme.extended_palette().primary.strong.color
         }

@@ -1,8 +1,8 @@
-use chrono::{DateTime, Local};
+use chrono::Local;
 use iced::{
-    Element, Subscription, Task, Theme, event, font,
+    Element, Subscription, Task, Theme, font,
     keyboard::{self, Key, Modifiers},
-    time::{self, Duration, Instant},
+    time::{self, Instant},
     window,
 };
 
@@ -18,8 +18,8 @@ use crate::scan;
 use crate::settings::{Settings, SettingsMessage};
 use crate::toast;
 use crate::utils::{
-    Action, Config, Filter, HomeAction, KeyPress, Layout, PlayId, PlayItem, PlayerAction, Playlist,
-    Screen, Sort, VideoSettings, filter::FilterMode, filter::SearchFilter, load_fonts,
+    Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort,
+    filter::FilterMode, filter::SearchFilter, load_fonts,
 };
 
 const DB_PATH: &str = "test.db";
