@@ -285,6 +285,7 @@ impl Show {
         directory: DirectoryId,
         path: String,
         name: String,
+        original_name: String,
         seasons: u16,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
@@ -293,7 +294,6 @@ impl Show {
         let tags = vec![];
         let synopsis = String::default();
         let release = NaiveDate::parse_from_str("1970-01-01", "%Y-%m-%d").unwrap();
-        let original_name = name.clone();
 
         let new = Self {
             id: ShowId(Uuid::now_v7()),

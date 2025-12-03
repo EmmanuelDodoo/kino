@@ -3,8 +3,27 @@ use crate::error;
 use crate::models::{
     Directory, DirectoryId, Episode, MediaType, Movie, Season, SeasonId, Show, ShowId,
 };
+use fancy_regex::Regex;
 use gstreamer_pbutils::Discoverer;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
+use std::sync::LazyLock;
+
+static CLEANER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[^a-zA-Z\d]+").expect("Cannot create sanitizer regex"));
+static MOVIE_REG1: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(.*?)(?=\d{3,4}p)|^.*$").expect("Cannot create movie regex 1"));
+static MOVIE_REG2: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(.*)(?=(\(|\[|\.)\d{4}(\)|\]|\.)(?!.*(\(|\[|\.)\d{4}(\)|\]|\.)))|^.*")
+        .expect("Cannot create movie regex 2")
+});
+static SEASON_REG: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?<=[s|S])\s?\d{1,3}|(?<=[^a-zA-Z][s|S][e|E][a|A][s|S]|[o|O][n|N])\s?\d{1,3}")
+        .expect("Cannot create season regex")
+});
+static EPISODE_REG: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?<=[^a-zA-Z][e|E])\s?\d{1,3}|(?<=[e|E][p|P][i|I][s|S]|[o|O][d|D][e|E])\s?\d{1,3}|(?<=\dx)\s?\d{1,3}")
+        .expect("Cannot create episode regex")
+});
 
 #[rustfmt::skip]
 const EXTENSIONS: [&str; 9] = [
@@ -123,7 +142,9 @@ pub fn scan_dir_helper<'a>(
         MediaType::Movies => {
             if let Some(videos) = scan_videos(&dir.path, discoverer) {
                 for movie in videos {
-                    let (_, query) = Movie::new(dir.id, movie.path, movie.name, movie.duration);
+                    let name = process_name(&movie.name).unwrap_or(movie.name.clone());
+                    let (_, query) =
+                        Movie::new(dir.id, movie.path, name, movie.name, movie.duration);
                     match query.execute(db) {
                         Ok(succ) => successes.push(succ),
                         Err(fail) => failures.push(fail),
@@ -136,8 +157,9 @@ pub fn scan_dir_helper<'a>(
 
             for show in shows {
                 let ShowPrim { path, seasons } = show;
+                let name = process_name(&path).unwrap_or(path.clone());
                 let (show, query) =
-                    Show::new(dir.id, path.clone(), path.clone(), seasons.len() as _);
+                    Show::new(dir.id, path.clone(), name, path.clone(), seasons.len() as _);
 
                 let new = match query.execute(db) {
                     Ok(succ) => {
@@ -165,7 +187,13 @@ pub fn scan_dir_helper<'a>(
 
                 for season in seasons {
                     let SeasonPrim { path, episodes } = season;
-                    let (season, query) = Season::new(show, path.clone(), path.clone());
+                    let number = process_season(&path);
+                    let name = match number {
+                        Some(number) => format!("Season {number}"),
+                        None => path.clone(),
+                    };
+
+                    let (season, query) = Season::new(show, name, path.clone(), number);
 
                     let new = match query.execute(db) {
                         Ok(succ) => {
@@ -192,8 +220,20 @@ pub fn scan_dir_helper<'a>(
                     };
 
                     for episode in episodes {
-                        let (_, query) =
-                            Episode::new(season, episode.name, episode.path, episode.duration);
+                        let number = process_episode(&episode.path);
+                        let name = match number {
+                            Some(number) => format!("Episode {number}"),
+                            None => episode.name.clone(),
+                        };
+
+                        let (_, query) = Episode::new(
+                            season,
+                            name,
+                            episode.name,
+                            episode.path,
+                            episode.duration,
+                            number,
+                        );
                         match query.execute(db) {
                             Ok(succ) => successes.push(succ),
                             Err(fail) => failures.push(fail),
@@ -438,4 +478,54 @@ fn get_existing_season(db: &Database, show: ShowId, path: &str) -> rusqlite::Res
         ],
         SeasonId::from_row,
     )
+}
+
+fn process_name(name: &str) -> Option<String> {
+    let value = MOVIE_REG1
+        .find(name)
+        .inspect_err(|err| println!("Name processing Error {name:}.\n{err:?}"))
+        .ok()
+        .and_then(|val| val)
+        .map(|val| val.as_str())?;
+
+    let value = MOVIE_REG2
+        .find(value)
+        .inspect_err(|err| println!("Name processing Error {name:}.\n{err:?}"))
+        .ok()
+        .and_then(|val| val)
+        .map(|value| value.as_str())?;
+
+    let cleaned = CLEANER.replace_all(value, " ").trim().to_owned();
+
+    Some(cleaned)
+}
+
+fn process_season(name: &str) -> Option<u16> {
+    let value = SEASON_REG
+        .find(name)
+        .inspect_err(|err| println!("{err:?}"))
+        .ok()
+        .and_then(|val| val);
+
+    let value = value?.as_str().trim();
+
+    value
+        .parse::<u16>()
+        .inspect_err(|err| println!("Season processing Error {name:}.\n{err:?}"))
+        .ok()
+}
+
+fn process_episode(name: &str) -> Option<u16> {
+    let value = EPISODE_REG
+        .find(name)
+        .inspect_err(|err| println!("{err:?}"))
+        .ok()
+        .and_then(|val| val);
+
+    let value = value?.as_str().trim();
+
+    value
+        .parse::<u16>()
+        .inspect_err(|err| println!("Episode processing Error {name:}.\n{err:?}"))
+        .ok()
 }

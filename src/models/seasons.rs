@@ -63,6 +63,7 @@ pub struct Season {
     pub recent_episode: Option<EpisodeId>,
     duration: u64,
     comments: u32,
+    pub number: u16,
 }
 
 impl Season {
@@ -87,6 +88,8 @@ impl Season {
         let watch_count = row.get::<_, u32>("watch_count")?;
 
         let episodes = row.get::<_, u16>("episode_count")?;
+
+        let number = row.get::<_, u16>("season_number")?;
 
         let progress = row.get::<_, f32>("progress")?;
 
@@ -125,6 +128,7 @@ impl Season {
             recent_episode,
             duration,
             comments,
+            number,
         })
     }
 
@@ -148,6 +152,7 @@ impl Season {
             recent_episode,
             duration,
             comments,
+            number,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -163,6 +168,7 @@ impl Season {
         let added = datetime_to_sql(added);
         let watch_count = ToSqlOutput::from(*watch_count);
         let episodes = ToSqlOutput::from(*episodes);
+        let number = ToSqlOutput::from(*number);
 
         let rating = ToSqlOutput::Owned(Value::from(*rating));
         let progress = ToSqlOutput::from(*progress);
@@ -195,12 +201,13 @@ impl Season {
             (":recent_episode", recent_episode),
             (":duration", duration),
             (":comments", comments),
+            (":season_number", number),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO season (id, show_id, name, original_name, path, poster, synopsis,release, created_at, watch_count, episode_count, rating, progress, last_watched, recent_episode, duration, comment_count) VALUES (:id, :show, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :episodes, :rating, :progress, :last_watched, :recent_episode, :duration, :comments) ON CONFLICT(show_id, path) DO NOTHING";
+        let sql = "INSERT INTO season (id, show_id, name, original_name, path, poster, synopsis,release, created_at, watch_count, episode_count, rating, progress, last_watched, recent_episode, duration, comment_count, season_number) VALUES (:id, :show, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :episodes, :rating, :progress, :last_watched, :recent_episode, :duration, :comments, :season_number) ON CONFLICT(show_id, path) DO NOTHING";
 
         let params = self.insert_params();
 
@@ -267,7 +274,12 @@ impl Season {
         }
     }
 
-    pub fn new<'a>(show: ShowId, name: String, path: String) -> (Self, Query<'a>) {
+    pub fn new<'a>(
+        show: ShowId,
+        name: String,
+        path: String,
+        number: Option<u16>,
+    ) -> (Self, Query<'a>) {
         let added = Local::now();
         let backdrop = None;
         let poster = None;
@@ -294,6 +306,7 @@ impl Season {
             last_watched: None,
             recent_episode: None,
             comments: 0,
+            number: number.unwrap_or_default(),
         };
 
         let query = new.insert();

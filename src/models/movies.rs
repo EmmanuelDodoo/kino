@@ -320,6 +320,7 @@ impl Movie {
         directory: DirectoryId,
         path: String,
         name: String,
+        original_name: String,
         duration: u64,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
@@ -328,7 +329,6 @@ impl Movie {
         let tags = vec![];
         let synopsis = String::default();
         let release = NaiveDate::parse_from_str("1970-01-01", "%Y-%m-%d").unwrap();
-        let original_name = name.clone();
 
         let new = Self {
             id: MovieId(Uuid::now_v7()),

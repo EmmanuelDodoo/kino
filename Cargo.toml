@@ -10,6 +10,8 @@ bytes = "1"
 
 chrono = { version = "0.4", features = ["std", "now"]}
 
+fancy-regex = "0.16"
+
 glib = "0.20" # gobject traits and error type
 gstreamer = "0.23"
 gstreamer-app = "0.23" # appsink
@@ -23,6 +25,7 @@ iced_video_player = { git = "https://github.com/EmmanuelDodoo/iced_video_player"
 image = "0.25"
 
 rand = "0.8"
+# regex = "1.12"
 rfd = "0.16"
 rusqlite = {version = "0.37", features = ["bundled", "uuid", "chrono"]}
 

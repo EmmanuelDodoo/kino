@@ -697,7 +697,7 @@ impl<T: Media> Thumbnail<T> {
         let name = container(name)
             .clip(true)
             .align_y(Vertical::Center)
-            .height(20.0);
+            .height(24.0);
 
         let ratings = ratings(&self.media, false);
 
