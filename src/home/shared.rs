@@ -890,7 +890,11 @@ pub struct SearchView {
 
 impl SearchView {
     pub fn new(item: SearchItem) -> Self {
-        let poster = item.poster.as_ref().map(Handle::from_path);
+        let poster = item
+            .poster
+            .as_deref()
+            .unwrap_or("assets/images/default.png");
+        let poster = Some(Handle::from_path(poster));
         Self {
             snippet: markdown::Content::parse(&item.snippet),
             item,
