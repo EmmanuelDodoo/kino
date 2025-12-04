@@ -11,6 +11,7 @@ CREATE TABLE directory (
 
 CREATE TABLE tv_show ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
+	tmdb_id              INTEGER,
 	name                 TEXT NOT NULL    ,
 	original_name	     TEXT NOT NULL,
 	directory            TEXT NOT NULL,
@@ -29,7 +30,6 @@ CREATE TABLE tv_show (
 	recent_season        TEXT     ,
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
-	fetched		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(directory, path),
 	FOREIGN KEY ( directory ) REFERENCES directory( id ) ON DELETE CASCADE
 );
@@ -101,6 +101,7 @@ CREATE INDEX idx_comment_episode_id ON episode_comment ( episode_id );
 
 CREATE TABLE movie (
 	id		            TEXT NOT NULL PRIMARY KEY,
+	tmdb_id              INTEGER,
 	name		        TEXT NOT NULL,
 	original_name	    TEXT NOT NULL,
 	directory            TEXT NOT NULL,
@@ -117,7 +118,6 @@ CREATE TABLE movie (
 	last_watched	    DATETIME,
 	duration	        INTEGER NOT NULL DEFAULT 0,
 	comment_count	    INTEGER NOT NULL DEFAULT 0,
-	fetched		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(directory, path),
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
 	CHECK ( 0 <= rating AND rating <= 5 ),
@@ -162,7 +162,10 @@ CREATE VIEW get_episode_data AS SELECT
 episode.*,
 season.show_id,
 tv_show.backdrop,
+tv_show.tmdb_id,
 season.path AS season_path,
+season.fetched AS season_fetched,
+season.season_number,
 tv_show.path AS show_path,
 directory.path AS directory_path
 FROM episode 

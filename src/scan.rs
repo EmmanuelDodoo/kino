@@ -90,7 +90,7 @@ pub fn scan_dir<'a>(db: &str, dir: Directory, discoverer: bool) -> Option<BatchR
 }
 
 pub fn scan_dirs<'a>(
-    db: &str,
+    db: impl AsRef<Path>,
     dirs: Vec<Directory>,
     discoverer: bool,
 ) -> (Option<BatchResult<'a>>, Vec<DirectoryId>) {

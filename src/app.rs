@@ -5,9 +5,11 @@ use iced::{
     time::{self, Instant},
     window,
 };
+use tokio::sync::mpsc;
 
 use crate::db::{self, Query};
 use crate::error::Error;
+use crate::fetch;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
     self, Collection, CollectionId, DirectoryId, Episode, EpisodeId, ItemId, Movie, MovieId,
@@ -21,8 +23,6 @@ use crate::utils::{
     Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort,
     filter::FilterMode, filter::SearchFilter, load_fonts,
 };
-
-const DB_PATH: &str = "test.db";
 
 #[derive(Debug, Clone, Copy)]
 pub enum FetchId {
@@ -120,6 +120,8 @@ pub struct App {
     db: db::Database,
 
     is_capturing_keys: bool,
+
+    auth_tx: mpsc::Sender<String>,
 }
 
 impl App {
@@ -128,6 +130,19 @@ impl App {
         let load_id = window::oldest().map(Message::WindowId);
         let settings = Config::defaults();
 
+        let (auth_tx, auth_rx) = mpsc::channel(2);
+
+        let fetcher = Task::perform(
+            fetch::fetcher(
+                auth_rx,
+                settings.db_path(),
+                "assets/temp",
+                // todo: Interval duration
+                std::time::Duration::from_secs(10),
+            ),
+            |_| Message::None,
+        );
+
         let (home, home_tasks) = Home::boot(
             settings.layout(),
             Filter::new(FilterMode::default()),
@@ -135,15 +150,16 @@ impl App {
             settings.general.recents_limit,
         );
 
-        let new = Self::new(settings, home);
+        let new = Self::new(settings, home, auth_tx);
 
-        let tasks = Task::batch([load_font, load_id, home_tasks]);
+        let tasks = Task::batch([load_font, load_id, home_tasks, fetcher]);
 
         (new, tasks)
     }
 
-    fn new(settings: Config, home: Home) -> Self {
-        let db = db::Database::open_test_db(DB_PATH).expect("Failed to open DB");
+    fn new(config: Config, home: Home, auth_tx: mpsc::Sender<String>) -> Self {
+        let db = db::Database::open_test_db(config.db_path()).expect("Failed to open DB");
+        // let db = db::Database::open_with_schema(config.db_path()).expect("Failed to open DB");
 
         Self {
             screen: Screen::Home,
@@ -153,10 +169,11 @@ impl App {
             window: None,
             player: None,
             settings: None,
-            config: settings,
+            config,
             home,
             db,
             is_capturing_keys: false,
+            auth_tx,
         }
     }
 
@@ -339,29 +356,18 @@ impl App {
                     }
                 }
                 FetchId::Shows => {
-                    let shows =
-                        match self
-                            .db
-                            .get_shows(limit, offset, filter, sort, shared::Thumbnail::new)
-                        {
-                            Ok(shows) => shows,
-                            Err(error) => {
-                                let msg =
-                                    Message::PushToast(error.to_string(), toast::Status::Error);
-                                return Task::done(msg);
-                            }
-                        };
+                    let shows = match self.db.get_shows(limit, offset, filter, sort, show_map) {
+                        Ok(shows) => shows,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
 
                     self.home.fetched_shows(shows)
                 }
                 FetchId::Movies => {
-                    let movies = match self.db.get_movies(
-                        limit,
-                        offset,
-                        filter,
-                        sort,
-                        shared::Thumbnail::new,
-                    ) {
+                    let movies = match self.db.get_movies(limit, offset, filter, sort, movie_map) {
                         Ok(movies) => movies,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
@@ -372,31 +378,20 @@ impl App {
                     self.home.fetched_movies(movies)
                 }
                 FetchId::Recents => {
-                    let movies = match self.db.get_movies(
-                        limit,
-                        offset,
-                        filter,
-                        sort,
-                        shared::Thumbnail::new,
-                    ) {
+                    let movies = match self.db.get_movies(limit, offset, filter, sort, movie_map) {
                         Ok(movies) => movies,
                         Err(error) => {
                             let msg = Message::PushToast(error.to_string(), toast::Status::Error);
                             return Task::done(msg);
                         }
                     };
-                    let shows =
-                        match self
-                            .db
-                            .get_shows(limit, offset, filter, sort, shared::Thumbnail::new)
-                        {
-                            Ok(shows) => shows,
-                            Err(error) => {
-                                let msg =
-                                    Message::PushToast(error.to_string(), toast::Status::Error);
-                                return Task::done(msg);
-                            }
-                        };
+                    let shows = match self.db.get_shows(limit, offset, filter, sort, show_map) {
+                        Ok(shows) => shows,
+                        Err(error) => {
+                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            return Task::done(msg);
+                        }
+                    };
 
                     self.home.fetched_recents(movies, shows)
                 }
@@ -659,7 +654,6 @@ impl App {
             }
             Message::SettingsOpen => self.settings(),
             Message::SaveSettings => {
-                // todo: Directories changes
                 self.screen = Screen::Home;
 
                 let Some(settings) = self.settings.take() else {
@@ -671,7 +665,6 @@ impl App {
                     .recents_limit(settings.config.general.recents_limit);
                 self.config = settings.config;
 
-                // todo: Scan dirs
                 let dirs = settings.directories;
 
                 let msg = match self.db.toggle_directories(dirs) {
@@ -684,8 +677,13 @@ impl App {
                 };
 
                 let refresh = self.home.refresh(now);
+                let auth = self.config.general.auth_token.clone();
+                let auth_tx = self.auth_tx.clone();
 
-                Task::batch([refresh, Task::done(msg)])
+                let auth =
+                    Task::perform(async move { auth_tx.send(auth).await }, |_| Message::None);
+
+                Task::batch([auth, refresh, Task::done(msg)])
             }
             Message::Layout(layout) => {
                 self.config.general.layout = layout;
@@ -704,9 +702,10 @@ impl App {
 
                 let discoverer = self.config.general.scan_discoverer;
                 let home_task = self.home.scanning(true, now);
+                let db_path = self.config.db_path();
 
                 let scan = Task::perform(
-                    async move { scan::scan_dirs(DB_PATH, dirs, discoverer) },
+                    async move { scan::scan_dirs(db_path, dirs, discoverer) },
                     |(todo, res)| {
                         if let Some(res) = todo {
                             dbg!(res.successes.len());

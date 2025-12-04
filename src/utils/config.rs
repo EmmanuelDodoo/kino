@@ -120,7 +120,7 @@ impl VideoSettings {
 }
 
 // todo: API key,
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct GeneralSettings {
     pub layout: Layout,
     pub refresh_interval: std::time::Duration,
@@ -129,6 +129,7 @@ pub struct GeneralSettings {
     pub search_limit: Option<i32>,
     pub theme: AppTheme,
     pub scan_discoverer: bool,
+    pub auth_token: String,
 }
 
 impl GeneralSettings {
@@ -140,6 +141,7 @@ impl GeneralSettings {
             recents_limit: Some(5),
             search_limit: Some(5),
             scan_discoverer: true,
+            auth_token: String::default(),
         }
     }
 }
@@ -174,6 +176,10 @@ impl Config {
 
     pub fn search_limit(&self) -> Option<i32> {
         self.general.search_limit
+    }
+
+    pub fn db_path(&self) -> String {
+        "test.db".to_string()
     }
 }
 

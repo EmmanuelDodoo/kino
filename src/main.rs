@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 mod app;
 mod db;
 mod error;
+mod fetch;
 mod home;
 mod models;
 mod player;

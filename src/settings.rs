@@ -96,6 +96,7 @@ pub enum FolderSelectionMessage {
 pub enum SettingsMessage {
     Goto(Page),
     Scroll(scrollable::Viewport),
+    Auth(String),
     Refresh(String),
     ThumbnailInterval(String),
     Recents(String),
@@ -179,6 +180,10 @@ impl Settings {
             }
             SettingsMessage::Cancel => self.cancel(),
             SettingsMessage::Save => Task::done(Message::SaveSettings),
+            SettingsMessage::Auth(auth) => {
+                self.config.general.auth_token = auth;
+                Task::none()
+            }
             SettingsMessage::Refresh(interval) => {
                 let interval = interval.trim();
                 if interval.is_empty() {
@@ -674,6 +679,7 @@ impl Settings {
             search_limit,
             theme,
             scan_discoverer,
+            auth_token,
         } = &self.config.general;
 
         let refresh = {
@@ -840,6 +846,29 @@ impl Settings {
                 .spacing(spacing)
         };
 
+        let auth = {
+            let label = label_maker("TMDB API Token: ");
+            let icon = help(
+                "The TMDB© API Read Access Token used for fetching media metadata",
+                size / RATIO,
+            );
+
+            let input = text_input("Token", &auth_token)
+                .width(500)
+                .size(size)
+                .padding(padding)
+                .on_input(SettingsMessage::Auth);
+
+            let label = row!(label, icon)
+                .spacing(2)
+                .align_y(Vertical::Center)
+                .width(width);
+
+            row!(label, input)
+                .spacing(spacing)
+                .align_y(Vertical::Center)
+        };
+
         let content = column!(
             refresh,
             recents_limit,
@@ -847,7 +876,8 @@ impl Settings {
             layouts,
             theme,
             dirs,
-            discoverer
+            discoverer,
+            auth,
         )
         .spacing(36.0)
         .height(Length::Fill);
@@ -1435,7 +1465,8 @@ fn directory_draw<'a>(
         .on_press(SettingsMessage::ToggleDirectory(directory.id))
         .style(styles::button::subtler);
 
-    let label = span(&directory.path).strikethrough(!selected).size(size);
+    let path = trim_path(Path::new(&directory.path));
+    let label = span(path).strikethrough(!selected).size(size);
     let label = rich_text([label]).on_link_click(|_: ()| SettingsMessage::None);
 
     let tag = container(text(directory.media_type.to_string()).size(size / (RATIO * RATIO)))
@@ -1471,16 +1502,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
     let font = label_font();
 
     let folder = {
-        let path = path
-            .components()
-            .rev()
-            .take(3)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<PathBuf>();
-        let path = path.display().to_string();
-        let path = path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned();
+        let path = trim_path(path);
 
         let path = text(path).size(size).font(Font {
             style: font::Style::Italic,
@@ -1695,4 +1717,17 @@ fn binding_tooltip<'a>(
     use iced::widget::tooltip::Position;
 
     tooltip(content, label, Position::Top).into()
+}
+
+fn trim_path(path: &Path) -> String {
+    let path = path
+        .components()
+        .rev()
+        .take(3)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<PathBuf>();
+    let path = path.display().to_string();
+    path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned()
 }

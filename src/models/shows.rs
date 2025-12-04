@@ -9,6 +9,12 @@ use crate::db::{Operation, Query, Table};
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ShowId(Uuid);
 
+impl std::fmt::Display for ShowId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl ShowId {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         Self::from_row_helper("id", row)

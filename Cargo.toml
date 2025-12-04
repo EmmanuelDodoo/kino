@@ -25,11 +25,14 @@ iced_video_player = { git = "https://github.com/EmmanuelDodoo/iced_video_player"
 image = "0.25"
 
 rand = "0.8"
+reqwest = {version = "0.12", features = ["json"]}
 # regex = "1.12"
 rfd = "0.16"
 rusqlite = {version = "0.37", features = ["bundled", "uuid", "chrono"]}
 
-tokio = "1.47"
+serde = { version = "1.0", features = ["derive"]}
+
+tokio = {version = "1.47", features = ["fs"]}
 
 url = "2"
 uuid = {version = "1.18", features = ["v7", "std"]}

@@ -60,7 +60,7 @@ impl Database {
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-        map: fn(Movie) -> T,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
     ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
@@ -82,9 +82,7 @@ impl Database {
         let mut statement = self.prepare_cached(&sql)?;
 
         statement
-            .query_map(&[(":limit", &limit), (":offset", &offset)], |row| {
-                Movie::from_row(row).map(map)
-            })?
+            .query_map(&[(":limit", &limit), (":offset", &offset)], map)?
             .collect()
     }
 
@@ -116,7 +114,7 @@ impl Database {
         offset: Option<i32>,
         filter: Filter,
         sort: Sort,
-        map: fn(Show) -> T,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
     ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
@@ -139,9 +137,7 @@ impl Database {
 
         let mut statement = self.prepare_cached(&sql)?;
         statement
-            .query_map(&[(":limit", &limit), (":offset", &offset)], |row| {
-                Show::from_row(row).map(map)
-            })?
+            .query_map(&[(":limit", &limit), (":offset", &offset)], map)?
             .collect()
     }
 
@@ -956,7 +952,7 @@ impl Database {
         statement.execute(params.as_slice())
     }
 
-    pub fn open_test_db(path: &str) -> rusqlite::Result<Database> {
+    pub fn open_test_db(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Database> {
         let conn = Database::open(path)?;
 
         let schema = include_str!("../schema.sql");
@@ -969,7 +965,7 @@ impl Database {
         Ok(conn)
     }
 
-    pub fn open_with_schema(path: &str) -> rusqlite::Result<Database> {
+    pub fn open_with_schema(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Database> {
         let conn = Database::open(path)?;
         let schema = include_str!("../schema.sql");
         conn.execute_batch(schema)?;
@@ -977,7 +973,7 @@ impl Database {
         Ok(conn)
     }
 
-    pub fn open(path: &str) -> rusqlite::Result<Database> {
+    pub fn open(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Database> {
         let conn = rusqlite::Connection::open(path)?;
 
         Ok(Database { conn })
