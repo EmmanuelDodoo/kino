@@ -1,0 +1,13 @@
+# Example Config file
+[video]
+
+[general]
+
+[keybindings.general]
+actions.Back = [ {key = "Enter", modifiers = "Ctrl" } ]
+actions.SearchToggle = [{key = "Space"}]
+defaults = false
+
+[keybindings.player]
+defaults = false
+

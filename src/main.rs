@@ -5,8 +5,9 @@ use iced::{
     advanced::{self, Widget, layout, mouse, overlay, widget::tree},
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
+    application::BootFn,
     border::{self, Border, Radius},
-    color, font, padding,
+    color, font, keyboard, padding,
     time::{Duration, Instant},
     widget::{
         self, Space, bottom, bottom_center, button, center, center_x, center_y, column, container,
@@ -15,6 +16,7 @@ use iced::{
     },
     window,
 };
+use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
@@ -33,6 +35,7 @@ mod widgets;
 
 use app::App;
 use models::{Directory, ItemId, Media, MediaType, Movie, SearchItem, Show};
+use utils::config::Config;
 use utils::filter;
 use utils::filter::*;
 use utils::icons;
@@ -51,27 +54,90 @@ use widgets::*;
 // fn test_main() -> iced::Result {
 #[rustfmt::skip]
 fn main() -> iced::Result {
-    // iced::run(app::App::update, app::App::view)
+    use std::env;
+
+    let mut args = env::args();
+    let _ = args.next();
+
+    let mode = args.next();
+
+    let mode = match mode.as_deref() {
+        Some("dev") => BootMode::Dev,
+        Some("dummies") => BootMode::Dummies,
+        _ => BootMode::Prod,
+    };
 
     iced::application::timed(
-        App::boot, 
-        App::update, 
+        mode,
+        App::update,
         App::subscription,
         App::view
     )
         .exit_on_close_request(false)
         .theme(App::theme)
 
-    // iced::application::timed(
-    //     Playground::boot,
-    //     Playground::update,
-    //     Playground::subscription,
-    //     Playground::view,
-    // )
-    //     .theme(Playground::theme)
+        // iced::application::timed(
+        //     Playground::boot,
+        //     Playground::update,
+        //     Playground::subscription,
+        //     Playground::view,
+        // )
+        //     .theme(Playground::theme)
 
-    .window_size(Size::new(1200.0, 750.0))
-    .run()
+        .window_size(Size::new(1200.0, 750.0))
+        .run()
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BootMode {
+    Dev,
+    Dummies,
+    Prod,
+}
+
+impl BootFn<App, app::Message> for BootMode {
+    fn boot(&self) -> (App, Task<app::Message>) {
+        use std::fs::read_to_string;
+
+        let config_path = "config.toml";
+
+        let mut errors = Vec::with_capacity(3);
+
+        let config = match self {
+            Self::Dev | Self::Dummies => Config::dev(),
+            Self::Prod => read_to_string(config_path)
+                .inspect_err(|error| {
+                    if !matches!(error.kind(), std::io::ErrorKind::NotFound) {
+                        errors.push(format!("Config file error. \n{error}"))
+                    }
+                })
+                .ok()
+                .map(|config| {
+                    toml::from_str::<Config>(&config)
+                        .inspect_err(|error| {
+                            errors.push(format!(
+                                "Config file error. \n{}",
+                                error.message().to_owned()
+                            ))
+                        })
+                        .ok()
+                })
+                .flatten()
+                .unwrap_or_else(|| Config::defaults()),
+        };
+
+        let db = match self {
+            Self::Dev => db::Database::open_with_schema(config.db_path(), config.schema_path()),
+            Self::Dummies => {
+                let dummies = "dummy.txt";
+                db::Database::open_with_dummies(config.db_path(), config.schema_path(), dummies)
+            }
+            Self::Prod => db::Database::open_with_schema(config.db_path(), config.schema_path()),
+        }
+        .expect("Failed to open DB");
+
+        App::boot(config, db, errors)
+    }
 }
 
 #[derive(Debug, Clone)]

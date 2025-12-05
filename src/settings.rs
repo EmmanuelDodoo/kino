@@ -933,10 +933,10 @@ impl Settings {
             search_limit,
             layouts,
             theme,
-            dirs,
-            discoverer,
             auth,
             movie_depth,
+            discoverer,
+            dirs,
         )
         .spacing(36.0)
         .height(Length::Fill);

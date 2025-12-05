@@ -125,42 +125,44 @@ pub struct App {
 }
 
 impl App {
-    pub fn boot() -> (Self, Task<Message>) {
+    pub fn boot(config: Config, db: db::Database, errors: Vec<String>) -> (Self, Task<Message>) {
+        let load_errors = Task::done(Message::PushToasts(
+            errors
+                .into_iter()
+                .map(|error| (error, toast::Status::Error))
+                .collect(),
+        ));
+
         let load_font = load_fonts().map(Message::FontLoad);
         let load_id = window::oldest().map(Message::WindowId);
-        let settings = Config::defaults();
 
         let (auth_tx, auth_rx) = mpsc::channel(2);
 
         let fetcher = Task::perform(
             fetch::fetcher(
                 auth_rx,
-                settings.db_path(),
-                "assets/temp",
-                // todo: Interval duration
-                std::time::Duration::from_secs(10),
+                config.db_path(),
+                config.images_path(),
+                config.fetching_interval(),
             ),
             |_| Message::None,
         );
 
         let (home, home_tasks) = Home::boot(
-            settings.layout(),
+            config.layout(),
             Filter::new(FilterMode::default()),
             Sort::new_with_name(),
-            settings.general.recents_limit,
+            config.general.recents_limit,
         );
 
-        let new = Self::new(settings, home, auth_tx);
+        let new = Self::new(config, db, home, auth_tx);
 
-        let tasks = Task::batch([load_font, load_id, home_tasks, fetcher]);
+        let tasks = Task::batch([load_errors, load_font, load_id, home_tasks, fetcher]);
 
         (new, tasks)
     }
 
-    fn new(config: Config, home: Home, auth_tx: mpsc::Sender<String>) -> Self {
-        let db = db::Database::open_test_db(config.db_path()).expect("Failed to open DB");
-        // let db = db::Database::open_with_schema(config.db_path()).expect("Failed to open DB");
-
+    fn new(config: Config, db: db::Database, home: Home, auth_tx: mpsc::Sender<String>) -> Self {
         Self {
             screen: Screen::Home,
             now: Instant::now(),
@@ -285,7 +287,7 @@ impl App {
                 self.play_items(items)
             }
             Message::Key { key, modifiers } => {
-                let keypress = KeyPress::new(key, modifiers.into());
+                let keypress = KeyPress::with_modifiers(key, modifiers);
 
                 if let Some(settings) = self.settings.as_mut()
                     && self.is_capturing_keys

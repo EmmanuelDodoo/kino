@@ -8,7 +8,9 @@ use crate::filter::{self, Filter, search::SearchFilter};
 use crate::sort::{self, Sort};
 
 use rusqlite::{Connection, Result, Row, ToSql, params_from_iter, types::ToSqlOutput};
+use std::fs::read_to_string;
 use std::ops::Deref;
+use std::path::Path;
 use uuid::Uuid;
 
 pub struct Database {
@@ -969,28 +971,41 @@ impl Database {
         statement.execute(params.as_slice())
     }
 
-    pub fn open_test_db(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Database> {
+    pub fn open_with_dummies(
+        path: impl AsRef<Path>,
+        schema: impl AsRef<Path>,
+        dummies: impl AsRef<Path>,
+    ) -> crate::error::Result<Database> {
+        let exists = path.as_ref().try_exists()?;
         let conn = Database::open(path)?;
 
-        let schema = include_str!("../schema.sql");
-        conn.execute_batch(schema)?;
+        if !exists {
+            let schema = read_to_string(schema)?;
+            conn.execute_batch(&schema)?;
 
-        let dummy = include_str!("../dummy.txt");
-
-        conn.execute_batch(dummy)?;
+            let dummies = read_to_string(dummies)?;
+            conn.execute_batch(&dummies)?;
+        }
 
         Ok(conn)
     }
 
-    pub fn open_with_schema(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Database> {
-        let conn = Database::open(path)?;
-        let schema = include_str!("../schema.sql");
-        conn.execute_batch(schema)?;
+    pub fn open_with_schema(
+        db: impl AsRef<Path>,
+        schema: impl AsRef<Path>,
+    ) -> crate::error::Result<Database> {
+        let exists = db.as_ref().try_exists()?;
+        let conn = Database::open(db)?;
+
+        if !exists {
+            let schema = read_to_string(schema)?;
+            conn.execute_batch(&schema)?;
+        }
 
         Ok(conn)
     }
 
-    pub fn open(path: impl AsRef<std::path::Path>) -> rusqlite::Result<Database> {
+    pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Database> {
         let conn = rusqlite::Connection::open(path)?;
 
         Ok(Database { conn })

@@ -334,7 +334,7 @@ pub enum Screen {
     // Log,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Layout {
     #[default]
     Grid,
@@ -362,13 +362,14 @@ impl Layout {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 pub enum HomeAction {
     SettingsOpen,
     CloseModal,
     LayoutToggle,
     RefreshContent,
     /// Refreshes both content and the side menu
+    #[serde(rename="RefreshAll")]
     Refresh,
     SearchToggle,
     Back,
@@ -420,7 +421,7 @@ impl std::fmt::Display for HomeAction {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 pub enum PlayerAction {
     PlayToggle,
     PlayNext,
@@ -441,6 +442,7 @@ pub enum PlayerAction {
     VideoConfig,
     VideoComment,
     SubtitlesToggle,
+    #[serde(rename="CollectionAdd")]
     Add,
     CloseView,
     Back,
@@ -534,7 +536,7 @@ impl std::fmt::Display for PlayerAction {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 pub enum SettingsAction {
     Up,
     Down,
