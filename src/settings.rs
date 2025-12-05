@@ -99,6 +99,7 @@ pub enum SettingsMessage {
     Scroll(scrollable::Viewport),
     Auth(String),
     Refresh(String),
+    MovieDepth(String),
     ThumbnailInterval(String),
     Recents(String),
     Search(String),
@@ -184,6 +185,22 @@ impl Settings {
             SettingsMessage::Save => Task::done(Message::SaveSettings),
             SettingsMessage::Auth(auth) => {
                 self.config.general.auth_token = auth;
+                Task::none()
+            }
+            SettingsMessage::MovieDepth(depth) => {
+                let depth = depth.trim();
+                if depth.is_empty() {
+                    self.config.general.movie_depth = 0;
+                    return Task::none();
+                }
+
+                let Ok(depth) = depth.parse::<u8>() else {
+                    let msg =
+                        Message::PushToast(format!("Invalid input: {depth}"), toast::Status::Error);
+                    return Task::done(msg);
+                };
+
+                self.config.general.movie_depth = depth;
                 Task::none()
             }
             SettingsMessage::Refresh(interval) => {
@@ -695,6 +712,7 @@ impl Settings {
             theme,
             scan_discoverer,
             auth_token,
+            movie_depth,
         } = &self.config.general;
 
         let refresh = {
@@ -884,6 +902,31 @@ impl Settings {
                 .align_y(Vertical::Center)
         };
 
+        let movie_depth = {
+            let label = label_maker("Movie Directory Depth: ");
+            let icon = help(
+                "How often deep movie directory scans for videos should go.",
+                size / RATIO,
+            );
+
+            let depth = movie_depth.to_string();
+            let input = text_input("Depth", &depth)
+                .width(64)
+                .size(size)
+                .padding(padding)
+                .on_input(SettingsMessage::MovieDepth)
+                .align_x(Horizontal::Right);
+
+            let label = row!(label, icon)
+                .spacing(2)
+                .align_y(Vertical::Center)
+                .width(width);
+
+            row!(label, input)
+                .spacing(spacing)
+                .align_y(Vertical::Center)
+        };
+
         let content = column!(
             refresh,
             recents_limit,
@@ -893,6 +936,7 @@ impl Settings {
             dirs,
             discoverer,
             auth,
+            movie_depth,
         )
         .spacing(36.0)
         .height(Length::Fill);

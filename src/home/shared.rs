@@ -17,8 +17,8 @@ use iced::{
     },
 };
 
-pub const CARD_HEIGHT: f32 = 375.0;
-pub const CARD_WIDTH: f32 = CARD_HEIGHT * 0.7;
+pub const CARD_HEIGHT: f32 = 400.0;
+pub const CARD_WIDTH: f32 = CARD_HEIGHT * 2.0 / 3.0;
 pub const LIST_HEIGHT: f32 = 150.0;
 pub const LIST_WIDTH: f32 = LIST_HEIGHT * 5.5 / 10.0;
 pub const IMAGE_RADIUS: f32 = 7.0;

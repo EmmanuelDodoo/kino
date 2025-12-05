@@ -130,6 +130,7 @@ pub struct GeneralSettings {
     pub theme: AppTheme,
     pub scan_discoverer: bool,
     pub auth_token: String,
+    pub movie_depth: u8
 }
 
 impl GeneralSettings {
@@ -142,6 +143,7 @@ impl GeneralSettings {
             search_limit: Some(5),
             scan_discoverer: true,
             auth_token: String::default(),
+            movie_depth: 2,
         }
     }
 }

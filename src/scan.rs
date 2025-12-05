@@ -58,7 +58,12 @@ struct ShowPrim {
     seasons: Vec<SeasonPrim>,
 }
 
-pub fn scan_dir<'a>(db: &str, dir: Directory, discoverer: bool) -> Option<BatchResult<'a>> {
+pub fn scan_dir<'a>(
+    db: &str,
+    dir: Directory,
+    discoverer: bool,
+    movie_depth: u8,
+) -> Option<BatchResult<'a>> {
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
             eprintln!(
@@ -86,13 +91,14 @@ pub fn scan_dir<'a>(db: &str, dir: Directory, discoverer: bool) -> Option<BatchR
         }
     };
 
-    scan_dir_helper(&mut db, dir, discoverer.as_ref())
+    scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth)
 }
 
 pub fn scan_dirs<'a>(
     db: impl AsRef<Path>,
     dirs: Vec<Directory>,
     discoverer: bool,
+    movie_depth: u8,
 ) -> (Option<BatchResult<'a>>, Vec<DirectoryId>) {
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
@@ -118,7 +124,7 @@ pub fn scan_dirs<'a>(
 
     for dir in dirs {
         let id = dir.id;
-        match scan_dir_helper(&mut db, dir, discoverer.as_ref()) {
+        match scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth) {
             Some(res) => {
                 scanned.push(id);
                 result.merge(res);
@@ -134,13 +140,14 @@ pub fn scan_dir_helper<'a>(
     db: &mut Database,
     dir: Directory,
     discoverer: Option<&Discoverer>,
+    movie_depth: u8,
 ) -> Option<BatchResult<'a>> {
     let mut successes = vec![];
     let mut failures = vec![];
 
     match dir.media_type {
         MediaType::Movies => {
-            if let Some(videos) = scan_videos(&dir.path, discoverer) {
+            if let Some(videos) = scan_videos(&dir.path, discoverer, movie_depth) {
                 for movie in videos {
                     let name = process_name(&movie.name).unwrap_or(movie.name.clone());
                     let (_, query) =
@@ -339,14 +346,18 @@ fn scan_show_dir(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Opt
     Some(show)
 }
 
-fn scan_videos(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Option<Vec<Video>> {
-    scan_video_dir(path, discoverer, 2, None)
+fn scan_videos(
+    path: impl AsRef<Path>,
+    discoverer: Option<&Discoverer>,
+    depth: u8,
+) -> Option<Vec<Video>> {
+    scan_video_dir(path, discoverer, depth, None)
 }
 
 fn scan_video_dir(
     path: impl AsRef<Path>,
     discoverer: Option<&Discoverer>,
-    depth: usize,
+    depth: u8,
     prefix: Option<String>,
 ) -> Option<Vec<Video>> {
     let path = path.as_ref();

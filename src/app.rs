@@ -707,9 +707,10 @@ impl App {
                 let discoverer = self.config.general.scan_discoverer;
                 let home_task = self.home.scanning(true, now);
                 let db_path = self.config.db_path();
+                let movie_depth = self.config.general.movie_depth;
 
                 let scan = Task::perform(
-                    async move { scan::scan_dirs(db_path, dirs, discoverer) },
+                    async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth) },
                     |(todo, res)| {
                         if let Some(res) = todo {
                             dbg!(res.successes.len());
