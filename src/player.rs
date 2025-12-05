@@ -385,7 +385,9 @@ impl Manager {
                 Task::none()
             }
             ManagerMessage::ToggleFullscreen => self.fullscreen_toggle(),
-            ManagerMessage::PreviousScreen => Task::done(Message::Back),
+            ManagerMessage::PreviousScreen => {
+                self.fullscreen_exit().chain(Task::done(Message::Back))
+            }
             ManagerMessage::ToggleSubtitles => self.subtitles_toggle(),
             ManagerMessage::PlayNext => self.play_next(now),
             ManagerMessage::PlayPrevious => self.play_previous(now),
