@@ -866,9 +866,11 @@ impl Manager {
                 collections,
                 selected,
                 ..
-            }) => modal(content, draw_collection_add(selected, collections.iter()))
-                .on_blur(ManagerMessage::CloseView)
-                .into(),
+            }) => modal(
+                content,
+                draw_collection_add(selected, collections.iter()),
+                ManagerMessage::CloseView,
+            ),
         }
     }
 

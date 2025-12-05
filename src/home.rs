@@ -2081,9 +2081,7 @@ impl Home {
                     View::Rating { rating, .. } => draw_rating(rating),
                 };
 
-                modal(content, overlay)
-                    .on_blur(HomeMessage::CloseView)
-                    .into()
+                modal(content, overlay, HomeMessage::CloseView)
             }
         }
     }

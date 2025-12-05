@@ -574,16 +574,12 @@ impl Settings {
             Some(View::FolderSelection { path, kind }) => {
                 let overlay = draw_folder_selection(path, kind);
 
-                modal(content, overlay)
-                    .on_blur(SettingsMessage::Cancel)
-                    .into()
+                modal(content, overlay, SettingsMessage::Cancel)
             }
             Some(View::CaptureKey { action, key }) => {
                 let overlay = draw_capture_key(action, key);
 
-                modal(content, overlay)
-                    .on_blur(SettingsMessage::Cancel)
-                    .into()
+                modal(content, overlay, SettingsMessage::Cancel)
             }
         }
     }
