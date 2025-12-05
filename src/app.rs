@@ -663,9 +663,9 @@ impl App {
                 self.home.layout(settings.config.layout());
                 self.home
                     .recents_limit(settings.config.general.recents_limit);
-                self.config = settings.config;
 
-                let dirs = settings.directories;
+                let (config, dirs) = settings.save();
+                self.config = config;
 
                 let msg = match self.db.toggle_directories(dirs) {
                     Ok(true) => Message::PushToast(
@@ -678,10 +678,14 @@ impl App {
 
                 let refresh = self.home.refresh(now);
                 let auth = self.config.general.auth_token.clone();
-                let auth_tx = self.auth_tx.clone();
 
-                let auth =
-                    Task::perform(async move { auth_tx.send(auth).await }, |_| Message::None);
+                let auth = if !auth.is_empty() {
+                    let auth_tx = self.auth_tx.clone();
+
+                    Task::perform(async move { auth_tx.send(auth).await }, |_| Message::None)
+                } else {
+                    Task::none()
+                };
 
                 Task::batch([auth, refresh, Task::done(msg)])
             }

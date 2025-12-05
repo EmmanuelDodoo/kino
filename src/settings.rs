@@ -1,4 +1,5 @@
 use crate::app::Message;
+use crate::db::Operation;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
     AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
@@ -123,6 +124,7 @@ pub enum SettingsMessage {
     Save,
     Cancel,
     ToggleDirectory(DirectoryId),
+    ToggleDirKind(DirectoryId),
     FolderSelected(Option<PathBuf>),
     FolderSelection(FolderSelectionMessage),
     AddFolder,
@@ -143,7 +145,7 @@ pub struct Settings {
 
     scroll_state: ScrollState,
 
-    pub directories: Vec<(Directory, bool)>,
+    pub directories: Vec<(Directory, bool, Operation)>,
 }
 
 impl Settings {
@@ -441,24 +443,41 @@ impl Settings {
                         .map(ToOwned::to_owned)
                         .unwrap_or(path);
 
-                    if self.directories.iter().any(|(dir, _)| dir.path == path) {
+                    if self.directories.iter().any(|(dir, _, _)| dir.path == path) {
                         return Task::none();
                     }
 
                     // todo??
                     let (new, _query) = Directory::new(path, kind, true);
 
-                    self.directories.push((new, true));
+                    self.directories.push((new, false, Operation::Insert));
 
                     Task::none()
                 }
             },
             SettingsMessage::ToggleDirectory(id) => {
-                if let Some((_, selected)) =
-                    self.directories.iter_mut().find(|(dir, _)| dir.id == id)
+                if let Some((_, new, operation)) =
+                    self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
                 {
-                    *selected = !(*selected);
+                    *operation = match operation {
+                        Operation::Update => Operation::Delete,
+                        Operation::Insert => Operation::Delete,
+                        Operation::Delete if *new => Operation::Insert,
+                        Operation::Delete => Operation::Update,
+                    };
                 }
+                Task::none()
+            }
+            SettingsMessage::ToggleDirKind(id) => {
+                if let Some((dir, _, _)) =
+                    self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
+                {
+                    dir.media_type = match dir.media_type {
+                        MediaType::Shows => MediaType::Movies,
+                        MediaType::Movies => MediaType::Shows,
+                    };
+                }
+
                 Task::none()
             }
             SettingsMessage::ClearAllBindings(action) => {
@@ -813,7 +832,7 @@ impl Settings {
             let dirs = column(
                 self.directories
                     .iter()
-                    .map(|(dir, selected)| directory_draw(dir, *selected, size)),
+                    .map(|(dir, _, operation)| directory_draw(dir, *operation, size)),
             )
             .spacing(12)
             .push(add);
@@ -881,6 +900,8 @@ impl Settings {
         )
         .spacing(36.0)
         .height(Length::Fill);
+
+        let content = center_x(content);
 
         content.into()
     }
@@ -1205,6 +1226,8 @@ impl Settings {
         )
         .spacing(24);
 
+        let content = center_x(content);
+
         content.into()
     }
 
@@ -1413,8 +1436,22 @@ impl Settings {
     }
 
     pub fn fetched_directories(&mut self, dirs: Vec<Directory>) {
-        self.directories
-            .extend(dirs.into_iter().map(|dirs| (dirs, true)));
+        self.directories.extend(
+            dirs.into_iter()
+                .map(|dirs| (dirs, false, Operation::Update)),
+        );
+    }
+
+    pub fn save(self) -> (Config, Vec<(Directory, Operation)>) {
+        let directories = self
+            .directories
+            .into_iter()
+            .map(|(dir, _, op)| (dir, op))
+            .collect();
+
+        let config = self.config;
+
+        (config, directories)
     }
 }
 
@@ -1454,10 +1491,14 @@ fn help<'a>(label: &'a str, size: f32) -> Tooltip<'a, SettingsMessage> {
 
 fn directory_draw<'a>(
     directory: &'a Directory,
-    selected: bool,
+    operation: Operation,
     size: f32,
 ) -> Element<'a, SettingsMessage> {
-    let icon = if selected { icons::MINUS } else { icons::ADD };
+    let icon = if matches!(operation, Operation::Delete) {
+        icons::ADD
+    } else {
+        icons::MINUS
+    };
     let icon = icons::icon(icon).size(size / RATIO);
 
     let icon_btn = button(icon)
@@ -1465,22 +1506,31 @@ fn directory_draw<'a>(
         .on_press(SettingsMessage::ToggleDirectory(directory.id))
         .style(styles::button::subtler);
 
-    let path = trim_path(Path::new(&directory.path));
-    let label = span(path).strikethrough(!selected).size(size);
+    let path = trim_path(Path::new(&directory.path), 5);
+    let label = span(path)
+        .strikethrough(matches!(operation, Operation::Delete))
+        .size(size);
     let label = rich_text([label]).on_link_click(|_: ()| SettingsMessage::None);
 
-    let tag = container(text(directory.media_type.to_string()).size(size / (RATIO * RATIO)))
-        .padding([2, 5])
-        .style(|theme| {
-            let default = styles::container::bordered(theme);
-            let border = default.border.rounded(3.0);
+    let tag = text(directory.media_type.to_string()).size(size / (RATIO * RATIO));
 
-            container::Style { border, ..default }
-        });
+    let tag = button(tag)
+        .padding([2, 5])
+        .style(|theme, status| {
+            let default = styles::button::text_primary(theme, status);
+            let border = default.border.rounded(3.0).color(default.text_color).width(0.75);
+
+            button::Style {
+                border,
+                ..default
+            }
+        })
+        .on_press(SettingsMessage::ToggleDirKind(directory.id));
 
     row!(icon_btn, label, tag)
-        .spacing(12)
         .align_y(Vertical::Center)
+        .spacing(12)
+        .wrap()
         .into()
 }
 
@@ -1502,7 +1552,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
     let font = label_font();
 
     let folder = {
-        let path = trim_path(path);
+        let path = trim_path(path, 3);
 
         let path = text(path).size(size).font(Font {
             style: font::Style::Italic,
@@ -1719,11 +1769,11 @@ fn binding_tooltip<'a>(
     tooltip(content, label, Position::Top).into()
 }
 
-fn trim_path(path: &Path) -> String {
+fn trim_path(path: &Path, components: usize) -> String {
     let path = path
         .components()
         .rev()
-        .take(3)
+        .take(components)
         .collect::<Vec<_>>()
         .into_iter()
         .rev()

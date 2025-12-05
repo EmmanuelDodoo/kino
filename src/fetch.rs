@@ -828,7 +828,7 @@ mod episodes {
         let mut rows = 0;
 
         for (episode, data) in episodes {
-            let name = format!("{} {}", data.episode_number, data.name);
+            let name = format!("{}. {}", data.episode_number, data.name);
             rows += trans.execute(
                 sql,
                 &[

@@ -61,7 +61,7 @@ pub fn loading_animation(now: iced::time::Instant) -> Animation<bool> {
 
 pub fn tooltip<'a, Message: 'a>(
     content: impl Into<iced::Element<'a, Message>>,
-    label: &'a str,
+    label: impl iced::widget::text::IntoFragment<'a>,
     position: iced::widget::tooltip::Position,
 ) -> iced::widget::Tooltip<'a, Message> {
     use iced::widget::{container, text, tooltip};

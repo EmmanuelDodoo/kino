@@ -686,20 +686,21 @@ impl Database {
 
     pub fn toggle_directories(
         &mut self,
-        directories: Vec<(Directory, bool)>,
+        directories: Vec<(Directory, Operation)>,
     ) -> rusqlite::Result<bool> {
         if directories.is_empty() {
             return Ok(false);
         }
 
         let mut inserts = vec![];
+        let mut updates = vec![];
         let mut deletes = vec![];
 
-        for (dir, insert) in directories {
-            if insert {
-                inserts.push(dir)
-            } else {
-                deletes.push(dir);
+        for (dir, operation) in directories {
+            match operation {
+                Operation::Insert => inserts.push(dir),
+                Operation::Update => updates.push(dir),
+                Operation::Delete => deletes.push(dir),
             }
         }
 
@@ -731,6 +732,22 @@ impl Database {
                 .collect::<Vec<_>>();
 
             rows += trans.execute(&insert, params.as_slice())?;
+        }
+
+        if !updates.is_empty() {
+            let sql = "UPDATE OR IGNORE directory SET path=:path, active=:active, media_type=:type WHERE id=:id";
+
+            for dir in updates {
+                rows += trans.execute(
+                    sql,
+                    &[
+                        (":id", &ToSqlOutput::from(dir.id)),
+                        (":path", &ToSqlOutput::from(dir.path)),
+                        (":active", &ToSqlOutput::from(dir.active)),
+                        (":type", &ToSqlOutput::from(dir.media_type)),
+                    ],
+                )?;
+            }
         }
 
         if !deletes.is_empty() {

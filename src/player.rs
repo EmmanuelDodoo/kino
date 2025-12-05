@@ -607,6 +607,10 @@ impl Manager {
             .shift_step(0.1)
             .width(125.0);
 
+            let volume_text = format!("{:.0}", self.settings.volume * 100.0);
+
+            let volume = tooltip(volume, volume_text, tp);
+
             let speed = container(
                 text(format!("{:.02}x", self.settings.speed))
                     .size(icon_size / (typo::RATIO))

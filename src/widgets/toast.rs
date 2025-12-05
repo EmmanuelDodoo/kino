@@ -109,15 +109,7 @@ where
                 let side = container(space())
                     .style(|theme| match toast.status {
                         Status::Info => container::primary(theme),
-                        Status::Warn => {
-                            let pair = theme.extended_palette().warning.base;
-                            container::Style {
-                                background: Some(pair.color.into()),
-                                text_color: Some(pair.text),
-                                border: iced::border::rounded(2),
-                                ..Default::default()
-                            }
-                        }
+                        Status::Warn => container::warning(theme),
                         Status::Error => container::danger(theme),
                         Status::Success => container::success(theme),
                     })
