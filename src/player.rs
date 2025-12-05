@@ -7,7 +7,7 @@ use iced::{
     time::Instant,
     widget::{
         button, center, checkbox, column, container, image, mouse_area, row, rule, scrollable,
-        slider, space, stack, text, toggler, tooltip as tp,
+        slider, space, stack, text, tooltip as tp,
     },
     window,
 };
@@ -24,7 +24,7 @@ use crate::utils::{
     loading_animation, loading_svg, modal_container, styles, tooltip,
     typo::{self, *},
 };
-use crate::widgets::{self, modal};
+use crate::widgets::{self, modal, toggler};
 use crate::{app::Message, utils::CANCEL};
 
 #[derive(Debug)]

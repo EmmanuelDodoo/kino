@@ -6,14 +6,14 @@ use crate::utils::{
     SettingsAction, VideoSettings, icons, modal_container, picklist_handle, sized_button, styles,
     tooltip, typo::*,
 };
-use crate::widgets::{modal, toast};
+use crate::widgets::{modal, toast, toggler};
 use iced::{
     Border, Element, Length, Padding, Task, Theme,
     alignment::{Horizontal, Vertical},
     font::{self, Font},
     widget::{
         button, center_x, column, container, operation, pick_list, rich_text, row, rule,
-        scrollable, slider, space, span, table, text, text_input, toggler, tooltip::Tooltip,
+        scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
 
@@ -1518,12 +1518,13 @@ fn directory_draw<'a>(
         .padding([2, 5])
         .style(|theme, status| {
             let default = styles::button::text_primary(theme, status);
-            let border = default.border.rounded(3.0).color(default.text_color).width(0.75);
+            let border = default
+                .border
+                .rounded(3.0)
+                .color(default.text_color)
+                .width(0.75);
 
-            button::Style {
-                border,
-                ..default
-            }
+            button::Style { border, ..default }
         })
         .on_press(SettingsMessage::ToggleDirKind(directory.id));
 

@@ -17,6 +17,7 @@ use iced::{
 };
 use std::io;
 use std::path::{Path, PathBuf};
+use tokio::sync::mpsc;
 
 mod app;
 mod db;
@@ -31,7 +32,7 @@ pub mod utils;
 mod widgets;
 
 use app::App;
-use models::{Directory, ItemId, Media, MediaType, SearchItem, Show};
+use models::{Directory, ItemId, Media, MediaType, Movie, SearchItem, Show};
 use utils::filter;
 use utils::filter::*;
 use utils::icons;
@@ -51,7 +52,6 @@ use widgets::*;
 #[rustfmt::skip]
 fn main() -> iced::Result {
     // iced::run(app::App::update, app::App::view)
-
 
     iced::application::timed(
         App::boot, 
@@ -77,18 +77,17 @@ fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     FontLoad(Result<(), iced::font::Error>),
-    Scan,
-    Fetch,
-    ScanComplete,
+    Iced(bool),
+    Custom(bool),
+    Extra(bool),
     None,
 }
 
 struct Playground {
     now: Instant,
-    db: db::Database,
-    dir: Directory,
-    items: Vec<Show>,
-    scanning: bool,
+    iced: bool,
+    custom: bool,
+    extra: bool,
 }
 
 impl Playground {
@@ -97,21 +96,11 @@ impl Playground {
 
         let now = Instant::now();
 
-        let db = db::Database::open_with_schema("test.db").unwrap();
-        let (dir, query) = Directory::new(
-            r"C:\Users\edodo\Desktop\Series".into(),
-            // r"C:\Users\edodo\Desktop\coding\Projects\kino\assets".into(),
-            MediaType::Shows,
-            true,
-        );
-        query.execute(&db).unwrap();
-
         let new = Self {
             now,
-            db,
-            dir,
-            items: vec![],
-            scanning: false,
+            iced: false,
+            custom: false,
+            extra: false,
         };
 
         (new, Task::batch([fonts]))
@@ -127,63 +116,34 @@ impl Playground {
                 eprintln!("{error:?}");
                 Task::none()
             }
-            Message::Scan => {
-                self.scanning = true;
-                let dir = self.dir.clone();
-
-                Task::perform(
-                    // async move { scan::scan_dirs("test.db", vec![dir.clone(), dir]).unwrap() },
-                    async move { scan::scan_dir("test.db", dir, true) },
-                    |res| {
-                        if let Some(res) = res {
-                            println!("{}", res.successes.len());
-                            println!("{}", res.failures.len());
-                        }
-                        Message::ScanComplete
-                    },
-                )
-            }
-            Message::ScanComplete => {
-                self.scanning = false;
+            Message::Iced(toggle) => {
+                self.iced = toggle;
                 Task::none()
             }
-            Message::Fetch => {
-                let items = self
-                    .db
-                    .get_shows(None, None, Filter::none(), Sort::default(), |item| item)
-                    .unwrap();
-
-                self.items = items;
-
+            Message::Custom(toggle) => {
+                self.custom = toggle;
+                Task::none()
+            }
+            Message::Extra(toggle) => {
+                self.extra = toggle;
                 Task::none()
             }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let items = self
-            .items
-            .iter()
-            .map(|item| text(item.name()).size(H7).into());
-        let items = column(items).spacing(10);
+        let iced = widget::toggler(self.iced)
+            .on_toggle(Message::Iced)
+            .label("Iced");
+        let custom = widgets::toggler(self.custom)
+            .on_toggle(Message::Custom)
+            .duration(Duration::from_millis(200))
+            .label("Custom");
+        let extra = widgets::toggler(self.extra)
+            .on_toggle(Message::Extra)
+            .label("Extra");
 
-        let scanning: Element<'_, Message> = if self.scanning {
-            text("Scanning.....").into()
-        } else {
-            empty()
-        };
-
-        let dir = text(&self.dir.path);
-
-        let actions = row!(
-            button("Scan").on_press(Message::Scan),
-            button("Fetch").on_press(Message::Fetch)
-        )
-        .spacing(50.0);
-
-        let content = column!(dir, actions, scanning, items)
-            .spacing(8.0)
-            .align_x(Horizontal::Center);
+        let content = column!(iced, custom, extra).spacing(20.0);
 
         let content = center(content);
 
