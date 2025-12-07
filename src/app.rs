@@ -41,6 +41,7 @@ pub enum FetchId {
 #[derive(Clone, Debug)]
 pub enum Message {
     FontLoad(Result<(), font::Error>),
+    ExitRequested(window::Id),
     Exit(window::Id),
     WindowId(Option<window::Id>),
     CloseToast(usize),
@@ -125,7 +126,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn boot(config: Config, db: db::Database, errors: Vec<String>) -> (Self, Task<Message>) {
+    pub fn boot(
+        config: Config,
+        db: db::Database,
+        errors: impl IntoIterator<Item = String>,
+    ) -> (Self, Task<Message>) {
         let load_errors = Task::done(Message::PushToasts(
             errors
                 .into_iter()
@@ -203,19 +208,24 @@ impl App {
                     Task::none()
                 }
             }
-            Message::Exit(id) => {
+            Message::ExitRequested(id) => {
                 let Some(own) = &self.window else {
                     return Task::none();
                 };
 
-                if id == *own {
-                    self.player.take();
-                    self.screen = Screen::Home;
-                    window::close::<Message>(*own).discard()
-                } else {
-                    Task::none()
+                if id != *own {
+                    return Task::none();
+                }
+
+                self.player.take();
+                self.screen = Screen::Home;
+
+                match self.config.save() {
+                    Ok(_) => Task::done(Message::Exit(id)),
+                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
                 }
             }
+            Message::Exit(id) => window::close::<Message>(id).discard(),
             Message::PushToast(message, status) => {
                 self.push_toast(toast::Toast::new(message, status));
                 Task::none()
@@ -790,7 +800,7 @@ impl App {
             Message::Key { key, modifiers }
         });
 
-        let exit = window::close_requests().map(Message::Exit);
+        let exit = window::close_requests().map(Message::ExitRequested);
 
         let home = self.home.subscription();
 

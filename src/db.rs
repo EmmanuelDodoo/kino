@@ -973,14 +973,13 @@ impl Database {
 
     pub fn open_with_dummies(
         path: impl AsRef<Path>,
-        schema: impl AsRef<Path>,
         dummies: impl AsRef<Path>,
     ) -> crate::error::Result<Database> {
         let exists = path.as_ref().try_exists()?;
         let conn = Database::open(path)?;
 
         if !exists {
-            let schema = read_to_string(schema)?;
+            let schema = include_str!("../schema.sql");
             conn.execute_batch(&schema)?;
 
             let dummies = read_to_string(dummies)?;
@@ -990,15 +989,12 @@ impl Database {
         Ok(conn)
     }
 
-    pub fn open_with_schema(
-        db: impl AsRef<Path>,
-        schema: impl AsRef<Path>,
-    ) -> crate::error::Result<Database> {
+    pub fn open_with_schema(db: impl AsRef<Path>) -> crate::error::Result<Database> {
         let exists = db.as_ref().try_exists()?;
         let conn = Database::open(db)?;
 
         if !exists {
-            let schema = read_to_string(schema)?;
+            let schema = include_str!("../schema.sql");
             conn.execute_batch(&schema)?;
         }
 

@@ -97,46 +97,29 @@ pub enum BootMode {
 
 impl BootFn<App, app::Message> for BootMode {
     fn boot(&self) -> (App, Task<app::Message>) {
-        use std::fs::read_to_string;
-
-        let config_path = "config.toml";
-
-        let mut errors = Vec::with_capacity(3);
-
-        let config = match self {
-            Self::Dev | Self::Dummies => Config::dev(),
-            Self::Prod => read_to_string(config_path)
-                .inspect_err(|error| {
-                    if !matches!(error.kind(), std::io::ErrorKind::NotFound) {
-                        errors.push(format!("Config file error. \n{error}"))
-                    }
-                })
-                .ok()
-                .map(|config| {
-                    toml::from_str::<Config>(&config)
-                        .inspect_err(|error| {
-                            errors.push(format!(
-                                "Config file error. \n{}",
-                                error.message().to_owned()
-                            ))
-                        })
-                        .ok()
-                })
-                .flatten()
-                .unwrap_or_else(|| Config::defaults()),
-        };
-
-        let db = match self {
-            Self::Dev => db::Database::open_with_schema(config.db_path(), config.schema_path()),
+        match self {
             Self::Dummies => {
+                let config = Config::dev();
                 let dummies = "dummy.txt";
-                db::Database::open_with_dummies(config.db_path(), config.schema_path(), dummies)
+                let db = db::Database::open_with_dummies(config.db_path(), dummies)
+                    .expect("Failed to open dummy database");
+                App::boot(config, db, std::iter::empty())
             }
-            Self::Prod => db::Database::open_with_schema(config.db_path(), config.schema_path()),
-        }
-        .expect("Failed to open DB");
+            Self::Dev => {
+                let config = Config::dev();
+                let db = db::Database::open_with_schema(config.db_path())
+                    .expect("Failed to open dev database");
 
-        App::boot(config, db, errors)
+                App::boot(config, db, std::iter::empty())
+            }
+            Self::Prod => {
+                let (config, errors) = Config::load();
+                let db = db::Database::open_with_schema(config.db_path())
+                    .expect("Failed to open Database");
+
+                App::boot(config, db, errors)
+            }
+        }
     }
 }
 
@@ -198,18 +181,24 @@ impl Playground {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let iced = widget::toggler(self.iced)
-            .on_toggle(Message::Iced)
-            .label("Iced");
-        let custom = widgets::toggler(self.custom)
-            .on_toggle(Message::Custom)
-            .duration(Duration::from_millis(200))
-            .label("Custom");
-        let extra = widgets::toggler(self.extra)
-            .on_toggle(Message::Extra)
-            .label("Extra");
+        // let iced = widget::toggler(self.iced)
+        //     .on_toggle(Message::Iced)
+        //     .label("Iced");
+        // let custom = widgets::toggler(self.custom)
+        //     .on_toggle(Message::Custom)
+        //     .duration(Duration::from_millis(200))
+        //     .label("Custom");
+        // let extra = widgets::toggler(self.extra)
+        //     .on_toggle(Message::Extra)
+        //     .label("Extra");
+        //
+        // let content = column!(iced, custom, extra).spacing(20.0);
+        let handle = image::Handle::from_path("assets/fantastic.qal.png");
 
-        let content = column!(iced, custom, extra).spacing(20.0);
+        let content = image(handle.clone())
+            .height(400)
+            .width(400.0 * 2.0 / 3.0)
+            .content_fit(ContentFit::Contain);
 
         let content = center(content);
 

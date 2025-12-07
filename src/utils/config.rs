@@ -1,7 +1,7 @@
 use super::{Action, HomeAction, Layout, PlayerAction, Screen, SettingsAction};
 pub use keys::{KeyModifier, KeyPress, KeyStore};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub enum AppTheme {
@@ -258,7 +258,7 @@ impl GeneralSettings {
     fn debug_defaults() -> Self {
         Self {
             layout: Layout::default(),
-            refresh_interval: Duration::from_secs(10),
+            refresh_interval: Duration::from_secs(30),
             theme: AppTheme::default(),
             recents_limit: Some(5),
             search_limit: Some(5),
@@ -340,20 +340,88 @@ impl From<General> for GeneralSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-    #[serde(default = "Config::defaults")]
+#[serde(default = "Config::defaults")]
 pub struct Config {
     pub video: VideoSettings,
     pub general: GeneralSettings,
     #[serde(rename = "keybindings")]
     pub keystore: KeyStore,
+    #[serde(skip)]
+    config_dir: Option<PathBuf>,
 }
 
 impl Config {
+    const CONFIG_PATH: &str = "config.toml";
+    const DEV_PATH: &str = ".dev";
+
+    pub fn load() -> (Self, Vec<String>) {
+        use directories::ProjectDirs;
+        use std::fs::{create_dir_all, read_to_string};
+
+        let mut errors = Vec::with_capacity(3);
+
+        let project = ProjectDirs::from("", "", "kino").expect("Cannot create project directory");
+        let config_dir = project.config_local_dir();
+        let images = config_dir.join("images");
+
+        // todo: Scripts later on as well
+        create_dir_all(images).expect("Cannot create project directory structure");
+
+        let config_path = config_dir.join(Self::CONFIG_PATH);
+
+        let config = match read_to_string(config_path).map_err(|error| error.kind()) {
+            Ok(config) => config,
+            Err(std::io::ErrorKind::NotFound) => {
+                let mut config = Config::defaults();
+                config.config_dir = Some(config_dir.to_path_buf());
+                return (config, errors);
+            }
+            Err(error) => {
+                errors.push(format!("Config file reading error.\n{error}"));
+
+                let mut config = Config::defaults();
+                config.config_dir = Some(config_dir.to_path_buf());
+
+                return (config, errors);
+            }
+        };
+
+        let mut config = match toml::from_str::<Config>(&config) {
+            Ok(config) => config,
+            Err(error) => {
+                errors.push(format!("Config file loading error.\n{error}"));
+
+                let mut config = Config::defaults();
+                config.config_dir = Some(config_dir.to_path_buf());
+
+                return (config, errors);
+            }
+        };
+
+        config.config_dir = Some(config_dir.to_path_buf());
+
+        (config, errors)
+    }
+
+    pub fn save(&self) -> Result<(), String> {
+        use std::fs::write;
+
+        let path = match &self.config_dir {
+            Some(dir) => dir.join(Self::CONFIG_PATH),
+            None => [Self::DEV_PATH, Self::CONFIG_PATH].iter().collect(),
+        };
+
+        let config = toml::to_string_pretty(self).map_err(|error| error.to_string())?;
+
+        write(path, config).map_err(|error| error.to_string())
+    }
+
     pub fn defaults() -> Self {
         Self {
             video: VideoSettings::defaults(),
             general: GeneralSettings::defaults(),
             keystore: KeyStore::defaults(),
+            config_dir: None,
         }
     }
 
@@ -362,6 +430,7 @@ impl Config {
             general: GeneralSettings::debug_defaults(),
             video: VideoSettings::defaults(),
             keystore: KeyStore::defaults(),
+            config_dir: Some(PathBuf::from(Self::DEV_PATH)),
         }
     }
 
@@ -381,23 +450,23 @@ impl Config {
         self.general.search_limit
     }
 
-    pub fn db_path(&self) -> String {
-        //todo!()
-        "test.db".to_string()
+    pub fn db_path(&self) -> PathBuf {
+        self.config_dir
+            .as_ref()
+            .map(|dir| dir.join("kino.db"))
+            .unwrap_or_else(|| [&Self::DEV_PATH, "kino.db"].iter().collect())
     }
 
-    pub fn images_path(&self) -> String {
-        // todo
-        "assets/temp".to_owned()
-    }
-
-    pub fn schema_path(&self) -> String {
-        "schema.sql".to_owned()
+    pub fn images_path(&self) -> PathBuf {
+        self.config_dir
+            .as_ref()
+            .map(|dir| dir.join("images"))
+            .unwrap_or_else(|| [&Self::DEV_PATH, "images"].iter().collect())
     }
 
     pub fn fetching_interval(&self) -> Duration {
         // todo
-        Duration::from_secs(10)
+        Duration::from_secs(60)
     }
 }
 
@@ -1280,7 +1349,7 @@ mod keys {
         fn empty() -> Self {
             Self {
                 actions: None,
-                defaults: Some(false)
+                defaults: Some(false),
             }
         }
     }

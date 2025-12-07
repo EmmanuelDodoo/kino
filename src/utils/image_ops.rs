@@ -19,6 +19,32 @@ fn open(path: &str) -> Option<DynamicImage> {
         })
 }
 
+pub fn default_poster() -> Option<Handle> {
+    use std::io::Cursor;
+
+    let default = include_bytes!("default.png");
+    let default = Cursor::new(default);
+
+    let img = ImageReader::new(default)
+        .with_guessed_format()
+        .inspect_err(|error| eprintln!("Default poster opening error. Error\n{error}"))
+        .ok()
+        .and_then(|reader| {
+            reader
+                .decode()
+                .inspect_err(|error| eprintln!("Default poster opening error. Error\n{error}"))
+                .ok()
+        })?;
+
+    let img = img.to_rgba8();
+
+    Some(Handle::from_rgba(
+        img.width(),
+        img.height(),
+        bytes::Bytes::from(img.into_raw()),
+    ))
+}
+
 pub fn collage<'a>(
     paths: impl Iterator<Item = &'a str>,
     width: u32,

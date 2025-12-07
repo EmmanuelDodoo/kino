@@ -10,6 +10,8 @@ bytes = "1"
 
 chrono = { version = "0.4", features = ["std", "now"]}
 
+directories = "6"
+
 fancy-regex = "0.16"
 
 glib = "0.20" # gobject traits and error type

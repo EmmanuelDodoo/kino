@@ -1,8 +1,8 @@
 use crate::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
-use crate::utils::empty;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Filter, Sort, collage, sample_complement, styles};
+use crate::utils::{default_poster, empty};
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
@@ -323,8 +323,11 @@ impl<T: Media> Thumbnail<T> {
         let sample_color = media.poster().and_then(sample_complement);
 
         //todo: Sample color is not great for current default poster
-        let poster = media.poster().unwrap_or("assets/images/default.png");
-        let poster = Some(Handle::from_path(poster));
+        let poster = match media.poster() {
+            Some(poster) => Some(Handle::from_path(poster)),
+            None => default_poster(),
+        };
+
         let backdrop = media.backdrop().map(Handle::from_path);
 
         Self {
@@ -890,11 +893,10 @@ pub struct SearchView {
 
 impl SearchView {
     pub fn new(item: SearchItem) -> Self {
-        let poster = item
-            .poster
-            .as_deref()
-            .unwrap_or("assets/images/default.png");
-        let poster = Some(Handle::from_path(poster));
+        let poster = match &item.poster {
+            Some(poster) => Some(Handle::from_path(poster)),
+            None => default_poster(),
+        };
         Self {
             snippet: markdown::Content::parse(&item.snippet),
             item,
