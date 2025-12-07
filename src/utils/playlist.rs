@@ -131,7 +131,7 @@ impl Playlist {
     pub fn merge(mut self, mut other: Self, flip: bool) -> Self {
         let total = self.items.len() + other.items.len();
         let current = if flip {
-            other.current.min(total.saturating_sub(1))
+            (self.items.len() + other.current).min(total.saturating_sub(1))
         } else {
             self.current
         };

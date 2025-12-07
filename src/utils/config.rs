@@ -305,8 +305,16 @@ impl From<GeneralSettings> for General {
             layout: (layout != defaults.layout).then_some(layout),
             refresh_interval: (refresh_interval != defaults.refresh_interval)
                 .then_some(refresh_interval),
-            recents_limit,
-            search_limit,
+            recents_limit: if recents_limit != defaults.recents_limit {
+                recents_limit
+            } else {
+                None
+            },
+            search_limit: if search_limit != defaults.search_limit {
+                search_limit
+            } else {
+                None
+            },
             theme: (theme != defaults.theme).then_some(theme),
             scan_discoverer: (scan_discoverer != defaults.scan_discoverer)
                 .then_some(scan_discoverer),
@@ -337,8 +345,16 @@ impl From<General> for GeneralSettings {
         Self {
             layout: layout.unwrap_or(defaults.layout),
             refresh_interval: refresh_interval.unwrap_or(defaults.refresh_interval),
-            recents_limit,
-            search_limit,
+            recents_limit: if recents_limit.is_none() {
+                defaults.recents_limit
+            } else {
+                recents_limit
+            },
+            search_limit: if search_limit.is_none() {
+                defaults.search_limit
+            } else {
+                search_limit
+            },
             theme: theme.unwrap_or(defaults.theme),
             scan_discoverer: scan_discoverer.unwrap_or(defaults.scan_discoverer),
             auth_token: auth_token.unwrap_or(defaults.auth_token),

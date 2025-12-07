@@ -219,12 +219,13 @@ impl App {
                     return Task::none();
                 }
 
-                self.player.take();
-                self.screen = Screen::Home;
+                let stats = self.exit_player();
 
                 match self.config.save() {
-                    Ok(_) => Task::done(Message::Exit(id)),
-                    Err(error) => Task::done(Message::PushToast(error, toast::Status::Error)),
+                    Ok(_) => stats.chain(Task::done(Message::Exit(id))),
+                    Err(error) => {
+                        stats.chain(Task::done(Message::PushToast(error, toast::Status::Error)))
+                    }
                 }
             }
             Message::Exit(id) => window::close::<Message>(id).discard(),
@@ -274,8 +275,8 @@ impl App {
 
                 Task::none()
             }
-            Message::PlayItem(item) => self.play_items(std::iter::once(item)),
-            Message::PlayItems(items) => self.play_items(items.into_iter()),
+            Message::PlayItem(item) => self.play_items(std::iter::once(item), true),
+            Message::PlayItems(items) => self.play_items(items.into_iter(), false),
             Message::PlayCollectionItems { id, items } => {
                 let items = match self.db.get_collection_items(id) {
                     Ok(items) => items,
@@ -296,7 +297,7 @@ impl App {
                     )
                 });
 
-                self.play_items(items)
+                self.play_items(items, false)
             }
             Message::Key { key, modifiers } => {
                 let keypress = KeyPress::with_modifiers(key, modifiers);
@@ -320,19 +321,7 @@ impl App {
             Message::Back => match self.screen {
                 Screen::Home => self.home.back(now),
                 Screen::Player => {
-                    self.screen = Screen::Home;
-                    let stats = match self.player.take() {
-                        Some(mut player) => {
-                            self.config.video.speed = player.settings.speed;
-                            self.config.video.show_subtitles = player.settings.show_subtitles;
-                            self.config.video.volume = player.settings.volume;
-
-                            player.stats()
-                        }
-                        None => None,
-                    };
-
-                    let stats = stats.map(Task::done).unwrap_or_default();
+                    let stats = self.exit_player();
 
                     Task::batch([self.home.refresh(now), stats])
                 }
@@ -934,7 +923,7 @@ impl App {
         }
     }
 
-    fn play_items(&mut self, items: impl Iterator<Item = ItemId>) -> Task<Message> {
+    fn play_items(&mut self, items: impl Iterator<Item = ItemId>, flip: bool) -> Task<Message> {
         let mut errors = vec![];
         let mut playlist = Playlist::empty();
 
@@ -958,7 +947,7 @@ impl App {
                     .into_iter()
                     .map(|message| (message, toast::Status::Warn));
                 errors.extend(invalids);
-                playlist = playlist.merge(item_playlist, false)
+                playlist = playlist.merge(item_playlist, flip)
             }
         }
 
@@ -986,6 +975,22 @@ impl App {
                 .map(|settings| settings.action(sat))
                 .unwrap_or_default(),
         }
+    }
+
+    fn exit_player(&mut self) -> Task<Message> {
+        self.screen = Screen::Home;
+        let stats = match self.player.take() {
+            Some(mut player) => {
+                self.config.video.speed = player.settings.speed;
+                self.config.video.show_subtitles = player.settings.show_subtitles;
+                self.config.video.volume = player.settings.volume;
+
+                player.stats()
+            }
+            None => None,
+        };
+
+        stats.map(Task::done).unwrap_or_default()
     }
 }
 

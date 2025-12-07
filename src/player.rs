@@ -363,6 +363,7 @@ impl Manager {
             }
             ManagerMessage::TogglePlay => self.play_toggle(),
             ManagerMessage::ChangeVolume(volume) => {
+                let volume = volume.clamp(0.0, 1.0);
                 self.settings.volume = volume;
 
                 if let Some(Player { video, .. }) = self.player_mut() {
@@ -500,6 +501,7 @@ impl Manager {
         };
 
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
+
         let options = column!(
             row!(
                 sized_button(icons::ELLIPSIS_VER, icon_size)
@@ -511,11 +513,14 @@ impl Manager {
         )
         .align_x(Horizontal::Right)
         .width(Self::WIDTH);
-        let back = container(
+
+        let back = container(tooltip(
             sized_button(icons::BACK, icon_size)
                 .on_press(ManagerMessage::PreviousScreen)
                 .style(styles::button::text_slate),
-        )
+            "Exit Player",
+            tp::Position::Bottom,
+        ))
         .align_x(Horizontal::Left)
         .align_y(Vertical::Center)
         .width(Self::WIDTH);
@@ -632,36 +637,45 @@ impl Manager {
                 tp,
             );
 
-            row!(
+            let subtitles = if self.settings.show_subtitles {
                 tooltip(
-                    sized_button(
-                        if self.settings.show_subtitles {
-                            icons::SUBTITLES_OFF
-                        } else {
-                            icons::SUBTITLES_ON
-                        },
-                        icon_size
-                    )
-                    .on_press(ManagerMessage::ToggleSubtitles)
-                    .style(styles::button::text_slate),
-                    "Subtitles",
-                    tp
-                ),
-                speed,
-                sized_button(
-                    if self.settings.muted {
-                        icons::MUTE
-                    } else {
-                        icons::VOLUME
-                    },
-                    icon_size
+                    sized_button(icons::SUBTITLES_OFF, icon_size)
+                        .on_press(ManagerMessage::ToggleSubtitles)
+                        .style(styles::button::text_slate),
+                    "Subtitles off",
+                    tp,
                 )
-                .on_press(ManagerMessage::ToggleMute)
-                .style(styles::button::text_slate),
-                volume
-            )
-            .spacing(4.0)
-            .align_y(Vertical::Center)
+            } else {
+                tooltip(
+                    sized_button(icons::SUBTITLES_ON, icon_size)
+                        .on_press(ManagerMessage::ToggleSubtitles)
+                        .style(styles::button::text_slate),
+                    "Subtitles on",
+                    tp,
+                )
+            };
+
+            let mute = if self.settings.muted {
+                tooltip(
+                    sized_button(icons::MUTE, icon_size)
+                        .on_press(ManagerMessage::ToggleMute)
+                        .style(styles::button::text_slate),
+                    "Unmute",
+                    tp,
+                )
+            } else {
+                tooltip(
+                    sized_button(icons::VOLUME, icon_size)
+                        .on_press(ManagerMessage::ToggleMute)
+                        .style(styles::button::text_slate),
+                    "Mute",
+                    tp,
+                )
+            };
+
+            row!(subtitles, speed, mute, volume)
+                .spacing(4.0)
+                .align_y(Vertical::Center)
         }
         .width(Self::WIDTH + 100.0);
 
@@ -724,19 +738,52 @@ impl Manager {
                     .into(),
             };
 
-            row!(
-                previous,
+            let seek_amt = self.settings.seek_change_amt.trunc() as i16;
+            let sb = tooltip(
                 sized_button(icons::SEEK_BACK, size)
                     .style(styles::button::text_slate)
                     .on_press_maybe(self.is_ready(ManagerMessage::SeekBack(false))),
-                play,
+                format!(
+                    "Backward {} sec{}",
+                    seek_amt,
+                    if seek_amt.abs() > 1 { "s" } else { "" }
+                ),
+                tp,
+            );
+
+            let sf = tooltip(
                 sized_button(icons::SEEK_FRONT, size)
                     .style(styles::button::text_slate)
                     .on_press_maybe(self.is_ready(ManagerMessage::SeekFront(false))),
-                next,
+                format!(
+                    "Forward {} sec{}",
+                    seek_amt,
+                    if seek_amt.abs() > 1 { "s" } else { "" }
+                ),
+                tp,
+            );
+
+            row!(previous, sb, play, sf, next,)
+                .spacing(2.0)
+                .align_y(Vertical::Center)
+        };
+
+        let full = if self.is_fullscreen {
+            tooltip(
+                sized_button(icons::MINIMIZE, icon_size)
+                    .style(styles::button::text_slate)
+                    .on_press(ManagerMessage::ToggleFullscreen),
+                "Exit Fullscreen",
+                tp,
             )
-            .spacing(2.0)
-            .align_y(Vertical::Center)
+        } else {
+            tooltip(
+                sized_button(icons::MAXIMIZE, icon_size)
+                    .style(styles::button::text_slate)
+                    .on_press(ManagerMessage::ToggleFullscreen),
+                "Enter Fullscreen",
+                tp,
+            )
         };
 
         let right = column!(
@@ -765,16 +812,7 @@ impl Manager {
                     "Playlist",
                     tp
                 ),
-                sized_button(
-                    if self.is_fullscreen {
-                        icons::MINIMIZE
-                    } else {
-                        icons::MAXIMIZE
-                    },
-                    icon_size
-                )
-                .style(styles::button::text_slate)
-                .on_press(ManagerMessage::ToggleFullscreen)
+                full
             )
             .spacing(2.0)
             .align_y(Vertical::Center)
@@ -870,7 +908,7 @@ impl Manager {
                 ..
             }) => modal(
                 content,
-                draw_collection_add(selected, collections.iter()),
+                draw_collection_add(selected, collections.is_empty(), collections.iter()),
                 ManagerMessage::CloseView,
             ),
         }
@@ -1307,17 +1345,14 @@ fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
             Button::Right => ManagerMessage::Config,
             _ => return None,
         },
-        MouseAction::Scroll(delta) => match delta {
-            iced::mouse::ScrollDelta::Lines { y, .. } => ManagerMessage::ChangeVolume(y as f64),
-            _ => return None,
-        },
+        MouseAction::Scroll(_) => return None,
     };
 
     Some(msg)
 }
 
 fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, ManagerMessage> {
-    let width = 325.0;
+    let width = 375.0;
     let rule_height = 1.0;
     let padding = [6, 12];
 
@@ -1372,7 +1407,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
                 .height(16)
                 .style(color),
         )
-        .max_width(width * 0.80);
+        .max_width(width * 0.75);
         let duration = format!("{hrs:02}:{mins:02}:{secs:02}");
         let duration = text(duration).size(size).font(font).height(16).style(color);
 
@@ -1388,7 +1423,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         .into()
     });
 
-    let items = container(column(items).spacing(5)).padding(padding);
+    let items = container(column(items).spacing(8)).padding(padding);
 
     let actions = {
         let position = tp::Position::Top;
@@ -1466,6 +1501,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
 
 fn draw_collection_add<'a>(
     selected: &'a HashSet<CollectionId>,
+    is_empty: bool,
     collections: impl Iterator<Item = &'a SimpleCollection>,
 ) -> Element<'a, ManagerMessage> {
     let title = text("Collections").size(H6);
@@ -1515,7 +1551,7 @@ fn draw_collection_add<'a>(
     let collections = scrollable(collections).spacing(16.0);
 
     let collections = container(collections)
-        .padding([6, 8])
+        .padding(if is_empty { [0, 0] } else { [6, 8] })
         .style(|theme: &Theme| {
             let color = theme.extended_palette().secondary.strong.color;
             let default = styles::container::transparent(theme);
