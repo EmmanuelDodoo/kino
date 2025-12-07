@@ -1,8 +1,8 @@
 use crate::db::Database;
 use crate::models::{EpisodeId, MovieId, SeasonId, ShowId};
 use reqwest::{
-    Client, ClientBuilder, Request,
-    header::{ACCEPT, AUTHORIZATION, HeaderMap},
+    Client, ClientBuilder,
+    header::{ACCEPT, HeaderMap},
 };
 use serde::Deserialize;
 use std::ops::Deref;
@@ -13,10 +13,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
 use tokio::time;
 
-use rusqlite::{
-    Result, Row,
-    types::{ToSqlOutput, Value, ValueRef},
-};
+use rusqlite::types::{ToSqlOutput, ValueRef};
 
 static CLIENT: LazyLock<Client> = LazyLock::new(|| {
     let mut headers = HeaderMap::new();
@@ -31,7 +28,6 @@ static CLIENT: LazyLock<Client> = LazyLock::new(|| {
 #[derive(Deserialize, Debug, Clone)]
 struct ImageConfig {
     base_url: String,
-    secure_base_url: String,
     backdrop_sizes: Vec<String>,
     poster_sizes: Vec<String>,
 }
@@ -70,18 +66,15 @@ struct TMDBShow {
 
 #[derive(Deserialize, Debug, Clone)]
 struct TMDBSeason {
-    id: u32,
     air_date: String,
     name: String,
     overview: String,
     poster_path: String,
-    season_number: u32,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 struct TMDBEpisode {
     air_date: String,
-    id: u32,
     name: String,
     overview: String,
     still_path: String,
@@ -292,7 +285,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
     };
     let mut writer = BufWriter::new(file);
 
-    if let None = writer
+    if writer
         .write(bytes.deref())
         .await
         .inspect_err(|error| {
@@ -302,10 +295,11 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
             )
         })
         .ok()
+        .is_none()
     {
         return false;
     };
-    if let None = writer
+    if writer
         .flush()
         .await
         .inspect_err(|error| {
@@ -315,6 +309,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
             )
         })
         .ok()
+        .is_none()
     {
         return false;
     };
@@ -340,18 +335,16 @@ pub async fn fetcher(
     let mut image_config = None;
 
     loop {
-        if !auth_rx.is_empty() {
-            if let Some(new_auth) = auth_rx.recv().await {
-                auth = new_auth;
-                image_config = get_config(&auth)
-                    .await
-                    .inspect_err(|error| {
-                        eprintln!(
-                            "\nGetting image config with auth {auth} failed. \nError{error}\n",
-                        )
-                    })
-                    .ok();
-            }
+        if !auth_rx.is_empty()
+            && let Some(new_auth) = auth_rx.recv().await
+        {
+            auth = new_auth;
+            image_config = get_config(&auth)
+                .await
+                .inspect_err(|error| {
+                    eprintln!("\nGetting image config with auth {auth} failed. \nError{error}\n",)
+                })
+                .ok();
         }
 
         let Some(image_config) = image_config.as_ref() else {
@@ -435,7 +428,7 @@ mod movies {
         db: &mut Database,
         images: Vec<(MovieId, String, String)>,
     ) -> rusqlite::Result<usize> {
-        use rusqlite::types::{ToSqlOutput, Value, ValueRef};
+        use rusqlite::types::ToSqlOutput;
 
         let trans = db.transaction()?;
         let sql = "UPDATE movie SET  poster=:poster, backdrop=:backdrop WHERE id=:id";
@@ -513,7 +506,6 @@ mod movies {
 
         if let Err(error) = insert_images(db, images) {
             eprintln!("{error}");
-            return;
         }
     }
 }
@@ -658,7 +650,6 @@ mod shows {
 
         if let Err(error) = insert_images(db, images) {
             eprintln!("{error}");
-            return;
         }
     }
 }
@@ -781,7 +772,6 @@ mod seasons {
 
         if let Err(error) = insert_images(db, images) {
             eprintln!("{error}");
-            return;
         }
     }
 }
@@ -914,7 +904,6 @@ mod episodes {
 
         if let Err(error) = insert_images(db, images) {
             eprintln!("{error}");
-            return;
         }
     }
 }

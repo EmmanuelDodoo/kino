@@ -932,7 +932,7 @@ impl Settings {
                 size / RATIO,
             );
 
-            let input = text_input("Token", &auth_token)
+            let input = text_input("Token", auth_token)
                 .width(500)
                 .size(size)
                 .padding(padding)

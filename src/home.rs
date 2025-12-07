@@ -339,7 +339,6 @@ pub struct Home {
     view: Option<View>,
 
     scroll: Scroll,
-    pending: Vec<Task<HomeMessage>>,
 
     recent_limit: Option<i32>,
 
@@ -389,7 +388,6 @@ impl Home {
             scroll: Scroll::new(),
             pages: HashMap::default(),
             current_page: None,
-            pending: vec![],
             collections: Vec::default(),
             view: None,
             recent_limit,

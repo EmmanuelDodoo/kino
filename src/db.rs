@@ -1,6 +1,6 @@
 use crate::models::{
     CollectionId, Directory, DirectoryId, EComment, ECommentId, EpisodeId, MComment, MCommentId,
-    Movie, MovieId, SearchItem, SeasonId, Show, ShowId,
+    MovieId, SearchItem, SeasonId, ShowId,
     collection::{self, ItemId},
 };
 
@@ -980,7 +980,7 @@ impl Database {
 
         if !exists {
             let schema = include_str!("../schema.sql");
-            conn.execute_batch(&schema)?;
+            conn.execute_batch(schema)?;
 
             let dummies = read_to_string(dummies)?;
             conn.execute_batch(&dummies)?;
@@ -995,7 +995,7 @@ impl Database {
 
         if !exists {
             let schema = include_str!("../schema.sql");
-            conn.execute_batch(&schema)?;
+            conn.execute_batch(schema)?;
         }
 
         Ok(conn)

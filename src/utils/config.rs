@@ -337,8 +337,8 @@ impl From<General> for GeneralSettings {
         Self {
             layout: layout.unwrap_or(defaults.layout),
             refresh_interval: refresh_interval.unwrap_or(defaults.refresh_interval),
-            recents_limit: recents_limit,
-            search_limit: search_limit,
+            recents_limit,
+            search_limit,
             theme: theme.unwrap_or(defaults.theme),
             scan_discoverer: scan_discoverer.unwrap_or(defaults.scan_discoverer),
             auth_token: auth_token.unwrap_or(defaults.auth_token),
@@ -463,14 +463,14 @@ impl Config {
         self.config_dir
             .as_ref()
             .map(|dir| dir.join("kino.db"))
-            .unwrap_or_else(|| [&Self::DEV_PATH, "kino.db"].iter().collect())
+            .unwrap_or_else(|| [Self::DEV_PATH, "kino.db"].iter().collect())
     }
 
     pub fn images_path(&self) -> PathBuf {
         self.config_dir
             .as_ref()
             .map(|dir| dir.join("images"))
-            .unwrap_or_else(|| [&Self::DEV_PATH, "images"].iter().collect())
+            .unwrap_or_else(|| [Self::DEV_PATH, "images"].iter().collect())
     }
 
     pub fn fetching_interval(&self) -> Duration {
@@ -655,7 +655,7 @@ mod keys {
         serializer.serialize_str(&format!("{named:?}"))
     }
 
-    fn deserialize_named<'de, D>(deserializer: D) -> Result<keyboard::key::Named, D::Error>
+    fn _deserialize_named<'de, D>(deserializer: D) -> Result<keyboard::key::Named, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -663,7 +663,7 @@ mod keys {
         parse_named(&s).map_err(serde::de::Error::custom)
     }
 
-    fn deserialize_unidentified<'de, D>(deserializer: D) -> Result<keyboard::Key, D::Error>
+    fn _deserialize_unidentified<'de, D>(deserializer: D) -> Result<keyboard::Key, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -1348,18 +1348,6 @@ mod keys {
     {
         actions: Option<HashMap<A, Vec<KeyPress>>>,
         defaults: Option<bool>,
-    }
-
-    impl<A> DeInner<A>
-    where
-        A: Eq + Hash + Copy,
-    {
-        fn empty() -> Self {
-            Self {
-                actions: None,
-                defaults: Some(false),
-            }
-        }
     }
 
     impl<A> From<DeInner<A>> for KeyStoreInner<A>
