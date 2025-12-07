@@ -239,6 +239,7 @@ pub struct GeneralSettings {
     pub scan_discoverer: bool,
     pub auth_token: String,
     pub movie_depth: u8,
+    pub fetching_interval: Duration,
 }
 
 impl GeneralSettings {
@@ -252,19 +253,21 @@ impl GeneralSettings {
             scan_discoverer: true,
             auth_token: String::default(),
             movie_depth: 2,
+            fetching_interval: Duration::from_secs(600),
         }
     }
 
     fn debug_defaults() -> Self {
         Self {
             layout: Layout::default(),
-            refresh_interval: Duration::from_secs(30),
+            refresh_interval: Duration::from_secs(120),
             theme: AppTheme::default(),
             recents_limit: Some(5),
             search_limit: Some(5),
             scan_discoverer: false,
             auth_token: String::default(),
             movie_depth: 2,
+            fetching_interval: Duration::from_secs(30),
         }
     }
 }
@@ -279,6 +282,7 @@ struct General {
     scan_discoverer: Option<bool>,
     auth_token: Option<String>,
     movie_depth: Option<u8>,
+    fetching_interval: Option<Duration>,
 }
 
 impl From<GeneralSettings> for General {
@@ -292,6 +296,7 @@ impl From<GeneralSettings> for General {
             scan_discoverer,
             auth_token,
             movie_depth,
+            fetching_interval,
         } = value;
 
         let defaults = GeneralSettings::defaults();
@@ -307,6 +312,8 @@ impl From<GeneralSettings> for General {
                 .then_some(scan_discoverer),
             auth_token: (auth_token != defaults.auth_token).then_some(auth_token),
             movie_depth: (movie_depth != defaults.movie_depth).then_some(movie_depth),
+            fetching_interval: (fetching_interval != defaults.fetching_interval)
+                .then_some(fetching_interval),
         }
     }
 }
@@ -322,6 +329,7 @@ impl From<General> for GeneralSettings {
             scan_discoverer,
             auth_token,
             movie_depth,
+            fetching_interval,
         } = value;
 
         let defaults = GeneralSettings::defaults();
@@ -335,6 +343,7 @@ impl From<General> for GeneralSettings {
             scan_discoverer: scan_discoverer.unwrap_or(defaults.scan_discoverer),
             auth_token: auth_token.unwrap_or(defaults.auth_token),
             movie_depth: movie_depth.unwrap_or(defaults.movie_depth),
+            fetching_interval: fetching_interval.unwrap_or(defaults.fetching_interval),
         }
     }
 }
@@ -465,8 +474,7 @@ impl Config {
     }
 
     pub fn fetching_interval(&self) -> Duration {
-        // todo
-        Duration::from_secs(60)
+        self.general.fetching_interval
     }
 }
 

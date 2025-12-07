@@ -74,7 +74,7 @@ pub enum Message {
         offset: Option<i32>,
     },
     FetchDirectories,
-    Refresh(Instant),
+    Refresh(Instant, bool),
     LastWatched(PlayId),
     VideoStats(PlayItem),
     Key {
@@ -200,8 +200,10 @@ impl App {
                 self.window = window;
                 Task::none()
             }
-            Message::Refresh(refresh) => {
-                if refresh.duration_since(self.last_refresh) >= self.config.refresh_interval() {
+            Message::Refresh(refresh, force) => {
+                if force
+                    || refresh.duration_since(self.last_refresh) >= self.config.refresh_interval()
+                {
                     self.last_refresh = refresh;
                     self.home.refresh(now)
                 } else {
@@ -688,7 +690,8 @@ impl App {
                     Err(error) => Message::PushToast(error.to_string(), toast::Status::Error),
                 };
 
-                let refresh = self.home.refresh(now);
+                let refresh = Task::done(Message::Refresh(now, true));
+
                 let auth = self.config.general.auth_token.clone();
 
                 let auth = if !auth.is_empty() {
@@ -804,7 +807,8 @@ impl App {
 
         let home = self.home.subscription();
 
-        let refresh = time::every(self.config.refresh_interval()).map(Message::Refresh);
+        let refresh =
+            time::every(self.config.refresh_interval()).map(|at| Message::Refresh(at, false));
 
         Subscription::batch([animating, keys, exit, player, refresh, home])
     }

@@ -99,6 +99,7 @@ pub enum SettingsMessage {
     Scroll(scrollable::Viewport),
     Auth(String),
     Refresh(String),
+    Fetch(String),
     MovieDepth(String),
     ThumbnailInterval(String),
     Recents(String),
@@ -219,6 +220,25 @@ impl Settings {
                 };
 
                 self.config.general.refresh_interval = Duration::from_secs(interval);
+
+                Task::none()
+            }
+            SettingsMessage::Fetch(interval) => {
+                let interval = interval.trim();
+                if interval.is_empty() {
+                    self.config.general.fetching_interval = Duration::ZERO;
+                    return Task::none();
+                }
+
+                let Ok(interval) = interval.parse::<u64>() else {
+                    let msg = Message::PushToast(
+                        format!("Invalid input: {interval}"),
+                        toast::Status::Error,
+                    );
+                    return Task::done(msg);
+                };
+
+                self.config.general.fetching_interval = Duration::from_secs(interval);
 
                 Task::none()
             }
@@ -713,6 +733,7 @@ impl Settings {
             scan_discoverer,
             auth_token,
             movie_depth,
+            fetching_interval,
         } = &self.config.general;
 
         let refresh = {
@@ -723,6 +744,31 @@ impl Settings {
             );
 
             let interval = refresh_interval.as_secs().to_string();
+            let input = text_input("Interval in seconds", &interval)
+                .width(64)
+                .size(size)
+                .padding(padding)
+                .on_input(SettingsMessage::Refresh)
+                .align_x(Horizontal::Right);
+
+            let label = row!(label, icon)
+                .spacing(2)
+                .align_y(Vertical::Center)
+                .width(width);
+
+            row!(label, input)
+                .spacing(spacing)
+                .align_y(Vertical::Center)
+        };
+
+        let fetching_interval = {
+            let label = label_maker("Fetch Interval: ");
+            let icon = help(
+                "How often to scrape TMDB© for new media data in seconds",
+                size / RATIO,
+            );
+
+            let interval = fetching_interval.as_secs().to_string();
             let input = text_input("Interval in seconds", &interval)
                 .width(64)
                 .size(size)
@@ -934,6 +980,7 @@ impl Settings {
             layouts,
             theme,
             auth,
+            fetching_interval,
             movie_depth,
             discoverer,
             dirs,
