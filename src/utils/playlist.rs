@@ -41,12 +41,21 @@ impl PlayItem {
             [&directory, &show, &season, &path].iter().collect()
         };
 
-        Self::new(row, id, full_path)
+        let name = {
+            let show = row.get::<_, String>("show_name")?;
+            let season = row.get::<_, u16>("season_number")?;
+            let name = row.get::<_, String>("name")?;
+
+            format!("{show} - S{season:02}E{name}")
+        };
+
+        Self::new(row, id, full_path, name)
     }
 
     pub fn from_movie(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
         let id = MovieId::from_row(row)?;
         let id = PlayId::Movie(id);
+        let name = row.get::<_, String>("name")?;
 
         let full_path: PathBuf = {
             let path = row.get::<_, String>("path")?;
@@ -54,11 +63,15 @@ impl PlayItem {
             [&directory, &path].iter().collect()
         };
 
-        Self::new(row, id, full_path)
+        Self::new(row, id, full_path, name)
     }
 
-    fn new(row: &rusqlite::Row<'_>, id: PlayId, path: PathBuf) -> rusqlite::Result<Self> {
-        let name = row.get::<_, String>("name")?;
+    fn new(
+        row: &rusqlite::Row<'_>,
+        id: PlayId,
+        path: PathBuf,
+        name: String,
+    ) -> rusqlite::Result<Self> {
         let progress = row.get::<_, f32>("progress")?;
         let duration = row.get::<_, u64>("duration")?;
         let watch_count = row.get::<_, u32>("watch_count")?;

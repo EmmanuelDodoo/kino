@@ -2073,9 +2073,11 @@ impl Home {
                         theme,
                         false,
                     ),
-                    View::CollectionAdd(state) => {
-                        draw_collection_add(state, self.collections.iter())
-                    }
+                    View::CollectionAdd(state) => draw_collection_add(
+                        state,
+                        self.collections.iter(),
+                        self.collections.is_empty(),
+                    ),
                     View::Rating { rating, .. } => draw_rating(rating),
                 };
 
@@ -2976,6 +2978,7 @@ fn sort_collections(collections: &mut [SimpleCollection]) {
 fn draw_collection_add<'a>(
     state: &'a CollectionAddState,
     collections: impl Iterator<Item = &'a SimpleCollection>,
+    is_empty: bool,
 ) -> Element<'a, HomeMessage> {
     let title = text("Collections").size(H6);
 
@@ -3023,7 +3026,7 @@ fn draw_collection_add<'a>(
     let collections = scrollable(collections).spacing(16.0);
 
     let collections = container(collections)
-        .padding([6, 8])
+        .padding(if is_empty { [0, 0] } else { [6, 8] })
         .style(|theme: &Theme| {
             let color = theme.extended_palette().secondary.strong.color;
             let default = styles::container::transparent(theme);

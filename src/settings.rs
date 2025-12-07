@@ -764,7 +764,7 @@ impl Settings {
         let fetching_interval = {
             let label = label_maker("Fetch Interval: ");
             let icon = help(
-                "How often to scrape TMDB© for new media data in seconds",
+                "How often to scrape TMDB© for new media data in seconds. Note this only takes effect on restart.",
                 size / RATIO,
             );
 
@@ -773,7 +773,7 @@ impl Settings {
                 .width(64)
                 .size(size)
                 .padding(padding)
-                .on_input(SettingsMessage::Refresh)
+                .on_input(SettingsMessage::Fetch)
                 .align_x(Horizontal::Right);
 
             let label = row!(label, icon)
