@@ -959,10 +959,7 @@ impl Home {
                         }
 
                         let Ok(number) = number.parse::<u32>() else {
-                            let msg = Message::PushToast(
-                                format!("Invalid input: {number}"),
-                                toast::Status::Error,
-                            );
+                            let msg = Message::error(format!("Invalid input: {number}"));
                             return Task::done(msg);
                         };
 
@@ -998,10 +995,7 @@ impl Home {
                         }
 
                         let Ok(minutes) = minutes.parse::<u64>() else {
-                            let msg = Message::PushToast(
-                                format!("Invalid input: {minutes}"),
-                                toast::Status::Error,
-                            );
+                            let msg = Message::error(format!("Invalid input: {minutes}"));
                             return Task::done(msg);
                         };
 
@@ -1036,10 +1030,7 @@ impl Home {
                         }
 
                         let Ok(hours) = hours.parse::<u64>() else {
-                            let msg = Message::PushToast(
-                                format!("Invalid input: {hours}"),
-                                toast::Status::Error,
-                            );
+                            let msg = Message::error(format!("Invalid input: {hours}"));
                             return Task::done(msg);
                         };
 
@@ -1072,10 +1063,7 @@ impl Home {
                         }
 
                         let Ok(year) = year.parse::<i32>() else {
-                            let msg = Message::PushToast(
-                                format!("Invalid input: {year}"),
-                                toast::Status::Error,
-                            );
+                            let msg = Message::error(format!("Invalid input: {year}"));
                             return Task::done(msg);
                         };
 

@@ -520,6 +520,38 @@ impl Config {
         self.general.search_limit
     }
 
+    pub fn config_path(&self) -> Option<PathBuf> {
+        let path = self
+            .config_dir
+            .as_ref()
+            .map(|dir| dir.join(Self::CONFIG_PATH))?;
+
+        match path.canonicalize() {
+            Ok(path) => Some(path),
+            Err(error) => {
+                let error = error.to_string();
+                tracing::error!(error);
+                Some(path)
+            }
+        }
+    }
+
+    pub fn log_path(&self) -> Option<PathBuf> {
+        let path = self
+            .config_dir
+            .as_ref()
+            .map(|dir| dir.join(Self::LOG_FILE))?;
+
+        match path.canonicalize() {
+            Ok(path) => Some(path),
+            Err(error) => {
+                let error = error.to_string();
+                tracing::error!(error);
+                Some(path)
+            }
+        }
+    }
+
     pub fn db_path(&self) -> PathBuf {
         self.config_dir
             .as_ref()

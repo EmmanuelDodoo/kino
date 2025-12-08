@@ -27,6 +27,7 @@ iced = { git = "https://github.com/iced-rs/iced", rev = "cfd06b4", features = [
 iced_video_player = { git = "https://github.com/EmmanuelDodoo/iced_video_player" }
 # iced_video_player = { path = "../ivp_fork" }
 image = "0.25"
+open = "5.3.3"
 rand = "0.8"
 reqwest = { version = "0.12", features = ["json"] }
 # regex = "1.12"

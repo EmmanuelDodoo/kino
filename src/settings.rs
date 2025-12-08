@@ -97,6 +97,8 @@ pub enum FolderSelectionMessage {
 pub enum SettingsMessage {
     Goto(Page),
     Scroll(scrollable::Viewport),
+    OpenLog,
+    OpenConfig,
     Auth(String),
     Refresh(String),
     Fetch(String),
@@ -196,8 +198,7 @@ impl Settings {
                 }
 
                 let Ok(depth) = depth.parse::<u8>() else {
-                    let msg =
-                        Message::PushToast(format!("Invalid input: {depth}"), toast::Status::Error);
+                    let msg = Message::error(format!("Invalid input: {depth}"));
                     return Task::done(msg);
                 };
 
@@ -212,10 +213,7 @@ impl Settings {
                 }
 
                 let Ok(interval) = interval.parse::<u64>() else {
-                    let msg = Message::PushToast(
-                        format!("Invalid input: {interval}"),
-                        toast::Status::Error,
-                    );
+                    let msg = Message::error(format!("Invalid input: {interval}"));
                     return Task::done(msg);
                 };
 
@@ -231,10 +229,7 @@ impl Settings {
                 }
 
                 let Ok(interval) = interval.parse::<u64>() else {
-                    let msg = Message::PushToast(
-                        format!("Invalid input: {interval}"),
-                        toast::Status::Error,
-                    );
+                    let msg = Message::error(format!("Invalid input: {interval}"));
                     return Task::done(msg);
                 };
 
@@ -250,10 +245,7 @@ impl Settings {
                 }
 
                 let Ok(recents) = recents.parse::<i32>() else {
-                    let msg = Message::PushToast(
-                        format!("Invalid input: {recents}"),
-                        toast::Status::Error,
-                    );
+                    let msg = Message::error(format!("Invalid input: {recents}"));
                     return Task::done(msg);
                 };
 
@@ -269,10 +261,7 @@ impl Settings {
                 }
 
                 let Ok(searches) = searches.parse::<i32>() else {
-                    let msg = Message::PushToast(
-                        format!("Invalid input: {searches}"),
-                        toast::Status::Error,
-                    );
+                    let msg = Message::error(format!("Invalid input: {searches}"));
                     return Task::done(msg);
                 };
 
@@ -288,8 +277,7 @@ impl Settings {
                 }
 
                 let Ok(amt) = amt.parse::<f64>() else {
-                    let msg =
-                        Message::PushToast(format!("Invalid input: {amt}"), toast::Status::Error);
+                    let msg = Message::error(format!("Invalid input: {amt}"));
                     return Task::done(msg);
                 };
 
@@ -305,8 +293,7 @@ impl Settings {
                 }
 
                 let Ok(amt) = amt.parse::<f64>() else {
-                    let msg =
-                        Message::PushToast(format!("Invalid input: {amt}"), toast::Status::Error);
+                    let msg = Message::error(format!("Invalid input: {amt}"));
                     return Task::done(msg);
                 };
 
@@ -322,8 +309,7 @@ impl Settings {
                 }
 
                 let Ok(amt) = amt.parse::<f64>() else {
-                    let msg =
-                        Message::PushToast(format!("Invalid input: {amt}"), toast::Status::Error);
+                    let msg = Message::error(format!("Invalid input: {amt}"));
                     return Task::done(msg);
                 };
 
@@ -339,8 +325,7 @@ impl Settings {
                 }
 
                 let Ok(amt) = amt.parse::<f64>() else {
-                    let msg =
-                        Message::PushToast(format!("Invalid input: {amt}"), toast::Status::Error);
+                    let msg = Message::error(format!("Invalid input: {amt}"));
                     return Task::done(msg);
                 };
 
@@ -356,8 +341,7 @@ impl Settings {
                 }
 
                 let Ok(amt) = amt.parse::<f64>() else {
-                    let msg =
-                        Message::PushToast(format!("Invalid input: {amt}"), toast::Status::Error);
+                    let msg = Message::error(format!("Invalid input: {amt}"));
                     return Task::done(msg);
                 };
 
@@ -373,8 +357,7 @@ impl Settings {
                 }
 
                 let Ok(amt) = amt.parse::<f64>() else {
-                    let msg =
-                        Message::PushToast(format!("Invalid input: {amt}"), toast::Status::Error);
+                    let msg = Message::error(format!("Invalid input: {amt}"));
                     return Task::done(msg);
                 };
 
@@ -390,10 +373,7 @@ impl Settings {
                 }
 
                 let Ok(interval) = interval.parse::<u32>() else {
-                    let msg = Message::PushToast(
-                        format!("Invalid input: {interval}"),
-                        toast::Status::Error,
-                    );
+                    let msg = Message::error(format!("Invalid input: {interval}"));
                     return Task::done(msg);
                 };
 
@@ -593,6 +573,29 @@ impl Settings {
                 self.config.general.scan_discoverer = enable;
 
                 Task::none()
+            }
+            SettingsMessage::OpenLog => {
+                let Some(path) = self.config.log_path() else {
+                    return Task::none();
+                };
+
+                match open::that(path) {
+                    Ok(_) => Task::none(),
+                    Err(error) => {
+                        println!("{error}");
+                        Task::done(Message::error(error))
+                    }
+                }
+            }
+            SettingsMessage::OpenConfig => {
+                let Some(path) = self.config.config_path() else {
+                    return Task::none();
+                };
+
+                match open::that(path) {
+                    Ok(_) => Task::none(),
+                    Err(error) => Task::done(Message::error(error)),
+                }
             }
         }
     }
@@ -973,6 +976,32 @@ impl Settings {
                 .align_y(Vertical::Center)
         };
 
+        let open = {
+            let config = {
+                let label = label_maker("Config File");
+                let icon = icons::icon(icons::EXTERNAL).size(size / RATIO);
+
+                let label = row!(label, icon).spacing(4).align_y(Vertical::Center);
+
+                button(label)
+                    .on_press(SettingsMessage::OpenConfig)
+                    .style(styles::button::text)
+            };
+
+            let log = {
+                let label = label_maker("Log File");
+                let icon = icons::icon(icons::EXTERNAL).size(size / RATIO);
+
+                let label = row!(label, icon).spacing(4).align_y(Vertical::Center);
+
+                button(label)
+                    .on_press(SettingsMessage::OpenLog)
+                    .style(styles::button::text)
+            };
+
+            column!(config, log).spacing(8)
+        };
+
         let content = column!(
             refresh,
             recents_limit,
@@ -984,6 +1013,7 @@ impl Settings {
             movie_depth,
             discoverer,
             dirs,
+            open,
         )
         .spacing(36.0)
         .height(Length::Fill);

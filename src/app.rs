@@ -102,6 +102,10 @@ impl Message {
             offset: None,
         }
     }
+
+    pub fn error(error: impl std::fmt::Display) -> Self {
+        Message::PushToast(error.to_string(), toast::Status::Error)
+    }
 }
 
 pub struct App {
@@ -194,7 +198,7 @@ impl App {
             Message::Animate => Task::none(),
             Message::FontLoad(Ok(_)) => Task::none(),
             Message::FontLoad(Err(_)) => {
-                let msg = Message::PushToast("Font load error".to_owned(), toast::Status::Error);
+                let msg = Message::error("Font load error");
 
                 Task::done(msg)
             }
@@ -225,9 +229,7 @@ impl App {
 
                 match self.config.save() {
                     Ok(_) => stats.chain(Task::done(Message::Exit(id))),
-                    Err(error) => {
-                        stats.chain(Task::done(Message::PushToast(error, toast::Status::Error)))
-                    }
+                    Err(error) => stats.chain(Task::done(Message::error(error))),
                 }
             }
             Message::Exit(id) => window::close::<Message>(id).discard(),
@@ -270,7 +272,7 @@ impl App {
                 let _res = match query.execute(&self.db) {
                     Ok(suc) => suc,
                     Err(error) => {
-                        let msg = Message::PushToast(error.error.to_string(), toast::Status::Error);
+                        let msg = Message::error(error.error);
                         return Task::done(msg);
                     }
                 };
@@ -283,7 +285,7 @@ impl App {
                 let items = match self.db.get_collection_items(id) {
                     Ok(items) => items,
                     Err(error) => {
-                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        let msg = Message::error(error);
                         return Task::done(msg);
                     }
                 }
@@ -350,7 +352,7 @@ impl App {
                     {
                         Ok(collection) => collection,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -364,7 +366,7 @@ impl App {
                     let shows = match self.db.get_shows(limit, offset, filter, sort, show_map) {
                         Ok(shows) => shows,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -375,7 +377,7 @@ impl App {
                     let movies = match self.db.get_movies(limit, offset, filter, sort, movie_map) {
                         Ok(movies) => movies,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -386,14 +388,14 @@ impl App {
                     let movies = match self.db.get_movies(limit, offset, filter, sort, movie_map) {
                         Ok(movies) => movies,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
                     let shows = match self.db.get_shows(limit, offset, filter, sort, show_map) {
                         Ok(shows) => shows,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -404,7 +406,7 @@ impl App {
                     let show = match self.db.get_show(id, show_map) {
                         Ok(show) => show,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -415,7 +417,7 @@ impl App {
                     {
                         Ok(seasons) => seasons,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -426,7 +428,7 @@ impl App {
                     let season = match self.db.get_season(id, season_map) {
                         Ok(season) => season,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -441,7 +443,7 @@ impl App {
                     ) {
                         Ok(episodes) => episodes,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -452,7 +454,7 @@ impl App {
                     let episode = match self.db.get_episode(id, episode_map) {
                         Ok(episode) => episode,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -463,7 +465,7 @@ impl App {
                     let movie = match self.db.get_movie(id, movie_map) {
                         Ok(movie) => movie,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -478,7 +480,7 @@ impl App {
                     {
                         Ok(collection) => collection,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -489,7 +491,7 @@ impl App {
                     let collection = match self.db.get_collection(id, Collection::from_row) {
                         Ok(collection) => collection,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -507,7 +509,7 @@ impl App {
                     ) {
                         Ok(items) => items,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -523,7 +525,7 @@ impl App {
                 let dirs = match self.db.get_directories() {
                     Ok(dirs) => dirs,
                     Err(error) => {
-                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        let msg = Message::error(error);
                         return Task::done(msg);
                     }
                 };
@@ -541,7 +543,7 @@ impl App {
                 ) {
                     Ok(items) => items,
                     Err(error) => {
-                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        let msg = Message::error(error);
                         return Task::done(msg);
                     }
                 };
@@ -552,7 +554,7 @@ impl App {
                 let memberships = match self.db.get_item_membership_ids(item) {
                     Ok(memberships) => memberships,
                     Err(error) => {
-                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        let msg = Message::error(error);
                         return Task::done(msg);
                     }
                 };
@@ -579,7 +581,7 @@ impl App {
                         }) {
                         Ok(memberships) => memberships,
                         Err(error) => {
-                            let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                            let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
@@ -588,12 +590,9 @@ impl App {
             }
             Message::ToggleMembership { item, collections } => {
                 let msg = match self.db.toggle_membership(item, collections) {
-                    Ok(true) => Message::PushToast(
-                        "Collections Updated!".to_owned(),
-                        toast::Status::Success,
-                    ),
+                    Ok(true) => Message::error("Collections Updated!"),
                     Ok(false) => Message::None,
-                    Err(error) => Message::PushToast(error.to_string(), toast::Status::Error),
+                    Err(error) => Message::error(error),
                 };
 
                 let refresh = self.home.content_refresh(now);
@@ -606,15 +605,11 @@ impl App {
                 match id {
                     PlayId::Movie(id) => match self.db.last_watched_movie(id, now) {
                         Ok(_) => Task::none(),
-                        Err(error) => {
-                            Task::done(Message::PushToast(error.to_string(), toast::Status::Error))
-                        }
+                        Err(error) => Task::done(Message::error(error)),
                     },
                     PlayId::Episode(id) => match self.db.last_watched_episode(id, now) {
                         Ok(_) => Task::none(),
-                        Err(error) => {
-                            Task::done(Message::PushToast(error.to_string(), toast::Status::Error))
-                        }
+                        Err(error) => Task::done(Message::error(error)),
                     },
                 }
             }
@@ -627,9 +622,7 @@ impl App {
                         item.duration,
                     ) {
                         Ok(_) => Task::none(),
-                        Err(error) => {
-                            Task::done(Message::PushToast(error.to_string(), toast::Status::Error))
-                        }
+                        Err(error) => Task::done(Message::error(error)),
                     }
                 }
                 PlayId::Episode(id) => {
@@ -640,9 +633,7 @@ impl App {
                         item.duration,
                     ) {
                         Ok(_) => Task::none(),
-                        Err(error) => {
-                            Task::done(Message::PushToast(error.to_string(), toast::Status::Error))
-                        }
+                        Err(error) => Task::done(Message::error(error)),
                     }
                 }
             },
@@ -650,7 +641,7 @@ impl App {
                 let random = match self.db.get_random() {
                     Ok(random) => random,
                     Err(error) => {
-                        let msg = Message::PushToast(error.to_string(), toast::Status::Error);
+                        let msg = Message::error(error);
                         return Task::done(msg);
                     }
                 };
@@ -675,12 +666,9 @@ impl App {
                 self.config.span_writer = writer;
 
                 let msg = match self.db.toggle_directories(dirs) {
-                    Ok(true) => Message::PushToast(
-                        "Directories Updated!".to_owned(),
-                        toast::Status::Success,
-                    ),
+                    Ok(true) => Message::error("Directories Updated!"),
                     Ok(false) => Message::None,
-                    Err(error) => Message::PushToast(error.to_string(), toast::Status::Error),
+                    Err(error) => Message::error(error),
                 };
 
                 let refresh = Task::done(Message::Refresh(now, true));
@@ -705,10 +693,7 @@ impl App {
                 let dirs = match self.db.get_directories() {
                     Ok(dirs) => dirs,
                     Err(error) => {
-                        return Task::done(Message::PushToast(
-                            error.to_string(),
-                            toast::Status::Error,
-                        ));
+                        return Task::done(Message::error(error));
                     }
                 };
 
@@ -737,10 +722,7 @@ impl App {
                 let _todo = match self.db.last_scans(scanned, last_scan) {
                     Ok(rows) => rows,
                     Err(error) => {
-                        return Task::done(Message::PushToast(
-                            error.to_string(),
-                            toast::Status::Error,
-                        ));
+                        return Task::done(Message::error(error));
                     }
                 };
 
