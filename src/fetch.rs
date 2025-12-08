@@ -115,7 +115,7 @@ async fn search_item(auth: &str, snippet: impl AsRef<str>, movie: bool) -> Optio
         .await
         .and_then(|res| res.error_for_status())
         .inspect_err(|error| {
-            eprintln!(
+            tracing::error!(
                 "Search fetch error on {}.\n Error {error}",
                 snippet.as_ref()
             )
@@ -124,7 +124,7 @@ async fn search_item(auth: &str, snippet: impl AsRef<str>, movie: bool) -> Optio
         .json()
         .await
         .inspect_err(|error| {
-            eprintln!(
+            tracing::error!(
                 "Search fetch error on {}.\n Error {error}",
                 snippet.as_ref()
             )
@@ -141,11 +141,11 @@ async fn get_movie(auth: &str, id: TMDBId) -> Option<TMDBMovie> {
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| eprintln!("Get movie error on {}.\n Error {error}", id.id))
+        .inspect_err(|error| tracing::error!("Get movie error on {}.\n Error {error}", id.id))
         .ok()?
         .json()
         .await
-        .inspect_err(|error| eprintln!("Get movie error on {}.\n Error {error}", id.id))
+        .inspect_err(|error| tracing::error!("Get movie error on {}.\n Error {error}", id.id))
         .ok()?;
 
     Some(response)
@@ -158,11 +158,11 @@ async fn get_show(auth: &str, id: TMDBId) -> Option<TMDBShow> {
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| eprintln!("Get show error on {}.\n Error {error}", id.id))
+        .inspect_err(|error| tracing::error!("Get show error on {}.\n Error {error}", id.id))
         .ok()?
         .json()
         .await
-        .inspect_err(|error| eprintln!("Get show error on {}.\n Error {error}", id.id))
+        .inspect_err(|error| tracing::error!("Get show error on {}.\n Error {error}", id.id))
         .ok()?;
 
     Some(response)
@@ -178,11 +178,11 @@ async fn get_season(auth: &str, show: TMDBId, number: u32) -> Option<TMDBSeason>
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| eprintln!("Get season error.\n Error {error}"))
+        .inspect_err(|error| tracing::error!("Get season error.\n Error {error}"))
         .ok()?
         .json()
         .await
-        .inspect_err(|error| eprintln!("Get season error.\n Error {error}"))
+        .inspect_err(|error| tracing::error!("Get season error.\n Error {error}"))
         .ok()?;
 
     Some(response)
@@ -198,11 +198,11 @@ async fn get_episode(auth: &str, show: TMDBId, season: u32, number: u32) -> Opti
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| eprintln!("Get episode error.\n Error {error}"))
+        .inspect_err(|error| tracing::error!("Get episode error.\n Error {error}"))
         .ok()?
         .json()
         .await
-        .inspect_err(|error| eprintln!("Get episode error.\n Error {error}"))
+        .inspect_err(|error| tracing::error!("Get episode error.\n Error {error}"))
         .ok()?;
 
     Some(response)
@@ -246,7 +246,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
         .await
         .and_then(|res| res.error_for_status())
         .inspect_err(|error| {
-            eprintln!(
+            tracing::error!(
                 "Image download error on {}: Error \n{error}",
                 path.display()
             )
@@ -261,7 +261,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
         .bytes()
         .await
         .inspect_err(|error| {
-            eprintln!(
+            tracing::error!(
                 "Image download error on {}: Error \n{error}",
                 path.display()
             )
@@ -274,7 +274,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
     let Some(file) = File::create(path)
         .await
         .inspect_err(|error| {
-            eprintln!(
+            tracing::error!(
                 "Image download error on {}: Error \n{error}",
                 path.display()
             )
@@ -289,7 +289,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
         .write(bytes.deref())
         .await
         .inspect_err(|error| {
-            eprintln!(
+            tracing::error!(
                 "Image download error on {}: Error \n{error}",
                 path.display()
             )
@@ -303,7 +303,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
         .flush()
         .await
         .inspect_err(|error| {
-            eprintln!(
+            tracing::error!(
                 "Image download error on {}: Error \n{error}",
                 path.display()
             )
@@ -326,7 +326,7 @@ pub async fn fetcher(
     let mut db = match Database::open(db) {
         Ok(db) => db,
         Err(error) => {
-            eprintln!("fetcher Db Error \n{error}");
+            tracing::error!("fetcher Db Error \n{error}");
             return;
         }
     };
@@ -342,7 +342,9 @@ pub async fn fetcher(
             image_config = get_config(&auth)
                 .await
                 .inspect_err(|error| {
-                    eprintln!("\nGetting image config with auth {auth} failed. \nError{error}\n",)
+                    tracing::error!(
+                        "\nGetting image config with auth {auth} failed. \nError{error}\n",
+                    )
                 })
                 .ok();
         }
@@ -458,7 +460,7 @@ mod movies {
         images_path: impl AsRef<Path>,
     ) {
         let images_path = images_path.as_ref();
-        let Ok(movies) = fetch(db, limit).inspect_err(|error| eprintln!("{error}")) else {
+        let Ok(movies) = fetch(db, limit).inspect_err(|error| tracing::error!("{error}")) else {
             return;
         };
 
@@ -475,7 +477,7 @@ mod movies {
         }
 
         if let Err(error) = insert_data(db, &data) {
-            eprintln!("{error}");
+            tracing::error!("{error}");
             return;
         }
 
@@ -505,7 +507,7 @@ mod movies {
         }
 
         if let Err(error) = insert_images(db, images) {
-            eprintln!("{error}");
+            tracing::error!("{error}");
         }
     }
 }
@@ -602,7 +604,7 @@ mod shows {
         images_path: impl AsRef<Path>,
     ) {
         let images_path = images_path.as_ref();
-        let Ok(shows) = fetch(db, limit).inspect_err(|error| eprintln!("{error}")) else {
+        let Ok(shows) = fetch(db, limit).inspect_err(|error| tracing::error!("{error}")) else {
             return;
         };
 
@@ -619,7 +621,7 @@ mod shows {
         }
 
         if let Err(error) = insert_data(db, &data) {
-            eprintln!("{error}");
+            tracing::error!("{error}");
             return;
         }
 
@@ -649,7 +651,7 @@ mod shows {
         }
 
         if let Err(error) = insert_images(db, images) {
-            eprintln!("{error}");
+            tracing::error!("{error}");
         }
     }
 }
@@ -742,7 +744,7 @@ mod seasons {
         images_path: impl AsRef<Path>,
     ) {
         let images_path = images_path.as_ref();
-        let Ok(seasons) = fetch(db, limit).inspect_err(|error| eprintln!("{error}")) else {
+        let Ok(seasons) = fetch(db, limit).inspect_err(|error| tracing::error!("{error}")) else {
             return;
         };
 
@@ -755,7 +757,7 @@ mod seasons {
         }
 
         if let Err(error) = insert_data(db, &data) {
-            eprintln!("{error}");
+            tracing::error!("{error}");
             return;
         }
 
@@ -771,7 +773,7 @@ mod seasons {
         }
 
         if let Err(error) = insert_images(db, images) {
-            eprintln!("{error}");
+            tracing::error!("{error}");
         }
     }
 }
@@ -873,7 +875,7 @@ mod episodes {
         images_path: impl AsRef<Path>,
     ) {
         let images_path = images_path.as_ref();
-        let Ok(episodes) = fetch(db, limit).inspect_err(|error| eprintln!("{error}")) else {
+        let Ok(episodes) = fetch(db, limit).inspect_err(|error| tracing::error!("{error}")) else {
             return;
         };
 
@@ -887,7 +889,7 @@ mod episodes {
         }
 
         if let Err(error) = insert_data(db, &data) {
-            eprintln!("{error}");
+            tracing::error!("{error}");
             return;
         }
 
@@ -903,7 +905,7 @@ mod episodes {
         }
 
         if let Err(error) = insert_images(db, images) {
-            eprintln!("{error}");
+            tracing::error!("{error}");
         }
     }
 }

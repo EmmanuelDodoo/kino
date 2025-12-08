@@ -66,14 +66,14 @@ pub fn scan_dir<'a>(
 ) -> Option<BatchResult<'a>> {
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
-            eprintln!(
+            tracing::error!(
                 "Scan directory gstreamer init error on {}. Error \n{error}",
                 dir.path
             );
         };
         Discoverer::new(gstreamer::ClockTime::from_seconds(5))
             .inspect_err(|error| {
-                eprintln!(
+                tracing::error!(
                     "Scan directory discoverer error on {}. Error \n{error}",
                     dir.path
                 )
@@ -86,7 +86,7 @@ pub fn scan_dir<'a>(
     let mut db = match Database::open(db) {
         Ok(db) => db,
         Err(error) => {
-            eprintln!("Scan directory error on {}. Error \n{error}", dir.path);
+            tracing::error!("Scan directory error on {}. Error \n{error}", dir.path);
             return None;
         }
     };
@@ -102,10 +102,12 @@ pub fn scan_dirs<'a>(
 ) -> (Option<BatchResult<'a>>, Vec<DirectoryId>) {
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
-            eprintln!("Scan directories gstreamer init error. Error \n{error}");
+            tracing::error!("Scan directories gstreamer init error. Error \n{error}");
         };
         Discoverer::new(gstreamer::ClockTime::from_seconds(5))
-            .inspect_err(|error| eprintln!("Scan directories discoverer error. Error \n{error}",))
+            .inspect_err(|error| {
+                tracing::error!("Scan directories discoverer error. Error \n{error}",)
+            })
             .ok()
     } else {
         None
@@ -114,7 +116,7 @@ pub fn scan_dirs<'a>(
     let mut db = match Database::open(db) {
         Ok(db) => db,
         Err(error) => {
-            eprintln!("Scan directories error. Error \n{error}");
+            tracing::error!("Scan directories error. Error \n{error}");
             return (None, Vec::with_capacity(0));
         }
     };
@@ -186,7 +188,7 @@ pub fn scan_dir_helper<'a>(
                     match get_existing_show(db, &dir, &path) {
                         Ok(id) => id,
                         Err(error) => {
-                            eprintln!("{error}");
+                            tracing::error!("{error}");
                             continue;
                         }
                     }
@@ -220,7 +222,7 @@ pub fn scan_dir_helper<'a>(
                         match get_existing_season(db, show, &path) {
                             Ok(id) => id,
                             Err(error) => {
-                                eprintln!("{error}");
+                                tracing::error!("{error}");
                                 continue;
                             }
                         }
@@ -263,14 +265,16 @@ fn scan_shows(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Option
     let mut shows = vec![];
     let read = path
         .read_dir()
-        .inspect_err(|error| eprintln!("Scan show dir on {}. Error \n{error}", path.display()))
+        .inspect_err(|error| {
+            tracing::error!("Scan show dir on {}. Error \n{error}", path.display())
+        })
         .ok()?;
 
     for item in read {
         let item = match item {
             Ok(item) => item,
             Err(error) => {
-                eprintln!("{error}");
+                tracing::error!("{error}");
                 continue;
             }
         };
@@ -278,7 +282,7 @@ fn scan_shows(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Option
         let is_dir = match item.file_type() {
             Ok(file) => file.is_dir(),
             Err(error) => {
-                eprintln!("{error}");
+                tracing::error!("{error}");
                 continue;
             }
         };
@@ -300,7 +304,9 @@ fn scan_show_dir(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Opt
 
     let read = path
         .read_dir()
-        .inspect_err(|error| eprintln!("Scan show dir on {}. Error \n{error}", path.display()))
+        .inspect_err(|error| {
+            tracing::error!("Scan show dir on {}. Error \n{error}", path.display())
+        })
         .ok()?;
 
     let mut seasons = vec![];
@@ -309,7 +315,7 @@ fn scan_show_dir(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Opt
         let item = match item {
             Ok(item) => item,
             Err(error) => {
-                eprintln!("{error}");
+                tracing::error!("{error}");
                 continue;
             }
         };
@@ -317,7 +323,7 @@ fn scan_show_dir(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Opt
         let is_dir = match item.file_type() {
             Ok(file) => file.is_dir(),
             Err(error) => {
-                eprintln!("{error}");
+                tracing::error!("{error}");
                 continue;
             }
         };
@@ -364,7 +370,7 @@ fn scan_video_dir(
     let path = path
         .canonicalize()
         .inspect_err(|error| {
-            eprintln!(
+            tracing::error!(
                 "Scan video dir error on {}. Error \n{error}",
                 path.display()
             );
@@ -375,14 +381,16 @@ fn scan_video_dir(
 
     let read = path
         .read_dir()
-        .inspect_err(|error| eprintln!("Scan video dir on {}. Error \n{error}", path.display()))
+        .inspect_err(|error| {
+            tracing::error!("Scan video dir on {}. Error \n{error}", path.display())
+        })
         .ok()?;
 
     for item in read {
         let item = match item {
             Ok(item) => item,
             Err(error) => {
-                eprintln!("{error}");
+                tracing::error!("{error}");
                 continue;
             }
         };
@@ -390,7 +398,7 @@ fn scan_video_dir(
         let is_file = match item.file_type() {
             Ok(file) => file.is_file(),
             Err(error) => {
-                eprintln!("{error}");
+                tracing::error!("{error}");
                 continue;
             }
         };
@@ -436,13 +444,13 @@ fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<(String, 
     }
 
     let url = url::Url::from_file_path(&path)
-        .inspect_err(|_| eprintln!("Scan file url error on {}", path.display()))
+        .inspect_err(|_| tracing::error!("Scan file url error on {}", path.display()))
         .ok();
     let duration = match discoverer.zip(url) {
         Some((discoverer, url)) => discoverer
             .discover_uri(url.as_str())
             .inspect_err(|error| {
-                eprintln!("Scan discover error on {}. Error {error}", path.display())
+                tracing::error!("Scan discover error on {}. Error {error}", path.display())
             })
             .ok()
             .and_then(|info| info.duration().map(|clock| clock.seconds()))
@@ -494,14 +502,14 @@ fn get_existing_season(db: &Database, show: ShowId, path: &str) -> rusqlite::Res
 fn process_name(name: &str) -> Option<String> {
     let value = MOVIE_REG1
         .find(name)
-        .inspect_err(|err| println!("Name processing Error {name:}.\n{err:?}"))
+        .inspect_err(|err| tracing::error!("Name processing Error {name:}.\n{err:?}"))
         .ok()
         .and_then(|val| val)
         .map(|val| val.as_str())?;
 
     let value = MOVIE_REG2
         .find(value)
-        .inspect_err(|err| println!("Name processing Error {name:}.\n{err:?}"))
+        .inspect_err(|err| tracing::error!("Name processing Error {name:}.\n{err:?}"))
         .ok()
         .and_then(|val| val)
         .map(|value| value.as_str())?;
@@ -514,7 +522,7 @@ fn process_name(name: &str) -> Option<String> {
 fn process_season(name: &str) -> Option<u16> {
     let value = SEASON_REG
         .find(name)
-        .inspect_err(|err| println!("{err:?}"))
+        .inspect_err(|err| tracing::error!("{err:?}"))
         .ok()
         .and_then(|val| val);
 
@@ -522,14 +530,14 @@ fn process_season(name: &str) -> Option<u16> {
 
     value
         .parse::<u16>()
-        .inspect_err(|err| println!("Season processing Error {name:}.\n{err:?}"))
+        .inspect_err(|err| tracing::error!("Season processing Error {name:}.\n{err:?}"))
         .ok()
 }
 
 fn process_episode(name: &str) -> Option<u16> {
     let value = EPISODE_REG
         .find(name)
-        .inspect_err(|err| println!("{err:?}"))
+        .inspect_err(|err| tracing::error!("{err:?}"))
         .ok()
         .and_then(|val| val);
 
@@ -537,6 +545,6 @@ fn process_episode(name: &str) -> Option<u16> {
 
     value
         .parse::<u16>()
-        .inspect_err(|err| println!("Episode processing Error {name:}.\n{err:?}"))
+        .inspect_err(|err| tracing::error!("Episode processing Error {name:}.\n{err:?}"))
         .ok()
 }

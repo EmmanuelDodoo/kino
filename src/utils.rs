@@ -156,7 +156,7 @@ pub struct ThumbnailGenerator {
 impl Drop for ThumbnailGenerator {
     fn drop(&mut self) {
         if let Err(err) = self.pipeline.set_state(gst::State::Null) {
-            eprintln!("Error droping ThumbnailGenerator: \n{err}");
+            tracing::error!("Error droping ThumbnailGenerator: \n{err}");
         }
     }
 }
@@ -185,7 +185,7 @@ impl ThumbnailGenerator {
         // Wait until preroll (pipeline ready to process)
         let (res, _, _) = pipeline.state(gst::ClockTime::NONE);
         if let Err(err) = res {
-            eprintln!("{err:?}");
+            tracing::error!("{err:?}");
         }
 
         let duration = pipeline
@@ -217,7 +217,7 @@ impl ThumbnailGenerator {
         // Wait until preroll (pipeline ready to process)
         let (res, _, _) = self.pipeline.state(gst::ClockTime::NONE);
         if let Err(err) = res {
-            eprintln!("{err:?}");
+            tracing::error!("{err:?}");
         }
 
         self.pipeline
@@ -241,7 +241,7 @@ impl ThumbnailGenerator {
 
         while let Some(msg) = self.bus.pop() {
             if let gst::MessageView::Error(error) = msg.view() {
-                eprintln!("{error:?}")
+                tracing::error!("{error:?}")
             }
         }
 
@@ -369,7 +369,7 @@ pub enum HomeAction {
     LayoutToggle,
     RefreshContent,
     /// Refreshes both content and the side menu
-    #[serde(rename="RefreshAll")]
+    #[serde(rename = "RefreshAll")]
     Refresh,
     SearchToggle,
     Back,
@@ -442,7 +442,7 @@ pub enum PlayerAction {
     VideoConfig,
     VideoComment,
     SubtitlesToggle,
-    #[serde(rename="CollectionAdd")]
+    #[serde(rename = "CollectionAdd")]
     Add,
     CloseView,
     Back,

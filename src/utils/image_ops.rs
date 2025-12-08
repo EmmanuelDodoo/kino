@@ -11,12 +11,14 @@ const DEFAULT_POSTER: &[u8] = include_bytes!("default.png");
 fn open(path: &str) -> Option<DynamicImage> {
     ImageReader::open(path)
         .and_then(|reader| reader.with_guessed_format())
-        .inspect_err(|error| eprintln!("Image opening error on {path}. Error\n{error}"))
+        .inspect_err(|error| tracing::error!("Image opening error on {path}. Error\n{error}"))
         .ok()
         .and_then(|reader| {
             reader
                 .decode()
-                .inspect_err(|error| eprintln!("Image opening error on {path}. Error\n{error}"))
+                .inspect_err(|error| {
+                    tracing::error!("Image opening error on {path}. Error\n{error}")
+                })
                 .ok()
         })
 }
@@ -28,12 +30,14 @@ pub fn default_poster() -> Option<Handle> {
 
     let img = ImageReader::new(default)
         .with_guessed_format()
-        .inspect_err(|error| eprintln!("Default poster opening error. Error\n{error}"))
+        .inspect_err(|error| tracing::error!("Default poster opening error. Error\n{error}"))
         .ok()
         .and_then(|reader| {
             reader
                 .decode()
-                .inspect_err(|error| eprintln!("Default poster opening error. Error\n{error}"))
+                .inspect_err(|error| {
+                    tracing::error!("Default poster opening error. Error\n{error}")
+                })
                 .ok()
         })?;
 
@@ -79,7 +83,7 @@ pub fn collage<'a>(
             let img = img.resize_to_fill(width, height, FilterType::Triangle);
 
             if let Err(error) = canvas.copy_from(&img, img_width, img_height) {
-                eprintln!("Collection collage error: Error\n{error}");
+                tracing::error!("Collection collage error: Error\n{error}");
                 continue;
             };
 
@@ -94,7 +98,7 @@ pub fn collage<'a>(
             let img = img.resize_to_fill(width, height, FilterType::Triangle);
 
             if let Err(error) = canvas.copy_from(&img, img_width, img_height) {
-                eprintln!("Collection collage error: Error\n{error}");
+                tracing::error!("Collection collage error: Error\n{error}");
                 continue;
             };
 

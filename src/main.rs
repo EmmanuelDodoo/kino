@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_imports)]
+
 use iced::{
     Color, ContentFit, Element, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation,
     Shadow, Size, Subscription, Task, Theme, Vector,
@@ -55,6 +56,10 @@ use widgets::*;
 #[rustfmt::skip]
 fn main() -> iced::Result {
     use std::env;
+    use tracing::{Level, span};
+
+    let span = span!(Level::DEBUG, "Kino");
+    let _guard = span.enter();
 
     let mut args = env::args();
     let _ = args.next();
@@ -162,7 +167,7 @@ impl Playground {
             Message::None => Task::none(),
             Message::FontLoad(Ok(_)) => Task::none(),
             Message::FontLoad(Err(error)) => {
-                eprintln!("{error:?}");
+                tracing::error!("{error:?}");
                 Task::none()
             }
             Message::Iced(toggle) => {

@@ -668,7 +668,9 @@ impl App {
                     .recents_limit(settings.config.general.recents_limit);
 
                 let (config, dirs) = settings.save();
+                let writer = self.config.span_writer.take();
                 self.config = config;
+                self.config.span_writer = writer;
 
                 let msg = match self.db.toggle_directories(dirs) {
                     Ok(true) => Message::PushToast(
@@ -811,13 +813,15 @@ impl App {
     }
 
     fn push_toast(&mut self, toast: toast::Toast) {
-        // todo
-        // match toast.status {
-        //     Status::Info => info!(toast.body),
-        //     Status::Warn => warn!(toast.body),
-        //     Status::Success => info!(toast.body),
-        //     Status::Error => error!(toast.body),
-        // }
+        use toast::Status;
+        use tracing::{debug, error, info, warn};
+
+        match toast.status {
+            Status::Info => info!(toast.message),
+            Status::Warn => warn!(toast.message),
+            Status::Success => debug!(toast.message),
+            Status::Error => error!(toast.message),
+        }
 
         self.toasts.push(dbg!(toast));
     }

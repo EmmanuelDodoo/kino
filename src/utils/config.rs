@@ -364,7 +364,7 @@ impl From<General> for GeneralSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(default = "Config::defaults")]
 pub struct Config {
     pub video: VideoSettings,
@@ -373,11 +373,34 @@ pub struct Config {
     pub keystore: KeyStore,
     #[serde(skip)]
     config_dir: Option<PathBuf>,
+    #[serde(skip)]
+    pub span_writer: Option<tracing_appender::non_blocking::WorkerGuard>,
+}
+
+impl Clone for Config {
+    fn clone(&self) -> Self {
+        let Config {
+            video,
+            general,
+            keystore,
+            config_dir,
+            span_writer: _writer,
+        } = self;
+
+        Self {
+            video: video.clone(),
+            general: general.clone(),
+            keystore: keystore.clone(),
+            config_dir: config_dir.clone(),
+            span_writer: None,
+        }
+    }
 }
 
 impl Config {
     const CONFIG_PATH: &str = "config.toml";
     const DEV_PATH: &str = ".dev";
+    const LOG_FILE: &str = "kino.log";
 
     pub fn load() -> (Self, Vec<String>) {
         use directories::ProjectDirs;
@@ -397,35 +420,53 @@ impl Config {
         let config = match read_to_string(config_path).map_err(|error| error.kind()) {
             Ok(config) => config,
             Err(std::io::ErrorKind::NotFound) => {
-                let mut config = Config::defaults();
-                config.config_dir = Some(config_dir.to_path_buf());
-                return (config, errors);
+                return (Config::defaults().prep(config_dir), errors);
             }
             Err(error) => {
                 errors.push(format!("Config file reading error.\n{error}"));
 
-                let mut config = Config::defaults();
-                config.config_dir = Some(config_dir.to_path_buf());
-
-                return (config, errors);
+                return (Config::defaults().prep(config_dir), errors);
             }
         };
 
-        let mut config = match toml::from_str::<Config>(&config) {
-            Ok(config) => config,
+        match toml::from_str::<Config>(&config) {
+            Ok(config) => (config.prep(config_dir), errors),
             Err(error) => {
                 errors.push(format!("Config file loading error.\n{error}"));
 
-                let mut config = Config::defaults();
-                config.config_dir = Some(config_dir.to_path_buf());
+                return (Config::defaults().prep(config_dir), errors);
+            }
+        }
+    }
 
-                return (config, errors);
+    fn prep(mut self, dir: impl AsRef<std::path::Path>) -> Self {
+        use std::fs::OpenOptions;
+        use tracing::{Level, span};
+        use tracing_subscriber::EnvFilter;
+
+        let dir = dir.as_ref();
+        let log = dir.join(Self::LOG_FILE);
+        self.config_dir = Some(dir.to_path_buf());
+
+        match OpenOptions::new().append(true).create(true).open(log) {
+            Ok(log) => {
+                let (non_blocking, writer_guard) = tracing_appender::non_blocking(log);
+                let filter = EnvFilter::new("error,kino=info");
+
+                self.span_writer = Some(writer_guard);
+
+                tracing_subscriber::fmt()
+                    .with_writer(non_blocking)
+                    .with_ansi(false)
+                    .with_env_filter(filter)
+                    .init();
+            }
+            Err(error) => {
+                tracing::error!("Error opening log file: \n{error}");
             }
         };
 
-        config.config_dir = Some(config_dir.to_path_buf());
-
-        (config, errors)
+        self
     }
 
     pub fn save(&self) -> Result<(), String> {
@@ -447,16 +488,20 @@ impl Config {
             general: GeneralSettings::defaults(),
             keystore: KeyStore::defaults(),
             config_dir: None,
+            span_writer: None,
         }
     }
 
     pub fn dev() -> Self {
-        Self {
+        let new = Self {
             general: GeneralSettings::debug_defaults(),
             video: VideoSettings::defaults(),
             keystore: KeyStore::defaults(),
             config_dir: Some(PathBuf::from(Self::DEV_PATH)),
-        }
+            span_writer: None,
+        };
+
+        new.prep(Self::DEV_PATH)
     }
 
     pub fn theme(&self) -> iced::Theme {
