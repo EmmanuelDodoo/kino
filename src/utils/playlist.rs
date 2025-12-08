@@ -42,11 +42,17 @@ impl PlayItem {
         };
 
         let name = {
+            let fetched = row.get::<_, bool>("fetched")?;
             let show = row.get::<_, String>("show_name")?;
             let season = row.get::<_, u16>("season_number")?;
-            let name = row.get::<_, String>("name")?;
 
-            format!("{show} - S{season:02}E{name}")
+            if fetched {
+                let name = row.get::<_, String>("name")?;
+                format!("{show} - S{season:02}E{name}")
+            } else {
+                let number = row.get::<_, u16>("episode_number")?;
+                format!("{show} - S{season:02}E{number:02}")
+            }
         };
 
         Self::new(row, id, full_path, name)

@@ -6,6 +6,8 @@ use image::{
 use iced::Color;
 use iced::widget::image::Handle;
 
+const DEFAULT_POSTER: &[u8] = include_bytes!("default.png");
+
 fn open(path: &str) -> Option<DynamicImage> {
     ImageReader::open(path)
         .and_then(|reader| reader.with_guessed_format())
@@ -22,8 +24,7 @@ fn open(path: &str) -> Option<DynamicImage> {
 pub fn default_poster() -> Option<Handle> {
     use std::io::Cursor;
 
-    let default = include_bytes!("default.png");
-    let default = Cursor::new(default);
+    let default = Cursor::new(DEFAULT_POSTER);
 
     let img = ImageReader::new(default)
         .with_guessed_format()
