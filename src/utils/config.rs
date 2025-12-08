@@ -537,6 +537,10 @@ impl Config {
     pub fn fetching_interval(&self) -> Duration {
         self.general.fetching_interval
     }
+
+    pub fn auth(&self) -> String {
+        self.general.auth_token.clone()
+    }
 }
 
 mod keys {

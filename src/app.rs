@@ -142,12 +142,14 @@ impl App {
         let load_id = window::oldest().map(Message::WindowId);
 
         let (auth_tx, auth_rx) = mpsc::channel(2);
+        let auth = config.auth();
 
         let fetcher = Task::perform(
             fetch::fetcher(
                 auth_rx,
                 config.db_path(),
                 config.images_path(),
+                auth,
                 config.fetching_interval(),
             ),
             |_| Message::None,
@@ -683,7 +685,7 @@ impl App {
 
                 let refresh = Task::done(Message::Refresh(now, true));
 
-                let auth = self.config.general.auth_token.clone();
+                let auth = self.config.auth();
 
                 let auth = if !auth.is_empty() {
                     let auth_tx = self.auth_tx.clone();

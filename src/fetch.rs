@@ -321,6 +321,7 @@ pub async fn fetcher(
     mut auth_rx: mpsc::Receiver<String>,
     db: impl AsRef<Path>,
     images_path: impl AsRef<Path>,
+    auth: String,
     interval: std::time::Duration,
 ) {
     let mut db = match Database::open(db) {
@@ -331,7 +332,7 @@ pub async fn fetcher(
         }
     };
 
-    let mut auth = String::default();
+    let mut auth = auth;
     let mut image_config = None;
 
     loop {
