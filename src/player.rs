@@ -561,8 +561,8 @@ impl Manager {
                 let spent = format!(
                     "{:02}:{:02}:{:02}",
                     *position as u64 / 3600,
-                    *position as u64 / 60,
-                    *position as u64 % 60,
+                    (*position as u64 % 3600) / 60,
+                    (*position as u64 % 3600) % 60,
                 );
                 let spent = container(text(spent)).style(styles::container::text);
 

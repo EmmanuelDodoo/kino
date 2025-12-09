@@ -106,6 +106,10 @@ impl Message {
     pub fn error(error: impl std::fmt::Display) -> Self {
         Message::PushToast(error.to_string(), toast::Status::Error)
     }
+
+    pub fn success(message: impl std::fmt::Display) -> Self {
+        Message::PushToast(message.to_string(), toast::Status::Success)
+    }
 }
 
 pub struct App {
@@ -590,7 +594,7 @@ impl App {
             }
             Message::ToggleMembership { item, collections } => {
                 let msg = match self.db.toggle_membership(item, collections) {
-                    Ok(true) => Message::error("Collections Updated!"),
+                    Ok(true) => Message::success("Collections Updated!"),
                     Ok(false) => Message::None,
                     Err(error) => Message::error(error),
                 };
@@ -666,7 +670,7 @@ impl App {
                 self.config.span_writer = writer;
 
                 let msg = match self.db.toggle_directories(dirs) {
-                    Ok(true) => Message::error("Directories Updated!"),
+                    Ok(true) => Message::success("Directories Updated!"),
                     Ok(false) => Message::None,
                     Err(error) => Message::error(error),
                 };

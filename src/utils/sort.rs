@@ -186,11 +186,16 @@ impl SortKind {
             Self::Added => x.added().cmp(&y.added()),
             Self::Rating => match (x.rating(), y.rating()) {
                 (Some(x), Some(y)) => x.total_cmp(&y),
-                (Some(_), None) => std::cmp::Ordering::Greater,
+                (Some(_), None) => std::cmp::Ordering::Less,
                 (None, Some(_)) => std::cmp::Ordering::Greater,
                 (None, None) => std::cmp::Ordering::Equal,
             },
-            Self::Recent => x.recent().cmp(&y.recent()),
+            Self::Recent => match (x.recent(), y.recent()) {
+                (Some(x), Some(y)) => x.cmp(&y),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            }
             Self::Release => x.release().cmp(&y.release()),
             Self::Progress => x.progress().total_cmp(&y.progress()),
             Self::Comments => x.comments().cmp(&y.comments()),

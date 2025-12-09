@@ -333,7 +333,12 @@ pub async fn fetcher(
     };
 
     let mut auth = auth;
-    let mut image_config = None;
+    let mut image_config = get_config(&auth)
+        .await
+        .inspect_err(|error| {
+            tracing::error!("\nGetting image config with auth {auth} failed. \nError{error}\n",)
+        })
+        .ok();
 
     loop {
         if !auth_rx.is_empty()
