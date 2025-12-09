@@ -66,6 +66,7 @@ struct TMDBShow {
 
 #[derive(Deserialize, Debug, Clone)]
 struct TMDBSeason {
+    id: u32,
     air_date: String,
     name: String,
     overview: String,
@@ -74,6 +75,7 @@ struct TMDBSeason {
 
 #[derive(Deserialize, Debug, Clone)]
 struct TMDBEpisode {
+    id: u32,
     air_date: String,
     name: String,
     overview: String,
@@ -372,12 +374,18 @@ pub async fn fetcher(
 mod movies {
     use super::*;
 
-    struct PendingMovie {
+    struct PendingData {
         id: MovieId,
         name: String,
     }
 
-    fn fetch(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingMovie>> {
+    struct PendingImage {
+        id: MovieId,
+        poster: String,
+        backdrop: String,
+    }
+
+    fn fetch_data(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingData>> {
         let sql = "SELECT movie.id, movie.name FROM movie WHERE movie.tmdb_id IS NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -386,14 +394,36 @@ mod movies {
             .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
                 let id = MovieId::from_row(row)?;
                 let name = row.get::<_, String>("name")?;
-                Ok(PendingMovie { id, name })
+                Ok(PendingData { id, name })
             })?
             .collect()
     }
 
-    fn insert_data(db: &mut Database, movies: &[(MovieId, TMDBMovie)]) -> rusqlite::Result<usize> {
+    fn fetch_image(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingImage>> {
+        let sql = "SELECT movie.id, movie.poster, movie.backdrop FROM movie WHERE movie.tmdb_id IS NOT NULL AND NOT movie.fetched LIMIT :limit";
+
+        let mut statement = db.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
+                let id = MovieId::from_row(row)?;
+                let poster = row.get::<_, String>("poster")?;
+                let backdrop = row.get::<_, String>("backdrop")?;
+                Ok(PendingImage {
+                    id,
+                    poster,
+                    backdrop,
+                })
+            })?
+            .collect()
+    }
+
+    fn insert_data(
+        db: &mut Database,
+        movies: Vec<(MovieId, TMDBMovie)>,
+    ) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql = "UPDATE movie SET tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name WHERE id=:id";
+        let sql = "UPDATE movie SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name WHERE id=:id";
         let mut rows = 0;
 
         for (movie, data) in movies {
@@ -409,20 +439,13 @@ mod movies {
                 sql,
                 &[
                     (":tmdb_id", &ToSqlOutput::from(data.id)),
-                    (":id", &ToSqlOutput::from(*movie)),
+                    (":id", &ToSqlOutput::from(movie)),
                     (":tags", &ToSqlOutput::from(tags)),
-                    (
-                        ":overview",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.overview)),
-                    ),
-                    (
-                        ":release",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.release_date)),
-                    ),
-                    (
-                        ":name",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.title)),
-                    ),
+                    (":overview", &ToSqlOutput::from(data.overview)),
+                    (":release", &ToSqlOutput::from(data.release_date)),
+                    (":name", &ToSqlOutput::from(data.title)),
+                    (":poster", &ToSqlOutput::from(data.poster_path)),
+                    (":backdrop", &ToSqlOutput::from(data.backdrop_path)),
                 ],
             )?
         }
@@ -439,7 +462,8 @@ mod movies {
         use rusqlite::types::ToSqlOutput;
 
         let trans = db.transaction()?;
-        let sql = "UPDATE movie SET  poster=:poster, backdrop=:backdrop WHERE id=:id";
+        let sql =
+            "UPDATE movie SET  poster=:poster, backdrop=:backdrop, fetched=:fetched WHERE id=:id";
         let mut rows = 0;
 
         for (id, poster, backdrop) in images {
@@ -449,6 +473,7 @@ mod movies {
                     (":id", &ToSqlOutput::from(id)),
                     (":poster", &ToSqlOutput::from(poster)),
                     (":backdrop", &ToSqlOutput::from(backdrop)),
+                    (":fetched", &ToSqlOutput::from(true)),
                 ],
             )?;
         }
@@ -466,54 +491,49 @@ mod movies {
         images_path: impl AsRef<Path>,
     ) {
         let images_path = images_path.as_ref();
-        let Ok(movies) = fetch(db, limit).inspect_err(|error| tracing::error!("{error}")) else {
-            return;
+
+        if let Ok(pending) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}")) {
+            let mut data = Vec::with_capacity(pending.len());
+
+            for movie in pending {
+                let Some(id) = search_item(auth, &movie.name, true).await else {
+                    continue;
+                };
+
+                if let Some(res) = get_movie(auth, id).await {
+                    data.push((movie.id, res))
+                };
+            }
+
+            if let Err(error) = insert_data(db, data) {
+                tracing::error!("{error}");
+            }
         };
 
-        let mut data = Vec::with_capacity(movies.len());
+        if let Ok(pending) = fetch_image(db, limit).inspect_err(|error| tracing::error!("{error}"))
+        {
+            let mut images = Vec::with_capacity(pending.len());
 
-        for movie in movies {
-            let Some(id) = search_item(auth, &movie.name, true).await else {
-                continue;
-            };
+            for movie in pending {
+                let poster_path = images_path.join(format!("{}_poster.jpg", movie.id));
+                let poster = download(auth, image_config, &movie.poster, true, &poster_path).await;
 
-            if let Some(res) = get_movie(auth, id).await {
-                data.push((movie.id, res))
-            };
-        }
+                let backdrop_path = images_path.join(format!("{}_backdrop.jpg", movie.id));
+                let backdrop =
+                    download(auth, image_config, &movie.backdrop, false, &backdrop_path).await;
 
-        if let Err(error) = insert_data(db, &data) {
-            tracing::error!("{error}");
-            return;
-        }
-
-        let mut images = Vec::with_capacity(data.len());
-
-        for (movie, data) in data {
-            let poster_path = images_path.join(format!("{movie}_poster.jpg"));
-            let poster = download(auth, image_config, &data.poster_path, true, &poster_path).await;
-
-            let backdrop_path = images_path.join(format!("{movie}_backdrop.jpg"));
-            let backdrop = download(
-                auth,
-                image_config,
-                &data.backdrop_path,
-                false,
-                &backdrop_path,
-            )
-            .await;
-
-            if poster && backdrop {
-                images.push((
-                    movie,
-                    poster_path.display().to_string(),
-                    backdrop_path.display().to_string(),
-                ))
+                if poster && backdrop {
+                    images.push((
+                        movie.id,
+                        poster_path.display().to_string(),
+                        backdrop_path.display().to_string(),
+                    ))
+                }
             }
-        }
 
-        if let Err(error) = insert_images(db, images) {
-            tracing::error!("{error}");
+            if let Err(error) = insert_images(db, images) {
+                tracing::error!("{error}");
+            }
         }
     }
 }
@@ -521,12 +541,18 @@ mod movies {
 mod shows {
     use super::*;
 
-    struct PendingShow {
+    struct PendingData {
         id: ShowId,
         name: String,
     }
 
-    fn fetch(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingShow>> {
+    struct PendingImage {
+        id: ShowId,
+        poster: String,
+        backdrop: String,
+    }
+
+    fn fetch_data(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingData>> {
         let sql = "SELECT tv_show.id, tv_show.name FROM tv_show WHERE tv_show.tmdb_id IS NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -535,14 +561,33 @@ mod shows {
             .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
                 let id = ShowId::from_row(row)?;
                 let name = row.get::<_, String>("name")?;
-                Ok(PendingShow { id, name })
+                Ok(PendingData { id, name })
             })?
             .collect()
     }
 
-    fn insert_data(db: &mut Database, shows: &[(ShowId, TMDBShow)]) -> rusqlite::Result<usize> {
+    fn fetch_image(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingImage>> {
+        let sql = "SELECT tv_show.id, tv_show.poster, tv_show.backdrop FROM tv_show WHERE tv_show.tmdb_id IS NOT NULL AND NOT tv_show.fetched LIMIT :limit";
+
+        let mut statement = db.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
+                let id = ShowId::from_row(row)?;
+                let poster = row.get::<_, String>("poster")?;
+                let backdrop = row.get::<_, String>("backdrop")?;
+                Ok(PendingImage {
+                    id,
+                    poster,
+                    backdrop,
+                })
+            })?
+            .collect()
+    }
+
+    fn insert_data(db: &mut Database, shows: Vec<(ShowId, TMDBShow)>) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql = "UPDATE tv_show SET tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name WHERE id=:id";
+        let sql = "UPDATE tv_show SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name WHERE id=:id";
         let mut rows = 0;
 
         for (show, data) in shows {
@@ -558,17 +603,13 @@ mod shows {
                 sql,
                 &[
                     (":tmdb_id", &ToSqlOutput::from(data.id)),
-                    (":id", &ToSqlOutput::from(*show)),
+                    (":id", &ToSqlOutput::from(show)),
                     (":tags", &ToSqlOutput::from(tags)),
-                    (
-                        ":overview",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.overview)),
-                    ),
-                    (
-                        ":release",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.first_air_date)),
-                    ),
-                    (":name", &ToSqlOutput::Borrowed(ValueRef::from(&*data.name))),
+                    (":overview", &ToSqlOutput::from(data.overview)),
+                    (":release", &ToSqlOutput::from(data.first_air_date)),
+                    (":name", &ToSqlOutput::from(data.name)),
+                    (":poster", &ToSqlOutput::from(data.poster_path)),
+                    (":backdrop", &ToSqlOutput::from(data.backdrop_path)),
                 ],
             )?
         }
@@ -583,7 +624,8 @@ mod shows {
         images: Vec<(ShowId, String, String)>,
     ) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql = "UPDATE tv_show SET  poster=:poster, backdrop=:backdrop WHERE id=:id";
+        let sql =
+            "UPDATE tv_show SET  poster=:poster, backdrop=:backdrop, fetched=:fetched WHERE id=:id";
         let mut rows = 0;
 
         for (id, poster, backdrop) in images {
@@ -593,6 +635,7 @@ mod shows {
                     (":id", &ToSqlOutput::from(id)),
                     (":poster", &ToSqlOutput::from(poster)),
                     (":backdrop", &ToSqlOutput::from(backdrop)),
+                    (":fetched", &ToSqlOutput::from(true)),
                 ],
             )?;
         }
@@ -610,54 +653,47 @@ mod shows {
         images_path: impl AsRef<Path>,
     ) {
         let images_path = images_path.as_ref();
-        let Ok(shows) = fetch(db, limit).inspect_err(|error| tracing::error!("{error}")) else {
-            return;
+
+        if let Ok(pending) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}")) {
+            let mut data = Vec::with_capacity(pending.len());
+
+            for show in pending {
+                let Some(id) = search_item(auth, &show.name, false).await else {
+                    continue;
+                };
+
+                if let Some(res) = get_show(auth, id).await {
+                    data.push((show.id, res))
+                };
+            }
+
+            if let Err(error) = insert_data(db, data) {
+                tracing::error!("{error}");
+            }
         };
 
-        let mut data = Vec::with_capacity(shows.len());
+        if let Ok(pending) = fetch_image(db, limit) {
+            let mut images = Vec::with_capacity(pending.len());
 
-        for show in shows {
-            let Some(id) = search_item(auth, &show.name, false).await else {
-                continue;
-            };
+            for show in pending {
+                let poster_path = images_path.join(format!("{}_poster.jpg", show.id));
+                let poster = download(auth, image_config, &show.poster, true, &poster_path).await;
 
-            if let Some(res) = get_show(auth, id).await {
-                data.push((show.id, res))
-            };
-        }
-
-        if let Err(error) = insert_data(db, &data) {
-            tracing::error!("{error}");
-            return;
-        }
-
-        let mut images = Vec::with_capacity(data.len());
-
-        for (show, data) in data {
-            let poster_path = images_path.join(format!("{show}_poster.jpg"));
-            let poster = download(auth, image_config, &data.poster_path, true, &poster_path).await;
-
-            let backdrop_path = images_path.join(format!("{show}_backdrop.jpg"));
-            let backdrop = download(
-                auth,
-                image_config,
-                &data.backdrop_path,
-                false,
-                &backdrop_path,
-            )
-            .await;
-
-            if poster && backdrop {
-                images.push((
-                    show,
-                    poster_path.display().to_string(),
-                    backdrop_path.display().to_string(),
-                ))
+                let backdrop_path = images_path.join(format!("{}_backdrop.jpg", show.id));
+                let backdrop =
+                    download(auth, image_config, &show.backdrop, false, &backdrop_path).await;
+                if poster && backdrop {
+                    images.push((
+                        show.id,
+                        poster_path.display().to_string(),
+                        backdrop_path.display().to_string(),
+                    ))
+                }
             }
-        }
 
-        if let Err(error) = insert_images(db, images) {
-            tracing::error!("{error}");
+            if let Err(error) = insert_images(db, images) {
+                tracing::error!("{error}");
+            }
         }
     }
 }
@@ -665,50 +701,65 @@ mod shows {
 mod seasons {
     use super::*;
 
-    struct PendingSeason {
+    struct PendingData {
         id: SeasonId,
         show: TMDBId,
         number: u32,
     }
 
-    fn fetch(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingSeason>> {
-        let sql = "SELECT season.id, season.season_number, tv_show.tmdb_id AS tmdb_id FROM season INNER JOIN tv_show ON season.show_id=tv_show.id AND tv_show.tmdb_id NOT NULL LIMIT :limit";
+    struct PendingImage {
+        id: SeasonId,
+        poster: String,
+    }
+
+    fn fetch_data(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingData>> {
+        let sql = "SELECT season.id, season.season_number, tv_show.tmdb_id AS show_tmdb_id FROM season INNER JOIN tv_show ON season.show_id=tv_show.id AND tv_show.tmdb_id NOT NULL AND season.tmdb_id IS NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
 
         statement
             .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
                 let id = SeasonId::from_row(row)?;
-                let show = row.get::<_, u32>("tmdb_id")?;
+                let show = row.get::<_, u32>("show_tmdb_id")?;
                 let show = TMDBId { id: show };
                 let number = row.get::<_, u32>("season_number")?;
-                Ok(PendingSeason { show, id, number })
+                Ok(PendingData { show, id, number })
+            })?
+            .collect()
+    }
+
+    fn fetch_image(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingImage>> {
+        let sql = "SELECT season.id, season.poster FROM season WHERE season.tmdb_id IS NOT NULL AND NOT season.fetched LIMIT :limit";
+
+        let mut statement = db.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
+                let id = SeasonId::from_row(row)?;
+                let poster = row.get::<_, String>("poster")?;
+                Ok(PendingImage { id, poster })
             })?
             .collect()
     }
 
     fn insert_data(
         db: &mut Database,
-        seasons: &[(SeasonId, TMDBSeason)],
+        seasons: Vec<(SeasonId, TMDBSeason)>,
     ) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql = "UPDATE season SET synopsis=:overview, release=:release, name=:name WHERE id=:id";
+        let sql = "UPDATE season SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name WHERE id=:id";
         let mut rows = 0;
 
         for (season, data) in seasons {
             rows += trans.execute(
                 sql,
                 &[
-                    (":id", &ToSqlOutput::from(*season)),
-                    (
-                        ":overview",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.overview)),
-                    ),
-                    (
-                        ":release",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.air_date)),
-                    ),
-                    (":name", &ToSqlOutput::Borrowed(ValueRef::from(&*data.name))),
+                    (":tmdb_id", &ToSqlOutput::from(data.id)),
+                    (":id", &ToSqlOutput::from(season)),
+                    (":overview", &ToSqlOutput::from(data.overview)),
+                    (":release", &ToSqlOutput::from(data.air_date)),
+                    (":name", &ToSqlOutput::from(data.name)),
+                    (":poster", &ToSqlOutput::from(data.poster_path)),
                 ],
             )?
         }
@@ -750,36 +801,36 @@ mod seasons {
         images_path: impl AsRef<Path>,
     ) {
         let images_path = images_path.as_ref();
-        let Ok(seasons) = fetch(db, limit).inspect_err(|error| tracing::error!("{error}")) else {
-            return;
+        if let Ok(seasons) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}")) {
+            let mut data = Vec::with_capacity(seasons.len());
+
+            for season in seasons {
+                if let Some(res) = get_season(auth, season.show, season.number).await {
+                    data.push((season.id, res))
+                }
+            }
+
+            if let Err(error) = insert_data(db, data) {
+                tracing::error!("{error}");
+            }
         };
 
-        let mut data = Vec::with_capacity(seasons.len());
+        if let Ok(seasons) = fetch_image(db, limit).inspect_err(|error| tracing::error!("{error}"))
+        {
+            let mut images = Vec::with_capacity(seasons.len());
 
-        for season in seasons {
-            if let Some(res) = get_season(auth, season.show, season.number).await {
-                data.push((season.id, res))
+            for season in seasons {
+                let poster_path = images_path.join(format!("{}_poster.jpg", season.id));
+                let poster = download(auth, image_config, &season.poster, true, &poster_path).await;
+
+                if poster {
+                    images.push((season.id, poster_path.display().to_string()))
+                }
             }
-        }
 
-        if let Err(error) = insert_data(db, &data) {
-            tracing::error!("{error}");
-            return;
-        }
-
-        let mut images = Vec::with_capacity(data.len());
-
-        for (season, data) in data {
-            let poster_path = images_path.join(format!("{season}_poster.jpg"));
-            let poster = download(auth, image_config, &data.poster_path, true, &poster_path).await;
-
-            if poster {
-                images.push((season, poster_path.display().to_string()))
+            if let Err(error) = insert_images(db, images) {
+                tracing::error!("{error}");
             }
-        }
-
-        if let Err(error) = insert_images(db, images) {
-            tracing::error!("{error}");
         }
     }
 }
@@ -787,26 +838,31 @@ mod seasons {
 mod episodes {
     use super::*;
 
-    struct PendingEpisode {
+    struct PendingData {
         id: EpisodeId,
         show: TMDBId,
         season: u32,
         number: u32,
     }
 
-    fn fetch(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingEpisode>> {
-        let sql = "SELECT id, episode_number, season_number, tmdb_id FROM get_episode_data WHERE tmdb_id NOT NULL AND NOT fetched LIMIT :limit";
+    struct PendingImage {
+        id: EpisodeId,
+        poster: String,
+    }
+
+    fn fetch_data(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingData>> {
+        let sql = "SELECT id, episode_number, season_number, show_tmdb_id FROM get_episode_data WHERE show_tmdb_id NOT NULL AND tmdb_id IS NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
 
         statement
             .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
                 let id = EpisodeId::from_row(row)?;
-                let show = row.get::<_, u32>("tmdb_id")?;
+                let show = row.get::<_, u32>("show_tmdb_id")?;
                 let show = TMDBId { id: show };
                 let season = row.get::<_, u32>("season_number")?;
                 let number = row.get::<_, u32>("episode_number")?;
-                Ok(PendingEpisode {
+                Ok(PendingData {
                     show,
                     id,
                     season,
@@ -816,13 +872,26 @@ mod episodes {
             .collect()
     }
 
+    fn fetch_image(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingImage>> {
+        let sql = "SELECT episode.id, episode.poster FROM episode WHERE episode.tmdb_id IS NOT NULL AND NOT episode.fetched LIMIT :limit";
+
+        let mut statement = db.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
+                let id = EpisodeId::from_row(row)?;
+                let poster = row.get::<_, String>("poster")?;
+                Ok(PendingImage { id, poster })
+            })?
+            .collect()
+    }
+
     fn insert_data(
         db: &mut Database,
-        episodes: &[(EpisodeId, TMDBEpisode)],
+        episodes: Vec<(EpisodeId, TMDBEpisode)>,
     ) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql =
-            "UPDATE episode SET synopsis=:overview, release=:release, name=:name WHERE id=:id";
+        let sql = "UPDATE episode SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name WHERE id=:id";
         let mut rows = 0;
 
         for (episode, data) in episodes {
@@ -830,16 +899,12 @@ mod episodes {
             rows += trans.execute(
                 sql,
                 &[
-                    (":id", &ToSqlOutput::from(*episode)),
-                    (
-                        ":overview",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.overview)),
-                    ),
-                    (
-                        ":release",
-                        &ToSqlOutput::Borrowed(ValueRef::from(&*data.air_date)),
-                    ),
+                    (":tmdb_id", &ToSqlOutput::from(data.id)),
+                    (":id", &ToSqlOutput::from(episode)),
+                    (":overview", &ToSqlOutput::from(data.overview)),
+                    (":release", &ToSqlOutput::from(data.air_date)),
                     (":name", &ToSqlOutput::from(name)),
+                    (":poster", &ToSqlOutput::from(data.still_path)),
                 ],
             )?
         }
@@ -881,37 +946,40 @@ mod episodes {
         images_path: impl AsRef<Path>,
     ) {
         let images_path = images_path.as_ref();
-        let Ok(episodes) = fetch(db, limit).inspect_err(|error| tracing::error!("{error}")) else {
-            return;
+        if let Ok(episodes) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}"))
+        {
+            let mut data = Vec::with_capacity(episodes.len());
+
+            for episode in episodes {
+                if let Some(res) =
+                    get_episode(auth, episode.show, episode.season, episode.number).await
+                {
+                    data.push((episode.id, res))
+                }
+            }
+
+            if let Err(error) = insert_data(db, data) {
+                tracing::error!("{error}");
+                return;
+            }
         };
 
-        let mut data = Vec::with_capacity(episodes.len());
+        if let Ok(episodes) = fetch_image(db, limit).inspect_err(|error| tracing::error!("{error}"))
+        {
+            let mut images = Vec::with_capacity(episodes.len());
 
-        for episode in episodes {
-            if let Some(res) = get_episode(auth, episode.show, episode.season, episode.number).await
-            {
-                data.push((episode.id, res))
+            for episode in episodes {
+                let poster_path = images_path.join(format!("{}_poster.jpg", episode.id));
+                let poster =
+                    download(auth, image_config, &episode.poster, true, &poster_path).await;
+
+                if poster {
+                    images.push((episode.id, poster_path.display().to_string()))
+                }
             }
-        }
-
-        if let Err(error) = insert_data(db, &data) {
-            tracing::error!("{error}");
-            return;
-        }
-
-        let mut images = Vec::with_capacity(data.len());
-
-        for (episode, data) in data {
-            let poster_path = images_path.join(format!("{episode}_poster.jpg"));
-            let poster = download(auth, image_config, &data.still_path, true, &poster_path).await;
-
-            if poster {
-                images.push((episode, poster_path.display().to_string()))
+            if let Err(error) = insert_images(db, images) {
+                tracing::error!("{error}");
             }
-        }
-
-        if let Err(error) = insert_images(db, images) {
-            tracing::error!("{error}");
         }
     }
 }

@@ -32,11 +32,11 @@ impl std::ops::DerefMut for Database {
 }
 
 impl Database {
-    const MOVIE_QUERY: &str = "SELECT movie.*, directory.path as directory_path FROM movie INNER JOIN directory ON movie.directory=directory.id";
+    const MOVIE_QUERY: &str = "SELECT  directory.path as directory_path, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.poster END AS poster, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.backdrop END AS backdrop, movie.*  FROM movie INNER JOIN directory ON movie.directory=directory.id";
 
-    const SHOW_QUERY: &str = "SELECT tv_show.*, directory.path as directory_path FROM tv_show INNER JOIN directory ON tv_show.directory=directory.id";
+    const SHOW_QUERY: &str = "SELECT  directory.path as directory_path, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.poster END AS poster, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.backdrop END AS backdrop, tv_show.* FROM tv_show INNER JOIN directory ON tv_show.directory=directory.id";
 
-    const SEASON_QUERY: &str = "SELECT season.*, tv_show.backdrop FROM season INNER JOIN tv_show ON season.show_id=tv_show.id";
+    const SEASON_QUERY: &str = "SELECT  tv_show.backdrop, CASE WHEN NOT season.fetched THEN NULL ELSE season.poster END AS poster, season.* FROM season INNER JOIN tv_show ON season.show_id=tv_show.id";
 
     const EPISODE_QUERY: &str = "SELECT * FROM get_episode_data";
 
