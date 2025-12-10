@@ -121,6 +121,9 @@ pub const PIN: char = '\u{e844}';
 pub const EDIT: char = '\u{e846}';
 pub const EXTERNAL: char = '\u{e859}';
 
+pub const DELETE: char = '\u{e85a}';
+pub const RENAME: char = '\u{e85b}';
+
 const LOADING_SVG: &[u8] = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24'><!-- Icon from Material Design Icons by Pictogrammers - https://github.com/Templarian/MaterialDesign/blob/master/LICENSE --><path fill='currentColor' d='M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8'/></svg>".as_bytes();
 
 pub static LOADING_SVG_HANDLE: LazyLock<iced::widget::svg::Handle> =

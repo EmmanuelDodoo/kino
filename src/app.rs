@@ -39,6 +39,19 @@ pub enum FetchId {
 }
 
 #[derive(Clone, Debug)]
+pub enum MediaUpdateKind {
+    Rating(f32),
+    Name(String),
+    Refetch,
+}
+
+#[derive(Clone, Debug)]
+pub struct MediaUpdate {
+    pub id: ItemId,
+    pub kind: MediaUpdateKind,
+}
+
+#[derive(Clone, Debug)]
 pub enum Message {
     FontLoad(Result<(), font::Error>),
     ExitRequested(window::Id),
@@ -57,6 +70,7 @@ pub enum Message {
         items: Items,
     },
     //todo
+    MediaUpdate(MediaUpdate),
     Query(Query<'static>),
     FetchMembershipIds(ItemId),
     FetchMemberships(ItemId),
@@ -282,6 +296,38 @@ impl App {
                 };
 
                 Task::none()
+            }
+            Message::MediaUpdate(MediaUpdate { id, kind }) => {
+                let query = match kind {
+                    MediaUpdateKind::Rating(value) => match id {
+                        ItemId::Show(id) => Show::set_rating(id, value),
+                        ItemId::Movie(id) => Movie::set_rating(id, value),
+                        ItemId::Season(id) => Season::set_rating(id, value),
+                        ItemId::Episode(id) => Episode::set_rating(id, value),
+                    },
+                    MediaUpdateKind::Name(value) => match id {
+                        ItemId::Show(id) => Show::set_name(id, value),
+                        ItemId::Movie(id) => Movie::set_name(id, value),
+                        ItemId::Season(id) => Season::set_name(id, value),
+                        ItemId::Episode(id) => Episode::set_name(id, value),
+                    },
+                    MediaUpdateKind::Refetch => match id {
+                        ItemId::Show(id) => Show::refetch(id),
+                        ItemId::Movie(id) => Movie::refetch(id),
+                        ItemId::Season(id) => Season::refetch(id),
+                        ItemId::Episode(id) => Episode::refetch(id),
+                    },
+                };
+
+                match query.execute(&self.db) {
+                    Ok(_todo) => self.home.content_refresh(now),
+                    Err(error) => {
+                        // todo
+                        let msg = Message::error(error.error);
+
+                        return Task::done(msg);
+                    }
+                }
             }
             Message::PlayItem(item) => self.play_items(std::iter::once(item), true),
             Message::PlayItems(items) => self.play_items(items.into_iter(), false),

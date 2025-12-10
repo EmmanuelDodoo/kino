@@ -2,24 +2,30 @@ use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{CollectionId, Episode, EpisodeId, ItemId, Media, SimpleCollection};
 use crate::utils::icons::*;
 use crate::utils::styles;
+use crate::utils::tooltip;
 use crate::utils::typo::*;
 use iced::widget::Space;
 use iced::{
     Color, Element, Length, Shadow,
     alignment::{Horizontal, Vertical},
-    widget::{bottom_center, button, center_x, column, container, row, scrollable, stack, text},
+    widget::{
+        bottom_center, button, center_x, column, container, row, scrollable, stack, text,
+        tooltip as tp,
+    },
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Message {
     Tab(Tab),
     AddCollection,
     Rate(Option<f32>),
     Play,
     Goto(CollectionId),
+    Rename(String),
+    Refetch,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct EpisodePageMessage {
     pub id: EpisodeId,
     pub message: Message,
@@ -66,6 +72,18 @@ impl EpisodePage {
                 let msg = HomeMessage::Goto(PageKind::Collection(id));
                 Some(msg)
             }
+            Message::Rename(name) => {
+                let msg = HomeMessage::OpenView(ViewMessage::Rename {
+                    id: self.id.into(),
+                    old: name,
+                });
+
+                Some(msg)
+            }
+            Message::Refetch => {
+                let msg = HomeMessage::Refetch(self.id.into());
+                Some(msg)
+            }
         }
     }
 
@@ -85,7 +103,36 @@ impl EpisodePage {
         let header = {
             let separator = || Element::from(text("•").size(H3));
 
-            let title = text(episode.media.name()).size(H4);
+            let title = {
+                let title = text(episode.media.name()).size(H4);
+
+                let rename = icon(RENAME).size(P);
+
+                let rename = button(rename)
+                    .on_press(EpisodePageMessage {
+                        id,
+                        message: Message::Rename(episode.media.name().to_owned()),
+                    })
+                    .padding(0)
+                    .style(styles::button::text);
+
+                let rename = tooltip(rename, "Rename", tp::Position::Bottom);
+
+                let refetch = icon(REFRESH).size(P);
+
+                let refetch = button(refetch)
+                    .on_press(EpisodePageMessage {
+                        id,
+                        message: Message::Refetch,
+                    })
+                    .padding(0)
+                    .style(styles::button::text);
+                let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Bottom);
+
+                let icons = row!(rename, refetch).spacing(8.0).align_y(Vertical::Center);
+                row!(title, icons).spacing(16.0).align_y(Vertical::Center)
+            };
+
             let duration = duration(&episode.media);
             let rating = button(ratings(&episode.media, true))
                 .on_press(EpisodePageMessage {

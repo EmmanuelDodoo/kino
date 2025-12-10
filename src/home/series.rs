@@ -4,6 +4,7 @@ use crate::models::{
 };
 use crate::utils::filter::*;
 use crate::utils::icons::*;
+use crate::utils::tooltip;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, Sort, styles};
 use iced::widget::Space;
@@ -12,11 +13,12 @@ use iced::{
     alignment::{Horizontal, Vertical},
     time::Instant,
     widget::{
-        self, button, column, container, grid, operation, row, rule, scrollable, space, stack, text,
+        self, button, column, container, grid, operation, row, rule, scrollable, space, stack,
+        text, tooltip as tp,
     },
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Message {
     Add(SeasonId),
     AddSelf,
@@ -28,9 +30,11 @@ pub enum Message {
     Scroll(scrollable::Viewport),
     Rate(Option<f32>),
     Goto(CollectionId),
+    Rename(String),
+    Refetch,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ShowPageMessage {
     pub id: ShowId,
     pub message: Message,
@@ -126,6 +130,18 @@ impl ShowPage {
             }
             Message::Goto(id) => {
                 let msg = HomeMessage::Goto(PageKind::Collection(id));
+                Some(msg)
+            }
+            Message::Rename(name) => {
+                let msg = HomeMessage::OpenView(ViewMessage::Rename {
+                    id: self.id.into(),
+                    old: name,
+                });
+
+                Some(msg)
+            }
+            Message::Refetch => {
+                let msg = HomeMessage::Refetch(self.id.into());
                 Some(msg)
             }
         }
@@ -302,7 +318,35 @@ impl ShowPage {
         let header = {
             let separator = || Element::from(text("•").line_height(0.9).size(H4));
 
-            let title = text(show.media.name()).size(H2);
+            let title = {
+                let title = text(show.media.name()).size(H2);
+                let rename = icon(RENAME).size(P);
+
+                let rename = button(rename)
+                    .on_press(ShowPageMessage {
+                        id,
+                        message: Message::Rename(show.media.name().to_owned()),
+                    })
+                    .padding(0)
+                    .style(styles::button::text);
+
+                let rename = tooltip(rename, "Rename", tp::Position::Bottom);
+
+                let refetch = icon(REFRESH).size(P);
+
+                let refetch = button(refetch)
+                    .on_press(ShowPageMessage {
+                        id,
+                        message: Message::Refetch,
+                    })
+                    .padding(0)
+                    .style(styles::button::text);
+                let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Bottom);
+
+                let icons = row!(rename, refetch).spacing(8.0).align_y(Vertical::Center);
+                row!(title, icons).spacing(16.0).align_y(Vertical::Center)
+            };
+
             let duration = duration(&show.media);
             let rating = button(ratings(&show.media, true))
                 .on_press(ShowPageMessage {

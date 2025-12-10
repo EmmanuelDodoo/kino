@@ -25,9 +25,12 @@ mod series;
 pub mod shared;
 mod shows;
 
-use crate::models::{
-    Collection, CollectionId, CollectionView, Episode, Movie, Season, Show, SimpleCollection,
-    collection::ItemId, collection::Items,
+use crate::{
+    app::{MediaUpdate, MediaUpdateKind},
+    models::{
+        Collection, CollectionId, CollectionView, Episode, Movie, Season, Show, SimpleCollection,
+        collection::{ItemId, Items},
+    },
 };
 
 use crate::app::{FetchId, Message};
@@ -217,12 +220,19 @@ pub enum RatingMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum RenameMessage {
+    Input(String),
+    Submit,
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig,
     Add(ItemId),
     AddToCollection(CollectionId),
     Search,
     Rating(ItemId, Option<f32>),
+    Rename { id: ItemId, old: String },
 }
 
 #[derive(Debug)]
@@ -230,7 +240,17 @@ pub enum View {
     CollectionConfig(CollectionConfig),
     Search(SearchState, Option<CollectionId>),
     CollectionAdd(CollectionAddState),
-    Rating { id: ItemId, rating: Rating },
+    Rating {
+        id: ItemId,
+        rating: Rating,
+    },
+    Rename {
+        id: ItemId,
+        input: widget::Id,
+        old: String,
+        value: String,
+        empty: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -292,6 +312,8 @@ pub enum HomeMessage {
     SearchMessage(SearchMessage),
     CollectionAdd(CollectionAddMessage),
     Rating(RatingMessage),
+    Rename(RenameMessage),
+    Refetch(ItemId),
     OpenView(ViewMessage),
     AddCollection(ItemId, CollectionId),
     CloseView,
@@ -544,6 +566,18 @@ impl Home {
                     self.view = Some(View::Rating { id, rating });
 
                     self.update_page_scroll()
+                }
+                ViewMessage::Rename { id, old } => {
+                    let input = widget::Id::unique();
+                    self.view = Some(View::Rename {
+                        id,
+                        empty: old.is_empty(),
+                        input: input.clone(),
+                        value: old.clone(),
+                        old,
+                    });
+
+                    Task::batch([self.update_page_scroll(), operation::focus(input)])
                 }
             },
             HomeMessage::CollectionConfig(csg) => {
@@ -814,42 +848,14 @@ impl Home {
                         }
 
                         let value = val as f32;
+                        let msg = Message::MediaUpdate(MediaUpdate {
+                            id: *id,
+                            kind: MediaUpdateKind::Rating(value),
+                        });
 
-                        match &mut self.state {
-                            State::Movie {
-                                movie: Thumbnail { media, .. },
-                                ..
-                            } if ItemId::Movie(media.id) == *id => {
-                                let query = media.set_rating(value);
+                        let close = self.close_view();
 
-                                Task::done(Message::Query(query))
-                            }
-                            State::Show {
-                                show: Thumbnail { media, .. },
-                                ..
-                            } if ItemId::Show(media.id) == *id => {
-                                let query = media.set_rating(value);
-
-                                Task::done(Message::Query(query))
-                            }
-                            State::Season {
-                                season: Thumbnail { media, .. },
-                                ..
-                            } if ItemId::Season(media.id) == *id => {
-                                let query = media.set_rating(value);
-
-                                Task::done(Message::Query(query))
-                            }
-                            State::Episode {
-                                episode: Thumbnail { media, .. },
-                                ..
-                            } if ItemId::Episode(media.id) == *id => {
-                                let query = media.set_rating(value);
-
-                                Task::done(Message::Query(query))
-                            }
-                            _ => Task::none(),
-                        }
+                        Task::batch([Task::done(msg), close])
                     }
                     RatingMessage::Submit => {
                         let Rating::Input { input, .. } = &rating else {
@@ -859,41 +865,14 @@ impl Home {
                         let value = input.parse::<f32>().unwrap_or(0.0).clamp(0.0, 5.0);
                         *rating = Rating::Value(value);
 
-                        match &mut self.state {
-                            State::Movie {
-                                movie: Thumbnail { media, .. },
-                                ..
-                            } if ItemId::Movie(media.id) == *id => {
-                                let query = media.set_rating(value);
+                        let msg = Message::MediaUpdate(MediaUpdate {
+                            id: *id,
+                            kind: MediaUpdateKind::Rating(value),
+                        });
 
-                                Task::done(Message::Query(query))
-                            }
-                            State::Show {
-                                show: Thumbnail { media, .. },
-                                ..
-                            } if ItemId::Show(media.id) == *id => {
-                                let query = media.set_rating(value);
+                        let close = self.close_view();
 
-                                Task::done(Message::Query(query))
-                            }
-                            State::Season {
-                                season: Thumbnail { media, .. },
-                                ..
-                            } if ItemId::Season(media.id) == *id => {
-                                let query = media.set_rating(value);
-
-                                Task::done(Message::Query(query))
-                            }
-                            State::Episode {
-                                episode: Thumbnail { media, .. },
-                                ..
-                            } if ItemId::Episode(media.id) == *id => {
-                                let query = media.set_rating(value);
-
-                                Task::done(Message::Query(query))
-                            }
-                            _ => Task::none(),
-                        }
+                        Task::batch([Task::done(msg), close])
                     }
                     RatingMessage::Input(value) => {
                         if let Rating::Input { input, .. } = rating {
@@ -903,6 +882,39 @@ impl Home {
                         Task::none()
                     }
                 }
+            }
+            HomeMessage::Rename(rsg) => {
+                let Some(View::Rename {
+                    id, value, empty, ..
+                }) = self.view.as_mut()
+                else {
+                    return Task::none();
+                };
+
+                match rsg {
+                    RenameMessage::Input(new) => {
+                        *empty = new.is_empty();
+                        *value = new;
+                        Task::none()
+                    }
+                    RenameMessage::Submit => {
+                        let msg = Message::MediaUpdate(MediaUpdate {
+                            id: *id,
+                            kind: MediaUpdateKind::Name(value.clone()),
+                        });
+                        let close = self.close_view();
+
+                        Task::batch([Task::done(msg), close])
+                    }
+                }
+            }
+            HomeMessage::Refetch(id) => {
+                let msg = Message::MediaUpdate(MediaUpdate {
+                    id,
+                    kind: MediaUpdateKind::Refetch,
+                });
+
+                Task::done(msg)
             }
             HomeMessage::CloseView => self.close_view(),
             HomeMessage::Back => self.back(now),
@@ -2067,6 +2079,13 @@ impl Home {
                         self.collections.is_empty(),
                     ),
                     View::Rating { rating, .. } => draw_rating(rating),
+                    View::Rename {
+                        input,
+                        old,
+                        value,
+                        empty,
+                        ..
+                    } => draw_rename(input, old, value, *empty),
                 };
 
                 modal(content, overlay, HomeMessage::CloseView)
@@ -3135,4 +3154,32 @@ fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
         .align_x(Horizontal::Center);
 
     modal_container(content).max_width(400).into()
+}
+
+fn draw_rename<'a>(
+    input: &widget::Id,
+    placeholder: &str,
+    value: &String,
+    is_empty: bool,
+) -> Element<'a, HomeMessage> {
+    let input = text_input(placeholder, value)
+        .on_input(|new| HomeMessage::Rename(RenameMessage::Input(new)))
+        .on_submit(HomeMessage::Rename(RenameMessage::Submit))
+        .id(input.clone())
+        .size(H7)
+        .width(250)
+        .style(move |theme: &Theme, status| {
+            let error = theme.extended_palette().danger.strong.color;
+            let default = text_input::default(theme, status);
+            let border = default.border.rounded(5);
+            let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {
+                border.color(error)
+            } else {
+                border
+            };
+
+            text_input::Style { border, ..default }
+        });
+
+    modal_container(input).padding([6, 8]).into()
 }

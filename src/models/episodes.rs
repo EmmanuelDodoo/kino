@@ -217,13 +217,12 @@ impl Episode {
     }
 
     #[must_use]
-    pub fn delete<'a>(self) -> Query<'a> {
+    pub fn delete<'a>(id: EpisodeId) -> Query<'a> {
         let sql = "DELTE FROM episode WHERE id=:id";
-        let id = ToSqlOutput::from(self.id);
-        let params = [(":id", id)];
+        let params = [(":id", ToSqlOutput::from(id))];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Episode,
             sql,
             params: params.to_vec(),
@@ -232,17 +231,15 @@ impl Episode {
     }
 
     #[must_use]
-    pub fn set_name<'a>(&mut self, name: String) -> Query<'a> {
-        self.name = name;
-
+    pub fn set_name<'a>(id: EpisodeId, name: String) -> Query<'a> {
         let sql = "UPDATE episode SET name=:name WHERE id=:id";
         let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":name", ToSqlOutput::from(self.name.clone())),
+            (":id", ToSqlOutput::from(id)),
+            (":name", ToSqlOutput::from(name)),
         ];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Episode,
             sql,
             params: params.to_vec(),
@@ -251,18 +248,17 @@ impl Episode {
     }
 
     #[must_use]
-    pub fn set_rating<'a>(&mut self, rating: f32) -> Query<'a> {
+    pub fn set_rating<'a>(id: EpisodeId, rating: f32) -> Query<'a> {
         debug_assert!((0.0..=5.0).contains(&rating), "Episode rating out of range");
-        self.rating = Some(rating);
 
         let sql = "UPDATE episode SET rating=:rating WHERE id=:id";
         let params = [
-            (":id", ToSqlOutput::from(self.id)),
+            (":id", ToSqlOutput::from(id)),
             (":rating", ToSqlOutput::from(rating)),
         ];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Episode,
             sql,
             params: params.to_vec(),
@@ -271,63 +267,16 @@ impl Episode {
     }
 
     #[must_use]
-    pub fn set_watch_count<'a>(&mut self, count: u32) -> Query<'a> {
-        self.watch_count = count;
-
-        let sql = "UPDATE episode SET watch_count=:count WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":count", ToSqlOutput::from(count)),
-        ];
+    pub fn refetch<'a>(id: EpisodeId) -> Query<'a> {
+        let sql = "UPDATE episode SET tmdb_id=NULL, fetched=FALSE WHERE id=:id";
+        let params = [(":id", ToSqlOutput::from(id))];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Episode,
+            op: Operation::Update,
             sql,
             params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    #[must_use]
-    pub fn set_progress<'a>(&mut self, progress: f32) -> Query<'a> {
-        assert!(
-            (0.0..1.0).contains(&progress),
-            "Episode progress out of range",
-        );
-        self.progress = progress;
-
-        let sql = "UPDATE episode SET progress=:progress WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":progress", ToSqlOutput::from(progress)),
-        ];
-
-        Query {
-            id: self.id.0,
-            table: Table::Episode,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    #[must_use]
-    pub fn set_last_watched<'a>(&mut self, watched: DateTime<Local>) -> Query<'a> {
-        self.last_watched = Some(watched);
-
-        let sql = "UPDATE episode SET last_watched=:watched WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":watched", datetime_to_sql(&watched)),
-        ];
-
-        Query {
-            id: self.id.0,
-            table: Table::Episode,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
         }
     }
 

@@ -209,12 +209,12 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn delete<'a>(self) -> Query<'a> {
+    pub fn delete<'a>(id: MovieId) -> Query<'a> {
         let sql = "DELETE FROM movie WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(self.id))];
+        let params = [(":id", ToSqlOutput::from(id))];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Movies,
             sql,
             params: params.to_vec(),
@@ -223,17 +223,15 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn set_name<'a>(&mut self, name: String) -> Query<'a> {
-        self.name = name;
-
+    pub fn set_name<'a>(id: MovieId, name: String) -> Query<'a> {
         let sql = "UPDATE movie SET name=:name WHERE id=:id";
         let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":name", ToSqlOutput::from(self.name.clone())),
+            (":id", ToSqlOutput::from(id)),
+            (":name", ToSqlOutput::from(name)),
         ];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Movies,
             sql,
             params: params.to_vec(),
@@ -242,17 +240,29 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn set_watch_count<'a>(&mut self, count: u32) -> Query<'a> {
-        self.watch_count = count;
+    pub fn refetch<'a>(id: MovieId) -> Query<'a> {
+        let sql = "UPDATE movie SET tmdb_id=NULL, fetched=FALSE WHERE id=:id";
+        let params = [(":id", ToSqlOutput::from(id))];
 
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            op: Operation::Update,
+            sql,
+            params: params.to_vec(),
+        }
+    }
+
+    #[must_use]
+    pub fn set_watch_count<'a>(id: MovieId, count: u32) -> Query<'a> {
         let sql = "UPDATE movie SET watch_count=:count WHERE id=:id";
         let params = [
-            (":id", ToSqlOutput::from(self.id)),
+            (":id", ToSqlOutput::from(id)),
             (":count", ToSqlOutput::from(count)),
         ];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Movies,
             sql,
             params: params.to_vec(),
@@ -261,60 +271,17 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn set_rating<'a>(&mut self, rating: f32) -> Query<'a> {
+    pub fn set_rating<'a>(id: MovieId, rating: f32) -> Query<'a> {
         debug_assert!((0.0..=5.0).contains(&rating), "Movie rating out of range");
-        self.rating = Some(rating);
 
         let sql = "UPDATE movie SET rating=:rating WHERE id=:id";
         let params = [
-            (":id", ToSqlOutput::from(self.id)),
+            (":id", ToSqlOutput::from(id)),
             (":rating", ToSqlOutput::from(rating)),
         ];
 
         Query {
-            id: self.id.0,
-            table: Table::Movies,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    #[must_use]
-    pub fn set_progress<'a>(&mut self, progress: f32) -> Query<'a> {
-        assert!(
-            (0.0..1.0).contains(&progress),
-            "Episode progress out of range",
-        );
-        self.progress = progress;
-
-        let sql = "UPDATE movie SET progress=:progress WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":progress", ToSqlOutput::from(progress)),
-        ];
-
-        Query {
-            id: self.id.0,
-            table: Table::Movies,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    #[must_use]
-    pub fn set_last_watched<'a>(&mut self, watched: DateTime<Local>) -> Query<'a> {
-        self.last_watched = Some(watched);
-
-        let sql = "UPDATE movie SET last_watched=:watched WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":watched", datetime_to_sql(&watched)),
-        ];
-
-        Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Movies,
             sql,
             params: params.to_vec(),

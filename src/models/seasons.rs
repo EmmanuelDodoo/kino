@@ -227,13 +227,12 @@ impl Season {
     }
 
     #[must_use]
-    pub fn delete<'a>(self) -> Query<'a> {
+    pub fn delete<'a>(id: SeasonId) -> Query<'a> {
         let sql = "DELETE FROM season WHERE id=:id";
-        let id = ToSqlOutput::from(self.id);
-        let params = [(":id", id)];
+        let params = [(":id", ToSqlOutput::from(id))];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Season,
             sql,
             params: params.to_vec(),
@@ -242,17 +241,15 @@ impl Season {
     }
 
     #[must_use]
-    pub fn set_name<'a>(&mut self, name: String) -> Query<'a> {
-        self.name = name;
-
+    pub fn set_name<'a>(id: SeasonId, name: String) -> Query<'a> {
         let sql = "UPDATE season SET name=:name WHERE id=:id";
         let params = vec![
-            (":id", ToSqlOutput::from(self.id)),
-            (":name", ToSqlOutput::from(self.name.clone())),
+            (":id", ToSqlOutput::from(id)),
+            (":name", ToSqlOutput::from(name)),
         ];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Season,
             sql,
             params,
@@ -261,22 +258,35 @@ impl Season {
     }
 
     #[must_use]
-    pub fn set_rating<'a>(&mut self, rating: f32) -> Query<'a> {
+    pub fn set_rating<'a>(id: SeasonId, rating: f32) -> Query<'a> {
         debug_assert!((0.0..=5.0).contains(&rating), "Season rating out of range");
-        self.rating = Some(rating);
 
         let sql = "UPDATE season SET rating=:rating WHERE id=:id";
         let params = vec![
-            (":id", ToSqlOutput::from(self.id)),
+            (":id", ToSqlOutput::from(id)),
             (":rating", ToSqlOutput::from(rating)),
         ];
 
         Query {
-            id: self.id.0,
+            id: id.0,
             table: Table::Season,
             sql,
             params,
             op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn refetch<'a>(id: SeasonId) -> Query<'a> {
+        let sql = "UPDATE season SET tmdb_id=NULL, fetched=FALSE WHERE id=:id";
+        let params = [(":id", ToSqlOutput::from(id))];
+
+        Query {
+            id: id.0,
+            table: Table::Season,
+            op: Operation::Update,
+            sql,
+            params: params.to_vec(),
         }
     }
 

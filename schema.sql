@@ -596,3 +596,18 @@ duration = COALESCE((
     WHERE id = NEW.show_id;
 END;
 
+CREATE TRIGGER show_refetch_tr AFTER UPDATE OF tmdb_id ON tv_show WHEN NEW.tmdb_id IS NULL
+BEGIN
+	UPDATE season
+	SET tmdb_id=NULL,
+	fetched=FALSE
+	WHERE show_id = NEW.id;
+END;
+
+CREATE TRIGGER season_refetch_tr AFTER UPDATE OF tmdb_id ON season WHEN NEW.tmdb_id IS NULL
+BEGIN
+	UPDATE episode
+	SET tmdb_id=NULL,
+	fetched=FALSE
+	WHERE season_id = NEW.id;
+END;

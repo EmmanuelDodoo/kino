@@ -2,24 +2,30 @@ use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{CollectionId, ItemId, Media, Movie, MovieId, SimpleCollection};
 use crate::utils::icons::*;
 use crate::utils::styles;
+use crate::utils::tooltip;
 use crate::utils::typo::*;
 use iced::widget::Space;
 use iced::{
     Color, Element, Length, Shadow,
     alignment::{Horizontal, Vertical},
-    widget::{bottom_center, button, center_x, column, container, row, scrollable, stack, text},
+    widget::{
+        bottom_center, button, center_x, column, container, row, scrollable, stack, text,
+        tooltip as tp,
+    },
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Message {
     Tab(Tab),
     Play,
     AddCollection,
     Rate(Option<f32>),
     Goto(CollectionId),
+    Rename(String),
+    Refetch,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct MoviePageMessage {
     pub id: MovieId,
     pub message: Message,
@@ -62,8 +68,20 @@ impl MoviePage {
                     HomeMessage::OpenView(ViewMessage::Rating(ItemId::Movie(self.id), rating));
                 Some(msg)
             }
+            Message::Rename(name) => {
+                let msg = HomeMessage::OpenView(ViewMessage::Rename {
+                    id: self.id.into(),
+                    old: name,
+                });
+
+                Some(msg)
+            }
             Message::Goto(id) => {
                 let msg = HomeMessage::Goto(PageKind::Collection(id));
+                Some(msg)
+            }
+            Message::Refetch => {
+                let msg = HomeMessage::Refetch(self.id.into());
                 Some(msg)
             }
         }
@@ -86,6 +104,32 @@ impl MoviePage {
             let separator = || Element::from(text("•").size(H3));
 
             let title = text(movie.media.name()).size(H4);
+            let rename = icon(RENAME).size(P);
+
+            let rename = button(rename)
+                .on_press(MoviePageMessage {
+                    id,
+                    message: Message::Rename(movie.media.name().to_owned()),
+                })
+                .padding(0)
+                .style(styles::button::text);
+
+            let rename = tooltip(rename, "Rename", tp::Position::Bottom);
+
+            let refetch = icon(REFRESH).size(P);
+
+            let refetch = button(refetch)
+                .on_press(MoviePageMessage {
+                    id,
+                    message: Message::Refetch,
+                })
+                .padding(0)
+                .style(styles::button::text);
+            let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Bottom);
+
+            let icons = row!(rename, refetch).spacing(8.0).align_y(Vertical::Center);
+            let title = row!(title, icons).spacing(16.0).align_y(Vertical::Center);
+
             let duration = duration(&movie.media);
             let rating = button(ratings(&movie.media, true))
                 .on_press(MoviePageMessage {
