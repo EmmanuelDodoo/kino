@@ -19,7 +19,8 @@ use std::time::Duration;
 use crate::home::shared::Icon;
 use crate::models::{CollectionId, SimpleCollection};
 use crate::utils::{
-    self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, empty,
+    self, PlayId, PlayItem, PlayerAction, Playlist, SubtitleDescription, SubtitleFont,
+    VideoSettings, empty,
     icons::{self, sized_button},
     loading_animation, loading_svg, modal_container, styles, tooltip,
     typo::{self, *},
@@ -67,6 +68,7 @@ pub struct Player {
     duration: f64,
     watch_time: Duration,
     last_frame: Option<Instant>,
+    subtitles: Option<String>,
 }
 
 #[derive(Debug)]
@@ -112,6 +114,7 @@ pub enum ManagerMessage {
     CollectionAddMessage(CollectionAddMessage),
     Playlist(PlaylistMessge),
     ClosePanel,
+    Subs(Option<String>),
     None,
 }
 
@@ -191,6 +194,7 @@ impl Manager {
             auto_next: _autoplay,
             completion_point: _completion,
             completion_watch_time: _completion_watch,
+            subtitles: _subtitles,
         } = self.settings;
 
         player.video.set_volume(volume);
@@ -479,6 +483,15 @@ impl Manager {
                 }
             },
             ManagerMessage::ClosePanel => self.close_panel(),
+            ManagerMessage::Subs(subs) => {
+                let Some(Player { subtitles, .. }) = self.player_mut() else {
+                    return Task::none();
+                };
+
+                *subtitles = subs.map(|subs| html_escape::decode_html_entities(&subs).into_owned());
+
+                Task::none()
+            }
         }
     }
 
@@ -853,7 +866,8 @@ impl Manager {
                         .on_click(handle_clicks)
                         .content_fit(iced::ContentFit::Contain)
                         .on_end_of_stream(ManagerMessage::EndOfStream)
-                        .on_new_frame(ManagerMessage::NewFrame),
+                        .on_new_frame(ManagerMessage::NewFrame)
+                        .on_subtitle_text(ManagerMessage::Subs),
                 )
                 .align_x(iced::Alignment::Center)
                 .align_y(iced::Alignment::Center)
@@ -867,13 +881,42 @@ impl Manager {
         }
     }
 
+    fn subtitle_draw(&self) -> Element<'_, ManagerMessage> {
+        if !self.settings.show_subtitles {
+            return empty();
+        }
+
+        let Some(Player {
+            subtitles: Some(subtitles),
+            ..
+        }) = self.player()
+        else {
+            return empty();
+        };
+
+        let subtitles = draw_subtitles(subtitles, self.settings.subtitles);
+
+        let content = row!(space::horizontal(), subtitles, space::horizontal())
+            .width(Length::Fill)
+            .align_y(Vertical::Center);
+
+        let content = column!(content, space::vertical().height(8));
+
+        content.into()
+    }
+
     pub fn view(&self, now: Instant) -> Element<'_, ManagerMessage> {
         let content = stack!(
             self.video_elem(now),
-            column!(self.top(), space::vertical(), self.media_controls(now))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding([3, 6])
+            column!(
+                self.top(),
+                space::vertical(),
+                self.subtitle_draw(),
+                self.media_controls(now)
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding([3, 6])
         )
         .height(Length::Fill)
         .width(Length::Fill);
@@ -1320,6 +1363,7 @@ fn load_video<Message: 'static + MaybeSend>(
                 duration,
                 watch_time: Duration::ZERO,
                 last_frame: None,
+                subtitles: None,
             })
         }),
         move |res| f(res.unwrap()),
@@ -1568,4 +1612,48 @@ fn draw_collection_add<'a>(
         .align_x(Horizontal::Center);
 
     modal_container(content).max_width(400).into()
+}
+
+fn draw_subtitles<'a>(
+    subtitles: &'a String,
+    description: SubtitleDescription,
+) -> Element<'a, ManagerMessage> {
+    let rgba = |color: u32| {
+        let r = (color & 0xff000000) >> 24;
+        let g = (color & 0x00ff0000) >> 16;
+        let b = (color & 0x0000ff00) >> 8;
+        let a = color & 0xff;
+
+        let a = (a as f32) / 255.0;
+
+        iced::color!(r as u8, g as u8, b as u8, a)
+    };
+
+    let SubtitleDescription {
+        size,
+        color,
+        font,
+        background_color,
+    } = description;
+
+    let content = text(subtitles)
+        .size(size)
+        .color(rgba(color))
+        .font(font)
+        .align_y(Vertical::Center);
+
+    let subtitles = container(content)
+        .align_y(Vertical::Center)
+        .padding([6, 6])
+        .style(move |_| {
+            let border = iced::border::rounded(5);
+            container::Style {
+                background: Some(rgba(background_color).into()),
+                text_color: None,
+                border,
+                ..Default::default()
+            }
+        });
+
+    subtitles.into()
 }

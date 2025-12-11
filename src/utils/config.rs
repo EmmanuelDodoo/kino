@@ -2,6 +2,7 @@ use super::{Action, HomeAction, Layout, PlayerAction, Screen, SettingsAction};
 pub use keys::{KeyModifier, KeyPress, KeyStore};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};
+pub use subtitles::{SubtitleDescription, SubtitleFont};
 
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub enum AppTheme {
@@ -78,8 +79,8 @@ impl std::fmt::Display for AppTheme {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(into = "Player", from = "Player")]
-// todo filters, subtitles
+#[serde(default = "VideoSettings::defaults", rename = "Player")]
+// todo filters
 pub struct VideoSettings {
     pub thumbnail_interval: u32,
     pub volume: f64,
@@ -99,6 +100,8 @@ pub struct VideoSettings {
     pub completion_point: f64,
     /// The percentage watch time at which a video is considered 'watched'.
     pub completion_watch_time: f64,
+
+    pub subtitles: SubtitleDescription,
 }
 
 impl VideoSettings {
@@ -118,117 +121,13 @@ impl VideoSettings {
             auto_next: true,
             completion_point: 0.95,
             completion_watch_time: 0.75,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Player {
-    thumbnail_interval: Option<u32>,
-    volume: Option<f64>,
-    speed: Option<f64>,
-    gamma: Option<f64>,
-    volume_change_amt: Option<f64>,
-    seek_change_amt: Option<f64>,
-    seek_shift_change_amt: Option<f64>,
-    speed_change_amt: Option<f64>,
-    show_subtitles: Option<bool>,
-    muted: Option<bool>,
-    auto_start: Option<bool>,
-    auto_next: Option<bool>,
-    completion_point: Option<f64>,
-    completion_watch_time: Option<f64>,
-}
-
-impl From<VideoSettings> for Player {
-    fn from(value: VideoSettings) -> Self {
-        let VideoSettings {
-            thumbnail_interval,
-            volume,
-            speed,
-            gamma,
-            volume_change_amt,
-            seek_change_amt,
-            seek_shift_change_amt,
-            speed_change_amt,
-            show_subtitles,
-            muted,
-            auto_start,
-            auto_next,
-            completion_point,
-            completion_watch_time,
-        } = value;
-
-        let defaults = VideoSettings::defaults();
-
-        Self {
-            thumbnail_interval: (thumbnail_interval != defaults.thumbnail_interval)
-                .then_some(thumbnail_interval),
-            volume: (volume != defaults.volume).then_some(volume),
-            speed: (speed != defaults.speed).then_some(speed),
-            gamma: (gamma != defaults.gamma).then_some(gamma),
-            volume_change_amt: (volume_change_amt != defaults.volume_change_amt)
-                .then_some(volume_change_amt),
-            seek_change_amt: (seek_change_amt != defaults.seek_change_amt)
-                .then_some(seek_change_amt),
-            seek_shift_change_amt: (seek_shift_change_amt != defaults.seek_shift_change_amt)
-                .then_some(seek_shift_change_amt),
-            speed_change_amt: (speed_change_amt != defaults.speed_change_amt)
-                .then_some(speed_change_amt),
-            show_subtitles: (show_subtitles != defaults.show_subtitles).then_some(show_subtitles),
-            muted: (muted != defaults.muted).then_some(muted),
-            auto_start: (auto_start != defaults.auto_start).then_some(auto_start),
-            auto_next: (auto_next != defaults.auto_next).then_some(auto_next),
-            completion_point: (completion_point != defaults.completion_point)
-                .then_some(completion_point),
-            completion_watch_time: (completion_watch_time != defaults.completion_watch_time)
-                .then_some(completion_watch_time),
-        }
-    }
-}
-
-impl From<Player> for VideoSettings {
-    fn from(value: Player) -> Self {
-        let Player {
-            thumbnail_interval,
-            volume,
-            speed,
-            gamma,
-            volume_change_amt,
-            seek_change_amt,
-            seek_shift_change_amt,
-            speed_change_amt,
-            show_subtitles,
-            muted,
-            auto_start,
-            auto_next,
-            completion_point,
-            completion_watch_time,
-        } = value;
-
-        let defaults = Self::defaults();
-
-        Self {
-            thumbnail_interval: thumbnail_interval.unwrap_or(defaults.thumbnail_interval),
-            volume: volume.unwrap_or(defaults.volume),
-            speed: speed.unwrap_or(defaults.speed),
-            gamma: gamma.unwrap_or(defaults.gamma),
-            volume_change_amt: volume_change_amt.unwrap_or(defaults.volume_change_amt),
-            seek_change_amt: seek_change_amt.unwrap_or(defaults.seek_change_amt),
-            seek_shift_change_amt: seek_shift_change_amt.unwrap_or(defaults.seek_shift_change_amt),
-            speed_change_amt: speed_change_amt.unwrap_or(defaults.speed_change_amt),
-            show_subtitles: show_subtitles.unwrap_or(defaults.show_subtitles),
-            muted: muted.unwrap_or(defaults.muted),
-            auto_start: auto_start.unwrap_or(defaults.auto_start),
-            auto_next: auto_next.unwrap_or(defaults.auto_next),
-            completion_point: completion_point.unwrap_or(defaults.completion_point),
-            completion_watch_time: completion_watch_time.unwrap_or(defaults.completion_watch_time),
+            subtitles: SubtitleDescription::defaults(),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(into = "General", from = "General")]
+#[serde(default = "GeneralSettings::defaults", rename = "General")]
 pub struct GeneralSettings {
     pub layout: Layout,
     pub refresh_interval: Duration,
@@ -1858,5 +1757,63 @@ mod keys {
             ),
         ]
         .into_iter()
+    }
+}
+
+mod subtitles {
+    use iced::{Font, font};
+    use serde::{
+        Deserialize, Deserializer, Serialize, Serializer,
+        de::{self, Visitor},
+        ser::SerializeStruct,
+    };
+
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+    #[serde(default = "SubtitleDescription::defaults")]
+    pub struct SubtitleDescription {
+        pub size: u32,
+        pub color: u32,
+        #[serde(skip)]
+        pub font: SubtitleFont,
+        pub background_color: u32,
+    }
+
+    impl SubtitleDescription {
+        pub(super) fn defaults() -> Self {
+            Self {
+                size: 20,
+                color: 0xf2f2f2ff,
+                font: SubtitleFont {
+                    family: font::Family::Serif,
+                    weight: font::Weight::Semibold,
+                    style: font::Style::Normal,
+                },
+                background_color: 0xaf,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct SubtitleFont {
+        pub family: font::Family,
+        pub weight: font::Weight,
+        pub style: font::Style,
+    }
+
+    impl From<SubtitleFont> for Font {
+        fn from(value: SubtitleFont) -> Self {
+            let SubtitleFont {
+                family,
+                weight,
+                style,
+            } = value;
+
+            Font {
+                family,
+                weight,
+                style,
+                stretch: font::Stretch::Normal,
+            }
+        }
     }
 }

@@ -3,8 +3,8 @@ use crate::db::Operation;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
     AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
-    SettingsAction, VideoSettings, icons, modal_container, picklist_handle, sized_button, styles,
-    tooltip, typo::*,
+    SettingsAction, SubtitleDescription, SubtitleFont, VideoSettings, icons, modal_container,
+    picklist_handle, sized_button, styles, tooltip, typo::*,
 };
 use crate::widgets::{modal, toast, toggler};
 use iced::{
@@ -469,7 +469,7 @@ impl Settings {
 
                     self.directories.push((new, false, Operation::Insert));
 
-                    Task::none()
+                    self.update_scroll()
                 }
             },
             SettingsMessage::ToggleDirectory(id) => {
@@ -1046,6 +1046,7 @@ impl Settings {
             // I cannot think of a reason why these should persist here
             // plus I'm lazy
             muted: _mute,
+            subtitles,
         } = &self.config.video;
 
         let thumbnail = {
