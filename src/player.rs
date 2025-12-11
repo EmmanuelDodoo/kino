@@ -185,17 +185,13 @@ impl Manager {
             seek_shift_change_amt: _seek_shift_amt,
             volume_change_amt: _volume,
             speed_change_amt: _speed,
-            show_subtitles,
+            show_subtitles: _show_subtitles,
             muted,
             auto_start,
             auto_next: _autoplay,
             completion_point: _completion,
             completion_watch_time: _completion_watch,
         } = self.settings;
-
-        if show_subtitles {
-            player.video.toggle_subtitle()
-        };
 
         player.video.set_volume(volume);
         player.video.set_speed(speed).unwrap();
@@ -1078,14 +1074,7 @@ impl Manager {
     }
 
     fn subtitles_toggle(&mut self) -> Task<Message> {
-        let shown = if let Some(player) = self.player_mut() {
-            player.video.toggle_subtitle();
-            player.video.subtitles()
-        } else {
-            false
-        };
-
-        self.settings.show_subtitles = shown;
+        self.settings.show_subtitles = !self.settings.show_subtitles;
         Task::none()
     }
 

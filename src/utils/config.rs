@@ -107,7 +107,7 @@ impl VideoSettings {
             thumbnail_interval: 10,
             volume: 1.0,
             speed: 1.0,
-            gamma: 1.3,
+            gamma: 1.0,
             volume_change_amt: 0.05,
             seek_change_amt: 5.0,
             seek_shift_change_amt: 10.0,
