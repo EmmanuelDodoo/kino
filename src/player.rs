@@ -34,6 +34,35 @@ use crate::variants;
 use crate::widgets::{self, modal, toggler};
 use crate::{app::Message, utils::CANCEL};
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Subtitle {
+    Embedded(TextTag),
+    Loaded(url::Url),
+}
+
+impl std::fmt::Display for Subtitle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Embedded(tag) => tag.fmt(f),
+            Self::Loaded(url) => {
+                let path = url.to_file_path().unwrap();
+
+                let file = path
+                    .file_name()
+                    .expect("Cannot have a non-file subtitles file");
+
+                file.display().fmt(f)
+            }
+        }
+    }
+}
+
+impl From<TextTag> for Subtitle {
+    fn from(value: TextTag) -> Self {
+        Self::Embedded(value)
+    }
+}
+
 #[derive(Debug)]
 enum Modal {
     CollectionAdd {
@@ -44,11 +73,9 @@ enum Modal {
     },
     Config {
         tab: ConfigTab,
-        subtitle: Option<PathBuf>,
-        original_text: Option<TextTag>,
-        current_text: Option<TextTag>,
-        current_audio: Option<AudioTag>,
-        original_audio: Option<AudioTag>,
+        subtitle_uri: Option<PathBuf>,
+        selected_text: Option<Subtitle>,
+        selected_audio: Option<AudioTag>,
         text_color: String,
         background_color: String,
     },
@@ -99,7 +126,7 @@ pub enum ConfigMessage {
     SelectFile,
     Selected(Option<PathBuf>),
     ClearSelected,
-    CurrentText(TextTag),
+    CurrentText(Subtitle),
     CurrentAudio(AudioTag),
     SubSize(String),
     SubSizeIncr,
@@ -119,7 +146,9 @@ pub struct Player {
     watch_time: Duration,
     last_frame: Option<Instant>,
     subtitles: Option<String>,
-    embedded_subtitles: Vec<TextTag>,
+    current_text: Option<Subtitle>,
+    current_audio: Option<AudioTag>,
+    available_subtitles: Vec<Subtitle>,
     embedded_audio: Vec<AudioTag>,
 }
 
@@ -522,11 +551,9 @@ impl Manager {
             ManagerMessage::Config(csg) => {
                 let Some(Modal::Config {
                     tab,
-                    subtitle,
-                    current_text,
-                    current_audio,
-                    original_text: _text,
-                    original_audio: _audio,
+                    subtitle_uri,
+                    selected_text,
+                    selected_audio,
                     text_color,
                     background_color,
                 }) = self.modal.as_mut()
@@ -645,19 +672,26 @@ impl Manager {
                     )
                     .map(Message::Player),
                     ConfigMessage::Selected(selected) => {
-                        *subtitle = selected;
+                        *subtitle_uri = selected;
                         Task::none()
                     }
                     ConfigMessage::ClearSelected => {
-                        subtitle.take();
+                        subtitle_uri.take();
+
+                        if let State::Ready(player) = &mut self.state {
+                            player
+                                .available_subtitles
+                                .retain(|sub| matches!(sub, Subtitle::Embedded(_)));
+                        }
+
                         Task::none()
                     }
                     ConfigMessage::CurrentText(text) => {
-                        *current_text = Some(text);
+                        *selected_text = Some(text);
                         Task::none()
                     }
                     ConfigMessage::CurrentAudio(audio) => {
-                        *current_audio = Some(audio);
+                        *selected_audio = Some(audio);
                         Task::none()
                     }
                     ConfigMessage::SubSize(size) => {
@@ -1162,11 +1196,9 @@ impl Manager {
             ),
             Some(Modal::Config {
                 tab,
-                subtitle,
-                current_text,
-                current_audio,
-                original_text: _text,
-                original_audio: _audio,
+                subtitle_uri,
+                selected_text,
+                selected_audio,
                 text_color,
                 background_color,
             }) => {
@@ -1174,7 +1206,7 @@ impl Manager {
                     .player()
                     .map(|player| {
                         (
-                            player.embedded_subtitles.as_slice(),
+                            player.available_subtitles.as_slice(),
                             player.embedded_audio.as_slice(),
                         )
                     })
@@ -1185,10 +1217,10 @@ impl Manager {
                         &self.settings,
                         subs,
                         audio,
-                        subtitle,
+                        subtitle_uri,
                         *tab,
-                        current_text,
-                        current_audio,
+                        selected_text,
+                        selected_audio,
                         text_color,
                         background_color,
                     ),
@@ -1464,55 +1496,192 @@ impl Manager {
         let previous = self.modal.take();
         if let State::Ready(player) = &mut self.state {
             if let Some(Modal::Config {
-                subtitle,
+                subtitle_uri,
                 tab: _tab,
-                current_text,
-                current_audio,
-                original_text,
-                original_audio,
+                selected_text,
+                selected_audio,
                 text_color: _text,
                 background_color: _background,
             }) = previous
             {
+                let original_uri = player.item.subtitle_uri.clone();
+                player.item.subtitle_uri = subtitle_uri.clone();
                 apply_settings(self.settings, player);
-                if let Some(subtitles) = subtitle {
-                    let subtitles = match subtitles.canonicalize() {
-                        Ok(subtitles) => subtitles,
-                        Err(error) => return Task::done(Message::error(error)),
-                    };
 
-                    let url = match url::Url::from_file_path(subtitles) {
-                        Ok(url) => url,
-                        Err(_) => {
-                            return Task::done(Message::error(
-                                "Cannot generate url from subtitle path",
-                            ));
-                        }
-                    };
-
+                let set_loaded = |player: &mut Player, url: url::Url| {
                     let position = player.video.position();
 
                     if let Err(error) = player.video.set_subtitle_url(&url) {
-                        return Task::done(Message::error(error));
+                        return Some(Message::error(error));
                     };
 
                     std::thread::sleep(std::time::Duration::from_millis(150));
                     if let Err(error) = player.video.seek(position, false) {
-                        return Task::done(Message::error(error));
+                        return Some(Message::error(error));
                     };
 
-                    player.embedded_subtitles = player.video.available_subtitles();
-                    player.embedded_audio = player.video.available_audio();
-                } else if let Some(text) = current_text {
-                    let changed = original_text.as_ref().map(|og| og != &text).unwrap_or(true);
+                    player.current_text = Some(Subtitle::Loaded(url.clone()));
 
-                    if changed {
-                        player.video.set_text(text);
+                    let embedded = player
+                        .video
+                        .available_subtitles()
+                        .into_iter()
+                        .map(|tag| Subtitle::from(tag));
+
+                    player.available_subtitles = std::iter::once(url)
+                        .map(|url| Subtitle::Loaded(url))
+                        .chain(embedded)
+                        .collect();
+
+                    None
+                };
+
+                let mut set_uri = |uri: PathBuf| {
+                    let path = match uri.canonicalize() {
+                        Ok(subtitles) => subtitles,
+                        Err(error) => return Some(Message::error(error)),
+                    };
+
+                    let url = match url::Url::from_file_path(path) {
+                        Ok(url) => url,
+                        Err(_) => {
+                            return Some(Message::error("Cannot generate url from subtitle path"));
+                        }
+                    };
+
+                    set_loaded(player, url)
+                };
+
+                match (original_uri, subtitle_uri) {
+                    (None, None) => {
+                        let changed = selected_text != player.current_text;
+                        if let Some(subtitle) = selected_text
+                            && changed
+                        {
+                            match subtitle {
+                                Subtitle::Loaded(url) => {
+                                    if let Some(message) = set_loaded(player, url) {
+                                        return Task::done(message);
+                                    }
+                                }
+                                Subtitle::Embedded(tag) => {
+                                    player.video.set_text(tag.clone());
+                                    player.current_text = Some(tag.into());
+                                }
+                            }
+                        }
+                    }
+                    (None, Some(subtitle_uri)) => {
+                        if let Some(message) = set_uri(subtitle_uri) {
+                            return Task::done(message);
+                        }
+                    }
+                    (Some(_), None) => {
+                        let selected_text = player.available_subtitles.first();
+                        let changed = selected_text != player.current_text.as_ref();
+                        if let Some(subtitle) = selected_text
+                            && changed
+                        {
+                            match subtitle {
+                                Subtitle::Loaded(url) => {
+                                    if let Some(message) = set_loaded(player, url.clone()) {
+                                        return Task::done(message);
+                                    }
+                                }
+                                Subtitle::Embedded(tag) => {
+                                    player.video.set_text(tag.clone());
+                                    player.current_text = Some(tag.clone().into());
+                                }
+                            }
+                        }
+                    }
+                    (Some(og), Some(selected)) if og != selected => {
+                        if let Some(message) = set_uri(selected) {
+                            return Task::done(message);
+                        }
+                    }
+                    (Some(_), Some(_)) => {
+                        let changed = selected_text != player.current_text;
+                        if let Some(subtitle) = selected_text
+                            && changed
+                        {
+                            match subtitle {
+                                Subtitle::Loaded(url) => {
+                                    if let Some(message) = set_loaded(player, url) {
+                                        return Task::done(message);
+                                    }
+                                }
+                                Subtitle::Embedded(tag) => {
+                                    player.video.set_text(tag.clone());
+                                    player.current_text = Some(tag.into());
+                                }
+                            }
+                        }
                     }
                 }
 
-                if let Some(audio) = current_audio {
-                    let changed = original_audio
+                // og_uri, selected_uri
+                // % Some, None => first tag,
+                // Some, Some, != => selected
+                // Some, Some == => if tag changed, tag else {}
+                // % None, Some => selected
+                // * None, None => tag
+                //
+                // match subtitle_uri {
+                //     Some(subtitle_uri) => {}
+                //     None => {
+                //
+                //     }
+                // }
+
+                // if uri_changed {
+                //
+                // }
+
+                // if let Some(subtitle_uri) = subtitle_uri {
+                //     let subtitles = match subtitle_uri.canonicalize() {
+                //         Ok(subtitles) => subtitles,
+                //         Err(error) => return Task::done(Message::error(error)),
+                //     };
+                //
+                //     let url = match url::Url::from_file_path(subtitles) {
+                //         Ok(url) => url,
+                //         Err(_) => {
+                //             return Task::done(Message::error(
+                //                 "Cannot generate url from subtitle path",
+                //             ));
+                //         }
+                //     };
+                //
+                //     let position = player.video.position();
+                //
+                //     if let Err(error) = player.video.set_subtitle_url(&url) {
+                //         return Task::done(Message::error(error));
+                //     };
+                //
+                //     std::thread::sleep(std::time::Duration::from_millis(150));
+                //     if let Err(error) = player.video.seek(position, false) {
+                //         return Task::done(Message::error(error));
+                //     };
+                //
+                //     player.current_text = player.video.get_text();
+                //     player.available_subtitles = player.video.available_subtitles();
+                //     player.embedded_audio = player.video.available_audio();
+                // } else if let Some(text) = selected_text {
+                //     let changed = player
+                //         .current_text
+                //         .as_ref()
+                //         .map(|og| og != &text)
+                //         .unwrap_or(true);
+                //
+                //     if changed {
+                //         player.video.set_text(text);
+                //     }
+                // }
+
+                if let Some(audio) = selected_audio {
+                    let changed = player
+                        .current_audio
                         .as_ref()
                         .map(|og| og != &audio)
                         .unwrap_or(true);
@@ -1556,20 +1725,23 @@ impl Manager {
     }
 
     fn video_config(&mut self) -> Task<Message> {
-        let (current_text, current_audio) = if let State::Ready(player) = &mut self.state {
-            player.video.set_paused(true);
-            (player.video.get_text(), player.video.get_audio())
-        } else {
-            (None, None)
-        };
+        let (selected_text, selected_audio, subtitle_uri) =
+            if let State::Ready(player) = &mut self.state {
+                player.video.set_paused(true);
+                (
+                    player.current_text.clone(),
+                    player.current_audio.clone(),
+                    player.item.subtitle_uri.clone(),
+                )
+            } else {
+                (None, None, None)
+            };
 
         self.modal = Some(Modal::Config {
             tab: ConfigTab::General,
-            subtitle: None,
-            original_text: current_text.clone(),
-            current_text,
-            original_audio: current_audio.clone(),
-            current_audio,
+            subtitle_uri,
+            selected_text,
+            selected_audio,
             text_color: format!("#{:08x}", self.settings.subtitles.color),
             background_color: format!("#{:08x}", self.settings.subtitles.background_color),
         });
@@ -1668,6 +1840,34 @@ fn load_video<Message: 'static + MaybeSend>(
             let mut video = Video::new(&path).unwrap();
             let duration = video.duration().as_secs_f64();
 
+            let subtitles_url = item
+                .subtitle_uri
+                .as_ref()
+                .and_then(|path| {
+                    path.canonicalize()
+                        .inspect_err(|error| tracing::error!("Video Subtitle error \n{error}"))
+                        .ok()
+                })
+                .and_then(|path| {
+                    url::Url::from_file_path(path)
+                        .inspect_err(|_| {
+                            tracing::error!("Video Subtitle error. Cannot create Url from path")
+                        })
+                        .ok()
+                });
+
+            if let Some(url) = subtitles_url.as_ref() {
+                if let Err(error) = video.set_subtitle_url(url) {
+                    tracing::error!("Video Subtitle error \n{error}")
+                }
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            // if let Err(error) = player.video.seek(position, false) {
+            //     return Task::done(Message::error(error));
+            // };
+            //
+
             let progress = if item.progress >= 1.0 {
                 0.0
             } else {
@@ -1683,7 +1883,23 @@ fn load_video<Message: 'static + MaybeSend>(
 
             video.set_paused(true);
 
-            let subtitles = video.available_subtitles();
+            let loaded_text = subtitles_url.map(|url| Subtitle::Loaded(url));
+
+            let curr_text = if loaded_text.is_none() {
+                video.get_text().map(|tag| Subtitle::from(tag))
+            } else {
+                loaded_text.clone()
+            };
+
+            let embedded = video
+                .available_subtitles()
+                .into_iter()
+                .map(|tag| Subtitle::from(tag));
+
+            let subtitles = loaded_text.into_iter().chain(embedded).collect();
+
+            let curr_audio = video.get_audio();
+
             let audio = video.available_audio();
 
             Arc::new(Player {
@@ -1696,8 +1912,10 @@ fn load_video<Message: 'static + MaybeSend>(
                 watch_time: Duration::ZERO,
                 last_frame: None,
                 subtitles: None,
+                current_text: curr_text,
+                current_audio: curr_audio,
                 embedded_audio: audio,
-                embedded_subtitles: subtitles,
+                available_subtitles: subtitles,
             })
         }),
         move |res| f(res.unwrap()),
@@ -1990,12 +2208,12 @@ fn draw_collection_add<'a>(
 
 fn draw_config<'a>(
     config: &'a VideoSettings,
-    embedded: &'a [TextTag],
+    embedded: &'a [Subtitle],
     audio: &'a [AudioTag],
     subtitle: &Option<PathBuf>,
     curr_tab: ConfigTab,
-    current_text: &Option<TextTag>,
-    current_audio: &Option<AudioTag>,
+    selected_text: &Option<Subtitle>,
+    selected_audio: &Option<AudioTag>,
     text_color: &'a str,
     background_color: &'a str,
 ) -> Element<'a, ManagerMessage> {
@@ -2225,6 +2443,7 @@ fn draw_config<'a>(
                         .spacing(4)
                         .align_y(Vertical::Center),
                     )
+                    .padding([2, 5])
                     .style(styles::button::text)
                     .on_press(ConfigMessage::ClearSelected)
                     .into(),
@@ -2241,7 +2460,7 @@ fn draw_config<'a>(
 
                 let handle = picklist_handle(size);
 
-                let pick = pick_list(embedded, current_text.clone(), ConfigMessage::CurrentText)
+                let pick = pick_list(embedded, selected_text.clone(), ConfigMessage::CurrentText)
                     .handle(handle)
                     .padding(padding)
                     .text_size(size);
@@ -2331,11 +2550,11 @@ fn draw_config<'a>(
         }
         ConfigTab::Audio => {
             let selection = {
-                let label = label_maker("Available Audio: ");
+                let label = label_maker("Embedded Audio: ");
 
                 let handle = picklist_handle(size);
 
-                let pick = pick_list(audio, current_audio.clone(), ConfigMessage::CurrentAudio)
+                let pick = pick_list(audio, selected_audio.clone(), ConfigMessage::CurrentAudio)
                     .handle(handle)
                     .padding(padding)
                     .text_size(size);

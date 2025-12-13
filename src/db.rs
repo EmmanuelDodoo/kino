@@ -877,16 +877,22 @@ impl Database {
         watch_count: u32,
         progress: f32,
         duration: u64,
+        subtitle_uri: Option<String>,
     ) -> rusqlite::Result<()> {
-        let sql = "UPDATE episode SET watch_count=:watch_count, duration=:duration, progress=:progress WHERE episode.id=:id";
+        let sql = "UPDATE episode SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_uri=:subtitle_uri WHERE episode.id=:id";
 
         let mut statement = self.prepare_cached(sql)?;
+
+        let subtitle_uri = subtitle_uri
+            .to_sql()
+            .expect("Option<String> ToSqlOutput conversion always successful");
 
         let _ = statement.execute(&[
             (":id", &ToSqlOutput::from(id)),
             (":watch_count", &ToSqlOutput::from(watch_count)),
             (":progress", &ToSqlOutput::from(progress)),
             (":duration", &ToSqlOutput::from(duration as isize)),
+            (":subtitle_uri", &subtitle_uri),
         ])?;
 
         Ok(())
@@ -898,16 +904,22 @@ impl Database {
         watch_count: u32,
         progress: f32,
         duration: u64,
+        subtitle_uri: Option<String>,
     ) -> rusqlite::Result<usize> {
-        let sql = "UPDATE movie SET watch_count=:watch_count, duration=:duration, progress=:progress WHERE movie.id=:id";
+        let sql = "UPDATE movie SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_uri=:subtitle_uri WHERE movie.id=:id";
 
         let mut statement = self.prepare_cached(sql)?;
+
+        let subtitle_uri = subtitle_uri
+            .to_sql()
+            .expect("Option<String> ToSqlOutput conversion always successful");
 
         let rows = statement.execute(&[
             (":id", &ToSqlOutput::from(id)),
             (":watch_count", &ToSqlOutput::from(watch_count)),
             (":progress", &ToSqlOutput::from(progress)),
             (":duration", &ToSqlOutput::from(duration as isize)),
+            (":subtitle_uri", &subtitle_uri),
         ])?;
 
         Ok(rows)

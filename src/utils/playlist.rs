@@ -26,6 +26,7 @@ pub struct PlayItem {
     pub progress: f32,
     pub duration: u64,
     pub watch_count: u32,
+    pub subtitle_uri: Option<PathBuf>,
 }
 
 impl PlayItem {
@@ -81,6 +82,8 @@ impl PlayItem {
         let progress = row.get::<_, f32>("progress")?;
         let duration = row.get::<_, u64>("duration")?;
         let watch_count = row.get::<_, u32>("watch_count")?;
+        let subtitle = row.get::<_, Option<String>>("subtitle_uri")?;
+        let subtitle_uri = subtitle.map(PathBuf::from);
 
         Ok(Self {
             id,
@@ -89,6 +92,7 @@ impl PlayItem {
             progress,
             duration,
             watch_count,
+            subtitle_uri,
         })
     }
 

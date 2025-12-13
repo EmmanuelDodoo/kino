@@ -670,6 +670,7 @@ impl App {
                         item.watch_count,
                         item.progress,
                         item.duration,
+                        item.subtitle_uri.map(|path| path.display().to_string()),
                     ) {
                         Ok(_) => Task::none(),
                         Err(error) => Task::done(Message::error(error)),
@@ -681,6 +682,7 @@ impl App {
                         item.watch_count,
                         item.progress,
                         item.duration,
+                        item.subtitle_uri.map(|path| path.display().to_string()),
                     ) {
                         Ok(_) => Task::none(),
                         Err(error) => Task::done(Message::error(error)),
