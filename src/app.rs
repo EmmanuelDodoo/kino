@@ -152,6 +152,7 @@ impl App {
         config: Config,
         db: db::Database,
         errors: impl IntoIterator<Item = String>,
+        fetch: bool,
     ) -> (Self, Task<Message>) {
         let load_errors = Task::done(Message::PushToasts(
             errors
@@ -166,16 +167,20 @@ impl App {
         let (auth_tx, auth_rx) = mpsc::channel(2);
         let auth = config.auth();
 
-        let fetcher = Task::perform(
-            fetch::fetcher(
-                auth_rx,
-                config.db_path(),
-                config.images_path(),
-                auth,
-                config.fetching_interval(),
-            ),
-            |_| Message::None,
-        );
+        let fetcher = if fetch {
+            Task::perform(
+                fetch::fetcher(
+                    auth_rx,
+                    config.db_path(),
+                    config.images_path(),
+                    auth,
+                    config.fetching_interval(),
+                ),
+                |_| Message::None,
+            )
+        } else {
+            Task::none()
+        };
 
         let (home, home_tasks) = Home::boot(
             config.layout(),

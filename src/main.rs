@@ -108,21 +108,21 @@ impl BootFn<App, app::Message> for BootMode {
                 let dummies = "dummy.txt";
                 let db = db::Database::open_with_dummies(config.db_path(), dummies)
                     .expect("Failed to open dummy database");
-                App::boot(config, db, std::iter::empty())
+                App::boot(config, db, std::iter::empty(), false)
             }
             Self::Dev => {
                 let config = Config::dev();
                 let db = db::Database::open_with_schema(config.db_path())
                     .expect("Failed to open dev database");
 
-                App::boot(config, db, std::iter::empty())
+                App::boot(config, db, std::iter::empty(), false)
             }
             Self::Prod => {
                 let (config, errors) = Config::load();
                 let db = db::Database::open_with_schema(config.db_path())
                     .expect("Failed to open Database");
 
-                App::boot(config, db, errors)
+                App::boot(config, db, errors, true)
             }
         }
     }
