@@ -79,6 +79,14 @@ impl std::fmt::Display for AppTheme {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct VideoFilters {
+    pub brightness: f64,
+    pub contrast: f64,
+    pub hue: f64,
+    pub saturation: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default = "VideoSettings::defaults", rename = "Player")]
 // todo filters
 pub struct VideoSettings {
@@ -102,6 +110,8 @@ pub struct VideoSettings {
     pub completion_watch_time: f64,
 
     pub subtitles: SubtitleDescription,
+
+    pub filters: VideoFilters,
 }
 
 impl VideoSettings {
@@ -122,6 +132,12 @@ impl VideoSettings {
             completion_point: 0.95,
             completion_watch_time: 0.75,
             subtitles: SubtitleDescription::defaults(),
+            filters: VideoFilters {
+                brightness: 0.00,
+                contrast: 1.0,
+                hue: 0.0,
+                saturation: 1.0,
+            },
         }
     }
 }
@@ -1782,7 +1798,7 @@ mod subtitles {
         pub(super) fn defaults() -> Self {
             Self {
                 size: 20,
-                color: 0xf2f2f2ff,
+                color: 0xff8243ff,
                 font: SubtitleFont {
                     family: font::Family::Serif,
                     weight: font::Weight::Semibold,

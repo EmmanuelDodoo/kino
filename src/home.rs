@@ -378,7 +378,7 @@ impl Home {
             id: FetchId::Recents,
             filters,
             sort,
-            limit: Some(5),
+            limit: recent_limit,
             offset: None,
         });
 

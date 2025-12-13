@@ -6,15 +6,20 @@ use iced::{
     font,
     time::Instant,
     widget::{
-        button, center, checkbox, column, container, image, mouse_area, row, rule, scrollable,
-        slider, space, stack, text, tooltip as tp,
+        button, center, checkbox, column, container, image, mouse_area, pick_list, row, rule,
+        scrollable, slider, space, stack, text, text_input, tooltip as tp,
     },
     window,
 };
-use iced_video_player::{Button, Kind, MouseAction, MouseClick, Video, VideoPlayer};
-use std::collections::HashSet;
+use iced_video_player::{
+    AudioTag, Button, Kind, MouseAction, MouseClick, TextTag, Video, VideoPlayer,
+};
 use std::sync::Arc;
 use std::time::Duration;
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use crate::home::shared::Icon;
 use crate::models::{CollectionId, SimpleCollection};
@@ -22,9 +27,10 @@ use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, SubtitleDescription, SubtitleFont,
     VideoSettings, empty,
     icons::{self, sized_button},
-    loading_animation, loading_svg, modal_container, styles, tooltip,
+    loading_animation, loading_svg, modal_container, picklist_handle, styles, tooltip, trim_path,
     typo::{self, *},
 };
+use crate::variants;
 use crate::widgets::{self, modal, toggler};
 use crate::{app::Message, utils::CANCEL};
 
@@ -35,6 +41,16 @@ enum Modal {
         collections: Vec<SimpleCollection>,
         selected: HashSet<CollectionId>,
         initial: HashSet<CollectionId>,
+    },
+    Config {
+        tab: ConfigTab,
+        subtitle: Option<PathBuf>,
+        original_text: Option<TextTag>,
+        current_text: Option<TextTag>,
+        current_audio: Option<AudioTag>,
+        original_audio: Option<AudioTag>,
+        text_color: String,
+        background_color: String,
     },
 }
 
@@ -58,6 +74,40 @@ pub enum CollectionAddMessage {
     Save,
 }
 
+variants! {
+#[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum ConfigTab {
+        General,
+        Filters,
+        Subtitles,
+        Audio,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ConfigMessage {
+    Tab(ConfigTab),
+    VolumeAmt(String),
+    SpeedAmt(String),
+    SeekAmt(String),
+    SeekShiftAmt(String),
+    Gamma(f64),
+    Brightness(f64),
+    Contrast(f64),
+    Hue(f64),
+    Saturation(f64),
+    SelectFile,
+    Selected(Option<PathBuf>),
+    ClearSelected,
+    CurrentText(TextTag),
+    CurrentAudio(AudioTag),
+    SubSize(String),
+    SubSizeIncr,
+    SubSizeDecr,
+    SubColor(String),
+    SubBackground(String),
+}
+
 #[derive(Debug)]
 pub struct Player {
     video: Video,
@@ -69,6 +119,8 @@ pub struct Player {
     watch_time: Duration,
     last_frame: Option<Instant>,
     subtitles: Option<String>,
+    embedded_subtitles: Vec<TextTag>,
+    embedded_audio: Vec<AudioTag>,
 }
 
 #[derive(Debug)]
@@ -97,7 +149,7 @@ pub enum ManagerMessage {
     CursorEnter,
     PreviousScreen,
     AddCollection,
-    Config,
+    OpenConfig,
     ToggleSubtitles,
     ToggleMute,
     PlayPrevious,
@@ -115,6 +167,7 @@ pub enum ManagerMessage {
     Playlist(PlaylistMessge),
     ClosePanel,
     Subs(Option<String>),
+    Config(ConfigMessage),
     None,
 }
 
@@ -136,7 +189,7 @@ pub struct Manager {
 }
 
 impl Manager {
-    const WIDTH: f32 = 150.0;
+    const WIDTH: f32 = 250.0;
 
     pub fn boot(
         window: Option<window::Id>,
@@ -178,32 +231,6 @@ impl Manager {
         }
     }
 
-    fn prep_video(&self, player: &mut Player) {
-        let VideoSettings {
-            thumbnail_interval: _thumbnails,
-            volume,
-            speed,
-            gamma,
-            seek_change_amt: _seek_amt,
-            seek_shift_change_amt: _seek_shift_amt,
-            volume_change_amt: _volume,
-            speed_change_amt: _speed,
-            show_subtitles: _show_subtitles,
-            muted,
-            auto_start,
-            auto_next: _autoplay,
-            completion_point: _completion,
-            completion_watch_time: _completion_watch,
-            subtitles: _subtitles,
-        } = self.settings;
-
-        player.video.set_volume(volume);
-        player.video.set_speed(speed).unwrap();
-        player.video.set_paused(!auto_start);
-        player.video.set_gamma(gamma);
-        player.video.set_muted(muted);
-    }
-
     pub fn update(&mut self, message: ManagerMessage, now: Instant) -> Task<Message> {
         match message {
             ManagerMessage::None => Task::none(),
@@ -239,12 +266,12 @@ impl Manager {
 
                 let last_watched = if !is_next || matches!(&self.state, State::Idle) {
                     let task = Task::done(Message::LastWatched(player.item.id));
-                    self.prep_video(&mut player);
+                    apply_settings(self.settings, &mut player);
                     self.state = State::Ready(Box::new(player));
 
                     task
                 } else {
-                    self.prep_video(&mut player);
+                    apply_settings(self.settings, &mut player);
                     player.video.set_paused(true);
                     self.next = AutoState::Ready(Box::new(player));
                     Task::none()
@@ -393,7 +420,7 @@ impl Manager {
             ManagerMessage::PlayNext => self.play_next(now),
             ManagerMessage::PlayPrevious => self.play_previous(now),
             ManagerMessage::AddCollection => self.collection_add(),
-            ManagerMessage::Config => self.video_config(),
+            ManagerMessage::OpenConfig => self.video_config(),
             ManagerMessage::Comment => self.video_comment(),
             ManagerMessage::SpeedReset => self.speed_reset(),
             ManagerMessage::CloseView => self.close_view(),
@@ -492,6 +519,191 @@ impl Manager {
 
                 Task::none()
             }
+            ManagerMessage::Config(csg) => {
+                let Some(Modal::Config {
+                    tab,
+                    subtitle,
+                    current_text,
+                    current_audio,
+                    original_text: _text,
+                    original_audio: _audio,
+                    text_color,
+                    background_color,
+                }) = self.modal.as_mut()
+                else {
+                    return Task::none();
+                };
+
+                match csg {
+                    ConfigMessage::Tab(new) => {
+                        *tab = new;
+                        Task::none()
+                    }
+                    ConfigMessage::VolumeAmt(amt) => {
+                        let amt = amt.trim();
+                        if amt.is_empty() {
+                            self.settings.volume_change_amt = 0.0;
+                            return Task::none();
+                        }
+
+                        let Ok(amt) = amt.parse::<f64>() else {
+                            let msg = Message::error(format!("Invalid input: {amt}"));
+                            return Task::done(msg);
+                        };
+
+                        self.settings.volume_change_amt = amt.min(1.0);
+
+                        Task::none()
+                    }
+                    ConfigMessage::SpeedAmt(amt) => {
+                        let amt = amt.trim();
+                        if amt.is_empty() {
+                            self.settings.speed_change_amt = 0.0;
+                            return Task::none();
+                        }
+
+                        let Ok(amt) = amt.parse::<f64>() else {
+                            let msg = Message::error(format!("Invalid input: {amt}"));
+                            return Task::done(msg);
+                        };
+
+                        self.settings.speed_change_amt = amt;
+
+                        Task::none()
+                    }
+                    ConfigMessage::SeekAmt(amt) => {
+                        let amt = amt.trim();
+                        if amt.is_empty() {
+                            self.settings.seek_change_amt = 0.0;
+                            return Task::none();
+                        }
+
+                        let Ok(amt) = amt.parse::<f64>() else {
+                            let msg = Message::error(format!("Invalid input: {amt}"));
+                            return Task::done(msg);
+                        };
+
+                        self.settings.seek_change_amt = amt;
+
+                        Task::none()
+                    }
+                    ConfigMessage::SeekShiftAmt(amt) => {
+                        let amt = amt.trim();
+                        if amt.is_empty() {
+                            self.settings.seek_shift_change_amt = 0.0;
+                            return Task::none();
+                        }
+
+                        let Ok(amt) = amt.parse::<f64>() else {
+                            let msg = Message::error(format!("Invalid input: {amt}"));
+                            return Task::done(msg);
+                        };
+
+                        self.settings.seek_shift_change_amt = amt;
+
+                        Task::none()
+                    }
+                    ConfigMessage::Gamma(gamma) => {
+                        self.settings.gamma = gamma;
+
+                        Task::none()
+                    }
+                    ConfigMessage::Brightness(brightness) => {
+                        self.settings.filters.brightness = brightness;
+
+                        Task::none()
+                    }
+                    ConfigMessage::Contrast(contrast) => {
+                        self.settings.filters.contrast = contrast;
+
+                        Task::none()
+                    }
+                    ConfigMessage::Hue(hue) => {
+                        self.settings.filters.hue = hue;
+
+                        Task::none()
+                    }
+                    ConfigMessage::Saturation(saturation) => {
+                        self.settings.filters.saturation = saturation;
+
+                        Task::none()
+                    }
+                    ConfigMessage::SelectFile => Task::perform(
+                        rfd::AsyncFileDialog::new()
+                            .add_filter(
+                                "",
+                                &[
+                                    "srt", "ass", "ssa", "vtt", "sub", "sbv", "ttml", "dfxp", "lrc",
+                                ],
+                            )
+                            .pick_file(),
+                        |handle| {
+                            ManagerMessage::Config(ConfigMessage::Selected(
+                                handle.map(|handle| handle.path().to_path_buf()),
+                            ))
+                        },
+                    )
+                    .map(Message::Player),
+                    ConfigMessage::Selected(selected) => {
+                        *subtitle = selected;
+                        Task::none()
+                    }
+                    ConfigMessage::ClearSelected => {
+                        subtitle.take();
+                        Task::none()
+                    }
+                    ConfigMessage::CurrentText(text) => {
+                        *current_text = Some(text);
+                        Task::none()
+                    }
+                    ConfigMessage::CurrentAudio(audio) => {
+                        *current_audio = Some(audio);
+                        Task::none()
+                    }
+                    ConfigMessage::SubSize(size) => {
+                        let size = size.trim();
+                        if size.is_empty() {
+                            self.settings.subtitles.size = 5;
+                            return Task::none();
+                        }
+
+                        let Ok(size) = size.parse::<u32>() else {
+                            let msg = Message::error(format!("Invalid input: {size}"));
+                            return Task::done(msg);
+                        };
+
+                        self.settings.subtitles.size = size.max(5);
+
+                        Task::none()
+                    }
+                    ConfigMessage::SubSizeIncr => {
+                        self.settings.subtitles.size = (self.settings.subtitles.size + 1).min(60);
+                        Task::none()
+                    }
+                    ConfigMessage::SubSizeDecr => {
+                        self.settings.subtitles.size = (self.settings.subtitles.size - 1).max(5);
+                        Task::none()
+                    }
+                    ConfigMessage::SubColor(color) => {
+                        if let Some(color) = convert_color_str(&color) {
+                            self.settings.subtitles.color = color;
+                        };
+
+                        *text_color = color;
+
+                        Task::none()
+                    }
+                    ConfigMessage::SubBackground(color) => {
+                        if let Some(color) = convert_color_str(&color) {
+                            self.settings.subtitles.background_color = color;
+                        };
+
+                        *background_color = color;
+
+                        Task::none()
+                    }
+                }
+            }
         }
     }
 
@@ -514,7 +726,7 @@ impl Manager {
         let options = column!(
             row!(
                 sized_button(icons::ELLIPSIS_VER, icon_size)
-                    .on_press(ManagerMessage::Config)
+                    .on_press(ManagerMessage::OpenConfig)
                     .style(styles::button::text_slate)
             )
             .spacing(6.0)
@@ -686,7 +898,7 @@ impl Manager {
                 .spacing(4.0)
                 .align_y(Vertical::Center)
         }
-        .width(Self::WIDTH + 100.0);
+        .width(Self::WIDTH);
 
         let middle = {
             let size = if self.is_fullscreen {
@@ -840,6 +1052,7 @@ impl Manager {
         .align_y(Vertical::Center);
 
         let content = column!(self.timeline(), content, space::vertical().height(8.0))
+            .align_x(Horizontal::Center)
             .spacing(8)
             .width(Length::Fill);
 
@@ -852,6 +1065,8 @@ impl Manager {
         let content = mouse_area(content)
             .on_exit(ManagerMessage::CursorExit)
             .on_enter(ManagerMessage::CursorEnter);
+
+        let content = column!(self.subtitle_draw(), content).align_x(Horizontal::Center);
 
         content.into()
     }
@@ -908,15 +1123,10 @@ impl Manager {
     pub fn view(&self, now: Instant) -> Element<'_, ManagerMessage> {
         let content = stack!(
             self.video_elem(now),
-            column!(
-                self.top(),
-                space::vertical(),
-                self.subtitle_draw(),
-                self.media_controls(now)
-            )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding([3, 6])
+            column!(self.top(), space::vertical(), self.media_controls(now))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding([3, 6])
         )
         .height(Length::Fill)
         .width(Length::Fill);
@@ -950,6 +1160,41 @@ impl Manager {
                 draw_collection_add(selected, collections.is_empty(), collections.iter()),
                 ManagerMessage::CloseView,
             ),
+            Some(Modal::Config {
+                tab,
+                subtitle,
+                current_text,
+                current_audio,
+                original_text: _text,
+                original_audio: _audio,
+                text_color,
+                background_color,
+            }) => {
+                let (subs, audio) = self
+                    .player()
+                    .map(|player| {
+                        (
+                            player.embedded_subtitles.as_slice(),
+                            player.embedded_audio.as_slice(),
+                        )
+                    })
+                    .unwrap_or_default();
+                modal(
+                    content,
+                    draw_config(
+                        &self.settings,
+                        subs,
+                        audio,
+                        subtitle,
+                        *tab,
+                        current_text,
+                        current_audio,
+                        text_color,
+                        background_color,
+                    ),
+                    ManagerMessage::CloseView,
+                )
+            }
         }
     }
 
@@ -1154,7 +1399,7 @@ impl Manager {
 
                 let last_watched = Message::LastWatched(player.item.id);
 
-                self.prep_video(&mut player);
+                apply_settings(self.settings, &mut player);
                 player.video.set_paused(false);
 
                 self.state = State::Ready(player);
@@ -1216,10 +1461,70 @@ impl Manager {
     }
 
     pub fn close_view(&mut self) -> Task<Message> {
+        let previous = self.modal.take();
         if let State::Ready(player) = &mut self.state {
+            if let Some(Modal::Config {
+                subtitle,
+                tab: _tab,
+                current_text,
+                current_audio,
+                original_text,
+                original_audio,
+                text_color: _text,
+                background_color: _background,
+            }) = previous
+            {
+                apply_settings(self.settings, player);
+                if let Some(subtitles) = subtitle {
+                    let subtitles = match subtitles.canonicalize() {
+                        Ok(subtitles) => subtitles,
+                        Err(error) => return Task::done(Message::error(error)),
+                    };
+
+                    let url = match url::Url::from_file_path(subtitles) {
+                        Ok(url) => url,
+                        Err(_) => {
+                            return Task::done(Message::error(
+                                "Cannot generate url from subtitle path",
+                            ));
+                        }
+                    };
+
+                    let position = player.video.position();
+
+                    if let Err(error) = player.video.set_subtitle_url(&url) {
+                        return Task::done(Message::error(error));
+                    };
+
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    if let Err(error) = player.video.seek(position, false) {
+                        return Task::done(Message::error(error));
+                    };
+
+                    player.embedded_subtitles = player.video.available_subtitles();
+                    player.embedded_audio = player.video.available_audio();
+                } else if let Some(text) = current_text {
+                    let changed = original_text.as_ref().map(|og| og != &text).unwrap_or(true);
+
+                    if changed {
+                        player.video.set_text(text);
+                    }
+                }
+
+                if let Some(audio) = current_audio {
+                    let changed = original_audio
+                        .as_ref()
+                        .map(|og| og != &audio)
+                        .unwrap_or(true);
+                    if changed {
+                        player.video.set_audio(audio);
+                    }
+                }
+            }
+
             player.video.set_paused(false);
         }
-        self.modal = None;
+
         Task::none()
     }
 
@@ -1251,7 +1556,25 @@ impl Manager {
     }
 
     fn video_config(&mut self) -> Task<Message> {
-        todo!()
+        let (current_text, current_audio) = if let State::Ready(player) = &mut self.state {
+            player.video.set_paused(true);
+            (player.video.get_text(), player.video.get_audio())
+        } else {
+            (None, None)
+        };
+
+        self.modal = Some(Modal::Config {
+            tab: ConfigTab::General,
+            subtitle: None,
+            original_text: current_text.clone(),
+            current_text,
+            original_audio: current_audio.clone(),
+            current_audio,
+            text_color: format!("#{:08x}", self.settings.subtitles.color),
+            background_color: format!("#{:08x}", self.settings.subtitles.background_color),
+        });
+
+        Task::none()
     }
 
     fn video_comment(&mut self) -> Task<Message> {
@@ -1259,6 +1582,12 @@ impl Manager {
     }
 
     pub fn action(&mut self, action: PlayerAction, now: Instant) -> Task<Message> {
+        if let PlayerAction::Exit = action
+            && self.modal.is_some()
+        {
+            return self.close_view();
+        }
+
         match action {
             PlayerAction::PlayToggle => self.play_toggle(),
             PlayerAction::PlayNext => self.play_next(now),
@@ -1354,6 +1683,9 @@ fn load_video<Message: 'static + MaybeSend>(
 
             video.set_paused(true);
 
+            let subtitles = video.available_subtitles();
+            let audio = video.available_audio();
+
             Arc::new(Player {
                 item,
                 video,
@@ -1364,10 +1696,52 @@ fn load_video<Message: 'static + MaybeSend>(
                 watch_time: Duration::ZERO,
                 last_frame: None,
                 subtitles: None,
+                embedded_audio: audio,
+                embedded_subtitles: subtitles,
             })
         }),
         move |res| f(res.unwrap()),
     )
+}
+
+fn apply_settings(settings: VideoSettings, player: &mut Player) {
+    let VideoSettings {
+        thumbnail_interval: _thumbnails,
+        volume,
+        speed,
+        gamma,
+        seek_change_amt: _seek_amt,
+        seek_shift_change_amt: _seek_shift_amt,
+        volume_change_amt: _volume,
+        speed_change_amt: _speed,
+        show_subtitles: _show_subtitles,
+        muted,
+        auto_start,
+        auto_next: _autoplay,
+        completion_point: _completion,
+        completion_watch_time: _completion_watch,
+        subtitles: _subtitles,
+        filters:
+            utils::VideoFilters {
+                contrast,
+                brightness,
+                hue,
+                saturation,
+            },
+    } = settings;
+
+    {
+        player.video.set_contrast(contrast);
+        player.video.set_brightness(brightness);
+        player.video.set_hue(hue);
+        player.video.set_saturation(saturation);
+    }
+
+    player.video.set_volume(volume);
+    player.video.set_speed(speed).unwrap();
+    player.video.set_paused(!auto_start);
+    player.video.set_gamma(gamma);
+    player.video.set_muted(muted);
 }
 
 fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
@@ -1375,7 +1749,7 @@ fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
         MouseAction::Button { button, kind } => match button {
             Button::Left if matches!(kind, Kind::Single) => ManagerMessage::TogglePlay,
             Button::Left if matches!(kind, Kind::Double) => ManagerMessage::ToggleFullscreen,
-            Button::Right => ManagerMessage::Config,
+            Button::Right => ManagerMessage::OpenConfig,
             _ => return None,
         },
         MouseAction::Scroll(_) => return None,
@@ -1385,7 +1759,7 @@ fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
 }
 
 fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, ManagerMessage> {
-    let width = 375.0;
+    let width = 350.0;
     let rule_height = 1.0;
     let padding = [6, 12];
 
@@ -1614,21 +1988,10 @@ fn draw_collection_add<'a>(
     modal_container(content).max_width(400).into()
 }
 
-fn draw_subtitles<'a>(
-    subtitles: &'a String,
+fn draw_subtitles<'a, Message: 'a>(
+    subtitles: &'a str,
     description: SubtitleDescription,
-) -> Element<'a, ManagerMessage> {
-    let rgba = |color: u32| {
-        let r = (color & 0xff000000) >> 24;
-        let g = (color & 0x00ff0000) >> 16;
-        let b = (color & 0x0000ff00) >> 8;
-        let a = color & 0xff;
-
-        let a = (a as f32) / 255.0;
-
-        iced::color!(r as u8, g as u8, b as u8, a)
-    };
-
+) -> Element<'a, Message> {
     let SubtitleDescription {
         size,
         color,
@@ -1637,8 +2000,8 @@ fn draw_subtitles<'a>(
     } = description;
 
     let content = text(subtitles)
-        .size(size)
-        .color(rgba(color))
+        .size(size.max(5))
+        .color(u32_to_rgba(color))
         .font(font)
         .align_y(Vertical::Center);
 
@@ -1648,7 +2011,7 @@ fn draw_subtitles<'a>(
         .style(move |_| {
             let border = iced::border::rounded(5);
             container::Style {
-                background: Some(rgba(background_color).into()),
+                background: Some(u32_to_rgba(background_color).into()),
                 text_color: None,
                 border,
                 ..Default::default()
@@ -1656,4 +2019,468 @@ fn draw_subtitles<'a>(
         });
 
     subtitles.into()
+}
+
+fn draw_config<'a>(
+    config: &'a VideoSettings,
+    embedded: &'a [TextTag],
+    audio: &'a [AudioTag],
+    subtitle: &Option<PathBuf>,
+    curr_tab: ConfigTab,
+    current_text: &Option<TextTag>,
+    current_audio: &Option<AudioTag>,
+    text_color: &'a str,
+    background_color: &'a str,
+) -> Element<'a, ManagerMessage> {
+    let size = H7;
+    let padding = [2, 5];
+    let spacing = 8;
+    // Audio selection,
+    //
+    // Playback Info?
+
+    let header = text("Video Config").size(H6).font(Font {
+        family: font::Family::Serif,
+        weight: font::Weight::Semibold,
+        ..Default::default()
+    });
+
+    let tabs = ConfigTab::VARIANTS.iter().map(|tab| {
+        let current = *tab == curr_tab;
+        let text = text(format!("{tab:?}")).size(H7).font(font::Font {
+            weight: font::Weight::Semibold,
+            ..Default::default()
+        });
+        container(
+            button(text)
+                .width(Length::Fill)
+                .style(move |theme, status| {
+                    if current {
+                        styles::button::background_primary(theme, status)
+                    } else {
+                        styles::button::subtle(theme, status)
+                    }
+                })
+                .on_press(ManagerMessage::Config(ConfigMessage::Tab(*tab))),
+        )
+        .clip(true)
+        .max_height(48.0)
+        .into()
+    });
+
+    let content: Element<'_, ConfigMessage> = match curr_tab {
+        ConfigTab::General => {
+            let input_width = 48;
+            let volume_amt = {
+                let label = label_maker("Volume amount: ");
+
+                let amt = format!("{:.02}", config.volume_change_amt);
+                let input = text_input("", &amt)
+                    .width(input_width)
+                    .size(size)
+                    .align_x(Horizontal::Right)
+                    .padding(padding)
+                    .on_input(ConfigMessage::VolumeAmt);
+
+                row!(label, space::horizontal(), input)
+                    .align_y(Vertical::Center)
+                    .spacing(spacing)
+            };
+
+            let speed_amt = {
+                let label = label_maker("Speed amount: ");
+
+                let amt = format!("{:.02}", config.speed_change_amt);
+                let input = text_input("", &amt)
+                    .width(input_width)
+                    .size(size)
+                    .align_x(Horizontal::Right)
+                    .padding(padding)
+                    .on_input(ConfigMessage::SpeedAmt);
+
+                row!(label, space::horizontal(), input)
+                    .align_y(Vertical::Center)
+                    .spacing(spacing)
+            };
+
+            let seek_amt = {
+                let label = label_maker("Seek amount: ");
+
+                let amt = format!("{:.02}", config.seek_change_amt);
+                let input = text_input("", &amt)
+                    .width(input_width)
+                    .size(size)
+                    .align_x(Horizontal::Right)
+                    .padding(padding)
+                    .on_input(ConfigMessage::SeekAmt);
+
+                let input = row!(input).align_y(Vertical::Center).spacing(4);
+
+                row!(label, space::horizontal(), input)
+                    .align_y(Vertical::Center)
+                    .spacing(spacing)
+            };
+
+            let seek_amt_shift = {
+                let label = label_maker("Seek Shift amount: ");
+
+                let amt = format!("{:.02}", config.seek_shift_change_amt);
+                let input = text_input("", &amt)
+                    .width(input_width)
+                    .size(size)
+                    .align_x(Horizontal::Right)
+                    .padding(padding)
+                    .on_input(ConfigMessage::SeekShiftAmt);
+
+                let input = row!(input).align_y(Vertical::Center).spacing(4);
+
+                row!(label, space::horizontal(), input)
+                    .align_y(Vertical::Center)
+                    .spacing(spacing)
+            };
+
+            column!(volume_amt, speed_amt, seek_amt, seek_amt_shift)
+                .spacing(16)
+                .into()
+        }
+        ConfigTab::Filters => {
+            let width = 200;
+            let slider_width = 200;
+
+            let gamma = {
+                let label = label_maker("Gamma: ").width(width);
+
+                let slider = slider(1.0..=3.0, config.gamma, ConfigMessage::Gamma)
+                    .step(0.05)
+                    .shift_step(0.1)
+                    .width(slider_width);
+
+                let gamma = text(format!("{:.01}", config.gamma)).size(size);
+                let slider = row!(gamma, slider).spacing(4.0);
+
+                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+            };
+
+            let brightness = {
+                let label = label_maker("Brightness: ").width(width);
+
+                let slider = slider(
+                    -1.0..=1.0,
+                    config.filters.brightness,
+                    ConfigMessage::Brightness,
+                )
+                .step(0.05)
+                .shift_step(0.1)
+                .width(slider_width);
+
+                let brightness = text(format!("{:.01}", config.filters.brightness)).size(size);
+                let slider = row!(brightness, slider).spacing(4.0);
+
+                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+            };
+
+            let contrast = {
+                let label = label_maker("Contrast: ").width(width);
+
+                let slider = slider(0.0..=2.0, config.filters.contrast, ConfigMessage::Contrast)
+                    .step(0.05)
+                    .shift_step(0.1)
+                    .width(slider_width);
+
+                let contrast = text(format!("{:.01}", config.filters.contrast)).size(size);
+                let slider = row!(contrast, slider).spacing(4.0);
+
+                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+            };
+
+            let hue = {
+                let label = label_maker("Hue: ").width(width);
+
+                let slider = slider(-1.0..=1.0, config.filters.hue, ConfigMessage::Hue)
+                    .step(0.05)
+                    .shift_step(0.1)
+                    .width(slider_width);
+
+                let hue = text(format!("{:.01}", config.filters.hue)).size(size);
+                let slider = row!(hue, slider).spacing(4.0);
+
+                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+            };
+
+            let saturation = {
+                let label = label_maker("Saturation: ").width(width);
+
+                let slider = slider(
+                    0.0..=2.0,
+                    config.filters.saturation,
+                    ConfigMessage::Saturation,
+                )
+                .step(0.05)
+                .shift_step(0.1)
+                .width(slider_width);
+
+                let saturation = text(format!("{:.01}", config.filters.saturation)).size(size);
+                let slider = row!(saturation, slider).spacing(4.0);
+
+                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+            };
+
+            column!(gamma, brightness, contrast, hue, saturation)
+                .spacing(16)
+                .into()
+        }
+        ConfigTab::Subtitles => {
+            let input_width = 48.0;
+            let color_width = 150.0;
+            let file = {
+                let add = button(
+                    row!(
+                        icons::icon(icons::FILE_UP).size(size),
+                        text("Load Subtitles").size(size)
+                    )
+                    .spacing(8.0)
+                    .align_y(Vertical::Center),
+                )
+                .padding([3, 6])
+                .style(styles::button::subtle)
+                .on_press(ConfigMessage::SelectFile);
+
+                let path = subtitle.as_ref().map(|path| trim_path(path, 3));
+                let path: Element<'_, ConfigMessage> = match path {
+                    Some(path) => button(
+                        row!(
+                            text(path).size(size).font(Font {
+                                weight: font::Weight::Semibold,
+                                ..Default::default()
+                            }),
+                            icons::icon(icons::CANCEL).size(size)
+                        )
+                        .spacing(4)
+                        .align_y(Vertical::Center),
+                    )
+                    .style(styles::button::text)
+                    .on_press(ConfigMessage::ClearSelected)
+                    .into(),
+                    None => empty(),
+                };
+
+                row!(add, space::horizontal(), path)
+                    .align_y(Vertical::Center)
+                    .spacing(12)
+            };
+
+            let selection = {
+                let label = label_maker("Available Subtitles: ");
+
+                let handle = picklist_handle(size);
+
+                let pick = pick_list(embedded, current_text.clone(), ConfigMessage::CurrentText)
+                    .handle(handle)
+                    .padding(padding)
+                    .text_size(size);
+
+                row!(label, space::horizontal(), pick)
+                    .align_y(Vertical::Center)
+                    .spacing(spacing)
+            };
+
+            let style = {
+                let label = label_maker("Subtitle Style").size(H6);
+                let dummy = draw_subtitles("An example subtitle", config.subtitles);
+
+                let sub_size = {
+                    let label = label_maker("Size: ");
+
+                    let amt = format!("{}", config.subtitles.size);
+
+                    let actions = {
+                        let incr = button(icons::icon(icons::CHEV_UP).size(10))
+                            .padding([2, 2])
+                            .style(styles::button::subtler)
+                            .on_press(ConfigMessage::SubSizeIncr);
+                        let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
+                            .padding([2, 2])
+                            .style(styles::button::subtler)
+                            .on_press(ConfigMessage::SubSizeDecr);
+
+                        column!(incr, decr).spacing(2.0)
+                    };
+
+                    let input = text_input("", &amt)
+                        .width(input_width)
+                        .size(size)
+                        .align_x(Horizontal::Right)
+                        .padding(padding)
+                        .on_input(ConfigMessage::SubSize);
+
+                    let input = row!(input, actions).spacing(4.0).align_y(Vertical::Center);
+
+                    row!(label, space::horizontal(), input)
+                        .align_y(Vertical::Center)
+                        .spacing(spacing)
+                };
+
+                let color = {
+                    let label = label_maker("Text Color (rgba): ");
+
+                    let input = text_input("", text_color)
+                        .width(color_width)
+                        .size(size)
+                        .align_x(Horizontal::Right)
+                        .padding(padding)
+                        .on_input(ConfigMessage::SubColor);
+
+                    row!(label, space::horizontal(), input)
+                        .align_y(Vertical::Center)
+                        .spacing(spacing)
+                };
+
+                let background = {
+                    let label = label_maker("Background Color (rgba): ");
+
+                    let input = text_input("", background_color)
+                        .width(color_width)
+                        .size(size)
+                        .align_x(Horizontal::Right)
+                        .padding(padding)
+                        .on_input(ConfigMessage::SubBackground);
+
+                    row!(label, space::horizontal(), input)
+                        .align_y(Vertical::Center)
+                        .spacing(spacing)
+                };
+
+                let content = column!(sub_size, color, background, dummy)
+                    .align_x(Horizontal::Center)
+                    .spacing(8.0);
+
+                column!(label, content).spacing(12)
+            };
+
+            column!(file, selection, style)
+                .width(Length::Fill)
+                .spacing(12)
+                .into()
+        }
+        ConfigTab::Audio => {
+            let selection = {
+                let label = label_maker("Available Audio: ");
+
+                let handle = picklist_handle(size);
+
+                let pick = pick_list(audio, current_audio.clone(), ConfigMessage::CurrentAudio)
+                    .handle(handle)
+                    .padding(padding)
+                    .text_size(size);
+
+                row!(label, space::horizontal(), pick)
+                    .align_y(Vertical::Center)
+                    .spacing(spacing)
+            };
+
+            // todo: Hardware volume,
+            column!(selection).width(Length::Fill).spacing(12).into()
+        }
+    };
+
+    let content = content.map(ManagerMessage::Config);
+
+    let side = column(tabs)
+        .spacing(8)
+        .width(125.0)
+        .height(Length::Fill)
+        .padding(3);
+
+    let side = container(side).style(|theme| {
+        let default = styles::container::bw3(theme);
+        let border = default.border.rounded(5.0);
+
+        container::Style { border, ..default }
+    });
+
+    let content = row!(side, content).spacing(20);
+
+    let content = column!(header, content)
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .spacing(12);
+
+    modal_container(content)
+        .style(|theme| {
+            let default = styles::container::bb(theme);
+            let border = default.border.rounded(5.0);
+
+            container::Style { border, ..default }
+        })
+        .width(575)
+        .height(300)
+        .into()
+}
+
+fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+    text(label).size(H7).font(Font {
+        family: font::Family::Serif,
+        weight: font::Weight::Semibold,
+        ..Default::default()
+    })
+}
+
+fn convert_color_str(input: &str) -> Option<u32> {
+    if input.is_empty() {
+        return None;
+    }
+
+    let input = input.trim();
+
+    let color = if input.contains(",") {
+        let values = input
+            .trim_start_matches("rgb(")
+            .trim_end_matches(")")
+            .split(",")
+            .enumerate()
+            .filter_map(|(idx, value)| {
+                if idx != 3 {
+                    value.trim().parse::<u8>().ok()
+                } else {
+                    match value.trim().parse::<u8>().ok() {
+                        Some(alpha) => Some(alpha),
+                        None => {
+                            let alpha = value.trim().parse::<f32>().ok()?;
+                            let alpha = alpha.max(0.0);
+
+                            Some((255.0 * alpha).trunc() as u8)
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<u8>>();
+
+        if values.len() < 3 || values.len() > 4 {
+            return None;
+        }
+
+        let r = *values.first()? as u32;
+        let g = *values.get(1)? as u32;
+        let b = *values.get(2)? as u32;
+        let a = values.get(3).copied().unwrap_or(255) as u32;
+
+        (r << 24) | (g << 16) | (b << 8) | a
+    } else if input.contains("#") {
+        u32::from_str_radix(input.trim_start_matches("#"), 16).ok()?
+    } else {
+        u32::from_str_radix(input.trim(), 16).ok()?
+    };
+
+    Some(color)
+}
+
+fn u32_to_rgba(color: u32) -> iced::Color {
+    let r = (color & 0xff000000) >> 24;
+    let g = (color & 0x00ff0000) >> 16;
+    let b = (color & 0x0000ff00) >> 8;
+    let a = color & 0xff;
+
+    let a = (a as f32) / 255.0;
+
+    iced::color!(r as u8, g as u8, b as u8, a)
 }

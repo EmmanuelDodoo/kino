@@ -2,6 +2,7 @@ use crate::app::Message;
 use crate::db::Operation;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
+    trim_path,
     AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
     SettingsAction, SubtitleDescription, SubtitleFont, VideoSettings, icons, modal_container,
     picklist_handle, sized_button, styles, tooltip, typo::*,
@@ -1886,17 +1887,4 @@ fn binding_tooltip<'a>(
     use iced::widget::tooltip::Position;
 
     tooltip(content, label, Position::Top).into()
-}
-
-fn trim_path(path: &Path, components: usize) -> String {
-    let path = path
-        .components()
-        .rev()
-        .take(components)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<PathBuf>();
-    let path = path.display().to_string();
-    path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned()
 }

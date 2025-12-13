@@ -1019,9 +1019,7 @@ impl App {
         self.screen = Screen::Home;
         let stats = match self.player.take() {
             Some(mut player) => {
-                self.config.video.speed = player.settings.speed;
-                self.config.video.show_subtitles = player.settings.show_subtitles;
-                self.config.video.volume = player.settings.volume;
+                self.config.video = player.settings;
 
                 player.stats()
             }

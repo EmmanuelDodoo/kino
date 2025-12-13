@@ -43,6 +43,14 @@ pub mod container {
         style(theme.extended_palette().background.weaker)
     }
 
+    pub fn bw2(theme: &Theme) -> Style {
+        style(theme.extended_palette().background.weakest)
+    }
+
+    pub fn bw3(theme: &Theme) -> Style {
+        style(theme.extended_palette().background.weak)
+    }
+
     pub fn bb(theme: &Theme) -> Style {
         style(theme.extended_palette().background.base)
     }
@@ -332,6 +340,29 @@ pub mod button {
                 background: Some(Background::Color(
                     palette.primary.strong.color.scale_alpha(0.75),
                 )),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
+    pub fn background_primary(theme: &Theme, status: Status) -> Style {
+        let palette = theme.extended_palette();
+        let pair = theme::palette::Pair {
+            color: palette.background.weaker.color,
+            text: palette.primary.strong.color,
+        };
+
+        let base = styled(pair);
+
+        match status {
+            Status::Active => base,
+            Status::Pressed => Style {
+                background: Some(Background::Color(palette.background.strongest.color)),
+                ..base
+            },
+            Status::Hovered => Style {
+                background: Some(palette.background.strong.color.into()),
                 ..base
             },
             Status::Disabled => disabled(base),

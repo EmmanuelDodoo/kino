@@ -5,6 +5,7 @@ use gstreamer::{
 };
 use iced::animation::{Animation, Easing};
 use iced::widget::image;
+use std::path::{Path, PathBuf};
 
 use crate::error::*;
 
@@ -137,6 +138,19 @@ pub fn picklist_handle(size: f32) -> iced::widget::pick_list::Handle<iced::Font>
         closed: down,
         open: up,
     }
+}
+
+pub fn trim_path(path: &Path, components: usize) -> String {
+    let path = path
+        .components()
+        .rev()
+        .take(components)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<PathBuf>();
+    let path = path.display().to_string();
+    path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned()
 }
 
 /// Far faster at generating multiple thumbnails than
@@ -602,4 +616,30 @@ impl From<SettingsAction> for Action {
     fn from(value: SettingsAction) -> Self {
         Self::Settings(value)
     }
+}
+
+#[macro_export]
+macro_rules! variants {
+	(
+		$(#[$meta:meta])*
+		$vis:vis enum $name:ident {
+			$(
+				$(#[$field_meta:meta])*
+				$variant:ident,
+			)+
+		}
+	) => {
+		$(#[$meta])*
+		$vis enum $name {
+			$(
+				$(#[$field_meta])*
+				$variant,
+			)+
+		}
+
+		impl $name {
+			pub const VARIANTS: &[Self] = &[$(Self::$variant,)+];
+                        pub const NAMES: &[&str] = &[$(stringify!($variant)),+];
+		}
+	};
 }
