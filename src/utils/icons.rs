@@ -21,6 +21,8 @@ pub const FORWARD: char = '\u{e80e}';
 pub const LOOP: char = '\u{e80f}';
 pub const UNLOOP: char = '\u{e80f}';
 
+pub const UPS: char = '\u{e85f}';
+pub const DOWNS: char = '\u{e860}';
 pub const CHEV_UP: char = '\u{e812}';
 pub const CHEV_DOWN: char = '\u{e811}';
 pub const CHEV_LEFT: char = '\u{e810}';

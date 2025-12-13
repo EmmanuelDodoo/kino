@@ -79,6 +79,7 @@ pub enum FilterMessage {
 pub enum SortMessage {
     AddSort(SortKind),
     RemoveSort(SortKind),
+    ReverseSort(SortKind),
     Clear,
     ToggleReverse,
 }
@@ -924,6 +925,7 @@ impl Home {
                 match ssg {
                     SortMessage::AddSort(kind) => self.sort.push(kind),
                     SortMessage::RemoveSort(kind) => self.sort.remove(kind),
+                    SortMessage::ReverseSort(kind) => self.sort.reverse_kind(kind),
                     SortMessage::Clear => self.sort.clear(),
                     SortMessage::ToggleReverse => self.sort.reverse(),
                 }
@@ -1725,18 +1727,40 @@ impl Home {
     fn sort_view(&self) -> Element<'_, HomeMessage> {
         let size = H8;
         let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
-        let view_sort = |sort: SortKind, order: Option<usize>| {
-            let enable = order.is_none();
+        let view_sort = |sort: SortKind, position: Option<(usize, bool)>| {
+            let enable = position.is_none();
             let msg = if enable {
                 HomeMessage::Sort(SortMessage::AddSort(sort))
             } else {
                 HomeMessage::Sort(SortMessage::RemoveSort(sort))
             };
 
-            let label = sort.view(order);
-            let content = text(label).size(size);
+            let content = match position {
+                Some((order, asc)) => {
+                    let label = format!("{sort} {}", order + 1);
+                    let content = text(label).size(size);
 
-            Element::from(button(content).on_press(msg).style(move |theme, status| {
+                    let unicode = if asc { UPS } else { DOWNS };
+                    let icon = icon(unicode).size(10.0);
+
+                    let icon = button(icon)
+                        .padding(0)
+                        .on_press(HomeMessage::Sort(SortMessage::ReverseSort(sort)))
+                        .style(styles::button::text_primary);
+
+                    let content = row!(content, icon).spacing(2.0).align_y(Vertical::Center);
+
+                    button(content)
+                }
+                None => {
+                    let label = format!("{sort}");
+                    let content = text(label).size(size);
+
+                    button(content)
+                }
+            }
+            .on_press(msg)
+            .style(move |theme, status| {
                 let default = if enable {
                     styles::button::background(theme, status)
                 } else if SortKind::HIDDEN.is_empty() {
@@ -1747,7 +1771,9 @@ impl Home {
                 let border = Border::default().width(2.0).rounded(5.0);
 
                 button::Style { border, ..default }
-            }))
+            });
+
+            Element::from(content)
         };
 
         let clear = button(text("Clear").size(size))
@@ -1767,8 +1793,9 @@ impl Home {
         } else {
             let hidden = container(
                 column(SortKind::HIDDEN.iter().map(|sort| {
-                    let order = self.sort.position(*sort);
-                    view_sort(*sort, order)
+                    let position = self.sort.position(*sort);
+
+                    view_sort(*sort, position)
                 }))
                 .spacing(8),
             )

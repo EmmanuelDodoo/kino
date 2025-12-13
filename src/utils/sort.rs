@@ -3,7 +3,7 @@ use crate::models::Media;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sort {
     count: u8,
-    sorts: [Option<u8>; SORTS],
+    sorts: [Option<(u8, bool)>; SORTS],
 }
 
 impl Sort {
@@ -28,6 +28,15 @@ impl Sort {
         new
     }
 
+    pub fn recents() -> Self {
+        let mut new = Self::new();
+        new.push(SortKind::Recent);
+        new.push(SortKind::Name);
+        new.reverse_kind(SortKind::Recent);
+
+        new
+    }
+
     pub fn clear(&mut self) {
         self.count = 0;
         self.sorts = [None; SORTS];
@@ -42,7 +51,8 @@ impl Sort {
             .map(|prefix| format!("{prefix}."))
             .unwrap_or_default();
 
-        let column = |kind: SortKind| {
+        let column = |kind: SortKind, asc: bool| {
+            let order = if asc { "ASC" } else { "DESC" };
             let name = match kind {
                 SortKind::Name => "name",
                 SortKind::Watch => "watch_count",
@@ -55,10 +65,13 @@ impl Sort {
                 SortKind::Comments => "comment_count",
             };
 
-            format!("{prefix}{name}")
+            format!("{prefix}{name} {order}")
         };
 
-        let sorts = self.prepare().map(column).collect::<Vec<_>>();
+        let sorts = self
+            .prepare()
+            .map(|(kind, asc)| column(kind, asc))
+            .collect::<Vec<_>>();
 
         Some(sorts.join(", "))
     }
@@ -66,8 +79,8 @@ impl Sort {
     pub fn sort<T: Media>(&self, x: &T, y: &T) -> std::cmp::Ordering {
         let sorts = self.prepare();
 
-        for kind in sorts {
-            let ord = kind.cmp(x, y);
+        for (kind, asc) in sorts {
+            let ord = if asc { kind.cmp(x, y) } else { kind.cmp(y, x) };
 
             if !matches!(ord, std::cmp::Ordering::Equal) {
                 return ord;
@@ -77,7 +90,7 @@ impl Sort {
         std::cmp::Ordering::Equal
     }
 
-    fn prepare(&self) -> impl Iterator<Item = SortKind> {
+    fn prepare(&self) -> impl Iterator<Item = (SortKind, bool)> {
         let mut sorts = self
             .sorts
             .into_iter()
@@ -87,24 +100,24 @@ impl Sort {
             })
             .collect::<Vec<_>>();
 
-        sorts.sort_by(|(_, x), (_, y)| x.cmp(y));
+        sorts.sort_by(|(_, (x, _)), (_, (y, _))| x.cmp(y));
 
-        sorts.into_iter().map(|(kind, _)| kind)
+        sorts.into_iter().map(|(kind, (_, asc))| (kind, asc))
     }
 
     pub fn push(&mut self, kind: SortKind) {
-        self.sorts[kind as usize] = Some(self.count);
+        self.sorts[kind as usize] = Some((self.count, true));
         self.count += 1;
     }
 
     pub fn remove(&mut self, kind: SortKind) {
-        let Some(old) = self.sorts[kind as usize].take() else {
+        let Some((old, _)) = self.sorts[kind as usize].take() else {
             return;
         };
 
         self.count = self.count.saturating_sub(1);
         for kind in &mut self.sorts {
-            let Some(idx) = kind else {
+            let Some((idx, _)) = kind else {
                 continue;
             };
 
@@ -118,18 +131,26 @@ impl Sort {
         let max = self.count.saturating_sub(1);
 
         for kind in &mut self.sorts {
-            let Some(idx) = kind else { continue };
+            let Some((idx, _)) = kind else { continue };
 
             *idx = max - *idx;
         }
+    }
+
+    pub fn reverse_kind(&mut self, kind: SortKind) {
+        let Some(Some((_, asc))) = self.sorts.get_mut(kind as usize) else {
+            return;
+        };
+
+        *asc = !*asc;
     }
 
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
 
-    pub fn position(&self, kind: SortKind) -> Option<usize> {
-        self.sorts[kind as usize].map(|pos| pos as usize)
+    pub fn position(&self, kind: SortKind) -> Option<(usize, bool)> {
+        self.sorts[kind as usize].map(|(pos, asc)| (pos as usize, asc))
     }
 }
 
@@ -169,14 +190,6 @@ impl SortKind {
 
     pub const HIDDEN: [SortKind; 0] = [];
 
-    pub fn view(&self, order: Option<usize>) -> String {
-        let order = order
-            .map(|order| (order + 1).to_string())
-            .unwrap_or_default();
-
-        format!("{self} {}", order)
-    }
-
     pub fn cmp<T: Media>(&self, x: &T, y: &T) -> std::cmp::Ordering {
         match self {
             Self::Name => {
@@ -195,7 +208,7 @@ impl SortKind {
                 (Some(_), None) => std::cmp::Ordering::Less,
                 (None, Some(_)) => std::cmp::Ordering::Greater,
                 (None, None) => std::cmp::Ordering::Equal,
-            }
+            },
             Self::Release => x.release().cmp(&y.release()),
             Self::Progress => x.progress().total_cmp(&y.progress()),
             Self::Comments => x.comments().cmp(&y.comments()),
