@@ -153,6 +153,102 @@ pub fn trim_path(path: &Path, components: usize) -> String {
     path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned()
 }
 
+pub fn draw_subtitles<'a, Message: 'a>(
+    subtitles: &'a str,
+    description: SubtitleDescription,
+) -> iced::Element<'a, Message> {
+    use iced::alignment::Vertical;
+    use iced::widget::{container, text};
+
+    let SubtitleDescription {
+        size,
+        color,
+        font,
+        background_color,
+    } = description;
+
+    let content = text(subtitles)
+        .size(size.max(5))
+        .color(u32_to_rgba(color))
+        .font(font)
+        .align_y(Vertical::Center);
+
+    let subtitles = container(content)
+        .align_y(Vertical::Center)
+        .padding([6, 6])
+        .style(move |_| {
+            let border = iced::border::rounded(5);
+            container::Style {
+                background: Some(u32_to_rgba(background_color).into()),
+                text_color: None,
+                border,
+                ..Default::default()
+            }
+        });
+
+    subtitles.into()
+}
+
+pub fn convert_color_str(input: &str) -> Option<u32> {
+    if input.is_empty() {
+        return None;
+    }
+
+    let input = input.trim();
+
+    let color = if input.contains(",") {
+        let values = input
+            .trim_start_matches("rgb(")
+            .trim_end_matches(")")
+            .split(",")
+            .enumerate()
+            .filter_map(|(idx, value)| {
+                if idx != 3 {
+                    value.trim().parse::<u8>().ok()
+                } else {
+                    match value.trim().parse::<u8>().ok() {
+                        Some(alpha) => Some(alpha),
+                        None => {
+                            let alpha = value.trim().parse::<f32>().ok()?;
+                            let alpha = alpha.max(0.0);
+
+                            Some((255.0 * alpha).trunc() as u8)
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<u8>>();
+
+        if values.len() < 3 || values.len() > 4 {
+            return None;
+        }
+
+        let r = *values.first()? as u32;
+        let g = *values.get(1)? as u32;
+        let b = *values.get(2)? as u32;
+        let a = values.get(3).copied().unwrap_or(255) as u32;
+
+        (r << 24) | (g << 16) | (b << 8) | a
+    } else if input.contains("#") {
+        u32::from_str_radix(input.trim_start_matches("#"), 16).ok()?
+    } else {
+        u32::from_str_radix(input.trim(), 16).ok()?
+    };
+
+    Some(color)
+}
+
+pub fn u32_to_rgba(color: u32) -> iced::Color {
+    let r = (color & 0xff000000) >> 24;
+    let g = (color & 0x00ff0000) >> 16;
+    let b = (color & 0x0000ff00) >> 8;
+    let a = color & 0xff;
+
+    let a = (a as f32) / 255.0;
+
+    iced::color!(r as u8, g as u8, b as u8, a)
+}
+
 /// Far faster at generating multiple thumbnails than
 /// [`iced_video_player::Video::thumbnails`].
 ///

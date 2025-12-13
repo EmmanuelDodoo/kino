@@ -2,10 +2,10 @@ use crate::app::Message;
 use crate::db::Operation;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
-    trim_path,
     AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
-    SettingsAction, SubtitleDescription, SubtitleFont, VideoSettings, icons, modal_container,
-    picklist_handle, sized_button, styles, tooltip, typo::*,
+    SettingsAction, SubtitleDescription, SubtitleFont, VideoSettings, convert_color_str,
+    draw_subtitles, icons, modal_container, picklist_handle, sized_button, styles, tooltip,
+    trim_path, typo::*,
 };
 use crate::widgets::{modal, toast, toggler};
 use iced::{
@@ -138,6 +138,11 @@ pub enum SettingsMessage {
     NewKeyPress(KeyAction),
     KeyAction(KeyAction),
     SaveKeyBinding,
+    SubSizeIncr,
+    SubSizeDecr,
+    SubSize(String),
+    SubColor(String),
+    SubBackground(String),
     None,
 }
 
@@ -149,6 +154,9 @@ pub struct Settings {
     view: Option<View>,
 
     scroll_state: ScrollState,
+
+    text_color: String,
+    background_color: String,
 
     pub directories: Vec<(Directory, bool, Operation)>,
 }
@@ -162,12 +170,16 @@ impl Settings {
     }
 
     fn new(config: Config) -> Self {
+        let text_color = format!("#{:08x}", config.video.subtitles.color);
+        let background_color = format!("#{:08x}", config.video.subtitles.background_color);
         Self {
             config,
             page: Page::default(),
             view: None,
             scroll_state: ScrollState::new(),
             directories: Vec::default(),
+            text_color,
+            background_color,
         }
     }
 
@@ -565,7 +577,6 @@ impl Settings {
 
                 Task::done(Message::CaptureKeys(false))
             }
-
             SettingsMessage::ToggleScanDiscover => {
                 self.config.general.scan_discoverer = !self.config.general.scan_discoverer;
                 Task::none()
@@ -598,6 +609,48 @@ impl Settings {
                     Err(error) => Task::done(Message::error(error)),
                 }
             }
+            SettingsMessage::SubSizeIncr => {
+                self.config.video.subtitles.size = (self.config.video.subtitles.size + 1).min(60);
+                Task::none()
+            }
+            SettingsMessage::SubSizeDecr => {
+                self.config.video.subtitles.size = (self.config.video.subtitles.size - 1).max(5);
+                Task::none()
+            }
+            SettingsMessage::SubSize(size) => {
+                let size = size.trim();
+                if size.is_empty() {
+                    self.config.video.subtitles.size = 5;
+                    return Task::none();
+                }
+
+                let Ok(size) = size.parse::<u32>() else {
+                    let msg = Message::error(format!("Invalid input: {size}"));
+                    return Task::done(msg);
+                };
+
+                self.config.video.subtitles.size = size.max(5);
+
+                Task::none()
+            }
+            SettingsMessage::SubColor(color) => {
+                if let Some(color) = convert_color_str(&color) {
+                    self.config.video.subtitles.color = color;
+                };
+
+                self.text_color = color;
+
+                Task::none()
+            }
+            SettingsMessage::SubBackground(color) => {
+                if let Some(color) = convert_color_str(&color) {
+                    self.config.video.subtitles.background_color = color;
+                };
+
+                self.background_color = color;
+
+                Task::none()
+            }
         }
     }
 
@@ -607,8 +660,7 @@ impl Settings {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(4),
-        )
-        .style(styles::container::bw);
+        );
 
         match &self.view {
             None => content.into(),
@@ -656,8 +708,16 @@ impl Settings {
         .spacing(20);
 
         let content = column!(header, space::vertical().height(20.0), options)
-            .width(200.0)
+            .padding(iced::Padding::ZERO.left(12))
+            .width(300.0)
             .height(Length::Fill);
+
+        let content = container(content).style(|theme| {
+            let default = styles::container::bw(theme);
+            let border = default.border.rounded(2.5);
+
+            container::Style { border, ..default }
+        });
 
         content.into()
     }
@@ -716,7 +776,6 @@ impl Settings {
 
         container(content)
             .clip(true)
-            .style(styles::container::bb)
             .height(Length::Fill)
             .width(Length::Fill)
             .into()
@@ -885,9 +944,12 @@ impl Settings {
             let label = label_maker("Media Directories: ").width(width);
 
             let add = button(
-                row!(icons::icon(icons::ADD).size(size), text("Add").size(size))
-                    .spacing(8.0)
-                    .align_y(Vertical::Center),
+                row!(
+                    icons::icon(icons::FOLDER_ADD).size(size),
+                    text("Add").size(size)
+                )
+                .spacing(8.0)
+                .align_y(Vertical::Center),
             )
             .padding([3, 6])
             .style(styles::button::subtle)
@@ -1044,10 +1106,11 @@ impl Settings {
             auto_next,
             completion_point,
             completion_watch_time,
+            subtitles,
             // I cannot think of a reason why these should persist here
             // plus I'm lazy
             muted: _mute,
-            subtitles,
+            filters: _filters,
         } = &self.config.video;
 
         let thumbnail = {
@@ -1215,7 +1278,7 @@ impl Settings {
                 .spacing(spacing)
         };
 
-        let subtitles = {
+        let subtitles_toggle = {
             let label = label_maker("Show subtitles: ").width(width);
             let label = button(label)
                 .padding(0)
@@ -1328,6 +1391,8 @@ impl Settings {
                 .spacing(spacing)
         };
 
+        let subtitles = subtitle_config(*subtitles, &self.text_color, &self.background_color);
+
         let content = column!(
             thumbnail,
             completion_point,
@@ -1339,9 +1404,10 @@ impl Settings {
             gamma,
             seek_amt,
             seek_amt_shift,
-            subtitles,
+            subtitles_toggle,
             auto_start,
             auto_next,
+            subtitles,
         )
         .spacing(24);
 
@@ -1887,4 +1953,87 @@ fn binding_tooltip<'a>(
     use iced::widget::tooltip::Position;
 
     tooltip(content, label, Position::Top).into()
+}
+
+fn subtitle_config<'a>(
+    subtitles: SubtitleDescription,
+    text_color: &'a str,
+    background_color: &'a str,
+) -> Element<'a, SettingsMessage> {
+    let size = H7;
+    let input_width = 48.0;
+    let color_width = 150.0;
+    let padding = [2, 5];
+    let spacing = 8;
+
+    let label = label_maker("Subtitle Style").size(H6);
+    let dummy = draw_subtitles("An example subtitle", subtitles);
+
+    let sub_size = {
+        let label = label_maker("Size: ");
+
+        let amt = format!("{}", subtitles.size);
+
+        let actions = {
+            let incr = button(icons::icon(icons::CHEV_UP).size(10))
+                .padding([2, 2])
+                .style(styles::button::subtler)
+                .on_press(SettingsMessage::SubSizeIncr);
+            let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
+                .padding([2, 2])
+                .style(styles::button::subtler)
+                .on_press(SettingsMessage::SubSizeDecr);
+
+            column!(incr, decr).spacing(2.0)
+        };
+
+        let input = text_input("", &amt)
+            .width(input_width)
+            .size(size)
+            .align_x(Horizontal::Right)
+            .padding(padding)
+            .on_input(SettingsMessage::SubSize);
+
+        let input = row!(input, actions).spacing(4.0).align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let color = {
+        let label = label_maker("Text Color (rgba): ");
+
+        let input = text_input("", text_color)
+            .width(color_width)
+            .size(size)
+            .align_x(Horizontal::Right)
+            .padding(padding)
+            .on_input(SettingsMessage::SubColor);
+
+        row!(label, space::horizontal(), input)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let background = {
+        let label = label_maker("Background Color (rgba): ");
+
+        let input = text_input("", background_color)
+            .width(color_width)
+            .size(size)
+            .align_x(Horizontal::Right)
+            .padding(padding)
+            .on_input(SettingsMessage::SubBackground);
+
+        row!(label, space::horizontal(), input)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let content = column!(sub_size, color, background, dummy)
+        .align_x(Horizontal::Center)
+        .spacing(8.0);
+
+    column!(label, content).spacing(12).into()
 }
