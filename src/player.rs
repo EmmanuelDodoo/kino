@@ -2220,9 +2220,6 @@ fn draw_config<'a>(
     let size = H7;
     let padding = [2, 5];
     let spacing = 8;
-    // Audio selection,
-    //
-    // Playback Info?
 
     let header = text("Video Config").size(H6).font(Font {
         family: font::Family::Serif,
@@ -2460,10 +2457,15 @@ fn draw_config<'a>(
 
                 let handle = picklist_handle(size);
 
-                let pick = pick_list(embedded, selected_text.clone(), ConfigMessage::CurrentText)
-                    .handle(handle)
-                    .padding(padding)
-                    .text_size(size);
+                let pick: Element<'_, ConfigMessage> = if embedded.is_empty() {
+                    label_maker("None").size(size).into()
+                } else {
+                    pick_list(embedded, selected_text.clone(), ConfigMessage::CurrentText)
+                        .handle(handle)
+                        .padding(padding)
+                        .text_size(size)
+                        .into()
+                };
 
                 row!(label, space::horizontal(), pick)
                     .align_y(Vertical::Center)
@@ -2554,10 +2556,15 @@ fn draw_config<'a>(
 
                 let handle = picklist_handle(size);
 
-                let pick = pick_list(audio, selected_audio.clone(), ConfigMessage::CurrentAudio)
-                    .handle(handle)
-                    .padding(padding)
-                    .text_size(size);
+                let pick: Element<'_, ConfigMessage> = if audio.is_empty() {
+                    label_maker("None").size(size).into()
+                } else {
+                    pick_list(audio, selected_audio.clone(), ConfigMessage::CurrentAudio)
+                        .handle(handle)
+                        .padding(padding)
+                        .text_size(size)
+                        .into()
+                };
 
                 row!(label, space::horizontal(), pick)
                     .align_y(Vertical::Center)

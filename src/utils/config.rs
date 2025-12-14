@@ -181,7 +181,7 @@ impl GeneralSettings {
             search_limit: Some(5),
             scan_discoverer: false,
             auth_token: String::default(),
-            movie_depth: 2,
+            movie_depth: 0,
             fetching_interval: Duration::from_secs(30),
         }
     }

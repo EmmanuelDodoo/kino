@@ -722,13 +722,14 @@ impl App {
                 self.config = config;
                 self.config.span_writer = writer;
 
-                let msg = match self.db.toggle_directories(dirs) {
-                    Ok(true) => Message::success("Directories Updated!"),
-                    Ok(false) => Message::None,
-                    Err(error) => Message::error(error),
+                let dir = match self.db.toggle_directories(dirs) {
+                    Ok(true) => Task::batch([
+                        Task::done(Message::success("Directories Updated!")),
+                        Task::done(Message::Scan),
+                    ]),
+                    Ok(false) => Task::done(Message::None),
+                    Err(error) => Task::done(Message::error(error)),
                 };
-
-                let refresh = Task::done(Message::Refresh(now, true));
 
                 let auth = self.config.auth();
 
@@ -740,7 +741,7 @@ impl App {
                     Task::none()
                 };
 
-                Task::batch([auth, refresh, Task::done(msg)])
+                Task::batch([auth, dir])
             }
             Message::Layout(layout) => {
                 self.config.general.layout = layout;

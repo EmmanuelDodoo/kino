@@ -31,6 +31,7 @@ CREATE TABLE tv_show (
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
 	fetched		     BOOLEAN DEFAULT FALSE,
+	removed		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(directory, path),
 	FOREIGN KEY ( directory ) REFERENCES directory( id ) ON DELETE CASCADE
 );
@@ -58,6 +59,7 @@ CREATE TABLE season (
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
 	fetched		     BOOLEAN DEFAULT FALSE,
+	removed		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(show_id, path),
 	FOREIGN KEY ( show_id ) REFERENCES tv_show( id ) ON DELETE CASCADE 
 );
@@ -84,6 +86,7 @@ CREATE TABLE episode (
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
 	fetched		     BOOLEAN DEFAULT FALSE,
 	subtitle_uri	     TEXT,
+	removed		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(season_id, path),
 	FOREIGN KEY ( season_id ) REFERENCES season( id ) ON DELETE CASCADE ,
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
@@ -124,6 +127,7 @@ CREATE TABLE movie (
 	comment_count	    INTEGER NOT NULL DEFAULT 0,
 	fetched		     BOOLEAN DEFAULT FALSE,
 	subtitle_uri	     TEXT,
+	removed		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(directory, path),
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
 	CHECK ( 0 <= rating AND rating <= 5 ),
@@ -251,7 +255,8 @@ CREATE TABLE media_fts_index (
 	rowid INTEGER PRIMARY KEY,
 	media_type TEXT NOT NULL,
 	media_id TEXT NOT NULL,
-    poster TEXT
+	poster TEXT,
+	removed BOOLEAN DEFAULT FALSE
 );
 
 CREATE TRIGGER fts_movie_insert_tr AFTER INSERT ON movie
@@ -300,7 +305,8 @@ BEGIN
 	WHERE rowid = (SELECT rowid FROM media_fts_index WHERE media_type = 'movie' AND media_id = NEW.id);
 
     UPDATE media_fts_index
-    SET poster = NEW.poster
+    SET poster = NEW.poster,
+    removed = NEW.removed
     WHERE media_type = 'movie' AND media_id = NEW.id;
 
 END;
@@ -315,7 +321,8 @@ BEGIN
 	WHERE rowid = (SELECT rowid FROM media_fts_index WHERE media_type = 'show' AND media_id = NEW.id);
 
     UPDATE media_fts_index
-    SET poster = NEW.poster
+    SET poster = NEW.poster,
+    removed = NEW.removed
     WHERE media_type = 'show' AND media_id = NEW.id;
 END;
 
@@ -328,7 +335,8 @@ BEGIN
 	WHERE rowid = (SELECT rowid FROM media_fts_index WHERE media_type = 'season' AND media_id = NEW.id);
 
     UPDATE media_fts_index
-    SET poster = NEW.poster
+    SET poster = NEW.poster,
+    removed = NEW.removed
     WHERE media_type = 'season' AND media_id = NEW.id;
 END;
 
@@ -341,7 +349,8 @@ BEGIN
 	WHERE rowid = (SELECT rowid FROM media_fts_index WHERE media_type = 'episode' AND media_id = NEW.id);
 
     UPDATE media_fts_index
-    SET poster = NEW.poster
+    SET poster = NEW.poster,
+    removed = NEW.removed
     WHERE media_type = 'episode' AND media_id = NEW.id;
 END;
 
@@ -602,7 +611,8 @@ CREATE TRIGGER show_refetch_tr AFTER UPDATE OF tmdb_id ON tv_show WHEN NEW.tmdb_
 BEGIN
 	UPDATE season
 	SET tmdb_id=NULL,
-	fetched=FALSE
+	fetched=FALSE,
+	removed=NEW.removed
 	WHERE show_id = NEW.id;
 END;
 
@@ -610,6 +620,7 @@ CREATE TRIGGER season_refetch_tr AFTER UPDATE OF tmdb_id ON season WHEN NEW.tmdb
 BEGIN
 	UPDATE episode
 	SET tmdb_id=NULL,
-	fetched=FALSE
+	fetched=FALSE,
+	removed=NEW.removed
 	WHERE season_id = NEW.id;
 END;

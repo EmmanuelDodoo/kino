@@ -1,7 +1,8 @@
 use crate::db::{BatchResult, Database};
 use crate::error;
 use crate::models::{
-    Directory, DirectoryId, Episode, MediaType, Movie, Season, SeasonId, Show, ShowId,
+    Directory, DirectoryId, Episode, EpisodeId, MediaType, Movie, MovieId, Season, SeasonId, Show,
+    ShowId,
 };
 use fancy_regex::Regex;
 use gstreamer_pbutils::Discoverer;
@@ -150,19 +151,64 @@ pub fn scan_dir_helper<'a>(
     match dir.media_type {
         MediaType::Movies => {
             if let Some(videos) = scan_videos(&dir.path, discoverer, movie_depth) {
+                let mut scanned = std::collections::HashSet::with_capacity(videos.len());
+
                 for movie in videos {
                     let name = process_name(&movie.name).unwrap_or(movie.name.clone());
                     let (_, query) =
-                        Movie::new(dir.id, movie.path, name, movie.name, movie.duration);
+                        Movie::new(dir.id, movie.path.clone(), name, movie.name, movie.duration);
                     match query.execute(db) {
-                        Ok(succ) => successes.push(succ),
+                        Ok(succ) => {
+                            scanned.insert(movie.path);
+                            successes.push(succ)
+                        }
                         Err(fail) => failures.push(fail),
                     };
                 }
+
+                struct DirMovie {
+                    id: MovieId,
+                    path: String,
+                }
+
+                if let Ok(dir_movies) = db
+                    .get_dir_movies(dir.id, |row| {
+                        let id = MovieId::from_row(row)?;
+                        let path = row.get::<_, String>("path")?;
+
+                        Ok(DirMovie { id, path })
+                    })
+                    .inspect_err(|error| tracing::error!("{error}"))
+                {
+                    let remove = dir_movies
+                        .into_iter()
+                        .map(|movie| (movie.id, scanned.contains(&movie.path)))
+                        .collect();
+
+                    if let Err(error) = db.toggle_remove_movies(remove) {
+                        tracing::error!("{error}")
+                    };
+                };
             }
         }
         MediaType::Shows => {
+            struct DirEpisode {
+                id: EpisodeId,
+                path: String,
+            }
+
+            struct DirSeason {
+                id: SeasonId,
+                path: String,
+            }
+
+            struct DirShow {
+                id: ShowId,
+                path: String,
+            }
+
             let shows = scan_shows(&dir.path, discoverer)?;
+            let mut scanned_shows = std::collections::HashSet::with_capacity(shows.len());
 
             for show in shows {
                 let ShowPrim { path, seasons } = show;
@@ -174,6 +220,7 @@ pub fn scan_dir_helper<'a>(
                     Ok(succ) => {
                         let modified = succ.rows > 0;
                         successes.push(succ);
+                        scanned_shows.insert(path.clone());
                         modified
                     }
                     Err(error) => {
@@ -194,6 +241,8 @@ pub fn scan_dir_helper<'a>(
                     }
                 };
 
+                let mut scanned_seasons = std::collections::HashSet::with_capacity(seasons.len());
+
                 for season in seasons {
                     let SeasonPrim { path, episodes } = season;
                     let number = process_season(&path);
@@ -208,6 +257,7 @@ pub fn scan_dir_helper<'a>(
                         Ok(succ) => {
                             let modified = succ.rows > 0;
                             successes.push(succ);
+                            scanned_seasons.insert(path.clone());
                             modified
                         }
                         Err(error) => {
@@ -228,6 +278,9 @@ pub fn scan_dir_helper<'a>(
                         }
                     };
 
+                    let mut scanned_episodes =
+                        std::collections::HashSet::with_capacity(episodes.len());
+
                     for episode in episodes {
                         let number = process_episode(&episode.path);
                         let name = match number {
@@ -239,17 +292,77 @@ pub fn scan_dir_helper<'a>(
                             season,
                             name,
                             episode.name,
-                            episode.path,
+                            episode.path.clone(),
                             episode.duration,
                             number,
                         );
                         match query.execute(db) {
-                            Ok(succ) => successes.push(succ),
+                            Ok(succ) => {
+                                scanned_episodes.insert(episode.path);
+                                successes.push(succ)
+                            }
                             Err(fail) => failures.push(fail),
                         }
                     }
+
+                    if let Ok(dir_episodes) = db
+                        .get_season_episodes_removed(season, |row| {
+                            let id = EpisodeId::from_row(row)?;
+                            let path = row.get::<_, String>("path")?;
+
+                            Ok(DirEpisode { id, path })
+                        })
+                        .inspect_err(|error| tracing::error!("{error}"))
+                    {
+                        let remove = dir_episodes
+                            .into_iter()
+                            .map(|episode| (episode.id, scanned_episodes.contains(&episode.path)))
+                            .collect();
+
+                        if let Err(error) = db.toggle_remove_episodes(remove) {
+                            tracing::error!("{error}")
+                        };
+                    };
                 }
+
+                if let Ok(dir_seasons) = db
+                    .get_show_seasons_removed(show, |row| {
+                        let id = SeasonId::from_row(row)?;
+                        let path = row.get::<_, String>("path")?;
+
+                        Ok(DirSeason { id, path })
+                    })
+                    .inspect_err(|error| tracing::error!("{error}"))
+                {
+                    let remove = dir_seasons
+                        .into_iter()
+                        .map(|season| (season.id, scanned_seasons.contains(&season.path)))
+                        .collect();
+
+                    if let Err(error) = db.toggle_remove_seasons(remove) {
+                        tracing::error!("{error}")
+                    };
+                };
             }
+
+            if let Ok(dir_shows) = db
+                .get_dir_shows(dir.id, |row| {
+                    let id = ShowId::from_row(row)?;
+                    let path = row.get::<_, String>("path")?;
+
+                    Ok(DirShow { id, path })
+                })
+                .inspect_err(|error| tracing::error!("{error}"))
+            {
+                let remove = dir_shows
+                    .into_iter()
+                    .map(|show| (show.id, scanned_shows.contains(&show.path)))
+                    .collect();
+
+                if let Err(error) = db.toggle_remove_shows(remove) {
+                    tracing::error!("{error}")
+                };
+            };
         }
     }
 

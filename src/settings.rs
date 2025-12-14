@@ -158,7 +158,7 @@ pub struct Settings {
     text_color: String,
     background_color: String,
 
-    pub directories: Vec<(Directory, bool, Operation)>,
+    pub directories: Vec<(Directory, Option<bool>, Operation)>,
 }
 
 impl Settings {
@@ -480,7 +480,7 @@ impl Settings {
                     // todo??
                     let (new, _query) = Directory::new(path, kind, true);
 
-                    self.directories.push((new, false, Operation::Insert));
+                    self.directories.push((new, None, Operation::Insert));
 
                     self.update_scroll()
                 }
@@ -492,20 +492,24 @@ impl Settings {
                     *operation = match operation {
                         Operation::Update => Operation::Delete,
                         Operation::Insert => Operation::Delete,
-                        Operation::Delete if *new => Operation::Insert,
+                        Operation::Delete if new.is_none() => Operation::Insert,
                         Operation::Delete => Operation::Update,
                     };
                 }
                 Task::none()
             }
             SettingsMessage::ToggleDirKind(id) => {
-                if let Some((dir, _, _)) =
+                if let Some((dir, new, _)) =
                     self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
                 {
                     dir.media_type = match dir.media_type {
                         MediaType::Shows => MediaType::Movies,
                         MediaType::Movies => MediaType::Shows,
                     };
+
+                    if let Some(toggled) = new {
+                        *toggled = !*toggled;
+                    }
                 }
 
                 Task::none()
@@ -1573,8 +1577,11 @@ impl Settings {
     fn cancel(&mut self) -> Task<Message> {
         match self.view.take() {
             None => Task::done(Message::Back),
-            Some(View::FolderSelection { .. }) => Task::none(),
-            Some(View::CaptureKey { .. }) => Task::done(Message::CaptureKeys(false)),
+            Some(View::FolderSelection { .. }) => self.update_scroll(),
+            Some(View::CaptureKey { .. }) => Task::batch([
+                Task::done(Message::CaptureKeys(false)),
+                self.update_scroll(),
+            ]),
         }
     }
 
@@ -1623,7 +1630,7 @@ impl Settings {
     pub fn fetched_directories(&mut self, dirs: Vec<Directory>) {
         self.directories.extend(
             dirs.into_iter()
-                .map(|dirs| (dirs, false, Operation::Update)),
+                .map(|dirs| (dirs, Some(false), Operation::Update)),
         );
     }
 
@@ -1631,7 +1638,13 @@ impl Settings {
         let directories = self
             .directories
             .into_iter()
-            .map(|(dir, _, op)| (dir, op))
+            .filter_map(|(dir, new, op)| {
+                match new {
+                    Some(false) if matches!(op, Operation::Update) => None,
+                    _ => Some((dir, op)),
+
+                }
+            })
             .collect();
 
         let config = self.config;

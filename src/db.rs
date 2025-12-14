@@ -32,9 +32,9 @@ impl std::ops::DerefMut for Database {
 }
 
 impl Database {
-    const MOVIE_QUERY: &str = "SELECT  directory.path as directory_path, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.poster END AS poster, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.backdrop END AS backdrop, movie.*  FROM movie INNER JOIN directory ON movie.directory=directory.id";
+    const MOVIE_QUERY: &str = "SELECT directory.id as directory_id,  directory.path as directory_path, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.poster END AS poster, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.backdrop END AS backdrop, movie.*  FROM movie INNER JOIN directory ON movie.directory=directory.id";
 
-    const SHOW_QUERY: &str = "SELECT  directory.path as directory_path, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.poster END AS poster, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.backdrop END AS backdrop, tv_show.* FROM tv_show INNER JOIN directory ON tv_show.directory=directory.id";
+    const SHOW_QUERY: &str = "SELECT directory.id as directory_id, directory.path as directory_path, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.poster END AS poster, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.backdrop END AS backdrop, tv_show.* FROM tv_show INNER JOIN directory ON tv_show.directory=directory.id";
 
     const SEASON_QUERY: &str = "SELECT  tv_show.backdrop, CASE WHEN NOT season.fetched THEN NULL ELSE season.poster END AS poster, season.* FROM season INNER JOIN tv_show ON season.show_id=tv_show.id";
 
@@ -54,6 +54,32 @@ impl Database {
         let mut statement = self.prepare_cached("SELECT * FROM directory WHERE id=:id")?;
 
         statement.query_row(&[(":id", &ToSqlOutput::from(id))], Directory::from_row)
+    }
+
+    pub fn get_dir_movies<T>(
+        &self,
+        dir: DirectoryId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
+        let sql = format!("{} WHERE directory_id=:dir", Self::MOVIE_QUERY);
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_map(&[(":dir", &ToSqlOutput::from(dir))], map)?
+            .collect()
+    }
+
+    pub fn get_dir_shows<T>(
+        &self,
+        dir: DirectoryId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
+        let sql = format!("{} WHERE directory_id=:dir", Self::SHOW_QUERY);
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_map(&[(":dir", &ToSqlOutput::from(dir))], map)?
+            .collect()
     }
 
     pub fn get_movies<T>(
@@ -77,7 +103,7 @@ impl Database {
             .unwrap_or_default();
 
         let sql = format!(
-            "{} {filter} {sort} LIMIT :limit OFFSET :offset",
+            "{} WHERE NOT removed {filter} {sort} LIMIT :limit OFFSET :offset",
             Self::MOVIE_QUERY
         );
 
@@ -131,10 +157,8 @@ impl Database {
             .unwrap_or_default();
 
         let sql = format!(
-            "{} {} {} LIMIT :limit OFFSET :offset",
+            "{} WHERE not removed {filter} {sort} LIMIT :limit OFFSET :offset",
             Self::SHOW_QUERY,
-            filter,
-            sort
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -165,7 +189,7 @@ impl Database {
             .unwrap_or_default();
 
         let sql = format!(
-            "{} WHERE season.show_id=:show {filter} {sort} LIMIT :limit OFFSET :offset",
+            "{} WHERE NOT season.removed AND season.show_id=:show {filter} {sort} LIMIT :limit OFFSET :offset",
             Self::SEASON_QUERY,
         );
 
@@ -179,6 +203,19 @@ impl Database {
                 ],
                 map,
             )?
+            .collect()
+    }
+
+    pub fn get_show_seasons_removed<T>(
+        &self,
+        show: ShowId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
+        let sql = format!("{} WHERE season.show_id=:show", Self::SEASON_QUERY,);
+
+        let mut statement = self.prepare_cached(&sql)?;
+        statement
+            .query_map(&[(":show", &ToSqlOutput::from(show))], map)?
             .collect()
     }
 
@@ -216,7 +253,7 @@ impl Database {
             .unwrap_or_default();
 
         let sql = format!(
-            "{} WHERE season_id=:season {filter} {sort} LIMIT :limit OFFSET :offset",
+            "{} WHERE NOT removed AND season_id=:season {filter} {sort} LIMIT :limit OFFSET :offset",
             Self::EPISODE_QUERY,
         );
 
@@ -231,6 +268,20 @@ impl Database {
                 ],
                 map,
             )?
+            .collect()
+    }
+
+    pub fn get_season_episodes_removed<T>(
+        &self,
+        season: SeasonId,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
+        let sql = format!("{} WHERE season_id=:season", Self::EPISODE_QUERY,);
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_map(&[(":season", &ToSqlOutput::from(season))], map)?
             .collect()
     }
 
@@ -519,7 +570,7 @@ impl Database {
                 .map(|query| format!("ORDER BY {query} NULLS LAST"))
                 .unwrap_or_default();
             let sql = format!(
-                "{} WHERE movie.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
+                "{} WHERE NOT removed AND movie.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
                 Self::MOVIE_QUERY,
             );
             let mut statement = self.prepare_cached(&sql)?;
@@ -542,7 +593,7 @@ impl Database {
 
             let vars = repeat(shows.len());
             let sql = format!(
-                "{} WHERE tv_show.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
+                "{} WHERE NOT removed AND tv_show.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
                 Self::SHOW_QUERY
             );
             let mut statement = self.prepare_cached(&sql)?;
@@ -565,7 +616,7 @@ impl Database {
 
             let vars = repeat(seasons.len());
             let sql = format!(
-                "{} WHERE season.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
+                "{} WHERE NOT season.removed AND season.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
                 Self::SEASON_QUERY
             );
             let mut statement = self.prepare_cached(&sql)?;
@@ -589,7 +640,7 @@ impl Database {
             let vars = repeat(episodes.len());
 
             let sql = format!(
-                "{} WHERE id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
+                "{} WHERE NOT removed AND id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
                 Self::EPISODE_QUERY
             );
 
@@ -737,9 +788,15 @@ impl Database {
         }
 
         if !updates.is_empty() {
+            let vars = repeat(updates.len());
             let sql = "UPDATE OR IGNORE directory SET path=:path, active=:active, media_type=:type WHERE id=:id";
 
+            let mut params = Vec::with_capacity(updates.len());
+            let delete_movies = format!("DELETE FROM movie where directory in ({vars})");
+            let delete_shows = format!("DELETE FROM tv_show where directory in ({vars})");
+
             for dir in updates {
+                params.push(ToSqlOutput::from(dir.id));
                 rows += trans.execute(
                     sql,
                     &[
@@ -750,6 +807,14 @@ impl Database {
                     ],
                 )?;
             }
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += trans.execute(&delete_movies, params.as_slice())?;
+            rows += trans.execute(&delete_shows, params.as_slice())?;
         }
 
         if !deletes.is_empty() {
@@ -795,7 +860,7 @@ impl Database {
             f.tags
             FROM media_fts f
             INNER JOIN media_fts_index i on f.rowid = i.rowid
-            WHERE media_fts MATCH :term {filter}
+            WHERE media_fts MATCH :term {filter} AND NOT i.removed
             ORDER BY rank
             LIMIT {limit}"
         );
@@ -831,11 +896,11 @@ impl Database {
         let mut rng = thread_rng();
         let media = [0, 1, 2, 3].choose(&mut rng).unwrap();
 
-        let (getter, media) = match media {
-            0 => (Self::MOVIE_QUERY, "movie"),
-            1 => (Self::SHOW_QUERY, "show"),
-            2 => (Self::SEASON_QUERY, "season"),
-            3 => (Self::EPISODE_QUERY, "episode"),
+        let (getter, media, removed) = match media {
+            0 => (Self::MOVIE_QUERY, "movie", "removed"),
+            1 => (Self::SHOW_QUERY, "show", "removed"),
+            2 => (Self::SEASON_QUERY, "season", "season.removed"),
+            3 => (Self::EPISODE_QUERY, "episode", "removed"),
             _ => unreachable!(),
         };
 
@@ -846,7 +911,7 @@ impl Database {
         };
 
         let sql = format!(
-            "{getter} WHERE {table}progress < 0.85 ORDER BY RANDOM() * (6 - {table}rating) LIMIT 1",
+            "{getter} WHERE NOT {removed} AND {table}progress < 0.85 ORDER BY RANDOM() * (6 - {table}rating) LIMIT 1",
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -981,6 +1046,201 @@ impl Database {
             .collect::<Vec<_>>();
 
         statement.execute(params.as_slice())
+    }
+
+    pub fn toggle_remove_movies(&self, movies: Vec<(MovieId, bool)>) -> rusqlite::Result<usize> {
+        if movies.is_empty() {
+            return Ok(0);
+        }
+
+        let mut rows = 0;
+        let (inserts, deletes): (Vec<(MovieId, bool)>, Vec<_>) =
+            movies.into_iter().partition(|(_, insert)| *insert);
+
+        if !inserts.is_empty() {
+            let vars = repeat(inserts.len());
+
+            let insert = format!("UPDATE movie SET removed=FALSE WHERE id IN ({vars})");
+
+            let params = inserts
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += self.execute(&insert, params.as_slice())?
+        }
+
+        if !deletes.is_empty() {
+            let vars = repeat(deletes.len());
+
+            let delete = format!("UPDATE movie SET removed=TRUE WHERE id IN ({vars})");
+
+            let params = deletes
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += self.execute(&delete, params.as_slice())?
+        }
+
+        Ok(rows)
+    }
+
+    pub fn toggle_remove_shows(&self, shows: Vec<(ShowId, bool)>) -> rusqlite::Result<usize> {
+        if shows.is_empty() {
+            return Ok(0);
+        }
+
+        let mut rows = 0;
+        let (inserts, deletes): (Vec<(ShowId, bool)>, Vec<_>) =
+            shows.into_iter().partition(|(_, insert)| *insert);
+
+        if !inserts.is_empty() {
+            let vars = repeat(inserts.len());
+
+            let insert = format!("UPDATE tv_show SET removed=FALSE WHERE id IN ({vars})");
+
+            let params = inserts
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += self.execute(&insert, params.as_slice())?
+        }
+
+        if !deletes.is_empty() {
+            let vars = repeat(deletes.len());
+
+            let delete = format!("UPDATE tv_show SET removed=TRUE WHERE id IN ({vars})");
+
+            let params = deletes
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += self.execute(&delete, params.as_slice())?
+        }
+
+        Ok(rows)
+    }
+
+    pub fn toggle_remove_seasons(&self, seasons: Vec<(SeasonId, bool)>) -> rusqlite::Result<usize> {
+        if seasons.is_empty() {
+            return Ok(0);
+        }
+
+        let mut rows = 0;
+        let (inserts, deletes): (Vec<(SeasonId, bool)>, Vec<_>) =
+            seasons.into_iter().partition(|(_, insert)| *insert);
+
+        if !inserts.is_empty() {
+            let vars = repeat(inserts.len());
+
+            let insert = format!("UPDATE season SET removed=FALSE WHERE id IN ({vars})");
+
+            let params = inserts
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += self.execute(&insert, params.as_slice())?
+        }
+
+        if !deletes.is_empty() {
+            let vars = repeat(deletes.len());
+
+            let delete = format!("UPDATE season SET removed=TRUE WHERE id IN ({vars})");
+
+            let params = deletes
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += self.execute(&delete, params.as_slice())?
+        }
+
+        Ok(rows)
+    }
+
+    pub fn toggle_remove_episodes(
+        &self,
+        episodes: Vec<(EpisodeId, bool)>,
+    ) -> rusqlite::Result<usize> {
+        if episodes.is_empty() {
+            return Ok(0);
+        }
+
+        let mut rows = 0;
+        let (inserts, deletes): (Vec<(EpisodeId, bool)>, Vec<_>) =
+            episodes.into_iter().partition(|(_, insert)| *insert);
+
+        if !inserts.is_empty() {
+            let vars = repeat(inserts.len());
+
+            let insert = format!("UPDATE episode SET removed=FALSE WHERE id IN ({vars})");
+
+            let params = inserts
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += self.execute(&insert, params.as_slice())?
+        }
+
+        if !deletes.is_empty() {
+            let vars = repeat(deletes.len());
+
+            let delete = format!("UPDATE episode SET removed=TRUE WHERE id IN ({vars})");
+
+            let params = deletes
+                .into_iter()
+                .map(|(id, _)| ToSqlOutput::from(id))
+                .collect::<Vec<_>>();
+
+            let params = params
+                .iter()
+                .map(|param| param as &dyn ToSql)
+                .collect::<Vec<_>>();
+
+            rows += self.execute(&delete, params.as_slice())?
+        }
+
+        Ok(rows)
     }
 
     pub fn open_with_dummies(
