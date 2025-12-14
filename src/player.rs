@@ -51,7 +51,13 @@ impl std::fmt::Display for Subtitle {
                     .file_name()
                     .expect("Cannot have a non-file subtitles file");
 
-                file.display().fmt(f)
+                let name = file.to_string_lossy();
+                let len = name.len();
+                let end = len.min(36);
+
+                let file = &name[0..end];
+
+                file.fmt(f)
             }
         }
     }
@@ -1492,209 +1498,164 @@ impl Manager {
         Task::none()
     }
 
-    pub fn close_view(&mut self) -> Task<Message> {
-        let previous = self.modal.take();
-        if let State::Ready(player) = &mut self.state {
-            if let Some(Modal::Config {
-                subtitle_uri,
-                tab: _tab,
-                selected_text,
-                selected_audio,
-                text_color: _text,
-                background_color: _background,
-            }) = previous
-            {
-                let original_uri = player.item.subtitle_uri.clone();
-                player.item.subtitle_uri = subtitle_uri.clone();
-                apply_settings(self.settings, player);
+    fn save_config(&mut self, config: Modal) -> Task<Message> {
+        let State::Ready(player) = &mut self.state else {
+            return Task::none();
+        };
 
-                let set_loaded = |player: &mut Player, url: url::Url| {
-                    let position = player.video.position();
+        let Modal::Config {
+            subtitle_uri,
+            tab: _tab,
+            selected_text,
+            selected_audio,
+            text_color: _text,
+            background_color: _background,
+        } = config
+        else {
+            return Task::none();
+        };
 
-                    if let Err(error) = player.video.set_subtitle_url(&url) {
-                        return Some(Message::error(error));
-                    };
+        let original_uri = player.item.subtitle_uri.clone();
+        player.item.subtitle_uri = subtitle_uri.clone();
+        apply_settings(self.settings, player);
 
-                    std::thread::sleep(std::time::Duration::from_millis(150));
-                    if let Err(error) = player.video.seek(position, false) {
-                        return Some(Message::error(error));
-                    };
+        let set_loaded = |player: &mut Player, url: url::Url| {
+            let position = player.video.position();
 
-                    player.current_text = Some(Subtitle::Loaded(url.clone()));
+            if let Err(error) = player.video.set_subtitle_url(&url) {
+                return Some(Message::error(error));
+            };
 
-                    let embedded = player
-                        .video
-                        .available_subtitles()
-                        .into_iter()
-                        .map(|tag| Subtitle::from(tag));
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            if let Err(error) = player.video.seek(position, false) {
+                return Some(Message::error(error));
+            };
 
-                    player.available_subtitles = std::iter::once(url)
-                        .map(|url| Subtitle::Loaded(url))
-                        .chain(embedded)
-                        .collect();
+            player.current_text = Some(Subtitle::Loaded(url.clone()));
 
-                    None
-                };
+            let embedded = player
+                .video
+                .available_subtitles()
+                .into_iter()
+                .map(|tag| Subtitle::from(tag));
 
-                let mut set_uri = |uri: PathBuf| {
-                    let path = match uri.canonicalize() {
-                        Ok(subtitles) => subtitles,
-                        Err(error) => return Some(Message::error(error)),
-                    };
+            player.available_subtitles = std::iter::once(url)
+                .map(|url| Subtitle::Loaded(url))
+                .chain(embedded)
+                .collect();
 
-                    let url = match url::Url::from_file_path(path) {
-                        Ok(url) => url,
-                        Err(_) => {
-                            return Some(Message::error("Cannot generate url from subtitle path"));
-                        }
-                    };
+            None
+        };
 
-                    set_loaded(player, url)
-                };
+        let mut set_uri = |uri: PathBuf| {
+            let path = match uri.canonicalize() {
+                Ok(subtitles) => subtitles,
+                Err(error) => return Some(Message::error(error)),
+            };
 
-                match (original_uri, subtitle_uri) {
-                    (None, None) => {
-                        let changed = selected_text != player.current_text;
-                        if let Some(subtitle) = selected_text
-                            && changed
-                        {
-                            match subtitle {
-                                Subtitle::Loaded(url) => {
-                                    if let Some(message) = set_loaded(player, url) {
-                                        return Task::done(message);
-                                    }
-                                }
-                                Subtitle::Embedded(tag) => {
-                                    player.video.set_text(tag.clone());
-                                    player.current_text = Some(tag.into());
-                                }
-                            }
-                        }
-                    }
-                    (None, Some(subtitle_uri)) => {
-                        if let Some(message) = set_uri(subtitle_uri) {
-                            return Task::done(message);
-                        }
-                    }
-                    (Some(_), None) => {
-                        let selected_text = player.available_subtitles.first();
-                        let changed = selected_text != player.current_text.as_ref();
-                        if let Some(subtitle) = selected_text
-                            && changed
-                        {
-                            match subtitle {
-                                Subtitle::Loaded(url) => {
-                                    if let Some(message) = set_loaded(player, url.clone()) {
-                                        return Task::done(message);
-                                    }
-                                }
-                                Subtitle::Embedded(tag) => {
-                                    player.video.set_text(tag.clone());
-                                    player.current_text = Some(tag.clone().into());
-                                }
-                            }
-                        }
-                    }
-                    (Some(og), Some(selected)) if og != selected => {
-                        if let Some(message) = set_uri(selected) {
-                            return Task::done(message);
-                        }
-                    }
-                    (Some(_), Some(_)) => {
-                        let changed = selected_text != player.current_text;
-                        if let Some(subtitle) = selected_text
-                            && changed
-                        {
-                            match subtitle {
-                                Subtitle::Loaded(url) => {
-                                    if let Some(message) = set_loaded(player, url) {
-                                        return Task::done(message);
-                                    }
-                                }
-                                Subtitle::Embedded(tag) => {
-                                    player.video.set_text(tag.clone());
-                                    player.current_text = Some(tag.into());
-                                }
-                            }
-                        }
-                    }
+            let url = match url::Url::from_file_path(path) {
+                Ok(url) => url,
+                Err(_) => {
+                    return Some(Message::error("Cannot generate url from subtitle path"));
                 }
+            };
 
-                // og_uri, selected_uri
-                // % Some, None => first tag,
-                // Some, Some, != => selected
-                // Some, Some == => if tag changed, tag else {}
-                // % None, Some => selected
-                // * None, None => tag
-                //
-                // match subtitle_uri {
-                //     Some(subtitle_uri) => {}
-                //     None => {
-                //
-                //     }
-                // }
+            set_loaded(player, url)
+        };
 
-                // if uri_changed {
-                //
-                // }
-
-                // if let Some(subtitle_uri) = subtitle_uri {
-                //     let subtitles = match subtitle_uri.canonicalize() {
-                //         Ok(subtitles) => subtitles,
-                //         Err(error) => return Task::done(Message::error(error)),
-                //     };
-                //
-                //     let url = match url::Url::from_file_path(subtitles) {
-                //         Ok(url) => url,
-                //         Err(_) => {
-                //             return Task::done(Message::error(
-                //                 "Cannot generate url from subtitle path",
-                //             ));
-                //         }
-                //     };
-                //
-                //     let position = player.video.position();
-                //
-                //     if let Err(error) = player.video.set_subtitle_url(&url) {
-                //         return Task::done(Message::error(error));
-                //     };
-                //
-                //     std::thread::sleep(std::time::Duration::from_millis(150));
-                //     if let Err(error) = player.video.seek(position, false) {
-                //         return Task::done(Message::error(error));
-                //     };
-                //
-                //     player.current_text = player.video.get_text();
-                //     player.available_subtitles = player.video.available_subtitles();
-                //     player.embedded_audio = player.video.available_audio();
-                // } else if let Some(text) = selected_text {
-                //     let changed = player
-                //         .current_text
-                //         .as_ref()
-                //         .map(|og| og != &text)
-                //         .unwrap_or(true);
-                //
-                //     if changed {
-                //         player.video.set_text(text);
-                //     }
-                // }
-
-                if let Some(audio) = selected_audio {
-                    let changed = player
-                        .current_audio
-                        .as_ref()
-                        .map(|og| og != &audio)
-                        .unwrap_or(true);
-                    if changed {
-                        player.video.set_audio(audio);
+        match (original_uri, subtitle_uri) {
+            (None, None) => {
+                let changed = selected_text != player.current_text;
+                if let Some(subtitle) = selected_text
+                    && changed
+                {
+                    match subtitle {
+                        Subtitle::Loaded(url) => {
+                            if let Some(message) = set_loaded(player, url) {
+                                return Task::done(message);
+                            }
+                        }
+                        Subtitle::Embedded(tag) => {
+                            player.video.set_text(tag.clone());
+                            player.current_text = Some(tag.into());
+                        }
                     }
                 }
             }
-
-            player.video.set_paused(false);
+            (None, Some(subtitle_uri)) => {
+                if let Some(message) = set_uri(subtitle_uri) {
+                    return Task::done(message);
+                }
+            }
+            (Some(_), None) => {
+                let selected_text = player.available_subtitles.first();
+                let changed = selected_text != player.current_text.as_ref();
+                if let Some(subtitle) = selected_text
+                    && changed
+                {
+                    match subtitle {
+                        Subtitle::Loaded(url) => {
+                            if let Some(message) = set_loaded(player, url.clone()) {
+                                return Task::done(message);
+                            }
+                        }
+                        Subtitle::Embedded(tag) => {
+                            player.video.set_text(tag.clone());
+                            player.current_text = Some(tag.clone().into());
+                        }
+                    }
+                }
+            }
+            (Some(og), Some(selected)) if og != selected => {
+                if let Some(message) = set_uri(selected) {
+                    return Task::done(message);
+                }
+            }
+            (Some(_), Some(_)) => {
+                let changed = selected_text != player.current_text;
+                if let Some(subtitle) = selected_text
+                    && changed
+                {
+                    match subtitle {
+                        Subtitle::Loaded(url) => {
+                            if let Some(message) = set_loaded(player, url) {
+                                return Task::done(message);
+                            }
+                        }
+                        Subtitle::Embedded(tag) => {
+                            player.video.set_text(tag.clone());
+                            player.current_text = Some(tag.into());
+                        }
+                    }
+                }
+            }
         }
 
+        if let Some(audio) = selected_audio {
+            let changed = player
+                .current_audio
+                .as_ref()
+                .map(|og| og != &audio)
+                .unwrap_or(true);
+            if changed {
+                player.video.set_audio(audio);
+            }
+        }
+
+        player.video.set_paused(false);
+
         Task::none()
+    }
+
+    pub fn close_view(&mut self) -> Task<Message> {
+        let previous = match self.modal.take() {
+            Some(view) => self.save_config(view),
+            None => Task::none(),
+        };
+
+        let controls = Task::done(Message::Player(ManagerMessage::CursorExit));
+
+        Task::batch([previous, controls])
     }
 
     pub fn close_panel(&mut self) -> Task<Message> {
@@ -2221,11 +2182,15 @@ fn draw_config<'a>(
     let padding = [2, 5];
     let spacing = 8;
 
-    let header = text("Video Config").size(H6).font(Font {
-        family: font::Family::Serif,
-        weight: font::Weight::Semibold,
-        ..Default::default()
-    });
+    let header = text("Video Config")
+        .size(H6)
+        .font(Font {
+            family: font::Family::Serif,
+            weight: font::Weight::Semibold,
+            ..Default::default()
+        })
+        .center()
+        .width(Length::Fill);
 
     let tabs = ConfigTab::VARIANTS.iter().map(|tab| {
         let current = *tab == curr_tab;
@@ -2427,14 +2392,17 @@ fn draw_config<'a>(
                 .style(styles::button::subtle)
                 .on_press(ConfigMessage::SelectFile);
 
-                let path = subtitle.as_ref().map(|path| trim_path(path, 3));
+                let path = subtitle.as_ref().map(|path| trim_path(path, 1));
                 let path: Element<'_, ConfigMessage> = match path {
                     Some(path) => button(
                         row!(
-                            text(path).size(size).font(Font {
+                            container(text(path).size(size).font(Font {
                                 weight: font::Weight::Semibold,
                                 ..Default::default()
-                            }),
+                            }))
+                            .max_width(250)
+                            .height(20)
+                            .clip(true),
                             icons::icon(icons::CANCEL).size(size)
                         )
                         .spacing(4)
@@ -2538,9 +2506,11 @@ fn draw_config<'a>(
                         .spacing(spacing)
                 };
 
-                let content = column!(sub_size, color, background, dummy)
-                    .align_x(Horizontal::Center)
-                    .spacing(8.0);
+                let content = column!(sub_size, color, background).spacing(8.0);
+
+                let content = column!(content, dummy)
+                    .spacing(16)
+                    .align_x(Horizontal::Center);
 
                 column!(label, content).spacing(12)
             };
@@ -2596,7 +2566,7 @@ fn draw_config<'a>(
     let content = column!(header, content)
         .height(Length::Fill)
         .width(Length::Fill)
-        .spacing(12);
+        .spacing(20);
 
     modal_container(content)
         .style(|theme| {
@@ -2605,8 +2575,9 @@ fn draw_config<'a>(
 
             container::Style { border, ..default }
         })
-        .width(575)
-        .height(300)
+        .padding([16, 16])
+        .width(600)
+        .height(400)
         .into()
 }
 
