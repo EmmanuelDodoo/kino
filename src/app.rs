@@ -43,6 +43,7 @@ pub enum MediaUpdateKind {
     Rating(f32),
     Name(String),
     Refetch,
+    Remove,
 }
 
 #[derive(Clone, Debug)]
@@ -69,8 +70,8 @@ pub enum Message {
         id: CollectionId,
         items: Items,
     },
-    //todo
     MediaUpdate(MediaUpdate),
+    //todo
     Query(Query<'static>),
     FetchMembershipIds(ItemId),
     FetchMemberships(ItemId),
@@ -322,6 +323,12 @@ impl App {
                         ItemId::Season(id) => Season::refetch(id),
                         ItemId::Episode(id) => Episode::refetch(id),
                     },
+                    MediaUpdateKind::Remove => match id {
+                        ItemId::Show(id) => Show::remove(id),
+                        ItemId::Movie(id) => Movie::remove(id),
+                        ItemId::Season(id) => Season::remove(id),
+                        ItemId::Episode(id) => Episode::remove(id),
+                    },
                 };
 
                 match query.execute(&self.db) {
@@ -378,7 +385,7 @@ impl App {
                 Task::none()
             }
             Message::Back => match self.screen {
-                Screen::Home => self.home.back(now),
+                Screen::Home => self.home.back(now, false),
                 Screen::Player => {
                     let stats = self.exit_player();
 
@@ -761,7 +768,7 @@ impl App {
                 let movie_depth = self.config.general.movie_depth;
 
                 let scan = Task::perform(
-                    async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth) },
+                    async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth, true) },
                     |(todo, res)| {
                         if let Some(res) = todo {
                             dbg!(res.successes.len());

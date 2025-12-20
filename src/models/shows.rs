@@ -218,8 +218,8 @@ impl Show {
     }
 
     #[must_use]
-    pub fn delete<'a>(id: ShowId) -> Query<'a> {
-        let sql = "DELETE FROM tv_show WHERE id=:id";
+    pub fn remove<'a>(id: ShowId) -> Query<'a> {
+        let sql = "UPDATE tv_show SET removed=TRUE WHERE id=:id";
 
         let params = [(":id", ToSqlOutput::from(id))];
 

@@ -217,8 +217,8 @@ impl Episode {
     }
 
     #[must_use]
-    pub fn delete<'a>(id: EpisodeId) -> Query<'a> {
-        let sql = "DELTE FROM episode WHERE id=:id";
+    pub fn remove<'a>(id: EpisodeId) -> Query<'a> {
+        let sql = "UPDATE episode SET removed=TRUE WHERE id=:id";
         let params = [(":id", ToSqlOutput::from(id))];
 
         Query {

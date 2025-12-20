@@ -141,6 +141,20 @@ impl SimpleCollection {
             icon: collection.icon,
         }
     }
+    #[must_use]
+    pub fn remove<'a>(self) -> Query<'a> {
+        let sql = "UPDATE collection SET removed=TRUE WHERE id=:id";
+
+        let params = [(":id", ToSqlOutput::from(self.id))];
+
+        Query {
+            id: self.id.0,
+            table: Table::Collection,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Delete,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -315,8 +329,8 @@ impl Collection {
     }
 
     #[must_use]
-    pub fn delete<'a>(self) -> Query<'a> {
-        let sql = "DELETE FROM collection WHERE id=:id";
+    pub fn remove<'a>(self) -> Query<'a> {
+        let sql = "UPDATE collection SET removed=TRUE WHERE id=:id";
 
         let params = [(":id", ToSqlOutput::from(self.id))];
 

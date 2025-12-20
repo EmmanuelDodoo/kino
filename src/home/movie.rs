@@ -23,6 +23,7 @@ pub enum Message {
     Goto(CollectionId),
     Rename(String),
     Refetch,
+    Remove,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +85,10 @@ impl MoviePage {
                 let msg = HomeMessage::Refetch(self.id.into());
                 Some(msg)
             }
+            Message::Remove => {
+                let msg = HomeMessage::Remove(self.id.into());
+                Some(msg)
+            }
         }
     }
 
@@ -103,32 +108,21 @@ impl MoviePage {
         let header = {
             let separator = || Element::from(text("•").size(H3));
 
-            let title = text(movie.media.name()).size(H4);
-            let rename = icon(RENAME).size(P);
-
-            let rename = button(rename)
-                .on_press(MoviePageMessage {
+            let title = title(
+                movie.media.name(),
+                MoviePageMessage {
                     id,
                     message: Message::Rename(movie.media.name().to_owned()),
-                })
-                .padding(0)
-                .style(styles::button::text);
-
-            let rename = tooltip(rename, "Rename", tp::Position::Bottom);
-
-            let refetch = icon(REFRESH).size(P);
-
-            let refetch = button(refetch)
-                .on_press(MoviePageMessage {
+                },
+                MoviePageMessage {
                     id,
                     message: Message::Refetch,
-                })
-                .padding(0)
-                .style(styles::button::text);
-            let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Bottom);
-
-            let icons = row!(rename, refetch).spacing(8.0).align_y(Vertical::Center);
-            let title = row!(title, icons).spacing(16.0).align_y(Vertical::Center);
+                },
+                MoviePageMessage {
+                    id,
+                    message: Message::Remove,
+                },
+            );
 
             let duration = duration(&movie.media);
             let rating = button(ratings(&movie.media, true))

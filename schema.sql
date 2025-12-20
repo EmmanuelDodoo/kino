@@ -102,6 +102,7 @@ CREATE TABLE episode_comment (
 	content              TEXT  NOT NULL   ,
 	episode_id           TEXT NOT NULL    ,
 	episode_timestamp    INT     ,
+	removed		     BOOLEAN DEFAULT FALSE,
 	FOREIGN KEY ( episode_id ) REFERENCES episode( id ) ON DELETE CASCADE 
 );
 
@@ -143,6 +144,7 @@ CREATE TABLE movie_comment (
 	content              TEXT  NOT NULL   ,
 	movie_id             TEXT NOT NULL    ,
 	movie_timestamp      INT     ,
+	removed		     BOOLEAN DEFAULT FALSE,
 	FOREIGN KEY ( movie_id ) REFERENCES movie( id ) ON DELETE CASCADE 
 );
 
@@ -157,6 +159,7 @@ CREATE TABLE collection (
 	custom          TEXT,
 	theme           INT,
 	created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+	removed		BOOLEAN DEFAULT FALSE,
 	CHECK (view IN ('shown', 'hidden', 'pinned'))
 );
 
@@ -164,6 +167,7 @@ CREATE TABLE collection_item (
 	collection_id		TEXT NOT NULL,
 	media_type		TEXT NOT NULL,
 	media_id		TEXT NOT NULL,
+	created_at		DATETIME DEFAULT CURRENT_TIMESTAMP,
 	CHECK ( media_type IN ('movie', 'show', 'season', 'episode')),
 	PRIMARY KEY ( collection_id, media_type, media_id),
 	FOREIGN KEY ( collection_id ) REFERENCES collection( id ) ON DELETE CASCADE
@@ -187,29 +191,29 @@ INNER JOIN directory ON tv_show.directory = directory.id;
 
 CREATE VIEW get_collection_posters AS SELECT collection_id, poster 
 FROM (
-	SELECT movie.poster, item.collection_id
+	SELECT CASE WHEN NOT movie.fetched THEN NULL ELSE movie.poster END AS poster, item.collection_id
 	FROM collection_item item
 	JOIN movie ON movie.id = item.media_id
-	WHERE item.media_type = 'movie' AND movie.poster IS NOT NULL
+	WHERE item.media_type = 'movie' AND poster IS NOT NULL
 
 	UNION ALL
 
-	SELECT tv_show.poster, item.collection_id
+	SELECT CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.poster END AS poster, item.collection_id
 	FROM collection_item item
 	JOIN tv_show ON tv_show.id = item.media_id
-	WHERE item.media_type = 'show' AND tv_show.poster IS NOT NULL
+	WHERE item.media_type = 'show' AND poster IS NOT NULL
 
 
 	UNION ALL
 
-	SELECT season.poster, item.collection_id
+	SELECT CASE WHEN NOT season.fetched THEN NULL ELSE season.poster END AS poster, item.collection_id
 	FROM collection_item item
 	JOIN season ON season.id = item.media_id
-	WHERE item.media_type = 'season' AND season.poster IS NOT NULL
+	WHERE item.media_type = 'season' AND poster IS NOT NULL
 
 	UNION ALL
 
-	SELECT episode.poster, item.collection_id
+	SELECT CASE WHEN NOT episode.fetched THEN NULL ELSE episode.poster END AS poster, item.collection_id
 	FROM collection_item item
 	JOIN episode ON episode.id = item.media_id
 	WHERE item.media_type = 'episode' AND episode.poster IS NOT NULL

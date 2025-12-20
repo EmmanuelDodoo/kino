@@ -227,8 +227,8 @@ impl Season {
     }
 
     #[must_use]
-    pub fn delete<'a>(id: SeasonId) -> Query<'a> {
-        let sql = "DELETE FROM season WHERE id=:id";
+    pub fn remove<'a>(id: SeasonId) -> Query<'a> {
+        let sql = "UPDATE season SET removed=TRUE WHERE id=:id";
         let params = [(":id", ToSqlOutput::from(id))];
 
         Query {

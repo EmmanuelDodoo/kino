@@ -32,6 +32,7 @@ pub enum Message {
     Goto(CollectionId),
     Rename(String),
     Refetch,
+    Remove,
 }
 
 #[derive(Debug, Clone)]
@@ -132,6 +133,10 @@ impl SeasonPage {
             }
             Message::Refetch => {
                 let msg = HomeMessage::Refetch(self.id.into());
+                Some(msg)
+            }
+            Message::Remove => {
+                let msg = HomeMessage::Remove(self.id.into());
                 Some(msg)
             }
         }
@@ -297,36 +302,21 @@ impl SeasonPage {
         let header = {
             let separator = || Element::from(text("•").line_height(0.9).size(H4));
 
-            let title = {
-                let title = text(season.media.name()).size(H2);
-
-                let rename = icon(RENAME).size(P);
-
-                let rename = button(rename)
-                    .on_press(SeasonPageMessage {
-                        id,
-                        message: Message::Rename(season.media.name().to_owned()),
-                    })
-                    .padding(0)
-                    .style(styles::button::text);
-
-                let rename = tooltip(rename, "Rename", tp::Position::Bottom);
-
-                let refetch = icon(REFRESH).size(P);
-
-                let refetch = button(refetch)
-                    .on_press(SeasonPageMessage {
-                        id,
-                        message: Message::Refetch,
-                    })
-                    .padding(0)
-                    .style(styles::button::text);
-                let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Bottom);
-
-                let icons = row!(rename, refetch).spacing(8.0).align_y(Vertical::Center);
-                row!(title, icons).spacing(16.0).align_y(Vertical::Center)
-            };
-
+            let title = title(
+                season.media.name(),
+                SeasonPageMessage {
+                    id,
+                    message: Message::Rename(season.media.name().to_owned()),
+                },
+                SeasonPageMessage {
+                    id,
+                    message: Message::Refetch,
+                },
+                SeasonPageMessage {
+                    id,
+                    message: Message::Remove,
+                },
+            );
             let duration = duration(&season.media);
             let rating = button(ratings(&season.media, true))
                 .on_press(SeasonPageMessage {

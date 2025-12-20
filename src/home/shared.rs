@@ -2,7 +2,7 @@ use crate::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleC
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Filter, Sort, collage, sample_complement, styles};
-use crate::utils::{default_poster, empty};
+use crate::utils::{default_poster, empty, tooltip};
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
@@ -13,7 +13,7 @@ use iced::{
     time::Instant,
     widget::{
         self, button, center, column, container, image::Handle, markdown, mouse_area, row, rule,
-        space, stack, text,
+        space, stack, text, tooltip as tp,
     },
 };
 
@@ -43,6 +43,46 @@ impl Tab {
             Self::Comments => "Comments",
         }
     }
+}
+
+pub fn title<'a, Message: 'a + Clone>(
+    name: &'a str,
+    on_rename: Message,
+    on_refetch: Message,
+    on_remove: Message,
+) -> Element<'a, Message> {
+    let icon_size = H7;
+    let title = text(name).size(H4);
+
+    let rename = icon(RENAME).size(icon_size);
+    let rename = button(rename)
+        .on_press(on_rename)
+        .padding(0)
+        .style(styles::button::text);
+    let rename = tooltip(rename, "Rename media", tp::Position::Bottom);
+
+    let refetch = icon(REFRESH).size(icon_size);
+    let refetch = button(refetch)
+        .on_press(on_refetch)
+        .padding(0)
+        .style(styles::button::text);
+    let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Bottom);
+
+    let delete = icon(DELETE).size(icon_size);
+    let delete = button(delete)
+        .on_press(on_remove)
+        .padding(0)
+        .style(styles::button::text_danger);
+    let delete = tooltip(delete, "Delete media", tp::Position::Bottom);
+
+    let icons = row!(rename, refetch, delete)
+        .spacing(8.0)
+        .align_y(Vertical::Center);
+
+    row!(title, icons)
+        .spacing(16.0)
+        .align_y(Vertical::Center)
+        .into()
 }
 
 pub fn duration<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {

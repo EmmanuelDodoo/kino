@@ -161,6 +161,20 @@ pub mod button {
         }
     }
 
+    pub fn danger(theme: &Theme, status: Status) -> Style {
+        let palette = theme.extended_palette();
+        let base = styled(palette.danger.base);
+
+        match status {
+            Status::Active | Status::Pressed => base,
+            Status::Hovered => Style {
+                background: Some(Background::Color(palette.danger.strong.color)),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
     pub fn text(theme: &Theme, status: Status) -> Style {
         let palette = theme.extended_palette();
 
@@ -189,6 +203,27 @@ pub mod button {
             Status::Active | Status::Pressed => base,
             Status::Hovered => Style {
                 text_color: Color::WHITE.scale_alpha(0.8),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
+    pub fn text_danger(theme: &Theme, status: Status) -> Style {
+        let danger = theme.extended_palette().danger;
+
+        let base = theme.extended_palette().danger.base;
+        let text_color = base.color;
+
+        let base = Style {
+            text_color,
+            ..Style::default()
+        };
+
+        match status {
+            Status::Active | Status::Pressed => base,
+            Status::Hovered => Style {
+                text_color: danger.weak.color,
                 ..base
             },
             Status::Disabled => disabled(base),

@@ -310,11 +310,13 @@ pub enum HomeMessage {
     Back,
     Forward,
     CollectionConfig(ConfigMessage),
+    RemoveCollection(CollectionId),
     SearchMessage(SearchMessage),
     CollectionAdd(CollectionAddMessage),
     Rating(RatingMessage),
     Rename(RenameMessage),
     Refetch(ItemId),
+    Remove(ItemId),
     OpenView(ViewMessage),
     AddCollection(ItemId, CollectionId),
     CloseView,
@@ -714,6 +716,23 @@ impl Home {
 
                 Task::none()
             }
+            HomeMessage::RemoveCollection(id) => {
+                let Some((index, _)) = self
+                    .collections
+                    .iter()
+                    .enumerate()
+                    .find(|(_, collection)| collection.id == id)
+                else {
+                    return Task::none();
+                };
+
+                let old = self.collections.remove(index);
+                let query = old.remove();
+
+                let remove = Task::done(Message::Query(query));
+
+                Task::batch([remove, self.back(now, true)])
+            }
             HomeMessage::SearchMessage(ssg) => {
                 let Some(View::Search(state, _)) = self.view.as_mut() else {
                     return Task::none();
@@ -916,8 +935,18 @@ impl Home {
 
                 Task::done(msg)
             }
+            HomeMessage::Remove(id) => {
+                let msg = Message::MediaUpdate(MediaUpdate {
+                    id,
+                    kind: MediaUpdateKind::Remove,
+                });
+
+                let remove = Task::done(msg);
+
+                Task::batch([self.back(now, true), remove])
+            }
             HomeMessage::CloseView => self.close_view(),
-            HomeMessage::Back => self.back(now),
+            HomeMessage::Back => self.back(now, false),
             HomeMessage::Forward => self.forward(now),
             HomeMessage::ToggleLayout => self.layout_toggle(),
             HomeMessage::Sort(ssg) => {
@@ -2160,11 +2189,15 @@ impl Home {
         state || scan
     }
 
-    pub fn back(&mut self, now: Instant) -> Task<Message> {
+    pub fn back(&mut self, now: Instant, clear: bool) -> Task<Message> {
         let (task, id, limit) = match self.current_page.take() {
             Some(current) => {
                 self.state = State::Loading(loading_animation(now));
-                self.forward.push(current);
+                if clear {
+                    self.forward.clear();
+                } else {
+                    self.forward.push(current);
+                }
 
                 match self.backward.pop() {
                     Some(new) => {
@@ -2421,7 +2454,7 @@ impl Home {
             HomeAction::Refresh => self.refresh(now),
             HomeAction::SearchToggle => self.toggle_search(None),
             HomeAction::CloseModal => self.close_view(),
-            HomeAction::Back => self.back(now),
+            HomeAction::Back => self.back(now, false),
             HomeAction::Forward => self.forward(now),
         }
     }

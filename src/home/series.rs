@@ -32,6 +32,7 @@ pub enum Message {
     Goto(CollectionId),
     Rename(String),
     Refetch,
+    Remove,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +132,10 @@ impl ShowPage {
             }
             Message::Refetch => {
                 let msg = HomeMessage::Refetch(self.id.into());
+                Some(msg)
+            }
+            Message::Remove => {
+                let msg = HomeMessage::Remove(self.id.into());
                 Some(msg)
             }
         }
@@ -301,34 +306,21 @@ impl ShowPage {
         let header = {
             let separator = || Element::from(text("•").line_height(0.9).size(H4));
 
-            let title = {
-                let title = text(show.media.name()).size(H2);
-                let rename = icon(RENAME).size(P);
-
-                let rename = button(rename)
-                    .on_press(ShowPageMessage {
-                        id,
-                        message: Message::Rename(show.media.name().to_owned()),
-                    })
-                    .padding(0)
-                    .style(styles::button::text);
-
-                let rename = tooltip(rename, "Rename", tp::Position::Bottom);
-
-                let refetch = icon(REFRESH).size(P);
-
-                let refetch = button(refetch)
-                    .on_press(ShowPageMessage {
-                        id,
-                        message: Message::Refetch,
-                    })
-                    .padding(0)
-                    .style(styles::button::text);
-                let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Bottom);
-
-                let icons = row!(rename, refetch).spacing(8.0).align_y(Vertical::Center);
-                row!(title, icons).spacing(16.0).align_y(Vertical::Center)
-            };
+            let title = title(
+                show.media.name(),
+                ShowPageMessage {
+                    id,
+                    message: Message::Rename(show.media.name().to_owned()),
+                },
+                ShowPageMessage {
+                    id,
+                    message: Message::Refetch,
+                },
+                ShowPageMessage {
+                    id,
+                    message: Message::Remove,
+                },
+            );
 
             let duration = duration(&show.media);
             let rating = button(ratings(&show.media, true))

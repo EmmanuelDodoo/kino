@@ -485,7 +485,7 @@ impl Database {
         map: fn(&Row<'_>) -> rusqlite::Result<T>,
     ) -> rusqlite::Result<Vec<T>> {
         let sql = format!(
-            "{} ORDER BY {} NULLS LAST",
+            "{} WHERE NOT removed ORDER BY {} NULLS LAST",
             Self::COLLECTION_QUERY,
             sort.query()
         );
@@ -1061,7 +1061,7 @@ impl Database {
         statement.execute(params.as_slice())
     }
 
-    pub fn toggle_remove_movies(&self, movies: Vec<(MovieId, bool)>) -> rusqlite::Result<usize> {
+    pub fn insert_remove_movies(&self, movies: Vec<(MovieId, bool)>) -> rusqlite::Result<usize> {
         if movies.is_empty() {
             return Ok(0);
         }
@@ -1109,7 +1109,7 @@ impl Database {
         Ok(rows)
     }
 
-    pub fn toggle_remove_shows(&self, shows: Vec<(ShowId, bool)>) -> rusqlite::Result<usize> {
+    pub fn insert_remove_shows(&self, shows: Vec<(ShowId, bool)>) -> rusqlite::Result<usize> {
         if shows.is_empty() {
             return Ok(0);
         }
@@ -1157,7 +1157,7 @@ impl Database {
         Ok(rows)
     }
 
-    pub fn toggle_remove_seasons(&self, seasons: Vec<(SeasonId, bool)>) -> rusqlite::Result<usize> {
+    pub fn insert_remove_seasons(&self, seasons: Vec<(SeasonId, bool)>) -> rusqlite::Result<usize> {
         if seasons.is_empty() {
             return Ok(0);
         }
@@ -1205,7 +1205,7 @@ impl Database {
         Ok(rows)
     }
 
-    pub fn toggle_remove_episodes(
+    pub fn insert_remove_episodes(
         &self,
         episodes: Vec<(EpisodeId, bool)>,
     ) -> rusqlite::Result<usize> {

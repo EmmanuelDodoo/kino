@@ -31,6 +31,7 @@ pub enum Message {
     DetailsItem(ItemId),
     Add(ItemId),
     Play(Items),
+    Remove,
     OpenConfig,
     AddNewItem,
     None,
@@ -115,6 +116,11 @@ impl CollectionPage {
             }
             Message::AddNewItem => {
                 let msg = HomeMessage::OpenView(ViewMessage::AddToCollection(self.id));
+
+                Some(msg)
+            }
+            Message::Remove => {
+                let msg = HomeMessage::RemoveCollection(self.id);
 
                 Some(msg)
             }
@@ -234,10 +240,26 @@ impl CollectionPage {
                 row!(play, hidden).spacing(2.0).align_y(Vertical::Center)
             };
 
+            let delete = {
+                button(icon(DELETE).size(P))
+                    .padding(0)
+                    .on_press(CollectionMessage {
+                        id,
+                        message: Message::Remove,
+                    })
+                    .style(|theme, status| {
+                        let default = styles::button::text_danger(theme, status);
+                        let border = default.border.rounded(5);
+
+                        button::Style { border, ..default }
+                    })
+            };
+
             let actions = row!(
                 btn(id, ADD, "Add", Message::AddNewItem),
                 btn(id, EDIT, "Edit", Message::OpenConfig),
                 play,
+                delete
             )
             .align_y(Vertical::Center)
             .spacing(16.0);

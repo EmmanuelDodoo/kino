@@ -209,8 +209,8 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn delete<'a>(id: MovieId) -> Query<'a> {
-        let sql = "DELETE FROM movie WHERE id=:id";
+    pub fn remove<'a>(id: MovieId) -> Query<'a> {
+        let sql = "UPDATE movie SET removed=TRUE WHERE id=:id";
         let params = [(":id", ToSqlOutput::from(id))];
 
         Query {

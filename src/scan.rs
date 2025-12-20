@@ -64,6 +64,7 @@ pub fn scan_dir<'a>(
     dir: Directory,
     discoverer: bool,
     movie_depth: u8,
+    reactivate: bool
 ) -> Option<BatchResult<'a>> {
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
@@ -92,7 +93,7 @@ pub fn scan_dir<'a>(
         }
     };
 
-    scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth)
+    scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth, reactivate)
 }
 
 pub fn scan_dirs<'a>(
@@ -100,6 +101,7 @@ pub fn scan_dirs<'a>(
     dirs: Vec<Directory>,
     discoverer: bool,
     movie_depth: u8,
+    reactivate: bool
 ) -> (Option<BatchResult<'a>>, Vec<DirectoryId>) {
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
@@ -127,7 +129,7 @@ pub fn scan_dirs<'a>(
 
     for dir in dirs {
         let id = dir.id;
-        match scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth) {
+        match scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth, reactivate) {
             Some(res) => {
                 scanned.push(id);
                 result.merge(res);
@@ -144,6 +146,7 @@ pub fn scan_dir_helper<'a>(
     dir: Directory,
     discoverer: Option<&Discoverer>,
     movie_depth: u8,
+    reactivate: bool,
 ) -> Option<BatchResult<'a>> {
     let mut successes = vec![];
     let mut failures = vec![];
@@ -169,23 +172,34 @@ pub fn scan_dir_helper<'a>(
                 struct DirMovie {
                     id: MovieId,
                     path: String,
+                    tombstone: bool,
                 }
 
                 if let Ok(dir_movies) = db
                     .get_dir_movies(dir.id, |row| {
                         let id = MovieId::from_row(row)?;
                         let path = row.get::<_, String>("path")?;
+                        let tombstone = row.get::<_, bool>("removed")?;
 
-                        Ok(DirMovie { id, path })
+                        Ok(DirMovie {
+                            id,
+                            path,
+                            tombstone,
+                        })
                     })
                     .inspect_err(|error| tracing::error!("{error}"))
                 {
-                    let remove = dir_movies
+                    let movies = dir_movies
                         .into_iter()
-                        .map(|movie| (movie.id, scanned.contains(&movie.path)))
+                        .map(|movie| {
+                            let scanned = scanned.contains(&movie.path);
+                            let insert = (scanned && reactivate && movie.tombstone)
+                                || (scanned && !movie.tombstone);
+                            (movie.id, insert)
+                        })
                         .collect();
 
-                    if let Err(error) = db.toggle_remove_movies(remove) {
+                    if let Err(error) = db.insert_remove_movies(movies) {
                         tracing::error!("{error}")
                     };
                 };
@@ -195,16 +209,19 @@ pub fn scan_dir_helper<'a>(
             struct DirEpisode {
                 id: EpisodeId,
                 path: String,
+                tombstone: bool,
             }
 
             struct DirSeason {
                 id: SeasonId,
                 path: String,
+                tombstone: bool,
             }
 
             struct DirShow {
                 id: ShowId,
                 path: String,
+                tombstone: bool,
             }
 
             let shows = scan_shows(&dir.path, discoverer)?;
@@ -309,17 +326,27 @@ pub fn scan_dir_helper<'a>(
                         .get_season_episodes_removed(season, |row| {
                             let id = EpisodeId::from_row(row)?;
                             let path = row.get::<_, String>("path")?;
+                            let tombstone = row.get::<_, bool>("removed")?;
 
-                            Ok(DirEpisode { id, path })
+                            Ok(DirEpisode {
+                                id,
+                                path,
+                                tombstone,
+                            })
                         })
                         .inspect_err(|error| tracing::error!("{error}"))
                     {
-                        let remove = dir_episodes
+                        let episodes = dir_episodes
                             .into_iter()
-                            .map(|episode| (episode.id, scanned_episodes.contains(&episode.path)))
+                            .map(|episode| {
+                                let scanned = scanned_episodes.contains(&episode.path);
+                                let insert = (scanned && reactivate && episode.tombstone)
+                                    || (scanned && !episode.tombstone);
+                                (episode.id, insert)
+                            })
                             .collect();
 
-                        if let Err(error) = db.toggle_remove_episodes(remove) {
+                        if let Err(error) = db.insert_remove_episodes(episodes) {
                             tracing::error!("{error}")
                         };
                     };
@@ -329,17 +356,27 @@ pub fn scan_dir_helper<'a>(
                     .get_show_seasons_removed(show, |row| {
                         let id = SeasonId::from_row(row)?;
                         let path = row.get::<_, String>("path")?;
+                        let tombstone = row.get::<_, bool>("removed")?;
 
-                        Ok(DirSeason { id, path })
+                        Ok(DirSeason {
+                            id,
+                            path,
+                            tombstone,
+                        })
                     })
                     .inspect_err(|error| tracing::error!("{error}"))
                 {
-                    let remove = dir_seasons
+                    let seasons = dir_seasons
                         .into_iter()
-                        .map(|season| (season.id, scanned_seasons.contains(&season.path)))
+                        .map(|season| {
+                            let scanned = scanned_seasons.contains(&season.path);
+                            let insert = (scanned && reactivate && season.tombstone)
+                                || (scanned && !season.tombstone);
+                            (season.id, insert)
+                        })
                         .collect();
 
-                    if let Err(error) = db.toggle_remove_seasons(remove) {
+                    if let Err(error) = db.insert_remove_seasons(seasons) {
                         tracing::error!("{error}")
                     };
                 };
@@ -349,17 +386,27 @@ pub fn scan_dir_helper<'a>(
                 .get_dir_shows(dir.id, |row| {
                     let id = ShowId::from_row(row)?;
                     let path = row.get::<_, String>("path")?;
+                    let tombstone = row.get::<_, bool>("removed")?;
 
-                    Ok(DirShow { id, path })
+                    Ok(DirShow {
+                        id,
+                        path,
+                        tombstone,
+                    })
                 })
                 .inspect_err(|error| tracing::error!("{error}"))
             {
-                let remove = dir_shows
+                let shows = dir_shows
                     .into_iter()
-                    .map(|show| (show.id, scanned_shows.contains(&show.path)))
+                    .map(|show| {
+                        let scanned = scanned_shows.contains(&show.path);
+                        let insert = (scanned && reactivate && show.tombstone)
+                            || (scanned && !show.tombstone);
+                        (show.id, insert)
+                    })
                     .collect();
 
-                if let Err(error) = db.toggle_remove_shows(remove) {
+                if let Err(error) = db.insert_remove_shows(shows) {
                     tracing::error!("{error}")
                 };
             };
