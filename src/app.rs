@@ -146,6 +146,7 @@ pub struct App {
     is_capturing_keys: bool,
 
     auth_tx: mpsc::Sender<String>,
+    rating_tx: mpsc::Sender<bool>,
 }
 
 impl App {
@@ -168,13 +169,18 @@ impl App {
         let (auth_tx, auth_rx) = mpsc::channel(2);
         let auth = config.auth();
 
+        let (rating_tx, rating_rx) = mpsc::channel(2);
+        let rating = config.general.tmdb_rating;
+
         let fetcher = if fetch {
             Task::perform(
                 fetch::fetcher(
-                    auth_rx,
                     config.db_path(),
-                    config.images_path(),
+                    auth_rx,
                     auth,
+                    rating_rx,
+                    rating,
+                    config.images_path(),
                     config.fetching_interval(),
                 ),
                 |_| Message::None,
@@ -190,14 +196,20 @@ impl App {
             config.general.recents_limit,
         );
 
-        let new = Self::new(config, db, home, auth_tx);
+        let new = Self::new(config, db, home, auth_tx, rating_tx);
 
         let tasks = Task::batch([load_errors, load_font, load_id, home_tasks, fetcher]);
 
         (new, tasks)
     }
 
-    fn new(config: Config, db: db::Database, home: Home, auth_tx: mpsc::Sender<String>) -> Self {
+    fn new(
+        config: Config,
+        db: db::Database,
+        home: Home,
+        auth_tx: mpsc::Sender<String>,
+        rating_tx: mpsc::Sender<bool>,
+    ) -> Self {
         Self {
             screen: Screen::Home,
             now: Instant::now(),
@@ -211,6 +223,7 @@ impl App {
             db,
             is_capturing_keys: false,
             auth_tx,
+            rating_tx,
         }
     }
 
@@ -726,6 +739,10 @@ impl App {
 
                 let (config, dirs) = settings.save();
                 let writer = self.config.span_writer.take();
+
+                let prev_rating = self.config.general.tmdb_rating;
+                let new_rating = config.general.tmdb_rating;
+
                 self.config = config;
                 self.config.span_writer = writer;
 
@@ -748,7 +765,17 @@ impl App {
                     Task::none()
                 };
 
-                Task::batch([auth, dir])
+                let rating = if prev_rating != new_rating {
+                    let rating_tx = self.rating_tx.clone();
+
+                    Task::perform(async move { rating_tx.send(new_rating).await }, |_| {
+                        Message::None
+                    })
+                } else {
+                    Task::none()
+                };
+
+                Task::batch([auth, rating, dir])
             }
             Message::Layout(layout) => {
                 self.config.general.layout = layout;

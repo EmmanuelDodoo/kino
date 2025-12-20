@@ -50,6 +50,7 @@ struct TMDBMovie {
     overview: String,
     poster_path: String,
     release_date: String,
+    vote_average: f64,
     title: String,
 }
 
@@ -61,6 +62,7 @@ struct TMDBShow {
     overview: String,
     poster_path: String,
     name: String,
+    vote_average: f64,
     first_air_date: String,
 }
 
@@ -70,6 +72,7 @@ struct TMDBSeason {
     air_date: String,
     name: String,
     overview: String,
+    vote_average: f64,
     poster_path: String,
 }
 
@@ -80,6 +83,7 @@ struct TMDBEpisode {
     name: String,
     overview: String,
     still_path: String,
+    vote_average: f64,
     episode_number: u32,
 }
 
@@ -320,10 +324,12 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
 }
 
 pub async fn fetcher(
-    mut auth_rx: mpsc::Receiver<String>,
     db: impl AsRef<Path>,
-    images_path: impl AsRef<Path>,
+    mut auth_rx: mpsc::Receiver<String>,
     auth: String,
+    mut rating_rx: mpsc::Receiver<bool>,
+    rating: bool,
+    images_path: impl AsRef<Path>,
     interval: std::time::Duration,
 ) {
     let mut db = match Database::open(db) {
@@ -342,6 +348,8 @@ pub async fn fetcher(
         })
         .ok();
 
+    let mut rating = rating;
+
     loop {
         if !auth_rx.is_empty()
             && let Some(new_auth) = auth_rx.recv().await
@@ -357,15 +365,21 @@ pub async fn fetcher(
                 .ok();
         }
 
+        if !rating_rx.is_empty()
+            && let Some(new_rating) = rating_rx.recv().await
+        {
+            rating = new_rating
+        }
+
         let Some(image_config) = image_config.as_ref() else {
             time::sleep(interval).await;
             continue;
         };
 
-        movies::handle_movies(&auth, &mut db, image_config, 40, &images_path).await;
-        shows::handle_shows(&auth, &mut db, image_config, 40, &images_path).await;
-        seasons::handle_seasons(&auth, &mut db, image_config, 20, &images_path).await;
-        episodes::handle_episodes(&auth, &mut db, image_config, 20, &images_path).await;
+        movies::handle_movies(&auth, &mut db, image_config, 40, &images_path, rating).await;
+        shows::handle_shows(&auth, &mut db, image_config, 40, &images_path, rating).await;
+        seasons::handle_seasons(&auth, &mut db, image_config, 20, &images_path, rating).await;
+        episodes::handle_episodes(&auth, &mut db, image_config, 20, &images_path, rating).await;
 
         time::sleep(interval).await;
     }
@@ -421,9 +435,10 @@ mod movies {
     fn insert_data(
         db: &mut Database,
         movies: Vec<(MovieId, TMDBMovie)>,
+        rating: bool,
     ) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql = "UPDATE movie SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name WHERE id=:id";
+        let sql = "UPDATE movie SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (movie, data) in movies {
@@ -434,6 +449,13 @@ mod movies {
                 .collect::<Vec<_>>();
 
             let tags = tags.join(", ");
+
+            let rating_value = (data.vote_average / 10.0) * 5.0;
+            let rating = if rating {
+                &ToSqlOutput::from(rating_value)
+            } else {
+                &ToSqlOutput::Owned(rusqlite::types::Value::Null)
+            };
 
             rows += trans.execute(
                 sql,
@@ -446,6 +468,7 @@ mod movies {
                     (":name", &ToSqlOutput::from(data.title)),
                     (":poster", &ToSqlOutput::from(data.poster_path)),
                     (":backdrop", &ToSqlOutput::from(data.backdrop_path)),
+                    (":rating", rating),
                 ],
             )?
         }
@@ -489,6 +512,7 @@ mod movies {
         image_config: &ImageConfig,
         limit: u8,
         images_path: impl AsRef<Path>,
+        rating: bool,
     ) {
         let images_path = images_path.as_ref();
 
@@ -505,7 +529,7 @@ mod movies {
                 };
             }
 
-            if let Err(error) = insert_data(db, data) {
+            if let Err(error) = insert_data(db, data, rating) {
                 tracing::error!("{error}");
             }
         };
@@ -585,9 +609,13 @@ mod shows {
             .collect()
     }
 
-    fn insert_data(db: &mut Database, shows: Vec<(ShowId, TMDBShow)>) -> rusqlite::Result<usize> {
+    fn insert_data(
+        db: &mut Database,
+        shows: Vec<(ShowId, TMDBShow)>,
+        rating: bool,
+    ) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql = "UPDATE tv_show SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name WHERE id=:id";
+        let sql = "UPDATE tv_show SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (show, data) in shows {
@@ -598,6 +626,12 @@ mod shows {
                 .collect::<Vec<_>>();
 
             let tags = tags.join(", ");
+            let rating_value = (data.vote_average / 10.0) * 5.0;
+            let rating = if rating {
+                &ToSqlOutput::from(rating_value)
+            } else {
+                &ToSqlOutput::Owned(rusqlite::types::Value::Null)
+            };
 
             rows += trans.execute(
                 sql,
@@ -610,6 +644,7 @@ mod shows {
                     (":name", &ToSqlOutput::from(data.name)),
                     (":poster", &ToSqlOutput::from(data.poster_path)),
                     (":backdrop", &ToSqlOutput::from(data.backdrop_path)),
+                    (":rating", rating),
                 ],
             )?
         }
@@ -651,6 +686,7 @@ mod shows {
         image_config: &ImageConfig,
         limit: u8,
         images_path: impl AsRef<Path>,
+        rating: bool,
     ) {
         let images_path = images_path.as_ref();
 
@@ -667,7 +703,7 @@ mod shows {
                 };
             }
 
-            if let Err(error) = insert_data(db, data) {
+            if let Err(error) = insert_data(db, data, rating) {
                 tracing::error!("{error}");
             }
         };
@@ -745,12 +781,20 @@ mod seasons {
     fn insert_data(
         db: &mut Database,
         seasons: Vec<(SeasonId, TMDBSeason)>,
+        rating: bool,
     ) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql = "UPDATE season SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name WHERE id=:id";
+        let sql = "UPDATE season SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (season, data) in seasons {
+            let rating_value = (data.vote_average / 10.0) * 5.0;
+            let rating = if rating {
+                &ToSqlOutput::from(rating_value)
+            } else {
+                &ToSqlOutput::Owned(rusqlite::types::Value::Null)
+            };
+
             rows += trans.execute(
                 sql,
                 &[
@@ -760,6 +804,7 @@ mod seasons {
                     (":release", &ToSqlOutput::from(data.air_date)),
                     (":name", &ToSqlOutput::from(data.name)),
                     (":poster", &ToSqlOutput::from(data.poster_path)),
+                    (":rating", rating),
                 ],
             )?
         }
@@ -799,6 +844,7 @@ mod seasons {
         image_config: &ImageConfig,
         limit: u8,
         images_path: impl AsRef<Path>,
+        rating: bool,
     ) {
         let images_path = images_path.as_ref();
         if let Ok(seasons) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}")) {
@@ -810,7 +856,7 @@ mod seasons {
                 }
             }
 
-            if let Err(error) = insert_data(db, data) {
+            if let Err(error) = insert_data(db, data, rating) {
                 tracing::error!("{error}");
             }
         };
@@ -889,13 +935,21 @@ mod episodes {
     fn insert_data(
         db: &mut Database,
         episodes: Vec<(EpisodeId, TMDBEpisode)>,
+        rating: bool,
     ) -> rusqlite::Result<usize> {
         let trans = db.transaction()?;
-        let sql = "UPDATE episode SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name WHERE id=:id";
+        let sql = "UPDATE episode SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name, rating=rating WHERE id=:id";
         let mut rows = 0;
 
         for (episode, data) in episodes {
             let name = format!("{:02} {}", data.episode_number, data.name);
+            let rating_value = (data.vote_average / 10.0) * 5.0;
+            let rating = if rating {
+                &ToSqlOutput::from(rating_value)
+            } else {
+                &ToSqlOutput::Owned(rusqlite::types::Value::Null)
+            };
+
             rows += trans.execute(
                 sql,
                 &[
@@ -905,6 +959,7 @@ mod episodes {
                     (":release", &ToSqlOutput::from(data.air_date)),
                     (":name", &ToSqlOutput::from(name)),
                     (":poster", &ToSqlOutput::from(data.still_path)),
+                    (":rating", rating),
                 ],
             )?
         }
@@ -944,6 +999,7 @@ mod episodes {
         image_config: &ImageConfig,
         limit: u8,
         images_path: impl AsRef<Path>,
+        rating: bool,
     ) {
         let images_path = images_path.as_ref();
         if let Ok(episodes) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}"))
@@ -958,7 +1014,7 @@ mod episodes {
                 }
             }
 
-            if let Err(error) = insert_data(db, data) {
+            if let Err(error) = insert_data(db, data, rating) {
                 tracing::error!("{error}");
                 return;
             }

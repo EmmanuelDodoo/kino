@@ -132,6 +132,8 @@ pub enum SettingsMessage {
     ToggleScanDiscover,
     RestoreDeleted(bool),
     ToggleRestore,
+    TMDBRating(bool),
+    ToggleTMDBRating,
     ToggleSubtitles,
     ToggleAutoStart,
     ToggleAutoNext,
@@ -628,6 +630,14 @@ impl Settings {
 
                 Task::none()
             }
+            SettingsMessage::ToggleTMDBRating => {
+                self.config.general.tmdb_rating = !self.config.general.tmdb_rating;
+                Task::none()
+            }
+            SettingsMessage::TMDBRating(enable) => {
+                self.config.general.tmdb_rating = enable;
+                Task::none()
+            }
 
             SettingsMessage::OpenLog => {
                 let Some(path) = self.config.log_path() else {
@@ -841,6 +851,7 @@ impl Settings {
             movie_depth,
             fetching_interval,
             restore_deleted,
+            tmdb_rating,
         } = &self.config.general;
 
         let refresh = {
@@ -1060,6 +1071,31 @@ impl Settings {
                 .spacing(spacing)
         };
 
+        let tmdb_rating = {
+            let label = label_maker("TMDB ratings: ");
+            let icon = help(
+                "Uses TMDB ratings as a default when fetching media metadata",
+                size,
+            );
+            let label = button(label)
+                .padding(0)
+                .on_press(SettingsMessage::ToggleTMDBRating)
+                .style(styles::button::text);
+
+            let label = row!(label, icon)
+                .spacing(2)
+                .align_y(Vertical::Center)
+                .width(width);
+
+            let toggle = toggler(*tmdb_rating)
+                .on_toggle(SettingsMessage::TMDBRating)
+                .size(size);
+
+            row!(label, toggle)
+                .align_y(Vertical::Center)
+                .spacing(spacing)
+        };
+
         let auth = {
             let label = label_maker("TMDB API Token: ");
             let icon = help(
@@ -1142,6 +1178,7 @@ impl Settings {
             theme,
             auth,
             fetching_interval,
+            tmdb_rating,
             movie_depth,
             discoverer,
             restore_deletes,
