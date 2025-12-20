@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, PageUpdate, shared::*};
+use super::{HomeMessage, PageKind, shared::*};
 use crate::models::CollectionId;
 use crate::utils::filter::*;
 use crate::utils::{Layout, Scroll, Sort};
@@ -15,33 +15,22 @@ pub enum CollectionsMessage {
 
 #[derive(Debug, Clone)]
 pub struct Collections {
-    layout: Layout,
-    sort: Sort,
-    filter: Filter,
     scroll: Scroll,
 }
 
 impl Collections {
-    pub fn boot(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<CollectionsMessage>) {
-        let (new, id) = Self::new(sort, layout, filters);
+    pub fn boot() -> (Self, Task<CollectionsMessage>) {
+        let (new, id) = Self::new();
         let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
 
         (new, scroll)
     }
 
-    fn new(sort: Sort, layout: Layout, filter: Filter) -> (Self, widget::Id) {
+    fn new() -> (Self, widget::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
-        (
-            Self {
-                layout,
-                sort,
-                filter,
-                scroll,
-            },
-            id,
-        )
+        (Self { scroll }, id)
     }
 
     pub fn update(&mut self, message: CollectionsMessage) -> Option<HomeMessage> {
@@ -62,18 +51,6 @@ impl Collections {
         thumbnails: impl Iterator<Item = &'a CollectionThumbnail>,
     ) -> Element<'a, CollectionsMessage> {
         self.grid(thumbnails)
-    }
-
-    pub fn page_update(&mut self, update: PageUpdate) {
-        let PageUpdate {
-            layout,
-            sort,
-            filters,
-        } = update;
-
-        self.sort = sort;
-        self.layout = layout;
-        self.filter = filters;
     }
 
     pub fn update_scroll(&mut self) -> Task<()> {

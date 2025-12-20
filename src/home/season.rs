@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
+use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{
     CollectionId, Episode, EpisodeId, ItemId, Media, Season, SeasonId, SimpleCollection,
 };
@@ -43,36 +43,25 @@ pub struct SeasonPageMessage {
 #[derive(Debug, Clone)]
 pub struct SeasonPage {
     id: SeasonId,
-    layout: Layout,
-    sort: Sort,
-    filters: Filter,
     tab: Tab,
     scroll: Scroll,
 }
 
 impl SeasonPage {
-    pub fn boot(
-        season: SeasonId,
-        sort: Sort,
-        filters: Filter,
-        layout: Layout,
-    ) -> (Self, Task<SeasonPageMessage>) {
-        let (new, id) = Self::new(season, sort, filters, layout);
+    pub fn boot(season: SeasonId) -> (Self, Task<SeasonPageMessage>) {
+        let (new, id) = Self::new(season);
         let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
 
         (new, scroll)
     }
 
-    fn new(season: SeasonId, sort: Sort, filters: Filter, layout: Layout) -> (Self, widget::Id) {
+    fn new(season: SeasonId) -> (Self, widget::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
         (
             Self {
                 id: season,
-                layout,
-                sort,
-                filters,
                 tab: Tab::Items,
                 scroll,
             },
@@ -148,18 +137,6 @@ impl SeasonPage {
         }
     }
 
-    pub fn page_update(&mut self, update: PageUpdate) {
-        let PageUpdate {
-            layout,
-            sort,
-            filters,
-        } = update;
-
-        self.sort = sort;
-        self.layout = layout;
-        self.filters = filters;
-    }
-
     pub fn show_tools(&self) -> bool {
         true
     }
@@ -171,11 +148,13 @@ impl SeasonPage {
     fn list<'a>(
         &self,
         now: Instant,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
     ) -> Element<'a, SeasonPageMessage> {
         let season = self.id;
 
-        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.list(
                 now,
                 move |id| SeasonPageMessage {
@@ -216,11 +195,13 @@ impl SeasonPage {
 
     fn compact<'a>(
         &self,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
     ) -> Element<'a, SeasonPageMessage> {
         let season = self.id;
 
-        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.compact(
                 move |id| SeasonPageMessage {
                     id: season,
@@ -256,11 +237,13 @@ impl SeasonPage {
     fn grid<'a>(
         &self,
         now: Instant,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
     ) -> Element<'a, SeasonPageMessage> {
         let season = self.id;
 
-        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.card(
                 now,
                 move |id| SeasonPageMessage {
@@ -481,6 +464,9 @@ impl SeasonPage {
     pub fn view<'a>(
         &self,
         now: Instant,
+        filters: Filter,
+        sort: Sort,
+        layout: Layout,
         season: &'a Thumbnail<Season>,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
         memberships: impl Iterator<Item = &'a SimpleCollection>,
@@ -490,10 +476,10 @@ impl SeasonPage {
             let id = self.id;
 
             match self.tab {
-                Tab::Items => match self.layout {
-                    Layout::Grid => self.grid(now, thumbnails),
-                    Layout::List => self.list(now, thumbnails),
-                    Layout::Compact => self.compact(thumbnails),
+                Tab::Items => match layout {
+                    Layout::Grid => self.grid(now, &filters, &sort, thumbnails),
+                    Layout::List => self.list(now, &filters, &sort, thumbnails),
+                    Layout::Compact => self.compact(&filters, &sort, thumbnails),
                 },
                 Tab::Data => data_tab(&season.media, width),
                 Tab::Comments => {

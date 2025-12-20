@@ -12,13 +12,6 @@ use super::shows::{TvShows, TvShowsMessage};
 use crate::models::{CollectionId, EpisodeId, ItemId, MovieId, SeasonId, ShowId};
 use crate::utils::{Filter, Layout, Sort};
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct PageUpdate {
-    pub layout: Layout,
-    pub sort: Sort,
-    pub filters: Filter,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum PageKind {
     Shows,
@@ -181,19 +174,6 @@ impl Page {
             Self::Show { page, .. } => page.update_scroll(),
             Self::Season { page, .. } => page.update_scroll(),
             Self::Movie { .. } | Self::Episode { .. } => Task::none(),
-            _ => todo!(),
-        }
-    }
-
-    pub fn page_update(&mut self, update: PageUpdate) {
-        match self {
-            Self::Movies(movies) => movies.page_update(update),
-            Self::Shows(shows) => shows.page_update(update),
-            Self::Collections(collections) => collections.page_update(update),
-            Self::Collection { collection, .. } => collection.page_update(update),
-            Self::Show { page, .. } => page.page_update(update),
-            Self::Season { page, .. } => page.page_update(update),
-            Self::Episode { .. } | Self::Movie { .. } => {}
             _ => todo!(),
         }
     }

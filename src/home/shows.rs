@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
+use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{ItemId, Show, ShowId};
 use crate::utils::filter::*;
 use crate::utils::typo::*;
@@ -20,33 +20,22 @@ pub enum TvShowsMessage {
 
 #[derive(Debug, Clone)]
 pub struct TvShows {
-    layout: Layout,
-    sort: Sort,
-    filters: Filter,
     scroll: Scroll,
 }
 
 impl TvShows {
-    pub fn boot(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<TvShowsMessage>) {
-        let (new, id) = Self::new(sort, filters, layout);
+    pub fn boot() -> (Self, Task<TvShowsMessage>) {
+        let (new, id) = Self::new();
         let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
 
         (new, scroll)
     }
 
-    fn new(sort: Sort, filters: Filter, layout: Layout) -> (Self, widget::Id) {
+    fn new() -> (Self, widget::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
-        (
-            Self {
-                sort,
-                filters,
-                layout,
-                scroll,
-            },
-            id,
-        )
+        (Self { scroll }, id)
     }
 
     pub fn update(&mut self, message: TvShowsMessage) -> Option<HomeMessage> {
@@ -79,18 +68,6 @@ impl TvShows {
         }
     }
 
-    pub fn page_update(&mut self, update: PageUpdate) {
-        let PageUpdate {
-            layout,
-            sort,
-            filters,
-        } = update.clone();
-
-        self.sort = sort;
-        self.layout = layout;
-        self.filters = filters;
-    }
-
     pub fn update_scroll(&mut self) -> Task<()> {
         operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
     }
@@ -98,9 +75,11 @@ impl TvShows {
     fn list<'a>(
         &self,
         now: Instant,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.list(
                 now,
                 TvShowsMessage::Add,
@@ -126,9 +105,11 @@ impl TvShows {
 
     fn compact<'a>(
         &self,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.compact(
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
@@ -152,9 +133,11 @@ impl TvShows {
     fn grid<'a>(
         &self,
         now: Instant,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = filter_sort(thumbnails, &self.filters, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.card(
                 now,
                 TvShowsMessage::Add,
@@ -183,12 +166,15 @@ impl TvShows {
     pub fn view<'a>(
         &self,
         now: Instant,
+        filters: Filter,
+        sort: Sort,
+        layout: Layout,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
     ) -> Element<'a, TvShowsMessage> {
-        match self.layout {
-            Layout::Grid => self.grid(now, thumbnails),
-            Layout::List => self.list(now, thumbnails),
-            Layout::Compact => self.compact(thumbnails),
+        match layout {
+            Layout::Grid => self.grid(now, &filters, &sort, thumbnails),
+            Layout::List => self.list(now, &filters, &sort, thumbnails),
+            Layout::Compact => self.compact(&filters, &sort, thumbnails),
         }
     }
 }

@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, PageUpdate, ViewMessage, shared::*};
+use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{ItemId, Media, Movie, MovieId};
 use crate::utils::filter::*;
 use crate::utils::icons::*;
@@ -22,33 +22,22 @@ pub enum MoviesMessage {
 
 #[derive(Debug, Clone)]
 pub struct Movies {
-    layout: Layout,
-    sort: Sort,
-    filter: Filter,
     scroll: Scroll,
 }
 
 impl Movies {
-    pub fn boot(sort: Sort, filters: Filter, layout: Layout) -> (Self, Task<MoviesMessage>) {
-        let (new, id) = Self::new(sort, layout, filters);
+    pub fn boot() -> (Self, Task<MoviesMessage>) {
+        let (new, id) = Self::new();
         let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
 
         (new, scroll)
     }
 
-    fn new(sort: Sort, layout: Layout, filter: Filter) -> (Self, widget::Id) {
+    fn new() -> (Self, widget::Id) {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
-        (
-            Self {
-                layout,
-                sort,
-                filter,
-                scroll,
-            },
-            id,
-        )
+        (Self { scroll }, id)
     }
 
     pub fn update(&mut self, message: MoviesMessage) -> Option<HomeMessage> {
@@ -77,24 +66,14 @@ impl Movies {
         }
     }
 
-    pub fn page_update(&mut self, update: PageUpdate) {
-        let PageUpdate {
-            layout,
-            sort,
-            filters,
-        } = update;
-
-        self.sort = sort;
-        self.layout = layout;
-        self.filter = filters;
-    }
-
     fn grid<'a>(
         &self,
         now: Instant,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
-        let content = filter_sort(thumbnails, &self.filter, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.card(
                 now,
                 MoviesMessage::Add,
@@ -123,9 +102,11 @@ impl Movies {
     fn list<'a>(
         &self,
         now: Instant,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
-        let content = filter_sort(thumbnails, &self.filter, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.list(
                 now,
                 MoviesMessage::Add,
@@ -151,9 +132,11 @@ impl Movies {
 
     fn compact<'a>(
         &self,
+        filters: &Filter,
+        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
-        let content = filter_sort(thumbnails, &self.filter, &self.sort).map(|thumbnail| {
+        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
             thumbnail.compact(
                 MoviesMessage::Add,
                 MoviesMessage::Details,
@@ -177,12 +160,15 @@ impl Movies {
     pub fn view<'a>(
         &self,
         now: Instant,
+        filters: Filter,
+        sort: Sort,
+        layout: Layout,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
-        match self.layout {
-            Layout::Grid => self.grid(now, thumbnails),
-            Layout::List => self.list(now, thumbnails),
-            Layout::Compact => self.compact(thumbnails),
+        match layout {
+            Layout::Grid => self.grid(now, &filters, &sort, thumbnails),
+            Layout::List => self.list(now, &filters, &sort, thumbnails),
+            Layout::Compact => self.compact(&filters, &sort, thumbnails),
         }
     }
 

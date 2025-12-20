@@ -48,7 +48,7 @@ use collections::{Collections, CollectionsMessage};
 use episode::{EpisodePage, EpisodePageMessage};
 use movie::{MoviePage, MoviePageMessage};
 use movies::{Movies, MoviesMessage};
-use pages::{Page, PageKind, PageUpdate};
+use pages::{Page, PageKind};
 use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
 use shared::{
@@ -693,8 +693,7 @@ impl Home {
                         self.forward.clear();
 
                         let msg = {
-                            let (collection, tasks) =
-                                CollectionPage::boot(new_id, self.sort, self.filters, self.layout);
+                            let (collection, tasks) = CollectionPage::boot(new_id);
 
                             self.pages.insert(
                                 PageKind::Collection(new_id),
@@ -930,16 +929,6 @@ impl Home {
                     SortMessage::ToggleReverse => self.sort.reverse(),
                 }
 
-                let update = PageUpdate {
-                    layout: self.layout,
-                    sort: self.sort,
-                    filters: self.filters,
-                };
-
-                if let Some(page) = self.current_page_mut() {
-                    page.page_update(update);
-                };
-
                 self.content_refresh(now)
             }
             HomeMessage::ToggleSort => {
@@ -1100,16 +1089,6 @@ impl Home {
                         self.filters.clear();
                     }
                 }
-
-                let update = PageUpdate {
-                    layout: self.layout,
-                    sort: self.sort,
-                    filters: self.filters,
-                };
-
-                if let Some(page) = self.current_page_mut() {
-                    page.page_update(update);
-                };
 
                 self.content_refresh(now)
             }
@@ -2007,12 +1986,12 @@ impl Home {
         match (&self.state, self.current_page()) {
             (State::Loading(animation), _) => center(loading_svg(animation, now)).into(),
             (State::Recent { shows, movies }, None) => self.recents(now, movies, shows),
-            (State::Shows(shows), Some(Page::Shows(page))) => {
-                page.view(now, shows.iter()).map(HomeMessage::Shows)
-            }
-            (State::Movies(movies), Some(Page::Movies(page))) => {
-                page.view(now, movies.iter()).map(HomeMessage::Movies)
-            }
+            (State::Shows(shows), Some(Page::Shows(page))) => page
+                .view(now, self.filters, self.sort, self.layout, shows.iter())
+                .map(HomeMessage::Shows),
+            (State::Movies(movies), Some(Page::Movies(page))) => page
+                .view(now, self.filters, self.sort, self.layout, movies.iter())
+                .map(HomeMessage::Movies),
             (State::Collections(collections), Some(Page::Collections(page))) => {
                 page.view(collections.iter()).map(HomeMessage::Collections)
             }
@@ -2038,7 +2017,15 @@ impl Home {
                 },
                 Some(Page::Season { page, .. }),
             ) => page
-                .view(now, season, episodes.iter(), memberships.iter())
+                .view(
+                    now,
+                    self.filters,
+                    self.sort,
+                    self.layout,
+                    season,
+                    episodes.iter(),
+                    memberships.iter(),
+                )
                 .map(HomeMessage::SeasonPage),
             (
                 State::Show {
@@ -2048,7 +2035,15 @@ impl Home {
                 },
                 Some(Page::Show { page, .. }),
             ) => page
-                .view(now, show, seasons.iter(), memberships.iter())
+                .view(
+                    now,
+                    self.filters,
+                    self.sort,
+                    self.layout,
+                    show,
+                    seasons.iter(),
+                    memberships.iter(),
+                )
                 .map(HomeMessage::ShowPage),
             (
                 State::Collection {
@@ -2064,6 +2059,9 @@ impl Home {
             ) => page
                 .view(
                     now,
+                    self.filters,
+                    self.sort,
+                    self.layout,
                     collection,
                     movies.iter().peekable(),
                     shows.iter().peekable(),
@@ -2163,12 +2161,6 @@ impl Home {
     }
 
     pub fn back(&mut self, now: Instant) -> Task<Message> {
-        let update = PageUpdate {
-            layout: self.layout,
-            sort: self.sort,
-            filters: self.filters,
-        };
-
         let (task, id, limit) = match self.current_page.take() {
             Some(current) => {
                 self.state = State::Loading(loading_animation(now));
@@ -2181,7 +2173,6 @@ impl Home {
                             .get_mut(&new)
                             .expect("Page cannot be in back without being recorded first");
                         self.current_page = Some(new);
-                        page.page_update(update);
                         let task = page.update_scroll().map(|_| Message::None);
 
                         (task, fetch_kind(new), None)
@@ -2204,7 +2195,6 @@ impl Home {
                     .get_mut(&new)
                     .expect("Page cannot be in back without being recorded first");
                 self.current_page = Some(new);
-                page.page_update(update);
                 let task = page.update_scroll().map(|_| Message::None);
 
                 (task, fetch_kind(new), None)
@@ -2223,12 +2213,6 @@ impl Home {
     }
 
     pub fn forward(&mut self, now: Instant) -> Task<Message> {
-        let update = PageUpdate {
-            layout: self.layout,
-            sort: self.sort,
-            filters: self.filters,
-        };
-
         let (task, id) = match self.current_page.take() {
             Some(current) => {
                 self.backward.push(current);
@@ -2243,7 +2227,6 @@ impl Home {
                     .expect("Page cannot be in forward without being recorded");
 
                 self.current_page = Some(new);
-                page.page_update(update);
                 let task = page.update_scroll().map(|_| Message::None);
 
                 (task, fetch_kind(new))
@@ -2259,7 +2242,6 @@ impl Home {
                     .get_mut(&new)
                     .expect("Page cannot be in forward without being recorded");
                 self.current_page = Some(new);
-                page.page_update(update);
                 let task = page.update_scroll().map(|_| Message::None);
 
                 (task, fetch_kind(new))
@@ -2326,16 +2308,6 @@ impl Home {
             Layout::Compact => Layout::Grid,
         };
 
-        let update = PageUpdate {
-            layout: self.layout,
-            sort: self.sort,
-            filters: self.filters,
-        };
-
-        if let Some(page) = self.current_page_mut() {
-            page.page_update(update);
-        };
-
         Task::done(Message::Layout(self.layout))
     }
 
@@ -2372,13 +2344,6 @@ impl Home {
         };
 
         if let Some(page) = self.pages.get_mut(&kind) {
-            let update = PageUpdate {
-                filters: self.filters,
-                sort: self.sort,
-                layout: self.layout,
-            };
-            page.page_update(update);
-
             let scroll = page.update_scroll().discard();
 
             let tsk = Task::done(msg).chain(scroll);
@@ -2388,14 +2353,14 @@ impl Home {
 
         let task = match kind {
             PageKind::Movies => {
-                let (movies, task) = Movies::boot(self.sort, self.filters, self.layout);
+                let (movies, task) = Movies::boot();
 
                 self.pages.insert(kind, Page::Movies(movies));
 
                 task.map(|msg| Message::Home(HomeMessage::Movies(msg)))
             }
             PageKind::Shows => {
-                let (shows, tasks) = TvShows::boot(self.sort, self.filters, self.layout);
+                let (shows, tasks) = TvShows::boot();
 
                 self.pages.insert(kind, Page::Shows(shows));
 
@@ -2416,29 +2381,28 @@ impl Home {
                 Task::none()
             }
             PageKind::Show(id) => {
-                let (show, task) = ShowPage::boot(id, self.sort, self.filters, self.layout);
+                let (show, task) = ShowPage::boot(id);
 
                 self.pages.insert(kind, Page::Show { id, page: show });
 
                 task.map(|ssg| Message::Home(HomeMessage::ShowPage(ssg)))
             }
             PageKind::Season(id) => {
-                let (season, task) = SeasonPage::boot(id, self.sort, self.filters, self.layout);
+                let (season, task) = SeasonPage::boot(id);
 
                 self.pages.insert(kind, Page::Season { id, page: season });
 
                 task.map(|ssg| Message::Home(HomeMessage::SeasonPage(ssg)))
             }
             PageKind::Collection(id) => {
-                let (collection, tasks) =
-                    CollectionPage::boot(id, self.sort, self.filters, self.layout);
+                let (collection, tasks) = CollectionPage::boot(id);
 
                 self.pages.insert(kind, Page::Collection { collection, id });
 
                 tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
             }
             PageKind::Collections => {
-                let (collections, task) = Collections::boot(self.sort, self.filters, self.layout);
+                let (collections, task) = Collections::boot();
 
                 self.pages.insert(kind, Page::Collections(collections));
 
