@@ -637,7 +637,7 @@ impl Manager {
                         Task::none()
                     }
                     ConfigMessage::Gamma(gamma) => {
-                        self.settings.gamma = gamma;
+                        self.settings.filters.gamma = gamma;
 
                         Task::none()
                     }
@@ -1888,7 +1888,6 @@ fn apply_settings(settings: VideoSettings, player: &mut Player) {
         thumbnail_interval: _thumbnails,
         volume,
         speed,
-        gamma,
         seek_change_amt: _seek_amt,
         seek_shift_change_amt: _seek_shift_amt,
         volume_change_amt: _volume,
@@ -1906,6 +1905,7 @@ fn apply_settings(settings: VideoSettings, player: &mut Player) {
                 brightness,
                 hue,
                 saturation,
+                gamma,
             },
     } = settings;
 
@@ -2297,12 +2297,12 @@ fn draw_config<'a>(
             let gamma = {
                 let label = label_maker("Gamma: ").width(width);
 
-                let slider = slider(1.0..=3.0, config.gamma, ConfigMessage::Gamma)
+                let slider = slider(1.0..=3.0, config.filters.gamma, ConfigMessage::Gamma)
                     .step(0.05)
                     .shift_step(0.1)
                     .width(slider_width);
 
-                let gamma = text(format!("{:.01}", config.gamma)).size(size);
+                let gamma = text(format!("{:.01}", config.filters.gamma)).size(size);
                 let slider = row!(gamma, slider).spacing(4.0);
 
                 row!(label, space::horizontal(), slider).align_y(Vertical::Center)

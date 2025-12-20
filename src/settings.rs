@@ -3,9 +3,9 @@ use crate::db::Operation;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
     AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
-    SettingsAction, SubtitleDescription, SubtitleFont, VideoSettings, convert_color_str,
-    draw_subtitles, icons, modal_container, picklist_handle, sized_button, styles, tooltip,
-    trim_path, typo::*,
+    SettingsAction, SubtitleDescription, SubtitleFont, VideoFilters, VideoSettings,
+    convert_color_str, draw_subtitles, icons, modal_container, picklist_handle, sized_button,
+    styles, tooltip, trim_path, typo::*,
 };
 use crate::widgets::{modal, toast, toggler};
 use iced::{
@@ -95,6 +95,15 @@ pub enum FolderSelectionMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum VideoFilterMessage {
+    Gamma(f64),
+    Brightness(f64),
+    Contrast(f64),
+    Hue(f64),
+    Saturation(f64),
+}
+
+#[derive(Debug, Clone)]
 pub enum SettingsMessage {
     Goto(Page),
     Scroll(scrollable::Viewport),
@@ -115,7 +124,7 @@ pub enum SettingsMessage {
     VolumeAmt(String),
     Speed(f64),
     SpeedAmt(String),
-    Gamma(f64),
+    VideoFilters(VideoFilterMessage),
     Subtitles(bool),
     AutoStart(bool),
     AutoNext(bool),
@@ -413,10 +422,28 @@ impl Settings {
                 self.config.video.speed = new;
                 Task::none()
             }
-            SettingsMessage::Gamma(new) => {
-                self.config.video.gamma = new;
-                Task::none()
-            }
+            SettingsMessage::VideoFilters(vsg) => match vsg {
+                VideoFilterMessage::Gamma(value) => {
+                    self.config.video.filters.gamma = value;
+                    Task::none()
+                }
+                VideoFilterMessage::Hue(value) => {
+                    self.config.video.filters.hue = value;
+                    Task::none()
+                }
+                VideoFilterMessage::Brightness(value) => {
+                    self.config.video.filters.brightness = value;
+                    Task::none()
+                }
+                VideoFilterMessage::Contrast(value) => {
+                    self.config.video.filters.contrast = value;
+                    Task::none()
+                }
+                VideoFilterMessage::Saturation(value) => {
+                    self.config.video.filters.saturation = value;
+                    Task::none()
+                }
+            },
             SettingsMessage::Subtitles(show) => {
                 self.config.video.show_subtitles = show;
                 Task::none()
@@ -1139,7 +1166,6 @@ impl Settings {
             thumbnail_interval,
             volume,
             speed,
-            gamma,
             volume_change_amt,
             seek_change_amt,
             seek_shift_change_amt,
@@ -1153,7 +1179,7 @@ impl Settings {
             // I cannot think of a reason why these should persist here
             // plus I'm lazy
             muted: _mute,
-            filters: _filters,
+            filters,
         } = &self.config.video;
 
         let thumbnail = {
@@ -1251,22 +1277,7 @@ impl Settings {
                 .spacing(spacing)
         };
 
-        let gamma = {
-            let label = label_maker("Default Gamma: ").width(width);
-
-            let value = text(format!("{gamma:.2}")).size(size / RATIO);
-            let gamma = slider(1.0..=3.0, *gamma, SettingsMessage::Gamma)
-                .default(1.3)
-                .step(0.1)
-                .shift_step(0.2)
-                .width(125.0);
-
-            let gamma = row!(gamma, value).align_y(Vertical::Center).spacing(4);
-
-            row!(label, gamma)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
+        let filters = draw_filters(filters).map(SettingsMessage::VideoFilters);
 
         let seek_amt = {
             let label = label_maker("Seek amount: ");
@@ -1444,7 +1455,7 @@ impl Settings {
             volume_amt,
             speed,
             speed_amt,
-            gamma,
+            filters,
             seek_amt,
             seek_amt_shift,
             subtitles_toggle,
@@ -2019,7 +2030,7 @@ fn subtitle_config<'a>(
     let dummy = draw_subtitles("An example subtitle", subtitles);
 
     let sub_size = {
-        let label = label_maker("Size: ");
+        let label = label_maker("Size: ").width(LABEL_WIDTH);
 
         let amt = format!("{}", subtitles.size);
 
@@ -2045,13 +2056,13 @@ fn subtitle_config<'a>(
 
         let input = row!(input, actions).spacing(4.0).align_y(Vertical::Center);
 
-        row!(label, space::horizontal(), input)
+        row!(label, input)
             .align_y(Vertical::Center)
             .spacing(spacing)
     };
 
     let color = {
-        let label = label_maker("Text Color (rgba): ");
+        let label = label_maker("Text Color (rgba): ").width(LABEL_WIDTH);
 
         let input = text_input("", text_color)
             .width(color_width)
@@ -2060,13 +2071,13 @@ fn subtitle_config<'a>(
             .padding(padding)
             .on_input(SettingsMessage::SubColor);
 
-        row!(label, space::horizontal(), input)
+        row!(label, input)
             .align_y(Vertical::Center)
             .spacing(spacing)
     };
 
     let background = {
-        let label = label_maker("Background Color (rgba): ");
+        let label = label_maker("Background Color (rgba): ").width(LABEL_WIDTH);
 
         let input = text_input("", background_color)
             .width(color_width)
@@ -2075,14 +2086,100 @@ fn subtitle_config<'a>(
             .padding(padding)
             .on_input(SettingsMessage::SubBackground);
 
-        row!(label, space::horizontal(), input)
+        row!(label, input)
             .align_y(Vertical::Center)
             .spacing(spacing)
     };
 
-    let content = column!(sub_size, color, background, dummy)
-        .align_x(Horizontal::Center)
-        .spacing(8.0);
+    let content = column!(sub_size, color, background, dummy).spacing(10.0);
 
-    column!(label, content).spacing(12).into()
+    column!(label, content).spacing(16).into()
+}
+
+fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
+    let size = TEXT_SIZE;
+    let width = LABEL_WIDTH;
+    let slider_width = 125;
+
+    let gamma = {
+        let label = label_maker("Gamma: ").width(width);
+
+        let slider = slider(1.0..=3.0, filters.gamma, VideoFilterMessage::Gamma)
+            .step(0.05)
+            .shift_step(0.1)
+            .width(slider_width);
+
+        let gamma = text(format!("{:.01}", filters.gamma)).size(size);
+        let slider = row!(gamma, slider).spacing(4.0);
+
+        row!(label, slider).align_y(Vertical::Center)
+    };
+
+    let brightness = {
+        let label = label_maker("Brightness: ").width(width);
+
+        let slider = slider(
+            -1.0..=1.0,
+            filters.brightness,
+            VideoFilterMessage::Brightness,
+        )
+        .step(0.05)
+        .shift_step(0.1)
+        .width(slider_width);
+
+        let brightness = text(format!("{:.01}", filters.brightness)).size(size);
+        let slider = row!(brightness, slider).spacing(4.0);
+
+        row!(label, slider).align_y(Vertical::Center)
+    };
+
+    let contrast = {
+        let label = label_maker("Contrast: ").width(width);
+
+        let slider = slider(0.0..=2.0, filters.contrast, VideoFilterMessage::Contrast)
+            .step(0.05)
+            .shift_step(0.1)
+            .width(slider_width);
+
+        let contrast = text(format!("{:.01}", filters.contrast)).size(size);
+        let slider = row!(contrast, slider).spacing(4.0);
+
+        row!(label, slider).align_y(Vertical::Center)
+    };
+
+    let hue = {
+        let label = label_maker("Hue: ").width(width);
+
+        let slider = slider(-1.0..=1.0, filters.hue, VideoFilterMessage::Hue)
+            .step(0.05)
+            .shift_step(0.1)
+            .width(slider_width);
+
+        let hue = text(format!("{:.01}", filters.hue)).size(size);
+        let slider = row!(hue, slider).spacing(4.0);
+
+        row!(label, slider).align_y(Vertical::Center)
+    };
+
+    let saturation = {
+        let label = label_maker("Saturation: ").width(width);
+
+        let slider = slider(
+            0.0..=2.0,
+            filters.saturation,
+            VideoFilterMessage::Saturation,
+        )
+        .step(0.05)
+        .shift_step(0.1)
+        .width(slider_width);
+
+        let saturation = text(format!("{:.01}", filters.saturation)).size(size);
+        let slider = row!(saturation, slider).spacing(4.0);
+
+        row!(label, slider).align_y(Vertical::Center)
+    };
+
+    column!(gamma, brightness, contrast, hue, saturation)
+        .spacing(16)
+        .into()
 }

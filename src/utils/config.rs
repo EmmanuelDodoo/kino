@@ -84,6 +84,7 @@ pub struct VideoFilters {
     pub contrast: f64,
     pub hue: f64,
     pub saturation: f64,
+    pub gamma: f64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -93,7 +94,6 @@ pub struct VideoSettings {
     pub thumbnail_interval: u32,
     pub volume: f64,
     pub speed: f64,
-    pub gamma: f64,
     pub volume_change_amt: f64,
     pub seek_change_amt: f64,
     pub seek_shift_change_amt: f64,
@@ -120,7 +120,6 @@ impl VideoSettings {
             thumbnail_interval: 10,
             volume: 1.0,
             speed: 1.0,
-            gamma: 1.0,
             volume_change_amt: 0.05,
             seek_change_amt: 5.0,
             seek_shift_change_amt: 10.0,
@@ -137,6 +136,7 @@ impl VideoSettings {
                 contrast: 1.0,
                 hue: 0.0,
                 saturation: 1.0,
+                gamma: 1.0,
             },
         }
     }
