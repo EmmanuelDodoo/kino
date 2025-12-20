@@ -155,6 +155,7 @@ pub struct GeneralSettings {
     pub auth_token: String,
     pub movie_depth: u8,
     pub fetching_interval: Duration,
+    pub restore_deleted: bool,
 }
 
 impl GeneralSettings {
@@ -169,6 +170,7 @@ impl GeneralSettings {
             auth_token: String::default(),
             movie_depth: 2,
             fetching_interval: Duration::from_secs(600),
+            restore_deleted: true,
         }
     }
 
@@ -183,98 +185,7 @@ impl GeneralSettings {
             auth_token: String::default(),
             movie_depth: 0,
             fetching_interval: Duration::from_secs(30),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct General {
-    layout: Option<Layout>,
-    refresh_interval: Option<Duration>,
-    recents_limit: Option<i32>,
-    search_limit: Option<i32>,
-    theme: Option<AppTheme>,
-    scan_discoverer: Option<bool>,
-    auth_token: Option<String>,
-    movie_depth: Option<u8>,
-    fetching_interval: Option<Duration>,
-}
-
-impl From<GeneralSettings> for General {
-    fn from(value: GeneralSettings) -> Self {
-        let GeneralSettings {
-            layout,
-            refresh_interval,
-            recents_limit,
-            search_limit,
-            theme,
-            scan_discoverer,
-            auth_token,
-            movie_depth,
-            fetching_interval,
-        } = value;
-
-        let defaults = GeneralSettings::defaults();
-
-        Self {
-            layout: (layout != defaults.layout).then_some(layout),
-            refresh_interval: (refresh_interval != defaults.refresh_interval)
-                .then_some(refresh_interval),
-            recents_limit: if recents_limit != defaults.recents_limit {
-                recents_limit
-            } else {
-                None
-            },
-            search_limit: if search_limit != defaults.search_limit {
-                search_limit
-            } else {
-                None
-            },
-            theme: (theme != defaults.theme).then_some(theme),
-            scan_discoverer: (scan_discoverer != defaults.scan_discoverer)
-                .then_some(scan_discoverer),
-            auth_token: (auth_token != defaults.auth_token).then_some(auth_token),
-            movie_depth: (movie_depth != defaults.movie_depth).then_some(movie_depth),
-            fetching_interval: (fetching_interval != defaults.fetching_interval)
-                .then_some(fetching_interval),
-        }
-    }
-}
-
-impl From<General> for GeneralSettings {
-    fn from(value: General) -> Self {
-        let General {
-            layout,
-            refresh_interval,
-            recents_limit,
-            search_limit,
-            theme,
-            scan_discoverer,
-            auth_token,
-            movie_depth,
-            fetching_interval,
-        } = value;
-
-        let defaults = GeneralSettings::defaults();
-
-        Self {
-            layout: layout.unwrap_or(defaults.layout),
-            refresh_interval: refresh_interval.unwrap_or(defaults.refresh_interval),
-            recents_limit: if recents_limit.is_none() {
-                defaults.recents_limit
-            } else {
-                recents_limit
-            },
-            search_limit: if search_limit.is_none() {
-                defaults.search_limit
-            } else {
-                search_limit
-            },
-            theme: theme.unwrap_or(defaults.theme),
-            scan_discoverer: scan_discoverer.unwrap_or(defaults.scan_discoverer),
-            auth_token: auth_token.unwrap_or(defaults.auth_token),
-            movie_depth: movie_depth.unwrap_or(defaults.movie_depth),
-            fetching_interval: fetching_interval.unwrap_or(defaults.fetching_interval),
+            restore_deleted: true,
         }
     }
 }

@@ -121,6 +121,8 @@ pub enum SettingsMessage {
     AutoNext(bool),
     ScanDiscoverer(bool),
     ToggleScanDiscover,
+    RestoreDeleted(bool),
+    ToggleRestore,
     ToggleSubtitles,
     ToggleAutoStart,
     ToggleAutoNext,
@@ -590,6 +592,16 @@ impl Settings {
 
                 Task::none()
             }
+            SettingsMessage::ToggleRestore => {
+                self.config.general.restore_deleted = !self.config.general.restore_deleted;
+                Task::none()
+            }
+            SettingsMessage::RestoreDeleted(enable) => {
+                self.config.general.restore_deleted = enable;
+
+                Task::none()
+            }
+
             SettingsMessage::OpenLog => {
                 let Some(path) = self.config.log_path() else {
                     return Task::none();
@@ -801,6 +813,7 @@ impl Settings {
             auth_token,
             movie_depth,
             fetching_interval,
+            restore_deleted,
         } = &self.config.general;
 
         let refresh = {
@@ -971,7 +984,7 @@ impl Settings {
         };
 
         let discoverer = {
-            let label = label_maker("Enable Discovery Scan ");
+            let label = label_maker("Enable Discovery Scan: ");
             let icon = help(
                 "More information is collected on videos but directory scanning is slower as a result ",
                 size,
@@ -988,6 +1001,31 @@ impl Settings {
 
             let toggle = toggler(*scan_discoverer)
                 .on_toggle(SettingsMessage::ScanDiscoverer)
+                .size(size);
+
+            row!(label, toggle)
+                .align_y(Vertical::Center)
+                .spacing(spacing)
+        };
+
+        let restore_deletes = {
+            let label = label_maker("Restore deleted Media: ");
+            let icon = help(
+                "Deleted media is restored when a directory is scanned",
+                size,
+            );
+            let label = button(label)
+                .padding(0)
+                .on_press(SettingsMessage::ToggleRestore)
+                .style(styles::button::text);
+
+            let label = row!(label, icon)
+                .spacing(2)
+                .align_y(Vertical::Center)
+                .width(width);
+
+            let toggle = toggler(*restore_deleted)
+                .on_toggle(SettingsMessage::RestoreDeleted)
                 .size(size);
 
             row!(label, toggle)
@@ -1079,6 +1117,7 @@ impl Settings {
             fetching_interval,
             movie_depth,
             discoverer,
+            restore_deletes,
             dirs,
             open,
         )
@@ -1638,12 +1677,9 @@ impl Settings {
         let directories = self
             .directories
             .into_iter()
-            .filter_map(|(dir, new, op)| {
-                match new {
-                    Some(false) if matches!(op, Operation::Update) => None,
-                    _ => Some((dir, op)),
-
-                }
+            .filter_map(|(dir, new, op)| match new {
+                Some(false) if matches!(op, Operation::Update) => None,
+                _ => Some((dir, op)),
             })
             .collect();
 

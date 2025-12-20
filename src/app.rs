@@ -766,9 +766,10 @@ impl App {
                 let home_task = self.home.scanning(true, now);
                 let db_path = self.config.db_path();
                 let movie_depth = self.config.general.movie_depth;
+                let restore = self.config.general.restore_deleted;
 
                 let scan = Task::perform(
-                    async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth, true) },
+                    async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth, restore) },
                     |(todo, res)| {
                         if let Some(res) = todo {
                             dbg!(res.successes.len());

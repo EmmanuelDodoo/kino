@@ -64,7 +64,7 @@ pub fn scan_dir<'a>(
     dir: Directory,
     discoverer: bool,
     movie_depth: u8,
-    reactivate: bool
+    restore: bool,
 ) -> Option<BatchResult<'a>> {
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
@@ -93,7 +93,7 @@ pub fn scan_dir<'a>(
         }
     };
 
-    scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth, reactivate)
+    scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth, restore)
 }
 
 pub fn scan_dirs<'a>(
@@ -101,7 +101,7 @@ pub fn scan_dirs<'a>(
     dirs: Vec<Directory>,
     discoverer: bool,
     movie_depth: u8,
-    reactivate: bool
+    restore: bool,
 ) -> (Option<BatchResult<'a>>, Vec<DirectoryId>) {
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
@@ -129,7 +129,7 @@ pub fn scan_dirs<'a>(
 
     for dir in dirs {
         let id = dir.id;
-        match scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth, reactivate) {
+        match scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth, restore) {
             Some(res) => {
                 scanned.push(id);
                 result.merge(res);
@@ -146,7 +146,7 @@ pub fn scan_dir_helper<'a>(
     dir: Directory,
     discoverer: Option<&Discoverer>,
     movie_depth: u8,
-    reactivate: bool,
+    restore: bool,
 ) -> Option<BatchResult<'a>> {
     let mut successes = vec![];
     let mut failures = vec![];
@@ -193,7 +193,7 @@ pub fn scan_dir_helper<'a>(
                         .into_iter()
                         .map(|movie| {
                             let scanned = scanned.contains(&movie.path);
-                            let insert = (scanned && reactivate && movie.tombstone)
+                            let insert = (scanned && restore && movie.tombstone)
                                 || (scanned && !movie.tombstone);
                             (movie.id, insert)
                         })
@@ -340,7 +340,7 @@ pub fn scan_dir_helper<'a>(
                             .into_iter()
                             .map(|episode| {
                                 let scanned = scanned_episodes.contains(&episode.path);
-                                let insert = (scanned && reactivate && episode.tombstone)
+                                let insert = (scanned && restore && episode.tombstone)
                                     || (scanned && !episode.tombstone);
                                 (episode.id, insert)
                             })
@@ -370,7 +370,7 @@ pub fn scan_dir_helper<'a>(
                         .into_iter()
                         .map(|season| {
                             let scanned = scanned_seasons.contains(&season.path);
-                            let insert = (scanned && reactivate && season.tombstone)
+                            let insert = (scanned && restore && season.tombstone)
                                 || (scanned && !season.tombstone);
                             (season.id, insert)
                         })
@@ -400,8 +400,8 @@ pub fn scan_dir_helper<'a>(
                     .into_iter()
                     .map(|show| {
                         let scanned = scanned_shows.contains(&show.path);
-                        let insert = (scanned && reactivate && show.tombstone)
-                            || (scanned && !show.tombstone);
+                        let insert =
+                            (scanned && restore && show.tombstone) || (scanned && !show.tombstone);
                         (show.id, insert)
                     })
                     .collect();
