@@ -13,6 +13,19 @@ use std::ops::Deref;
 use std::path::Path;
 use uuid::Uuid;
 
+struct Migration {
+    version: u64,
+    sql: &'static str,
+}
+
+#[rustfmt::skip]
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 0,
+        sql: ""
+    },
+];
+
 pub struct Database {
     conn: Connection,
 }
@@ -1256,9 +1269,10 @@ impl Database {
 
             let dummies = read_to_string(dummies)?;
             conn.execute_batch(&dummies)?;
+            Ok(conn)
+        } else {
+            Ok(apply_migration(conn)?)
         }
-
-        Ok(conn)
     }
 
     pub fn open_with_schema(db: impl AsRef<Path>) -> crate::error::Result<Database> {
@@ -1268,9 +1282,10 @@ impl Database {
         if !exists {
             let schema = include_str!("../schema.sql");
             conn.execute_batch(schema)?;
+            Ok(conn)
+        } else {
+            Ok(apply_migration(conn)?)
         }
-
-        Ok(conn)
     }
 
     pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Database> {
@@ -1278,6 +1293,26 @@ impl Database {
 
         Ok(Database { conn })
     }
+}
+
+fn apply_migration(mut db: Database) -> rusqlite::Result<Database> {
+    let curr_version: u64 = db.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    let mut new_version = curr_version;
+    let trans = db.transaction()?;
+
+    for migration in MIGRATIONS {
+        if migration.version <= curr_version {
+            continue;
+        }
+
+        trans.execute_batch(migration.sql)?;
+        new_version = migration.version;
+    }
+
+    trans.execute(&format!("PRAGMA user_version = {new_version}"), [])?;
+    trans.commit()?;
+
+    Ok(db)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

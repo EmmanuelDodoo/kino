@@ -1,4 +1,5 @@
 PRAGMA recursive_triggers = ON;
+PRAGMA user_version = 0;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
