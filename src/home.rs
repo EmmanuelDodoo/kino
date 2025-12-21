@@ -1921,7 +1921,7 @@ impl Home {
             ),
             tooltip(
                 icons::sized_button(self.layout.icon(), size).on_press(HomeMessage::ToggleLayout),
-                self.layout.str(),
+                self.layout.to_string(),
                 tp::Position::Bottom
             ),
         )

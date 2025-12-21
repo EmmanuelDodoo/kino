@@ -8,6 +8,7 @@ use iced::widget::image;
 use std::path::{Path, PathBuf};
 
 use crate::error::*;
+use crate::variants;
 
 pub mod config;
 pub use config::*;
@@ -444,17 +445,18 @@ pub enum Screen {
     // Log,
 }
 
+variants! {
 #[derive(Debug, Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum Layout {
-    #[default]
-    Grid,
-    List,
-    Compact,
+    pub enum Layout {
+        #[default]
+        Grid,
+        List,
+        Compact,
+    }
+
 }
 
 impl Layout {
-    pub const ALL: [Self; 3] = [Self::Grid, Self::List, Self::Compact];
-
     pub fn icon(&self) -> char {
         match self {
             Self::Grid => icons::GRID,
@@ -462,42 +464,39 @@ impl Layout {
             Self::Compact => icons::COMPACT_LIST,
         }
     }
+}
 
-    pub fn str(&self) -> &str {
-        match self {
-            Self::List => "List",
-            Self::Grid => "Grid",
-            Self::Compact => "Compact list",
-        }
+impl std::fmt::Display for Layout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Grid => "Grid",
+                Self::List => "List",
+                Self::Compact => "Compact list",
+            }
+        )
     }
 }
 
+variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
-pub enum HomeAction {
-    SettingsOpen,
-    CloseModal,
-    LayoutToggle,
-    RefreshContent,
-    /// Refreshes both content and the side menu
-    #[serde(rename = "RefreshAll")]
-    Refresh,
-    SearchToggle,
-    Back,
-    Forward,
+    pub enum HomeAction {
+        SettingsOpen,
+        CloseModal,
+        LayoutToggle,
+        RefreshContent,
+        /// Refreshes both content and the side menu
+        #[serde(rename = "RefreshAll")]
+        Refresh,
+        SearchToggle,
+        Back,
+        Forward,
+    }
 }
 
 impl HomeAction {
-    pub const ALL: &'static [Self] = &[
-        Self::SettingsOpen,
-        Self::CloseModal,
-        Self::LayoutToggle,
-        Self::RefreshContent,
-        Self::Refresh,
-        Self::SearchToggle,
-        Self::Back,
-        Self::Forward,
-    ];
-
     pub fn descr(&self) -> &str {
         match self {
             Self::SettingsOpen => "Opens the settings screen",
@@ -531,60 +530,38 @@ impl std::fmt::Display for HomeAction {
     }
 }
 
+variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
-pub enum PlayerAction {
-    PlayToggle,
-    PlayNext,
-    PlayPrevious,
-    FullscreenToggle,
-    /// Used for either exiting fullscreen or closing modal windows
-    Exit,
-    SeekBack,
-    SeekBackShift,
-    SeekFront,
-    SeekFrontShift,
-    VolumeIncrease,
-    VolumeDecrease,
-    MuteToggle,
-    SpeedIncrease,
-    SpeedDecrease,
-    SpeedReset,
-    VideoConfig,
-    VideoComment,
-    SubtitlesToggle,
-    #[serde(rename = "CollectionAdd")]
-    Add,
-    CloseView,
-    Back,
-    PlaylistToggle,
+    pub enum PlayerAction {
+        PlayToggle,
+        PlayNext,
+        PlayPrevious,
+        FullscreenToggle,
+        /// Used for either exiting fullscreen or closing modal windows
+        Exit,
+        SeekBack,
+        SeekBackShift,
+        SeekFront,
+        SeekFrontShift,
+        VolumeIncrease,
+        VolumeDecrease,
+        MuteToggle,
+        SpeedIncrease,
+        SpeedDecrease,
+        SpeedReset,
+        VideoConfig,
+        VideoComment,
+        SubtitlesToggle,
+        #[serde(rename = "CollectionAdd")]
+        Add,
+        CloseView,
+        Back,
+        PlaylistToggle,
+    }
+
 }
 
 impl PlayerAction {
-    pub const ALL: &'static [Self] = &[
-        Self::PlayToggle,
-        Self::PlayNext,
-        Self::PlayPrevious,
-        Self::FullscreenToggle,
-        Self::Exit,
-        Self::SeekBack,
-        Self::SeekBackShift,
-        Self::SeekFront,
-        Self::SeekFrontShift,
-        Self::VolumeIncrease,
-        Self::VolumeDecrease,
-        Self::MuteToggle,
-        Self::SpeedIncrease,
-        Self::SpeedDecrease,
-        Self::SpeedReset,
-        Self::VideoConfig,
-        Self::VideoComment,
-        Self::SubtitlesToggle,
-        Self::Add,
-        Self::CloseView,
-        Self::Back,
-        Self::PlaylistToggle,
-    ];
-
     pub fn descr(&self) -> &str {
         match self {
             Self::PlayToggle => "Toggles Play/Pause",
@@ -646,16 +623,17 @@ impl std::fmt::Display for PlayerAction {
     }
 }
 
+variants! {
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
-pub enum SettingsAction {
-    Up,
-    Down,
-    Cancel,
+    pub enum SettingsAction {
+        Up,
+        Down,
+        Cancel,
+    }
 }
 
 impl SettingsAction {
-    pub const ALL: &'static [Self] = &[Self::Cancel, Self::Up, Self::Down];
-
     pub fn descr(&self) -> &str {
         match self {
             Self::Cancel => "Discards changes and exits the settings screen",

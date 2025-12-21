@@ -2,10 +2,10 @@ use crate::app::Message;
 use crate::db::Operation;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
-    AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
+    self, AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
     SettingsAction, SubtitleDescription, SubtitleFont, VideoFilters, VideoSettings,
-    convert_color_str, draw_subtitles, icons, modal_container, picklist_handle, sized_button,
-    styles, tooltip, trim_path, typo::*,
+    convert_color_str, empty, icons, modal_container, picklist_handle, sized_button, styles,
+    tooltip, trim_path, typo::*,
 };
 use crate::widgets::{modal, toast, toggler};
 use iced::{
@@ -13,16 +13,27 @@ use iced::{
     alignment::{Horizontal, Vertical},
     font::{self, Font},
     widget::{
-        button, center_x, column, container, operation, pick_list, rich_text, row, rule,
-        scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
+        button, center_x, column, container, mouse_area, operation, pick_list, rich_text, row,
+        rule, scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const TEXT_SIZE: f32 = P;
-const LABEL_WIDTH: f32 = 300.0;
+const PADDING: [f32; 2] = [20.0, 24.0];
+const TEXT_SIZE: f32 = H7;
+const TOGGLER_SIZE: f32 = TEXT_SIZE * RATIO * RATIO;
+const INPUT_WIDTH: f32 = 48.0;
+const SPACING: f32 = 6.0;
+const INPUT_PADDING: [f32; 2] = [3.5, 5.0];
+const LIST_PADDING: [f32; 2] = [5.0, 10.0];
+const ACTIONS_PADDING: [f32; 2] = [1.5, 1.5];
+const ACTIONS_SIZE: f32 = 10.0;
+const ACTIONS_SPACING: f32 = 4.0;
+const SECTION_SPACING: f32 = 16.0;
+const SLIDER_WIDTH: f32 = 125.0;
+const SLIDER_SPACING: f32 = 4.0;
 
 #[derive(Debug, Clone, Copy)]
 pub enum KeyAction {
@@ -104,58 +115,119 @@ pub enum VideoFilterMessage {
 }
 
 #[derive(Debug, Clone)]
-pub enum SettingsMessage {
-    Goto(Page),
-    Scroll(scrollable::Viewport),
-    OpenLog,
-    OpenConfig,
-    Auth(String),
+pub enum GeneralMessage {
     Refresh(String),
-    Fetch(String),
-    MovieDepth(String),
-    ThumbnailInterval(String),
+    IncrRefresh,
+    DecrRefresh,
     Recents(String),
+    IncrRecents,
+    DecrRecents,
     Search(String),
-    Seek(String),
-    SeekShift(String),
+    IncrSearch,
+    DecrSearch,
+}
+
+#[derive(Debug, Clone)]
+pub enum AppearanceMessage {
     Layout(Layout),
     Theme(AppTheme),
-    Volume(f64),
-    VolumeAmt(String),
-    Speed(f64),
-    SpeedAmt(String),
-    VideoFilters(VideoFilterMessage),
-    Subtitles(bool),
-    AutoStart(bool),
-    AutoNext(bool),
+}
+
+#[derive(Debug, Clone)]
+pub enum MediaMessage {
+    MovieDepth(String),
     ScanDiscoverer(bool),
     ToggleScanDiscover,
     RestoreDeleted(bool),
     ToggleRestore,
-    TMDBRating(bool),
-    ToggleTMDBRating,
-    ToggleSubtitles,
-    ToggleAutoStart,
-    ToggleAutoNext,
-    CompletionPoint(String),
-    CompletionTime(String),
-    Save,
-    Cancel,
+    ToggleDirShow,
     ToggleDirectory(DirectoryId),
     ToggleDirKind(DirectoryId),
-    FolderSelected(Option<PathBuf>),
-    FolderSelection(FolderSelectionMessage),
     AddFolder,
-    ClearAllBindings(KeyAction),
-    ClearBinding(Page, KeyPress),
-    NewKeyPress(KeyAction),
-    KeyAction(KeyAction),
-    SaveKeyBinding,
+    IncrMovieDepth,
+    DecrMovieDepth,
+    None,
+}
+
+#[derive(Debug, Clone)]
+pub enum MetadataMessage {
+    TMDBRating(bool),
+    ToggleTMDBRating,
+    Auth(String),
+    Fetch(String),
+    IncrFetch,
+    DecrFetch,
+}
+
+#[derive(Debug, Clone)]
+pub enum PlaybackMessage {
+    AutoStart(bool),
+    AutoNext(bool),
+    ToggleAutoStart,
+    ToggleAutoNext,
+    Volume(f64),
+    VolumeAmt(String),
+    IncrVolAmt,
+    DecrVolAmt,
+    Speed(f64),
+    SpeedAmt(String),
+    IncrSpeedAmt,
+    DecrSpeedAmt,
+    CompletionPoint(String),
+    IncrComplPoint,
+    DecrComplPoint,
+    CompletionTime(String),
+    IncrComplTime,
+    DecrComplTime,
+}
+
+#[derive(Debug, Clone)]
+pub enum SeekingMessage {
+    ThumbnailInterval(String),
+    IncrThumbInterval,
+    DecrThumbInterval,
+    Seek(String),
+    IncrSeek,
+    DecrSeek,
+    SeekShift(String),
+    IncrSeekShift,
+    DecrSeekShift,
+}
+
+#[derive(Debug, Clone)]
+pub enum SubtitleMessage {
+    Subtitles(bool),
+    ToggleSubtitles,
     SubSizeIncr,
     SubSizeDecr,
     SubSize(String),
     SubColor(String),
     SubBackground(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum SettingsMessage {
+    Goto(Page),
+    Scroll(scrollable::Viewport),
+    OpenLog,
+    OpenConfig,
+    General(GeneralMessage),
+    Appearance(AppearanceMessage),
+    Media(MediaMessage),
+    Metadata(MetadataMessage),
+    Playback(PlaybackMessage),
+    Seeking(SeekingMessage),
+    VideoFilters(VideoFilterMessage),
+    Subtitles(SubtitleMessage),
+    Save,
+    Cancel,
+    FolderSelected(Option<PathBuf>),
+    FolderSelection(FolderSelectionMessage),
+    ClearAllBindings(KeyAction),
+    ClearBinding(Page, KeyPress),
+    NewKeyPress(KeyAction),
+    KeyAction(KeyAction),
+    SaveKeyBinding,
     None,
 }
 
@@ -172,6 +244,7 @@ pub struct Settings {
     background_color: String,
 
     pub directories: Vec<(Directory, Option<bool>, Operation)>,
+    directories_shown: bool,
 }
 
 impl Settings {
@@ -193,6 +266,7 @@ impl Settings {
             directories: Vec::default(),
             text_color,
             background_color,
+            directories_shown: false,
         }
     }
 
@@ -212,218 +286,437 @@ impl Settings {
             }
             SettingsMessage::Cancel => self.cancel(),
             SettingsMessage::Save => Task::done(Message::SaveSettings),
-            SettingsMessage::Auth(auth) => {
-                self.config.general.auth_token = auth;
-                Task::none()
-            }
-            SettingsMessage::MovieDepth(depth) => {
-                let depth = depth.trim();
-                if depth.is_empty() {
-                    self.config.general.movie_depth = 0;
-                    return Task::none();
+            SettingsMessage::General(gsg) => match gsg {
+                GeneralMessage::Refresh(interval) => {
+                    let interval = interval.trim();
+                    if interval.is_empty() {
+                        self.config.general.refresh_interval = Duration::ZERO;
+                        return Task::none();
+                    }
+
+                    let Ok(interval) = interval.parse::<u64>() else {
+                        let msg = Message::error(format!("Invalid input: {interval}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.general.refresh_interval = Duration::from_secs(interval);
+
+                    Task::none()
                 }
-
-                let Ok(depth) = depth.parse::<u8>() else {
-                    let msg = Message::error(format!("Invalid input: {depth}"));
-                    return Task::done(msg);
-                };
-
-                self.config.general.movie_depth = depth;
-                Task::none()
-            }
-            SettingsMessage::Refresh(interval) => {
-                let interval = interval.trim();
-                if interval.is_empty() {
-                    self.config.general.refresh_interval = Duration::ZERO;
-                    return Task::none();
+                GeneralMessage::IncrRefresh => {
+                    self.config.general.refresh_interval = self
+                        .config
+                        .general
+                        .refresh_interval
+                        .saturating_add(Duration::from_secs(1));
+                    Task::none()
                 }
-
-                let Ok(interval) = interval.parse::<u64>() else {
-                    let msg = Message::error(format!("Invalid input: {interval}"));
-                    return Task::done(msg);
-                };
-
-                self.config.general.refresh_interval = Duration::from_secs(interval);
-
-                Task::none()
-            }
-            SettingsMessage::Fetch(interval) => {
-                let interval = interval.trim();
-                if interval.is_empty() {
-                    self.config.general.fetching_interval = Duration::ZERO;
-                    return Task::none();
+                GeneralMessage::DecrRefresh => {
+                    self.config.general.refresh_interval = self
+                        .config
+                        .general
+                        .refresh_interval
+                        .saturating_sub(Duration::from_secs(1));
+                    Task::none()
                 }
+                GeneralMessage::Search(searches) => {
+                    let search = searches.trim();
+                    if search.is_empty() {
+                        self.config.general.search_limit = None;
+                        return Task::none();
+                    }
 
-                let Ok(interval) = interval.parse::<u64>() else {
-                    let msg = Message::error(format!("Invalid input: {interval}"));
-                    return Task::done(msg);
-                };
+                    let Ok(searches) = searches.parse::<i32>() else {
+                        let msg = Message::error(format!("Invalid input: {searches}"));
+                        return Task::done(msg);
+                    };
 
-                self.config.general.fetching_interval = Duration::from_secs(interval);
+                    self.config.general.search_limit = Some(searches);
 
-                Task::none()
-            }
-            SettingsMessage::Recents(recents) => {
-                let recents = recents.trim();
-                if recents.is_empty() {
-                    self.config.general.recents_limit = None;
-                    return Task::none();
+                    Task::none()
                 }
-
-                let Ok(recents) = recents.parse::<i32>() else {
-                    let msg = Message::error(format!("Invalid input: {recents}"));
-                    return Task::done(msg);
-                };
-
-                self.config.general.recents_limit = Some(recents);
-
-                Task::none()
-            }
-            SettingsMessage::Search(searches) => {
-                let search = searches.trim();
-                if search.is_empty() {
-                    self.config.general.search_limit = None;
-                    return Task::none();
+                GeneralMessage::IncrSearch => {
+                    let value = self.config.general.search_limit.unwrap_or(0) + 1;
+                    self.config.general.search_limit = Some(value);
+                    Task::none()
                 }
-
-                let Ok(searches) = searches.parse::<i32>() else {
-                    let msg = Message::error(format!("Invalid input: {searches}"));
-                    return Task::done(msg);
-                };
-
-                self.config.general.search_limit = Some(searches);
-
-                Task::none()
-            }
-            SettingsMessage::Seek(amt) => {
-                let amt = amt.trim();
-                if amt.is_empty() {
-                    self.config.video.seek_change_amt = 0.0;
-                    return Task::none();
+                GeneralMessage::DecrSearch => {
+                    let value = self.config.general.search_limit.unwrap_or(0) - 1;
+                    self.config.general.search_limit = Some(value.max(-1));
+                    Task::none()
                 }
+                GeneralMessage::Recents(recents) => {
+                    let recents = recents.trim();
+                    if recents.is_empty() {
+                        self.config.general.recents_limit = None;
+                        return Task::none();
+                    }
 
-                let Ok(amt) = amt.parse::<f64>() else {
-                    let msg = Message::error(format!("Invalid input: {amt}"));
-                    return Task::done(msg);
-                };
+                    let Ok(recents) = recents.parse::<i32>() else {
+                        let msg = Message::error(format!("Invalid input: {recents}"));
+                        return Task::done(msg);
+                    };
 
-                self.config.video.seek_change_amt = amt;
+                    self.config.general.recents_limit = Some(recents);
 
-                Task::none()
-            }
-            SettingsMessage::SeekShift(amt) => {
-                let amt = amt.trim();
-                if amt.is_empty() {
-                    self.config.video.seek_shift_change_amt = 0.0;
-                    return Task::none();
+                    Task::none()
                 }
-
-                let Ok(amt) = amt.parse::<f64>() else {
-                    let msg = Message::error(format!("Invalid input: {amt}"));
-                    return Task::done(msg);
-                };
-
-                self.config.video.seek_shift_change_amt = amt;
-
-                Task::none()
-            }
-            SettingsMessage::VolumeAmt(amt) => {
-                let amt = amt.trim();
-                if amt.is_empty() {
-                    self.config.video.volume_change_amt = 0.0;
-                    return Task::none();
+                GeneralMessage::IncrRecents => {
+                    let value = self.config.general.recents_limit.unwrap_or(0) + 1;
+                    self.config.general.recents_limit = Some(value);
+                    Task::none()
                 }
-
-                let Ok(amt) = amt.parse::<f64>() else {
-                    let msg = Message::error(format!("Invalid input: {amt}"));
-                    return Task::done(msg);
-                };
-
-                self.config.video.volume_change_amt = amt.min(1.0);
-
-                Task::none()
-            }
-            SettingsMessage::SpeedAmt(amt) => {
-                let amt = amt.trim();
-                if amt.is_empty() {
-                    self.config.video.speed_change_amt = 0.0;
-                    return Task::none();
+                GeneralMessage::DecrRecents => {
+                    let value = self.config.general.recents_limit.unwrap_or(0) - 1;
+                    self.config.general.recents_limit = Some(value.max(-1));
+                    Task::none()
                 }
-
-                let Ok(amt) = amt.parse::<f64>() else {
-                    let msg = Message::error(format!("Invalid input: {amt}"));
-                    return Task::done(msg);
-                };
-
-                self.config.video.speed_change_amt = amt;
-
-                Task::none()
-            }
-            SettingsMessage::CompletionPoint(amt) => {
-                let amt = amt.trim();
-                if amt.is_empty() {
-                    self.config.video.completion_point = 0.0;
-                    return Task::none();
+            },
+            SettingsMessage::Appearance(asg) => match asg {
+                AppearanceMessage::Theme(theme) => {
+                    self.config.general.theme = theme;
+                    Task::none()
                 }
+                AppearanceMessage::Layout(layout) => {
+                    self.config.general.layout = layout;
 
-                let Ok(amt) = amt.parse::<f64>() else {
-                    let msg = Message::error(format!("Invalid input: {amt}"));
-                    return Task::done(msg);
-                };
-
-                self.config.video.completion_point = amt.min(1.0);
-
-                Task::none()
-            }
-            SettingsMessage::CompletionTime(amt) => {
-                let amt = amt.trim();
-                if amt.is_empty() {
-                    self.config.video.completion_watch_time = 0.0;
-                    return Task::none();
+                    Task::none()
                 }
+            },
+            SettingsMessage::Media(msg) => match msg {
+                MediaMessage::None => Task::none(),
+                MediaMessage::AddFolder => pick_task(),
+                MediaMessage::MovieDepth(depth) => {
+                    let depth = depth.trim();
+                    if depth.is_empty() {
+                        self.config.general.movie_depth = 0;
+                        return Task::none();
+                    }
 
-                let Ok(amt) = amt.parse::<f64>() else {
-                    let msg = Message::error(format!("Invalid input: {amt}"));
-                    return Task::done(msg);
-                };
+                    let Ok(depth) = depth.parse::<u8>() else {
+                        let msg = Message::error(format!("Invalid input: {depth}"));
+                        return Task::done(msg);
+                    };
 
-                self.config.video.completion_watch_time = amt.min(1.0);
-
-                Task::none()
-            }
-            SettingsMessage::ThumbnailInterval(interval) => {
-                let interval = interval.trim();
-                if interval.is_empty() {
-                    self.config.video.thumbnail_interval = 0;
-                    return Task::none();
+                    self.config.general.movie_depth = depth;
+                    Task::none()
                 }
+                MediaMessage::IncrMovieDepth => {
+                    self.config.general.movie_depth =
+                        self.config.general.movie_depth.saturating_add(1);
+                    Task::none()
+                }
+                MediaMessage::DecrMovieDepth => {
+                    self.config.general.movie_depth =
+                        self.config.general.movie_depth.saturating_sub(1);
+                    Task::none()
+                }
+                MediaMessage::ToggleDirShow => {
+                    self.directories_shown = !self.directories_shown;
+                    Task::none()
+                }
+                MediaMessage::ToggleDirectory(id) => {
+                    if let Some((_, new, operation)) =
+                        self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
+                    {
+                        *operation = match operation {
+                            Operation::Update => Operation::Delete,
+                            Operation::Insert => Operation::Delete,
+                            Operation::Delete if new.is_none() => Operation::Insert,
+                            Operation::Delete => Operation::Update,
+                        };
+                    }
+                    Task::none()
+                }
+                MediaMessage::ToggleDirKind(id) => {
+                    if let Some((dir, new, _)) =
+                        self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
+                    {
+                        dir.media_type = match dir.media_type {
+                            MediaType::Shows => MediaType::Movies,
+                            MediaType::Movies => MediaType::Shows,
+                        };
 
-                let Ok(interval) = interval.parse::<u32>() else {
-                    let msg = Message::error(format!("Invalid input: {interval}"));
-                    return Task::done(msg);
-                };
+                        if let Some(toggled) = new {
+                            *toggled = !*toggled;
+                        }
+                    }
 
-                self.config.video.thumbnail_interval = interval;
+                    Task::none()
+                }
+                MediaMessage::ToggleRestore => {
+                    self.config.general.restore_deleted = !self.config.general.restore_deleted;
+                    Task::none()
+                }
+                MediaMessage::ToggleScanDiscover => {
+                    self.config.general.scan_discoverer = !self.config.general.scan_discoverer;
+                    Task::none()
+                }
+                MediaMessage::ScanDiscoverer(enable) => {
+                    self.config.general.scan_discoverer = enable;
 
-                Task::none()
-            }
-            SettingsMessage::Layout(layout) => {
-                self.config.general.layout = layout;
+                    Task::none()
+                }
+                MediaMessage::RestoreDeleted(enable) => {
+                    self.config.general.restore_deleted = enable;
 
-                Task::none()
-            }
-            SettingsMessage::Theme(theme) => {
-                self.config.general.theme = theme;
-                Task::none()
-            }
-            SettingsMessage::Volume(new) => {
-                self.config.video.volume = new;
-                Task::none()
-            }
-            SettingsMessage::Speed(new) => {
-                self.config.video.speed = new;
-                Task::none()
-            }
+                    Task::none()
+                }
+            },
+            SettingsMessage::Metadata(msg) => match msg {
+                MetadataMessage::Auth(auth) => {
+                    self.config.general.auth_token = auth;
+                    Task::none()
+                }
+                MetadataMessage::Fetch(interval) => {
+                    let interval = interval.trim();
+                    if interval.is_empty() {
+                        self.config.general.fetching_interval = Duration::ZERO;
+                        return Task::none();
+                    }
+
+                    let Ok(interval) = interval.parse::<u64>() else {
+                        let msg = Message::error(format!("Invalid input: {interval}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.general.fetching_interval = Duration::from_secs(interval);
+
+                    Task::none()
+                }
+                MetadataMessage::TMDBRating(enable) => {
+                    self.config.general.tmdb_rating = enable;
+                    Task::none()
+                }
+                MetadataMessage::ToggleTMDBRating => {
+                    self.config.general.tmdb_rating = !self.config.general.tmdb_rating;
+                    Task::none()
+                }
+                MetadataMessage::IncrFetch => {
+                    self.config.general.fetching_interval = self
+                        .config
+                        .general
+                        .fetching_interval
+                        .saturating_add(Duration::from_secs(1));
+                    Task::none()
+                }
+                MetadataMessage::DecrFetch => {
+                    self.config.general.fetching_interval = self
+                        .config
+                        .general
+                        .fetching_interval
+                        .saturating_sub(Duration::from_secs(1));
+                    Task::none()
+                }
+            },
+            SettingsMessage::Playback(psg) => match psg {
+                PlaybackMessage::VolumeAmt(amt) => {
+                    let amt = amt.trim();
+                    if amt.is_empty() {
+                        self.config.video.volume_change_amt = 0.0;
+                        return Task::none();
+                    }
+
+                    let Ok(amt) = amt.parse::<f64>() else {
+                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.volume_change_amt = amt.min(1.0);
+
+                    Task::none()
+                }
+                PlaybackMessage::IncrVolAmt => {
+                    self.config.video.volume_change_amt =
+                        (self.config.video.volume_change_amt + 0.05).min(1.0);
+                    Task::none()
+                }
+                PlaybackMessage::DecrVolAmt => {
+                    self.config.video.volume_change_amt =
+                        (self.config.video.volume_change_amt - 0.05).max(0.0);
+                    Task::none()
+                }
+                PlaybackMessage::SpeedAmt(amt) => {
+                    let amt = amt.trim();
+                    if amt.is_empty() {
+                        self.config.video.speed_change_amt = 0.0;
+                        return Task::none();
+                    }
+
+                    let Ok(amt) = amt.parse::<f64>() else {
+                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.speed_change_amt = amt;
+
+                    Task::none()
+                }
+                PlaybackMessage::IncrSpeedAmt => {
+                    self.config.video.speed_change_amt =
+                        (self.config.video.speed_change_amt + 0.1).min(1.0);
+                    Task::none()
+                }
+                PlaybackMessage::DecrSpeedAmt => {
+                    self.config.video.speed_change_amt =
+                        (self.config.video.speed_change_amt - 0.1).max(0.0);
+                    Task::none()
+                }
+                PlaybackMessage::CompletionPoint(amt) => {
+                    let amt = amt.trim();
+                    if amt.is_empty() {
+                        self.config.video.completion_point = 0.0;
+                        return Task::none();
+                    }
+
+                    let Ok(amt) = amt.parse::<f64>() else {
+                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.completion_point = amt.min(1.0);
+
+                    Task::none()
+                }
+                PlaybackMessage::IncrComplPoint => {
+                    self.config.video.completion_point =
+                        (self.config.video.completion_point + 0.05).min(1.0);
+                    Task::none()
+                }
+                PlaybackMessage::DecrComplPoint => {
+                    self.config.video.completion_point =
+                        (self.config.video.completion_point - 0.05).max(0.0);
+                    Task::none()
+                }
+                PlaybackMessage::CompletionTime(amt) => {
+                    let amt = amt.trim();
+                    if amt.is_empty() {
+                        self.config.video.completion_watch_time = 0.0;
+                        return Task::none();
+                    }
+
+                    let Ok(amt) = amt.parse::<f64>() else {
+                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.completion_watch_time = amt.min(1.0);
+
+                    Task::none()
+                }
+                PlaybackMessage::IncrComplTime => {
+                    self.config.video.completion_watch_time =
+                        (self.config.video.completion_watch_time + 0.05).min(1.0);
+                    Task::none()
+                }
+                PlaybackMessage::DecrComplTime => {
+                    self.config.video.completion_watch_time =
+                        (self.config.video.completion_watch_time - 0.05).max(0.0);
+                    Task::none()
+                }
+                PlaybackMessage::Volume(new) => {
+                    self.config.video.volume = new;
+                    Task::none()
+                }
+                PlaybackMessage::Speed(new) => {
+                    self.config.video.speed = new;
+                    Task::none()
+                }
+                PlaybackMessage::AutoStart(toggle) => {
+                    self.config.video.auto_start = toggle;
+                    Task::none()
+                }
+                PlaybackMessage::ToggleAutoStart => {
+                    self.config.video.auto_start = !self.config.video.auto_start;
+                    Task::none()
+                }
+                PlaybackMessage::AutoNext(toggle) => {
+                    self.config.video.auto_next = toggle;
+                    Task::none()
+                }
+                PlaybackMessage::ToggleAutoNext => {
+                    self.config.video.auto_next = !self.config.video.auto_next;
+                    Task::none()
+                }
+            },
+            SettingsMessage::Seeking(ssg) => match ssg {
+                SeekingMessage::ThumbnailInterval(interval) => {
+                    let interval = interval.trim();
+                    if interval.is_empty() {
+                        self.config.video.thumbnail_interval = 0;
+                        return Task::none();
+                    }
+
+                    let Ok(interval) = interval.parse::<u32>() else {
+                        let msg = Message::error(format!("Invalid input: {interval}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.thumbnail_interval = interval;
+
+                    Task::none()
+                }
+                SeekingMessage::IncrThumbInterval => {
+                    self.config.video.thumbnail_interval =
+                        self.config.video.thumbnail_interval.saturating_add(1);
+                    Task::none()
+                }
+                SeekingMessage::DecrThumbInterval => {
+                    self.config.video.thumbnail_interval =
+                        self.config.video.thumbnail_interval.saturating_sub(1);
+                    Task::none()
+                }
+                SeekingMessage::Seek(amt) => {
+                    let amt = amt.trim();
+                    if amt.is_empty() {
+                        self.config.video.seek_change_amt = 0.0;
+                        return Task::none();
+                    }
+
+                    let Ok(amt) = amt.parse::<f64>() else {
+                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.seek_change_amt = amt;
+
+                    Task::none()
+                }
+                SeekingMessage::IncrSeek => {
+                    self.config.video.seek_change_amt += 1.0;
+                    Task::none()
+                }
+                SeekingMessage::DecrSeek => {
+                    self.config.video.seek_change_amt =
+                        (self.config.video.seek_change_amt - 1.0).max(0.0);
+                    Task::none()
+                }
+                SeekingMessage::SeekShift(amt) => {
+                    let amt = amt.trim();
+                    if amt.is_empty() {
+                        self.config.video.seek_shift_change_amt = 0.0;
+                        return Task::none();
+                    }
+
+                    let Ok(amt) = amt.parse::<f64>() else {
+                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.seek_shift_change_amt = amt;
+
+                    Task::none()
+                }
+                SeekingMessage::IncrSeekShift => {
+                    self.config.video.seek_shift_change_amt += 1.0;
+                    Task::none()
+                }
+                SeekingMessage::DecrSeekShift => {
+                    self.config.video.seek_shift_change_amt =
+                        (self.config.video.seek_shift_change_amt - 1.0).max(0.0);
+                    Task::none()
+                }
+            },
             SettingsMessage::VideoFilters(vsg) => match vsg {
                 VideoFilterMessage::Gamma(value) => {
                     self.config.video.filters.gamma = value;
@@ -446,31 +739,60 @@ impl Settings {
                     Task::none()
                 }
             },
-            SettingsMessage::Subtitles(show) => {
-                self.config.video.show_subtitles = show;
-                Task::none()
-            }
-            SettingsMessage::ToggleSubtitles => {
-                self.config.video.show_subtitles = !self.config.video.show_subtitles;
-                Task::none()
-            }
-            SettingsMessage::AutoStart(toggle) => {
-                self.config.video.auto_start = toggle;
-                Task::none()
-            }
-            SettingsMessage::ToggleAutoStart => {
-                self.config.video.auto_start = !self.config.video.auto_start;
-                Task::none()
-            }
-            SettingsMessage::AutoNext(toggle) => {
-                self.config.video.auto_next = toggle;
-                Task::none()
-            }
-            SettingsMessage::ToggleAutoNext => {
-                self.config.video.auto_next = !self.config.video.auto_next;
-                Task::none()
-            }
-            SettingsMessage::AddFolder => pick_task(),
+            SettingsMessage::Subtitles(ssg) => match ssg {
+                SubtitleMessage::Subtitles(show) => {
+                    self.config.video.show_subtitles = show;
+                    Task::none()
+                }
+                SubtitleMessage::ToggleSubtitles => {
+                    self.config.video.show_subtitles = !self.config.video.show_subtitles;
+                    Task::none()
+                }
+                SubtitleMessage::SubSizeIncr => {
+                    self.config.video.subtitles.size =
+                        (self.config.video.subtitles.size + 1).min(60);
+                    Task::none()
+                }
+                SubtitleMessage::SubSizeDecr => {
+                    self.config.video.subtitles.size =
+                        (self.config.video.subtitles.size - 1).max(5);
+                    Task::none()
+                }
+                SubtitleMessage::SubSize(size) => {
+                    let size = size.trim();
+                    if size.is_empty() {
+                        self.config.video.subtitles.size = 5;
+                        return Task::none();
+                    }
+
+                    let Ok(size) = size.parse::<u32>() else {
+                        let msg = Message::error(format!("Invalid input: {size}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.subtitles.size = size.max(5);
+
+                    Task::none()
+                }
+                SubtitleMessage::SubColor(color) => {
+                    if let Some(color) = convert_color_str(&color) {
+                        self.config.video.subtitles.color = color;
+                    };
+
+                    self.text_color = color;
+
+                    Task::none()
+                }
+                SubtitleMessage::SubBackground(color) => {
+                    if let Some(color) = convert_color_str(&color) {
+                        self.config.video.subtitles.background_color = color;
+                    };
+
+                    self.background_color = color;
+
+                    Task::none()
+                }
+            },
             SettingsMessage::FolderSelected(folder) => {
                 let Some(folder) = folder else {
                     return Task::none();
@@ -512,39 +834,11 @@ impl Settings {
                     let (new, _query) = Directory::new(path, kind, true);
 
                     self.directories.push((new, None, Operation::Insert));
+                    self.directories_shown = true;
 
                     self.update_scroll()
                 }
             },
-            SettingsMessage::ToggleDirectory(id) => {
-                if let Some((_, new, operation)) =
-                    self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
-                {
-                    *operation = match operation {
-                        Operation::Update => Operation::Delete,
-                        Operation::Insert => Operation::Delete,
-                        Operation::Delete if new.is_none() => Operation::Insert,
-                        Operation::Delete => Operation::Update,
-                    };
-                }
-                Task::none()
-            }
-            SettingsMessage::ToggleDirKind(id) => {
-                if let Some((dir, new, _)) =
-                    self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
-                {
-                    dir.media_type = match dir.media_type {
-                        MediaType::Shows => MediaType::Movies,
-                        MediaType::Movies => MediaType::Shows,
-                    };
-
-                    if let Some(toggled) = new {
-                        *toggled = !*toggled;
-                    }
-                }
-
-                Task::none()
-            }
             SettingsMessage::ClearAllBindings(action) => {
                 match action {
                     KeyAction::General(Some(action)) => {
@@ -612,33 +906,6 @@ impl Settings {
 
                 Task::done(Message::CaptureKeys(false))
             }
-            SettingsMessage::ToggleScanDiscover => {
-                self.config.general.scan_discoverer = !self.config.general.scan_discoverer;
-                Task::none()
-            }
-            SettingsMessage::ScanDiscoverer(enable) => {
-                self.config.general.scan_discoverer = enable;
-
-                Task::none()
-            }
-            SettingsMessage::ToggleRestore => {
-                self.config.general.restore_deleted = !self.config.general.restore_deleted;
-                Task::none()
-            }
-            SettingsMessage::RestoreDeleted(enable) => {
-                self.config.general.restore_deleted = enable;
-
-                Task::none()
-            }
-            SettingsMessage::ToggleTMDBRating => {
-                self.config.general.tmdb_rating = !self.config.general.tmdb_rating;
-                Task::none()
-            }
-            SettingsMessage::TMDBRating(enable) => {
-                self.config.general.tmdb_rating = enable;
-                Task::none()
-            }
-
             SettingsMessage::OpenLog => {
                 let Some(path) = self.config.log_path() else {
                     return Task::none();
@@ -661,48 +928,6 @@ impl Settings {
                     Ok(_) => Task::none(),
                     Err(error) => Task::done(Message::error(error)),
                 }
-            }
-            SettingsMessage::SubSizeIncr => {
-                self.config.video.subtitles.size = (self.config.video.subtitles.size + 1).min(60);
-                Task::none()
-            }
-            SettingsMessage::SubSizeDecr => {
-                self.config.video.subtitles.size = (self.config.video.subtitles.size - 1).max(5);
-                Task::none()
-            }
-            SettingsMessage::SubSize(size) => {
-                let size = size.trim();
-                if size.is_empty() {
-                    self.config.video.subtitles.size = 5;
-                    return Task::none();
-                }
-
-                let Ok(size) = size.parse::<u32>() else {
-                    let msg = Message::error(format!("Invalid input: {size}"));
-                    return Task::done(msg);
-                };
-
-                self.config.video.subtitles.size = size.max(5);
-
-                Task::none()
-            }
-            SettingsMessage::SubColor(color) => {
-                if let Some(color) = convert_color_str(&color) {
-                    self.config.video.subtitles.color = color;
-                };
-
-                self.text_color = color;
-
-                Task::none()
-            }
-            SettingsMessage::SubBackground(color) => {
-                if let Some(color) = convert_color_str(&color) {
-                    self.config.video.subtitles.background_color = color;
-                };
-
-                self.background_color = color;
-
-                Task::none()
             }
         }
     }
@@ -802,12 +1027,12 @@ impl Settings {
             Page::Keybinds => self.scroll_state.keybinds.id.clone(),
         };
 
-        let top = column!(title, rule::horizontal(1.0), space::vertical().height(10.0));
+        let top = column!(title, horizontal_rule(), space::vertical().height(10.0));
 
         let content = scrollable(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .spacing(8.0)
+            .spacing(24.0)
             .id(scroll)
             .on_scroll(SettingsMessage::Scroll);
 
@@ -835,10 +1060,7 @@ impl Settings {
     }
 
     fn general(&self) -> Element<'_, SettingsMessage> {
-        let width = LABEL_WIDTH;
         let size = TEXT_SIZE;
-        let spacing = 20;
-        let padding = Padding::from([2, 5]);
 
         let GeneralSettings {
             layout,
@@ -854,295 +1076,22 @@ impl Settings {
             tmdb_rating,
         } = &self.config.general;
 
-        let refresh = {
-            let label = label_maker("Refresh Interval: ");
-            let icon = help(
-                "How often to scan for content changes in seconds",
-                size / RATIO,
-            );
+        let general = draw_general(refresh_interval, recents_limit, search_limit)
+            .map(SettingsMessage::General);
 
-            let interval = refresh_interval.as_secs().to_string();
-            let input = text_input("Interval in seconds", &interval)
-                .width(64)
-                .size(size)
-                .padding(padding)
-                .on_input(SettingsMessage::Refresh)
-                .align_x(Horizontal::Right);
+        let appearance = draw_appearance(layout, theme).map(SettingsMessage::Appearance);
 
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
+        let media = draw_media(
+            &self.directories,
+            self.directories_shown,
+            *scan_discoverer,
+            *restore_deleted,
+            *movie_depth,
+        )
+        .map(SettingsMessage::Media);
 
-            row!(label, input)
-                .spacing(spacing)
-                .align_y(Vertical::Center)
-        };
-
-        let fetching_interval = {
-            let label = label_maker("Fetch Interval: ");
-            let icon = help(
-                "How often to scrape TMDB© for new media data in seconds. Note this only takes effect on restart.",
-                size / RATIO,
-            );
-
-            let interval = fetching_interval.as_secs().to_string();
-            let input = text_input("Interval in seconds", &interval)
-                .width(64)
-                .size(size)
-                .padding(padding)
-                .on_input(SettingsMessage::Fetch)
-                .align_x(Horizontal::Right);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            row!(label, input)
-                .spacing(spacing)
-                .align_y(Vertical::Center)
-        };
-
-        let recents_limit = {
-            let label = label_maker("Recents Limit: ");
-            let icon = help("Number of recent items to display", size / RATIO);
-
-            let recents = recents_limit
-                .map(|limit| limit.to_string())
-                .unwrap_or_default();
-            let input = text_input("", &recents)
-                .width(64)
-                .size(size)
-                .padding(padding)
-                .align_x(Horizontal::Right)
-                .on_input(SettingsMessage::Recents);
-
-            let label = row!(label, icon)
-                .spacing(3)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            row!(label, input)
-                .spacing(spacing)
-                .align_y(Vertical::Center)
-        };
-
-        let search_limit = {
-            let label = label_maker("Search Limit: ");
-            let icon = help("Number of search items to display", size / RATIO);
-
-            let searches = search_limit
-                .map(|limit| limit.to_string())
-                .unwrap_or_default();
-            let input = text_input("", &searches)
-                .width(64)
-                .size(size)
-                .padding(padding)
-                .align_x(Horizontal::Right)
-                .on_input(SettingsMessage::Search);
-
-            let label = row!(label, icon)
-                .spacing(3)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            row!(label, input)
-                .spacing(spacing)
-                .align_y(Vertical::Center)
-        };
-
-        let layouts = {
-            let label = label_maker("Layout: ").width(width);
-            let layouts = Layout::ALL.iter().map(|value| {
-                let label = value.str();
-                let content = text(label).size(size);
-                Element::from(
-                    button(content)
-                        .on_press(SettingsMessage::Layout(*value))
-                        .style(move |theme, status| {
-                            let default = if value == layout {
-                                styles::button::subtle(theme, status)
-                            } else {
-                                styles::button::subtlest(theme, status)
-                            };
-
-                            let border = Border::default().width(2.0).rounded(5.0);
-
-                            button::Style { border, ..default }
-                        }),
-                )
-            });
-
-            row!(label)
-                .extend(layouts)
-                .spacing(spacing)
-                .align_y(Vertical::Center)
-        };
-
-        let theme = {
-            let handle = picklist_handle(size);
-
-            let label = label_maker("Theme: ").width(width);
-
-            let theme = pick_list(AppTheme::ALL, Some(*theme), SettingsMessage::Theme)
-                .handle(handle.clone())
-                .padding(padding)
-                .text_size(size);
-
-            row!(label, theme)
-                .spacing(spacing)
-                .align_y(Vertical::Center)
-        };
-
-        let dirs = {
-            let label = label_maker("Media Directories: ").width(width);
-
-            let add = button(
-                row!(
-                    icons::icon(icons::FOLDER_ADD).size(size),
-                    text("Add").size(size)
-                )
-                .spacing(8.0)
-                .align_y(Vertical::Center),
-            )
-            .padding([3, 6])
-            .style(styles::button::subtle)
-            .on_press(SettingsMessage::AddFolder);
-
-            let dirs = column(
-                self.directories
-                    .iter()
-                    .map(|(dir, _, operation)| directory_draw(dir, *operation, size)),
-            )
-            .spacing(12)
-            .push(add);
-
-            row!(label, dirs).spacing(spacing)
-        };
-
-        let discoverer = {
-            let label = label_maker("Enable Discovery Scan: ");
-            let icon = help(
-                "More information is collected on videos but directory scanning is slower as a result ",
-                size,
-            );
-            let label = button(label)
-                .padding(0)
-                .on_press(SettingsMessage::ToggleScanDiscover)
-                .style(styles::button::text);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let toggle = toggler(*scan_discoverer)
-                .on_toggle(SettingsMessage::ScanDiscoverer)
-                .size(size);
-
-            row!(label, toggle)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let restore_deletes = {
-            let label = label_maker("Restore deleted Media: ");
-            let icon = help(
-                "Deleted media is restored when a directory is scanned",
-                size,
-            );
-            let label = button(label)
-                .padding(0)
-                .on_press(SettingsMessage::ToggleRestore)
-                .style(styles::button::text);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let toggle = toggler(*restore_deleted)
-                .on_toggle(SettingsMessage::RestoreDeleted)
-                .size(size);
-
-            row!(label, toggle)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let tmdb_rating = {
-            let label = label_maker("TMDB ratings: ");
-            let icon = help(
-                "Uses TMDB ratings as a default when fetching media metadata",
-                size,
-            );
-            let label = button(label)
-                .padding(0)
-                .on_press(SettingsMessage::ToggleTMDBRating)
-                .style(styles::button::text);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let toggle = toggler(*tmdb_rating)
-                .on_toggle(SettingsMessage::TMDBRating)
-                .size(size);
-
-            row!(label, toggle)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let auth = {
-            let label = label_maker("TMDB API Token: ");
-            let icon = help(
-                "The TMDB© API Read Access Token used for fetching media metadata",
-                size / RATIO,
-            );
-
-            let input = text_input("Token", auth_token)
-                .width(500)
-                .size(size)
-                .padding(padding)
-                .on_input(SettingsMessage::Auth);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            row!(label, input)
-                .spacing(spacing)
-                .align_y(Vertical::Center)
-        };
-
-        let movie_depth = {
-            let label = label_maker("Movie Directory Depth: ");
-            let icon = help(
-                "How often deep movie directory scans for videos should go.",
-                size / RATIO,
-            );
-
-            let depth = movie_depth.to_string();
-            let input = text_input("Depth", &depth)
-                .width(64)
-                .size(size)
-                .padding(padding)
-                .on_input(SettingsMessage::MovieDepth)
-                .align_x(Horizontal::Right);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            row!(label, input)
-                .spacing(spacing)
-                .align_y(Vertical::Center)
-        };
+        let metadata = draw_metadata(auth_token, fetching_interval, *tmdb_rating)
+            .map(SettingsMessage::Metadata);
 
         let open = {
             let config = {
@@ -1152,8 +1101,9 @@ impl Settings {
                 let label = row!(label, icon).spacing(4).align_y(Vertical::Center);
 
                 button(label)
+                    .padding(0)
                     .on_press(SettingsMessage::OpenConfig)
-                    .style(styles::button::text)
+                    .style(styles::button::text_primary)
             };
 
             let log = {
@@ -1163,30 +1113,17 @@ impl Settings {
                 let label = row!(label, icon).spacing(4).align_y(Vertical::Center);
 
                 button(label)
+                    .padding(0)
                     .on_press(SettingsMessage::OpenLog)
-                    .style(styles::button::text)
+                    .style(styles::button::text_primary)
             };
 
-            column!(config, log).spacing(8)
+            column!(config, log).spacing(12)
         };
 
-        let content = column!(
-            refresh,
-            recents_limit,
-            search_limit,
-            layouts,
-            theme,
-            auth,
-            fetching_interval,
-            tmdb_rating,
-            movie_depth,
-            discoverer,
-            restore_deletes,
-            dirs,
-            open,
-        )
-        .spacing(36.0)
-        .height(Length::Fill);
+        let content = column!(general, appearance, media, metadata, open,)
+            .spacing(36.0)
+            .height(Length::Fill);
 
         let content = center_x(content);
 
@@ -1194,11 +1131,6 @@ impl Settings {
     }
 
     fn video(&self) -> Element<'_, SettingsMessage> {
-        let size = TEXT_SIZE;
-        let width = LABEL_WIDTH;
-        let spacing = 20;
-        let padding = Padding::from([2, 5]);
-
         let VideoSettings {
             thumbnail_interval,
             volume,
@@ -1219,288 +1151,36 @@ impl Settings {
             filters,
         } = &self.config.video;
 
-        let thumbnail = {
-            let label = label_maker("Thumbnail Interval: ").width(width);
+        let playback = draw_playback(
+            *volume,
+            *volume_change_amt,
+            *speed,
+            *speed_change_amt,
+            *auto_start,
+            *auto_next,
+            *completion_point,
+            *completion_watch_time,
+        )
+        .map(SettingsMessage::Playback);
 
-            let interval = thumbnail_interval.to_string();
-            let input = text_input("", &interval)
-                .width(64)
-                .size(size)
-                .align_x(Horizontal::Right)
-                .on_input(SettingsMessage::ThumbnailInterval)
-                .padding(padding);
-
-            let secs = text("seconds").size(size / RATIO);
-            let input = row!(input, secs).align_y(Vertical::Center).spacing(4);
-
-            row!(label, input)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let volume = {
-            let label = label_maker("Default Volume: ").width(width);
-
-            let value = text(format!("{volume:.2}")).size(size / RATIO);
-            let volume = slider(0.0..=1.0, *volume, SettingsMessage::Volume)
-                .step(0.05)
-                .shift_step(0.1)
-                .width(125.0);
-
-            let volume = row!(volume, value).align_y(Vertical::Center).spacing(4);
-
-            row!(label, volume)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let volume_amt = {
-            let label = label_maker("Volume amount: ");
-            let icon = help("Amount the volume changes by", size / RATIO);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let amt = format!("{:.02}", volume_change_amt);
-            let input = text_input("", &amt)
-                .width(64)
-                .size(size)
-                .align_x(Horizontal::Right)
-                .padding(padding)
-                .on_input(SettingsMessage::VolumeAmt);
-
-            row!(label, input)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let speed = {
-            let label = label_maker("Default Speed: ").width(width);
-
-            let value = text(format!("{speed:.2}")).size(size / RATIO);
-            let speed = slider(0.5..=2.5, *speed, SettingsMessage::Speed)
-                .step(0.1)
-                .shift_step(0.2)
-                .width(125.0);
-
-            let speed = row!(speed, value).align_y(Vertical::Center).spacing(4);
-
-            row!(label, speed)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let speed_amt = {
-            let label = label_maker("Speed amount: ");
-            let icon = help("Amount the playback speed changes by", size / RATIO);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let amt = format!("{:.02}", speed_change_amt);
-            let input = text_input("", &amt)
-                .width(64)
-                .size(size)
-                .align_x(Horizontal::Right)
-                .padding(padding)
-                .on_input(SettingsMessage::SpeedAmt);
-
-            row!(label, input)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
+        let seeking = draw_seeking(
+            *thumbnail_interval,
+            *seek_change_amt,
+            *seek_shift_change_amt,
+        )
+        .map(SettingsMessage::Seeking);
 
         let filters = draw_filters(filters).map(SettingsMessage::VideoFilters);
 
-        let seek_amt = {
-            let label = label_maker("Seek amount: ");
-            let icon = help("Seconds to skip", size / RATIO);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let amt = format!("{:.02}", seek_change_amt);
-            let input = text_input("", &amt)
-                .width(64)
-                .size(size)
-                .align_x(Horizontal::Right)
-                .padding(padding)
-                .on_input(SettingsMessage::Seek);
-
-            let secs = text("seconds").size(size / RATIO);
-            let input = row!(input, secs).align_y(Vertical::Center).spacing(4);
-
-            row!(label, input)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let seek_amt_shift = {
-            let label = label_maker("Seek Shift amount: ");
-            let icon = help(
-                "Seconds to skip while holding down the Shift key",
-                size / RATIO,
-            );
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let amt = format!("{:.02}", seek_shift_change_amt);
-            let input = text_input("", &amt)
-                .width(64)
-                .size(size)
-                .align_x(Horizontal::Right)
-                .padding(padding)
-                .on_input(SettingsMessage::SeekShift);
-
-            let secs = text("seconds").size(size / RATIO);
-            let input = row!(input, secs).align_y(Vertical::Center).spacing(4);
-
-            row!(label, input)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let subtitles_toggle = {
-            let label = label_maker("Show subtitles: ").width(width);
-            let label = button(label)
-                .padding(0)
-                .on_press(SettingsMessage::ToggleSubtitles)
-                .style(styles::button::text);
-
-            let toggle = toggler(*show_subtitles)
-                .on_toggle(SettingsMessage::Subtitles)
-                .size(size);
-
-            row!(label, toggle)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let auto_start = {
-            let label = label_maker("Auto Start: ");
-            let icon = help("Whether a loaded video automatically starts playing", size);
-            let label = button(label)
-                .padding(0)
-                .on_press(SettingsMessage::ToggleAutoStart)
-                .style(styles::button::text);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let toggle = toggler(*auto_start)
-                .on_toggle(SettingsMessage::AutoStart)
-                .size(size);
-
-            row!(label, toggle)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let auto_next = {
-            let label = label_maker("Autoplay: ");
-            let icon = help(
-                "Whether the next video in a playlist is automatically loaded and played.",
-                size,
-            );
-            let label = button(label)
-                .padding(0)
-                .on_press(SettingsMessage::ToggleAutoNext)
-                .style(styles::button::text);
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let toggle = toggler(*auto_next)
-                .on_toggle(SettingsMessage::AutoNext)
-                .size(size);
-
-            row!(label, toggle)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let completion_point = {
-            let label = label_maker("Completion point: ");
-            let icon = help(
-                "The percentage progress at which a video is considered as 'watched'",
-                size / RATIO,
-            );
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let amt = format!("{:.02}", completion_point);
-            let input = text_input("", &amt)
-                .width(64)
-                .size(size)
-                .align_x(Horizontal::Right)
-                .padding(padding)
-                .on_input(SettingsMessage::CompletionPoint);
-
-            row!(label, input)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let completion_time = {
-            let label = label_maker("Completion Watch time: ");
-            let icon = help(
-                "The percentage watch time at which a video is considered as 'watched'",
-                size / RATIO,
-            );
-
-            let label = row!(label, icon)
-                .spacing(2)
-                .align_y(Vertical::Center)
-                .width(width);
-
-            let amt = format!("{:.02}", completion_watch_time);
-            let input = text_input("", &amt)
-                .width(64)
-                .size(size)
-                .align_x(Horizontal::Right)
-                .padding(padding)
-                .on_input(SettingsMessage::CompletionTime);
-
-            row!(label, input)
-                .align_y(Vertical::Center)
-                .spacing(spacing)
-        };
-
-        let subtitles = subtitle_config(*subtitles, &self.text_color, &self.background_color);
-
-        let content = column!(
-            thumbnail,
-            completion_point,
-            completion_time,
-            volume,
-            volume_amt,
-            speed,
-            speed_amt,
-            filters,
-            seek_amt,
-            seek_amt_shift,
-            subtitles_toggle,
-            auto_start,
-            auto_next,
-            subtitles,
+        let subtitles = draw_subtitles(
+            *show_subtitles,
+            *subtitles,
+            &self.text_color,
+            &self.background_color,
         )
-        .spacing(24);
+        .map(SettingsMessage::Subtitles);
+
+        let content = column!(playback, seeking, filters, subtitles,).spacing(24);
 
         let content = center_x(content);
 
@@ -1508,9 +1188,11 @@ impl Settings {
     }
 
     fn keybinds(&self) -> Element<'_, SettingsMessage> {
+        let spacing = 10.0;
+
         let home = {
             let names = table::column(
-                table_header("Name"),
+                table_header("NAME"),
                 |(action, _): (&HomeAction, &Vec<KeyPress>)| {
                     table_name(action.to_string(), (*action).into())
                 },
@@ -1519,14 +1201,14 @@ impl Settings {
             .align_y(Vertical::Center);
 
             let descriptions = table::column(
-                table_header("Description"),
+                table_header("DESCRIPTION"),
                 |(action, _): (&HomeAction, &Vec<KeyPress>)| table_description(action.descr()),
             )
             .width(Length::Fill)
             .align_y(Vertical::Center);
 
             let keys = table::column(
-                table_header("Keybinding"),
+                table_header("KEYBINDING"),
                 |(_, keys): (&HomeAction, &Vec<KeyPress>)| table_keys(Page::General, keys),
             )
             .width(Length::Fill)
@@ -1534,7 +1216,7 @@ impl Settings {
 
             let table = table([names, descriptions, keys], self.config.keystore.home());
 
-            let title = label_maker("GENERAL");
+            let title = section_label("General");
             let new = {
                 let icon = icons::icon(icons::ADD).size(TEXT_SIZE);
                 let label = label_maker("New");
@@ -1548,12 +1230,12 @@ impl Settings {
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
-            column!(title, table).spacing(4)
+            column!(title, table).spacing(spacing)
         };
 
         let player = {
             let names = table::column(
-                table_header("Name"),
+                table_header("NAME"),
                 |(action, _): (&PlayerAction, &Vec<KeyPress>)| {
                     table_name(action.to_string(), (*action).into())
                 },
@@ -1562,14 +1244,14 @@ impl Settings {
             .align_y(Vertical::Center);
 
             let descriptions = table::column(
-                table_header("Description"),
+                table_header("DESCRIPTION"),
                 |(action, _): (&PlayerAction, &Vec<KeyPress>)| table_description(action.descr()),
             )
             .width(Length::Fill)
             .align_y(Vertical::Center);
 
             let keys = table::column(
-                table_header("Keybinding"),
+                table_header("KEYBINDING"),
                 |(_, keys): (&PlayerAction, &Vec<KeyPress>)| table_keys(Page::Video, keys),
             )
             .width(Length::Fill)
@@ -1577,7 +1259,7 @@ impl Settings {
 
             let table = table([names, descriptions, keys], self.config.keystore.player());
 
-            let title = label_maker("PLAYBACK");
+            let title = section_label("Playback");
             let new = {
                 let icon = icons::icon(icons::ADD).size(TEXT_SIZE);
                 let label = label_maker("New");
@@ -1591,12 +1273,12 @@ impl Settings {
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
-            column!(title, table).spacing(4)
+            column!(title, table).spacing(spacing)
         };
 
         let settings = {
             let names = table::column(
-                table_header("Name"),
+                table_header("NAME"),
                 |(action, _): (&SettingsAction, &Vec<KeyPress>)| {
                     table_name(action.to_string(), (*action).into())
                 },
@@ -1605,14 +1287,14 @@ impl Settings {
             .align_y(Vertical::Center);
 
             let descriptions = table::column(
-                table_header("Description"),
+                table_header("DESCRIPTION"),
                 |(action, _): (&SettingsAction, &Vec<KeyPress>)| table_description(action.descr()),
             )
             .width(Length::Fill)
             .align_y(Vertical::Center);
 
             let keys = table::column(
-                table_header("Keybinding"),
+                table_header("KEYBINDING"),
                 |(_, keys): (&SettingsAction, &Vec<KeyPress>)| table_keys(Page::Keybinds, keys),
             )
             .width(Length::Fill)
@@ -1620,7 +1302,7 @@ impl Settings {
 
             let table = table([names, descriptions, keys], self.config.keystore.settings());
 
-            let title = label_maker("SETTINGS");
+            let title = section_label("Settings");
             let new = {
                 let icon = icons::icon(icons::ADD).size(TEXT_SIZE);
                 let label = label_maker("New");
@@ -1634,7 +1316,7 @@ impl Settings {
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
-            column!(title, table).spacing(4)
+            column!(title, table).spacing(spacing)
         };
 
         let content = column!(home, player, settings)
@@ -1765,17 +1447,21 @@ fn side_button<'a>(
     .into()
 }
 
-fn help<'a>(label: &'a str, size: f32) -> Tooltip<'a, SettingsMessage> {
+fn help<'a, Message: 'a>(label: &'a str) -> Tooltip<'a, Message> {
     use iced::widget::tooltip::Position;
 
-    tooltip(icons::icon(icons::HELP).size(size), label, Position::Right)
+    tooltip(
+        icons::icon(icons::HELP).size(TEXT_SIZE / RATIO),
+        label,
+        Position::Right,
+    )
 }
 
 fn directory_draw<'a>(
     directory: &'a Directory,
     operation: Operation,
     size: f32,
-) -> Element<'a, SettingsMessage> {
+) -> Element<'a, MediaMessage> {
     let icon = if matches!(operation, Operation::Delete) {
         icons::ADD
     } else {
@@ -1784,15 +1470,15 @@ fn directory_draw<'a>(
     let icon = icons::icon(icon).size(size / RATIO);
 
     let icon_btn = button(icon)
-        .padding([3, 6])
-        .on_press(SettingsMessage::ToggleDirectory(directory.id))
+        .padding([6, 6])
+        .on_press(MediaMessage::ToggleDirectory(directory.id))
         .style(styles::button::subtler);
 
     let path = trim_path(Path::new(&directory.path), 5);
     let label = span(path)
         .strikethrough(matches!(operation, Operation::Delete))
         .size(size);
-    let label = rich_text([label]).on_link_click(|_: ()| SettingsMessage::None);
+    let label = rich_text([label]).on_link_click(|_: ()| MediaMessage::None);
 
     let tag = text(directory.media_type.to_string()).size(size / (RATIO * RATIO));
 
@@ -1808,12 +1494,12 @@ fn directory_draw<'a>(
 
             button::Style { border, ..default }
         })
-        .on_press(SettingsMessage::ToggleDirKind(directory.id));
+        .on_press(MediaMessage::ToggleDirKind(directory.id));
 
-    row!(icon_btn, label, tag)
+    row!(tag, label, space::horizontal(), icon_btn)
         .align_y(Vertical::Center)
+        .clip(true)
         .spacing(12)
-        .wrap()
         .into()
 }
 
@@ -1919,7 +1605,7 @@ fn draw_capture_key<'a>(
 
         let (lst, set): (Element<'_, SettingsMessage>, bool) = match action {
             KeyAction::General(selected) => (
-                pick_list(HomeAction::ALL, *selected, |action| {
+                pick_list(HomeAction::VARIANTS, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::General(Some(action)))
                 })
                 .handle(picklist_handle(size))
@@ -1929,7 +1615,7 @@ fn draw_capture_key<'a>(
                 selected.is_some(),
             ),
             KeyAction::Video(selected) => (
-                pick_list(PlayerAction::ALL, *selected, |action| {
+                pick_list(PlayerAction::VARIANTS, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::Video(Some(action)))
                 })
                 .handle(picklist_handle(size))
@@ -1939,7 +1625,7 @@ fn draw_capture_key<'a>(
                 selected.is_some(),
             ),
             KeyAction::Settings(selected) => (
-                pick_list(SettingsAction::ALL, *selected, |action| {
+                pick_list(SettingsAction::VARIANTS, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::Settings(Some(action)))
                 })
                 .handle(picklist_handle(size))
@@ -1973,7 +1659,6 @@ fn draw_capture_key<'a>(
 
 fn label_font() -> Font {
     Font {
-        family: font::Family::Serif,
         weight: font::Weight::Semibold,
         ..Default::default()
     }
@@ -1981,6 +1666,16 @@ fn label_font() -> Font {
 
 fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
     text(label).size(TEXT_SIZE).font(label_font())
+}
+
+fn section_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+    let font = Font {
+        family: font::Family::Serif,
+        weight: font::Weight::Semibold,
+        ..Default::default()
+    };
+
+    text(label).size(TEXT_SIZE * RATIO * RATIO).font(font)
 }
 
 fn table_header<'a>(label: &'a str) -> text::Text<'a> {
@@ -2052,108 +1747,732 @@ fn binding_tooltip<'a>(
     tooltip(content, label, Position::Top).into()
 }
 
-fn subtitle_config<'a>(
+fn draw_subtitles<'a>(
+    show_subtitles: bool,
     subtitles: SubtitleDescription,
     text_color: &'a str,
     background_color: &'a str,
-) -> Element<'a, SettingsMessage> {
-    let size = H7;
-    let input_width = 48.0;
+) -> Element<'a, SubtitleMessage> {
     let color_width = 150.0;
-    let padding = [2, 5];
-    let spacing = 8;
 
-    let label = label_maker("Subtitle Style").size(H6);
-    let dummy = draw_subtitles("An example subtitle", subtitles);
+    let dummy = utils::draw_subtitles("An example subtitle", subtitles);
+
+    let subtitles_toggle = {
+        let label = label_maker("Show subtitles ");
+        let label = button(label)
+            .padding(0)
+            .on_press(SubtitleMessage::ToggleSubtitles)
+            .style(styles::button::text);
+
+        let toggle = toggler(show_subtitles)
+            .on_toggle(SubtitleMessage::Subtitles)
+            .size(TOGGLER_SIZE);
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
 
     let sub_size = {
-        let label = label_maker("Size: ").width(LABEL_WIDTH);
+        let label = label_maker("Size ");
 
         let amt = format!("{}", subtitles.size);
 
-        let actions = {
-            let incr = button(icons::icon(icons::CHEV_UP).size(10))
-                .padding([2, 2])
-                .style(styles::button::subtler)
-                .on_press(SettingsMessage::SubSizeIncr);
-            let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
-                .padding([2, 2])
-                .style(styles::button::subtler)
-                .on_press(SettingsMessage::SubSizeDecr);
-
-            column!(incr, decr).spacing(2.0)
-        };
-
         let input = text_input("", &amt)
-            .width(input_width)
-            .size(size)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
-            .padding(padding)
-            .on_input(SettingsMessage::SubSize);
+            .padding(INPUT_PADDING)
+            .on_input(SubtitleMessage::SubSize);
 
-        let input = row!(input, actions).spacing(4.0).align_y(Vertical::Center);
+        let actions = input_actions(SubtitleMessage::SubSizeIncr, SubtitleMessage::SubSizeDecr);
 
-        row!(label, input)
-            .align_y(Vertical::Center)
-            .spacing(spacing)
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
     let color = {
-        let label = label_maker("Text Color (rgba): ").width(LABEL_WIDTH);
+        let label = label_maker("Text Color (rgba) ");
 
         let input = text_input("", text_color)
             .width(color_width)
-            .size(size)
+            .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
-            .padding(padding)
-            .on_input(SettingsMessage::SubColor);
+            .padding(INPUT_PADDING)
+            .on_input(SubtitleMessage::SubColor);
 
-        row!(label, input)
-            .align_y(Vertical::Center)
-            .spacing(spacing)
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
     let background = {
-        let label = label_maker("Background Color (rgba): ").width(LABEL_WIDTH);
+        let label = label_maker("Background Color (rgba) ");
 
         let input = text_input("", background_color)
             .width(color_width)
-            .size(size)
+            .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
-            .padding(padding)
-            .on_input(SettingsMessage::SubBackground);
+            .padding(INPUT_PADDING)
+            .on_input(SubtitleMessage::SubBackground);
 
-        row!(label, input)
-            .align_y(Vertical::Center)
-            .spacing(spacing)
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
-    let content = column!(sub_size, color, background, dummy).spacing(10.0);
+    let content = column!(
+        subtitles_toggle,
+        horizontal_rule(),
+        sub_size,
+        horizontal_rule(),
+        color,
+        horizontal_rule(),
+        background,
+        horizontal_rule(),
+    )
+    .spacing(10.0);
 
-    column!(label, content).spacing(16).into()
+    let content = column!(content, dummy)
+        .align_x(Horizontal::Center)
+        .spacing(20);
+
+    section("Subtitles", content)
+}
+
+fn section<'a, Message: 'a>(
+    label: &'a str,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let header = section_label(label);
+
+    let content = container(content)
+        .padding(PADDING)
+        .style(styles::container::bw2);
+
+    column!(header, content).spacing(SPACING).into()
+}
+
+fn draw_general<'a>(
+    refresh_interval: &Duration,
+    recents_limit: &Option<i32>,
+    search_limit: &Option<i32>,
+) -> Element<'a, GeneralMessage> {
+    let refresh_interval = {
+        let label = label_maker("Refresh Interval(seconds) ");
+        let icon = help("How often to scan for content changes in seconds");
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let interval = refresh_interval.as_secs().to_string();
+        let input = text_input("Interval in seconds", &interval)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .padding(INPUT_PADDING)
+            .on_input(GeneralMessage::Refresh)
+            .align_x(Horizontal::Right);
+
+        let actions = input_actions(GeneralMessage::IncrRefresh, GeneralMessage::DecrRefresh);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let recents_limit = {
+        let label = label_maker("Recents Limit ");
+        let icon = help("Number of recent media items to display");
+
+        let label = row!(label, icon).spacing(3).align_y(Vertical::Center);
+
+        let recents = recents_limit
+            .map(|limit| limit.to_string())
+            .unwrap_or_default();
+        let input = text_input("", &recents)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .padding(INPUT_PADDING)
+            .align_x(Horizontal::Right)
+            .on_input(GeneralMessage::Recents);
+
+        let actions = input_actions(GeneralMessage::IncrRecents, GeneralMessage::DecrRecents);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let search_limit = {
+        let label = label_maker("Search results limit ");
+        let icon = help("Number of search results to display");
+
+        let label = row!(label, icon).spacing(3).align_y(Vertical::Center);
+
+        let searches = search_limit
+            .map(|limit| limit.to_string())
+            .unwrap_or_default();
+        let input = text_input("", &searches)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .padding(INPUT_PADDING)
+            .align_x(Horizontal::Right)
+            .on_input(GeneralMessage::Search);
+
+        let actions = input_actions(GeneralMessage::IncrSearch, GeneralMessage::DecrSearch);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let content = column!(
+        refresh_interval,
+        horizontal_rule(),
+        recents_limit,
+        horizontal_rule(),
+        search_limit
+    )
+    .spacing(SECTION_SPACING);
+
+    section("General", content)
+}
+
+fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, AppearanceMessage> {
+    let layouts = {
+        let handle = picklist_handle(TEXT_SIZE);
+        let label = label_maker("Content layout ");
+
+        let layouts = pick_list(Layout::VARIANTS, Some(*layout), AppearanceMessage::Layout)
+            .handle(handle.clone())
+            .padding(LIST_PADDING)
+            .text_size(TEXT_SIZE)
+            .style(picklist_style);
+
+        row!(label, space::horizontal(), layouts).align_y(Vertical::Center)
+    };
+
+    let theme = {
+        let handle = picklist_handle(TEXT_SIZE);
+
+        let label = label_maker("Theme ");
+
+        let theme = pick_list(AppTheme::VARIANTS, Some(*theme), AppearanceMessage::Theme)
+            .handle(handle.clone())
+            .padding(LIST_PADDING)
+            .text_size(TEXT_SIZE)
+            .style(picklist_style);
+
+        row!(label, space::horizontal(), theme).align_y(Vertical::Center)
+    };
+
+    let content = column!(layouts, horizontal_rule(), theme,).spacing(SECTION_SPACING);
+
+    section("Appearance", content)
+}
+
+fn draw_media<'a>(
+    directories: &'a [(Directory, Option<bool>, Operation)],
+    directories_shown: bool,
+    scan_discoverer: bool,
+    restore_deleted: bool,
+    movie_depth: u8,
+) -> Element<'a, MediaMessage> {
+    let dirs = {
+        let top = {
+            let label = label_maker("Media Directories");
+
+            let add = button(
+                row!(
+                    icons::icon(icons::FOLDER_ADD).size(TEXT_SIZE),
+                    text("Add Folder").size(TEXT_SIZE)
+                )
+                .spacing(8.0)
+                .align_y(Vertical::Center),
+            )
+            .padding([3, 6])
+            .style(styles::button::text_primary)
+            .on_press(MediaMessage::AddFolder);
+
+            let icon = if directories_shown {
+                icons::CHEV_UP
+            } else {
+                icons::CHEV_DOWN
+            };
+            let icon = icons::icon(icon).size(TEXT_SIZE);
+            let right = row!(add, icon).spacing(6.0).align_y(Vertical::Center);
+
+            let content = row!(label, space::horizontal(), right).align_y(Vertical::Center);
+
+            mouse_area(content)
+                .on_press(MediaMessage::ToggleDirShow)
+                .interaction(iced::mouse::Interaction::Pointer)
+        };
+
+        let dirs: Element<'_, MediaMessage> = if directories_shown && !directories.is_empty() {
+            column(
+                directories
+                    .iter()
+                    .map(|(dir, _, operation)| directory_draw(dir, *operation, TEXT_SIZE)),
+            )
+            .spacing(12)
+            .into()
+        } else {
+            empty()
+        };
+
+        column!(top, space::horizontal(), dirs).spacing(6.0)
+    };
+
+    let discoverer = {
+        let label = label_maker("Video Discovery on Scan ");
+        let icon = help(
+            "Whether more information is collected on videos while scanning directories. Scanning is slower as a result ",
+        );
+        let label = button(label)
+            .padding(0)
+            .on_press(MediaMessage::ToggleScanDiscover)
+            .style(styles::button::text);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let toggle = toggler(scan_discoverer)
+            .on_toggle(MediaMessage::ScanDiscoverer)
+            .size(TOGGLER_SIZE);
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
+    let restore_deletes = {
+        let label = label_maker("Restore deleted media on scan ");
+        let icon = help("Whether deleted media is restored when its directory is scanned");
+
+        let label = button(label)
+            .padding(0)
+            .on_press(MediaMessage::ToggleRestore)
+            .style(styles::button::text);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let toggle = toggler(restore_deleted)
+            .on_toggle(MediaMessage::RestoreDeleted)
+            .size(TOGGLER_SIZE);
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
+    let movie_depth = {
+        let label = label_maker("Movie Directory Depth ");
+        let icon = help("How deep scans for videos in movie directories should be.");
+
+        let depth = movie_depth.to_string();
+        let input = text_input("Depth", &depth)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .padding(INPUT_PADDING)
+            .on_input(MediaMessage::MovieDepth)
+            .align_x(Horizontal::Right);
+
+        let actions = input_actions(MediaMessage::IncrMovieDepth, MediaMessage::DecrMovieDepth);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let content = column!(
+        dirs,
+        horizontal_rule(),
+        movie_depth,
+        horizontal_rule(),
+        discoverer,
+        horizontal_rule(),
+        restore_deletes
+    )
+    .spacing(SECTION_SPACING);
+
+    section("Media & Scanning", content)
+}
+
+fn draw_metadata<'a>(
+    auth_token: &String,
+    fetching_interval: &Duration,
+    tmdb_rating: bool,
+) -> Element<'a, MetadataMessage> {
+    let fetching_interval = {
+        let label = label_maker("TMDB fetch Interval(seconds) ");
+        let icon = help(
+            "How often to scrape TMDB© for new media data in seconds. Note this only takes effect on restart.",
+        );
+
+        let interval = fetching_interval.as_secs().to_string();
+        let input = text_input("Interval in seconds", &interval)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .padding(INPUT_PADDING)
+            .on_input(MetadataMessage::Fetch)
+            .align_x(Horizontal::Right);
+
+        let actions = input_actions(MetadataMessage::IncrFetch, MetadataMessage::DecrFetch);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let tmdb_rating = {
+        let label = label_maker("Use TMDB ratings ");
+        let icon = help("Use TMDB ratings as a default when fetching media metadata");
+        let label = button(label)
+            .padding(0)
+            .on_press(MetadataMessage::ToggleTMDBRating)
+            .style(styles::button::text);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let toggle = toggler(tmdb_rating)
+            .on_toggle(MetadataMessage::TMDBRating)
+            .size(TOGGLER_SIZE);
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
+    let auth = {
+        let label = label_maker("TMDB API Token ");
+        let icon = help("The TMDB© API Read Access Token used for fetching media metadata");
+
+        let input = text_input("Token", auth_token)
+            .width(475)
+            .size(TEXT_SIZE)
+            .padding(INPUT_PADDING)
+            .on_input(MetadataMessage::Auth);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let content = column!(
+        auth,
+        horizontal_rule(),
+        fetching_interval,
+        horizontal_rule(),
+        tmdb_rating,
+    )
+    .spacing(SECTION_SPACING);
+
+    section("Metadata", content)
+}
+
+fn draw_playback<'a>(
+    volume: f64,
+    volume_change_amt: f64,
+    speed: f64,
+    speed_change_amt: f64,
+    auto_start: bool,
+    auto_next: bool,
+    completion_point: f64,
+    completion_watch_time: f64,
+) -> Element<'a, PlaybackMessage> {
+    let volume = {
+        let label = label_maker("Default Volume ");
+
+        let value = text(format!("{volume:.2}")).size(TEXT_SIZE / RATIO);
+        let volume = slider(0.0..=1.0, volume, PlaybackMessage::Volume)
+            .step(0.05)
+            .shift_step(0.1)
+            .width(SLIDER_WIDTH);
+
+        let volume = row!(value, volume)
+            .align_y(Vertical::Center)
+            .spacing(SLIDER_SPACING);
+
+        row!(label, space::horizontal(), volume).align_y(Vertical::Center)
+    };
+
+    let volume_amt = {
+        let label = label_maker("Volume amount ");
+        let icon = help("Amount the volume changes by");
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let amt = format!("{:.02}", volume_change_amt);
+        let input = text_input("", &amt)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .align_x(Horizontal::Right)
+            .padding(INPUT_PADDING)
+            .on_input(PlaybackMessage::VolumeAmt);
+
+        let actions = input_actions(PlaybackMessage::IncrVolAmt, PlaybackMessage::DecrVolAmt);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let speed = {
+        let label = label_maker("Default Speed ");
+
+        let value = text(format!("{speed:.2}")).size(TEXT_SIZE / RATIO);
+        let speed = slider(0.5..=2.5, speed, PlaybackMessage::Speed)
+            .step(0.1)
+            .shift_step(0.2)
+            .width(SLIDER_WIDTH);
+
+        let speed = row!(value, speed)
+            .align_y(Vertical::Center)
+            .spacing(SLIDER_SPACING);
+
+        row!(label, space::horizontal(), speed).align_y(Vertical::Center)
+    };
+
+    let speed_amt = {
+        let label = label_maker("Speed amount ");
+        let icon = help("Amount the playback speed changes by");
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let amt = format!("{:.02}", speed_change_amt);
+        let input = text_input("", &amt)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .align_x(Horizontal::Right)
+            .padding(INPUT_PADDING)
+            .on_input(PlaybackMessage::SpeedAmt);
+
+        let actions = input_actions(PlaybackMessage::IncrSpeedAmt, PlaybackMessage::DecrSpeedAmt);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let auto_start = {
+        let label = label_maker("Auto Start ");
+        let icon = help("Whether a loaded video automatically starts playing");
+        let label = button(label)
+            .padding(0)
+            .on_press(PlaybackMessage::ToggleAutoStart)
+            .style(styles::button::text);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let toggle = toggler(auto_start)
+            .on_toggle(PlaybackMessage::AutoStart)
+            .size(TOGGLER_SIZE);
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
+    let auto_next = {
+        let label = label_maker("Autoplay ");
+        let icon = help("Whether the next video in a playlist is automatically loaded and played.");
+        let label = button(label)
+            .padding(0)
+            .on_press(PlaybackMessage::ToggleAutoNext)
+            .style(styles::button::text);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let toggle = toggler(auto_next)
+            .on_toggle(PlaybackMessage::AutoNext)
+            .size(TOGGLER_SIZE);
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
+    let completion_point = {
+        let label = label_maker("Completion point(%) ");
+        let icon = help("The percentage progress at which a video is considered as 'watched'");
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let amt = format!("{:.02}", completion_point);
+        let input = text_input("", &amt)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .align_x(Horizontal::Right)
+            .padding(INPUT_PADDING)
+            .on_input(PlaybackMessage::CompletionPoint);
+
+        let actions = input_actions(
+            PlaybackMessage::IncrComplPoint,
+            PlaybackMessage::DecrComplPoint,
+        );
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let completion_time = {
+        let label = label_maker("Completion Watch time(%) ");
+        let icon = help("The percentage watch time at which a video is considered as 'watched'");
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let amt = format!("{:.02}", completion_watch_time);
+        let input = text_input("", &amt)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .align_x(Horizontal::Right)
+            .padding(INPUT_PADDING)
+            .on_input(PlaybackMessage::CompletionTime);
+
+        let actions = input_actions(
+            PlaybackMessage::IncrComplTime,
+            PlaybackMessage::DecrComplTime,
+        );
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let content = column!(
+        auto_start,
+        horizontal_rule(),
+        auto_next,
+        horizontal_rule(),
+        volume,
+        horizontal_rule(),
+        volume_amt,
+        horizontal_rule(),
+        speed,
+        horizontal_rule(),
+        speed_amt,
+        horizontal_rule(),
+        completion_point,
+        horizontal_rule(),
+        completion_time,
+    )
+    .spacing(SECTION_SPACING);
+
+    section("Playback", content)
+}
+
+fn draw_seeking<'a>(
+    thumbnail_interval: u32,
+    seek_change_amt: f64,
+    seek_shift_change_amt: f64,
+) -> Element<'a, SeekingMessage> {
+    let thumbnail = {
+        let label = label_maker("Thumbnail Interval(seconds) ");
+
+        let interval = thumbnail_interval.to_string();
+        let input = text_input("", &interval)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .align_x(Horizontal::Right)
+            .on_input(SeekingMessage::ThumbnailInterval)
+            .padding(INPUT_PADDING);
+
+        let actions = input_actions(
+            SeekingMessage::IncrThumbInterval,
+            SeekingMessage::DecrThumbInterval,
+        );
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let seek_amt = {
+        let label = label_maker("Seek amount(seconds) ");
+        let icon = help("Seconds to skip");
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let amt = format!("{:.02}", seek_change_amt);
+        let input = text_input("", &amt)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .align_x(Horizontal::Right)
+            .padding(INPUT_PADDING)
+            .on_input(SeekingMessage::Seek);
+
+        let actions = input_actions(SeekingMessage::IncrSeek, SeekingMessage::DecrSeek);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let seek_amt_shift = {
+        let label = label_maker("Seek Shift amount(seconds) ");
+        let icon = help("Seconds to skip while holding down the Shift key");
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let amt = format!("{:.02}", seek_shift_change_amt);
+        let input = text_input("", &amt)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .align_x(Horizontal::Right)
+            .padding(INPUT_PADDING)
+            .on_input(SeekingMessage::SeekShift);
+
+        let actions = input_actions(SeekingMessage::IncrSeekShift, SeekingMessage::DecrSeekShift);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let content = column!(
+        thumbnail,
+        horizontal_rule(),
+        seek_amt,
+        horizontal_rule(),
+        seek_amt_shift,
+    )
+    .spacing(SECTION_SPACING);
+
+    section("Seeking & Navigation", content)
 }
 
 fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
-    let size = TEXT_SIZE;
-    let width = LABEL_WIDTH;
-    let slider_width = 125;
-
     let gamma = {
-        let label = label_maker("Gamma: ").width(width);
+        let label = label_maker("Gamma ");
 
         let slider = slider(1.0..=3.0, filters.gamma, VideoFilterMessage::Gamma)
             .step(0.05)
             .shift_step(0.1)
-            .width(slider_width);
+            .width(SLIDER_WIDTH);
 
-        let gamma = text(format!("{:.01}", filters.gamma)).size(size);
-        let slider = row!(gamma, slider).spacing(4.0);
+        let gamma = text(format!("{:.01}", filters.gamma)).size(TEXT_SIZE);
+        let slider = row!(gamma, slider)
+            .spacing(SLIDER_SPACING)
+            .align_y(Vertical::Center);
 
-        row!(label, slider).align_y(Vertical::Center)
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
     };
 
     let brightness = {
-        let label = label_maker("Brightness: ").width(width);
+        let label = label_maker("Brightness ");
 
         let slider = slider(
             -1.0..=1.0,
@@ -2162,44 +2481,50 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
         )
         .step(0.05)
         .shift_step(0.1)
-        .width(slider_width);
+        .width(SLIDER_WIDTH);
 
-        let brightness = text(format!("{:.01}", filters.brightness)).size(size);
-        let slider = row!(brightness, slider).spacing(4.0);
+        let brightness = text(format!("{:.01}", filters.brightness)).size(TEXT_SIZE);
+        let slider = row!(brightness, slider)
+            .spacing(SLIDER_SPACING)
+            .align_y(Vertical::Center);
 
-        row!(label, slider).align_y(Vertical::Center)
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
     };
 
     let contrast = {
-        let label = label_maker("Contrast: ").width(width);
+        let label = label_maker("Contrast ");
 
         let slider = slider(0.0..=2.0, filters.contrast, VideoFilterMessage::Contrast)
             .step(0.05)
             .shift_step(0.1)
-            .width(slider_width);
+            .width(SLIDER_WIDTH);
 
-        let contrast = text(format!("{:.01}", filters.contrast)).size(size);
-        let slider = row!(contrast, slider).spacing(4.0);
+        let contrast = text(format!("{:.01}", filters.contrast)).size(TEXT_SIZE);
+        let slider = row!(contrast, slider)
+            .spacing(SLIDER_SPACING)
+            .align_y(Vertical::Center);
 
-        row!(label, slider).align_y(Vertical::Center)
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
     };
 
     let hue = {
-        let label = label_maker("Hue: ").width(width);
+        let label = label_maker("Hue ");
 
         let slider = slider(-1.0..=1.0, filters.hue, VideoFilterMessage::Hue)
             .step(0.05)
             .shift_step(0.1)
-            .width(slider_width);
+            .width(SLIDER_WIDTH);
 
-        let hue = text(format!("{:.01}", filters.hue)).size(size);
-        let slider = row!(hue, slider).spacing(4.0);
+        let hue = text(format!("{:.01}", filters.hue)).size(TEXT_SIZE);
+        let slider = row!(hue, slider)
+            .spacing(SLIDER_SPACING)
+            .align_y(Vertical::Center);
 
-        row!(label, slider).align_y(Vertical::Center)
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
     };
 
     let saturation = {
-        let label = label_maker("Saturation: ").width(width);
+        let label = label_maker("Saturation ");
 
         let slider = slider(
             0.0..=2.0,
@@ -2208,15 +2533,78 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
         )
         .step(0.05)
         .shift_step(0.1)
-        .width(slider_width);
+        .width(SLIDER_WIDTH);
 
-        let saturation = text(format!("{:.01}", filters.saturation)).size(size);
-        let slider = row!(saturation, slider).spacing(4.0);
+        let saturation = text(format!("{:.01}", filters.saturation)).size(TEXT_SIZE);
+        let slider = row!(saturation, slider)
+            .spacing(SLIDER_SPACING)
+            .align_y(Vertical::Center);
 
-        row!(label, slider).align_y(Vertical::Center)
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
     };
 
-    column!(gamma, brightness, contrast, hue, saturation)
-        .spacing(16)
-        .into()
+    let content = column!(
+        gamma,
+        horizontal_rule(),
+        brightness,
+        horizontal_rule(),
+        contrast,
+        horizontal_rule(),
+        hue,
+        horizontal_rule(),
+        saturation,
+    )
+    .spacing(SECTION_SPACING);
+
+    section("Video Quality", content)
+}
+
+fn picklist_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
+    use pick_list::{Status, Style};
+
+    let palette = theme.extended_palette();
+    let pair = palette.background.weakest;
+
+    let active = Style {
+        text_color: pair.text,
+        background: pair.color.into(),
+        handle_color: pair.text,
+        placeholder_color: palette.secondary.base.color,
+        border: Border {
+            radius: 2.0.into(),
+            width: 1.0,
+            color: palette.background.strong.color,
+        },
+    };
+
+    match status {
+        Status::Active => active,
+        Status::Hovered | Status::Opened { .. } => Style {
+            border: Border {
+                color: palette.primary.strong.color,
+                ..active.border
+            },
+            ..active
+        },
+    }
+}
+
+fn horizontal_rule<'a, Message: 'a>() -> Element<'a, Message> {
+    rule::horizontal(1.0).into()
+}
+
+fn input_actions<'a, Message: 'a + Clone>(
+    increase: Message,
+    decrease: Message,
+) -> Element<'a, Message> {
+    let incr = button(icons::icon(icons::CHEV_UP).size(ACTIONS_SIZE))
+        .padding(ACTIONS_PADDING)
+        .style(styles::button::subtler)
+        .on_press(increase);
+    let decr = button(icons::icon(icons::CHEV_DOWN).size(ACTIONS_SIZE))
+        .padding(ACTIONS_PADDING)
+        .style(styles::button::subtler)
+        .on_press(decrease);
+
+    column!(incr, decr).spacing(2.0).into()
 }

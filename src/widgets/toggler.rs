@@ -79,7 +79,7 @@ where
             class: Theme::default(),
             last_status: None,
             easing: Easing::EaseOutQuint,
-            duration: Duration::from_millis(250),
+            duration: Duration::from_millis(500),
         }
     }
 

@@ -1,39 +1,26 @@
 use super::{Action, HomeAction, Layout, PlayerAction, Screen, SettingsAction};
+use crate::variants;
 pub use keys::{KeyModifier, KeyPress, KeyStore};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};
 pub use subtitles::{SubtitleDescription, SubtitleFont};
 
+variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
-pub enum AppTheme {
-    Light,
-    Dark,
-    SolarizedLight,
-    Nord,
-    GruvboxLight,
-    GruvboxDark,
-    CatppuccinLatte,
-    KanagawaWave,
-    #[default]
-    TokyoNight,
-    TokyoNightLight,
-    Moonfly,
-}
-
-impl AppTheme {
-    pub const ALL: [Self; 11] = [
-        AppTheme::Light,
-        AppTheme::Dark,
-        AppTheme::SolarizedLight,
-        AppTheme::Nord,
-        AppTheme::GruvboxLight,
-        AppTheme::GruvboxDark,
-        AppTheme::CatppuccinLatte,
-        AppTheme::KanagawaWave,
-        AppTheme::TokyoNight,
-        AppTheme::TokyoNightLight,
-        AppTheme::Moonfly,
-    ];
+    pub enum AppTheme {
+        Light,
+        Dark,
+        SolarizedLight,
+        Nord,
+        GruvboxLight,
+        GruvboxDark,
+        CatppuccinLatte,
+        KanagawaWave,
+        #[default]
+        TokyoNight,
+        TokyoNightLight,
+        Moonfly,
+    }
 }
 
 impl From<AppTheme> for iced::Theme {
