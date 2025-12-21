@@ -1771,7 +1771,6 @@ impl Manager {
 
         let progress = (progress * 1000.0).round() / 1000.0;
         let progress = progress.clamp(0.0, 1.0);
-        let progress = if progress >= 0.99 { 0.0 } else { progress };
         player.item.progress = progress as f32;
         player.item.watch_count = watch_count;
         player.item.duration = player.duration as u64;
@@ -1829,7 +1828,7 @@ fn load_video<Message: 'static + MaybeSend>(
             // };
             //
 
-            let progress = if item.progress >= 1.0 {
+            let progress = if item.progress >= 0.98 {
                 0.0
             } else {
                 item.progress
@@ -2303,7 +2302,7 @@ fn draw_config<'a>(
                     .width(slider_width);
 
                 let gamma = text(format!("{:.01}", config.filters.gamma)).size(size);
-                let slider = row!(gamma, slider).spacing(4.0);
+                let slider = row!(gamma, slider).spacing(4.0).align_y(Vertical::Center);
 
                 row!(label, space::horizontal(), slider).align_y(Vertical::Center)
             };
@@ -2321,7 +2320,9 @@ fn draw_config<'a>(
                 .width(slider_width);
 
                 let brightness = text(format!("{:.01}", config.filters.brightness)).size(size);
-                let slider = row!(brightness, slider).spacing(4.0);
+                let slider = row!(brightness, slider)
+                    .spacing(4.0)
+                    .align_y(Vertical::Center);
 
                 row!(label, space::horizontal(), slider).align_y(Vertical::Center)
             };
@@ -2335,7 +2336,9 @@ fn draw_config<'a>(
                     .width(slider_width);
 
                 let contrast = text(format!("{:.01}", config.filters.contrast)).size(size);
-                let slider = row!(contrast, slider).spacing(4.0);
+                let slider = row!(contrast, slider)
+                    .spacing(4.0)
+                    .align_y(Vertical::Center);
 
                 row!(label, space::horizontal(), slider).align_y(Vertical::Center)
             };
@@ -2349,7 +2352,7 @@ fn draw_config<'a>(
                     .width(slider_width);
 
                 let hue = text(format!("{:.01}", config.filters.hue)).size(size);
-                let slider = row!(hue, slider).spacing(4.0);
+                let slider = row!(hue, slider).spacing(4.0).align_y(Vertical::Center);
 
                 row!(label, space::horizontal(), slider).align_y(Vertical::Center)
             };
@@ -2367,7 +2370,9 @@ fn draw_config<'a>(
                 .width(slider_width);
 
                 let saturation = text(format!("{:.01}", config.filters.saturation)).size(size);
-                let slider = row!(saturation, slider).spacing(4.0);
+                let slider = row!(saturation, slider)
+                    .spacing(4.0)
+                    .align_y(Vertical::Center);
 
                 row!(label, space::horizontal(), slider).align_y(Vertical::Center)
             };
