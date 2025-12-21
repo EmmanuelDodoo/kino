@@ -176,7 +176,7 @@ pub fn progress<'a, T: Media, Message: 'a>(
             } else {
                 text::Style {
                     color: if primary {
-                        Some(theme.extended_palette().primary.weak.color)
+                        Some(theme.extended_palette().primary.strong.text)
                     } else {
                         None
                     },
@@ -191,7 +191,7 @@ pub fn progress<'a, T: Media, Message: 'a>(
         } else {
             text::Style {
                 color: if primary {
-                    Some(theme.extended_palette().primary.weak.color)
+                    Some(theme.extended_palette().primary.strong.text)
                 } else {
                     None
                 },
@@ -559,7 +559,7 @@ impl<T: Media> Thumbnail<T> {
                 text::Style { color: sample }
             } else {
                 text::Style {
-                    color: Some(theme.extended_palette().primary.weak.color),
+                    color: Some(theme.extended_palette().primary.strong.text),
                 }
             }
         };
