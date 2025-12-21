@@ -69,11 +69,9 @@ impl Movies {
     fn grid<'a>(
         &self,
         now: Instant,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.card(
                 now,
                 MoviesMessage::Add,
@@ -102,11 +100,9 @@ impl Movies {
     fn list<'a>(
         &self,
         now: Instant,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.list(
                 now,
                 MoviesMessage::Add,
@@ -132,11 +128,9 @@ impl Movies {
 
     fn compact<'a>(
         &self,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.compact(
                 MoviesMessage::Add,
                 MoviesMessage::Details,
@@ -160,15 +154,13 @@ impl Movies {
     pub fn view<'a>(
         &self,
         now: Instant,
-        filters: Filter,
-        sort: Sort,
         layout: Layout,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
         match layout {
-            Layout::Grid => self.grid(now, &filters, &sort, thumbnails),
-            Layout::List => self.list(now, &filters, &sort, thumbnails),
-            Layout::Compact => self.compact(&filters, &sort, thumbnails),
+            Layout::Grid => self.grid(now, thumbnails),
+            Layout::List => self.list(now, thumbnails),
+            Layout::Compact => self.compact(thumbnails),
         }
     }
 

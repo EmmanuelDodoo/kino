@@ -112,7 +112,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query} NULLS LAST"))
+            .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -166,7 +166,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query} NULLS LAST"))
+            .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -198,7 +198,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(Some("season"))
-            .map(|query| format!("ORDER BY {query} NULLS LAST"))
+            .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -262,7 +262,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query} NULLS LAST"))
+            .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -326,7 +326,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query} NULLS LAST"))
+            .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
         let sql =
@@ -359,7 +359,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(Some("episode_comment"))
-            .map(|query| format!("ORDER BY {query} NULLS LAST"))
+            .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -411,7 +411,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(None)
-            .map(|query| format!("ORDER BY {query} NULLS LAST"))
+            .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
         let sql =
@@ -444,7 +444,7 @@ impl Database {
             .unwrap_or_default();
         let sort = sort
             .query(Some("movie_comment"))
-            .map(|query| format!("ORDER BY {query} NULLS LAST"))
+            .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
         let sql = format!(
@@ -485,7 +485,7 @@ impl Database {
         map: fn(&Row<'_>) -> rusqlite::Result<T>,
     ) -> rusqlite::Result<Vec<T>> {
         let sql = format!(
-            "{} WHERE NOT removed ORDER BY {} NULLS LAST",
+            "{} WHERE NOT removed ORDER BY {}",
             Self::COLLECTION_QUERY,
             sort.query()
         );
@@ -513,7 +513,7 @@ impl Database {
         let vars = repeat(collections.len());
 
         let sql = format!(
-            "SELECT * FROM collection WHERE collection.id IN ({vars}) ORDER BY {} NULLS LAST LIMIT {limit} OFFSET {offset}",
+            "SELECT * FROM collection WHERE collection.id IN ({vars}) ORDER BY {} LIMIT {limit} OFFSET {offset}",
             sort.query()
         );
 
@@ -580,7 +580,7 @@ impl Database {
                 .unwrap_or_default();
             let sort = sort
                 .query(Some("movie"))
-                .map(|query| format!("ORDER BY {query} NULLS LAST"))
+                .map(|query| format!("ORDER BY {query}"))
                 .unwrap_or_default();
             let sql = format!(
                 "{} WHERE NOT removed AND movie.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
@@ -601,7 +601,7 @@ impl Database {
                 .unwrap_or_default();
             let sort = sort
                 .query(Some("tv_show"))
-                .map(|query| format!("ORDER BY {query} NULLS LAST"))
+                .map(|query| format!("ORDER BY {query}"))
                 .unwrap_or_default();
 
             let vars = repeat(shows.len());
@@ -624,7 +624,7 @@ impl Database {
                 .unwrap_or_default();
             let sort = sort
                 .query(Some("season"))
-                .map(|query| format!("ORDER BY {query} NULLS LAST"))
+                .map(|query| format!("ORDER BY {query}"))
                 .unwrap_or_default();
 
             let vars = repeat(seasons.len());
@@ -647,7 +647,7 @@ impl Database {
                 .unwrap_or_default();
             let sort = sort
                 .query(None)
-                .map(|query| format!("ORDER BY {query} NULLS LAST"))
+                .map(|query| format!("ORDER BY {query}"))
                 .unwrap_or_default();
 
             let vars = repeat(episodes.len());

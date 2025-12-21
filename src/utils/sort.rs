@@ -65,7 +65,7 @@ impl Sort {
                 SortKind::Comments => "comment_count",
             };
 
-            format!("{prefix}{name} {order}")
+            format!("{prefix}{name} {order} NULLS LAST")
         };
 
         let sorts = self
@@ -76,7 +76,7 @@ impl Sort {
         Some(sorts.join(", "))
     }
 
-    pub fn sort<T: Media>(&self, x: &T, y: &T) -> std::cmp::Ordering {
+    fn _sort<T: Media>(&self, x: &T, y: &T) -> std::cmp::Ordering {
         let sorts = self.prepare();
 
         for (kind, asc) in sorts {

@@ -130,8 +130,6 @@ impl CollectionPage {
     pub fn view<'a>(
         &'a self,
         now: Instant,
-        filters: Filter,
-        sort: Sort,
         layout: Layout,
         collection: &'a CollectionThumbnail,
         movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
@@ -141,9 +139,9 @@ impl CollectionPage {
     ) -> Element<'a, CollectionMessage> {
         let id = self.id;
         let content = match layout {
-            Layout::List => self.list(now, &filters, &sort, movies, shows, seasons, episodes),
-            Layout::Grid => self.grid(now, &filters, &sort, movies, shows, seasons, episodes),
-            Layout::Compact => self.compact(&filters, &sort, movies, shows, seasons, episodes),
+            Layout::List => self.list(now, movies, shows, seasons, episodes),
+            Layout::Grid => self.grid(now, movies, shows, seasons, episodes),
+            Layout::Compact => self.compact(movies, shows, seasons, episodes),
         };
 
         let content = scrollable(content)
@@ -282,8 +280,6 @@ impl CollectionPage {
     fn list<'a>(
         &self,
         now: Instant,
-        filters: &Filter,
-        sort: &Sort,
         mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
@@ -302,7 +298,6 @@ impl CollectionPage {
         } else {
             let movies = {
                 let label = label("Movies");
-                let movies = filter_sort(movies, filters, sort);
 
                 let movies: Element<'_, CollectionMessage> = {
                     let content = movies.map(|thumbnail| {
@@ -330,7 +325,6 @@ impl CollectionPage {
         } else {
             let shows = {
                 let label = label("Shows");
-                let shows = filter_sort(shows, filters, sort);
 
                 let shows: Element<'_, CollectionMessage> = {
                     let content = shows.map(|thumbnail| {
@@ -357,7 +351,6 @@ impl CollectionPage {
         } else {
             let seasons = {
                 let label = label("Seasons");
-                let seasons = filter_sort(seasons, filters, sort);
 
                 let seasons: Element<'_, CollectionMessage> = {
                     let content = seasons.map(|thumbnail| {
@@ -384,7 +377,6 @@ impl CollectionPage {
         } else {
             let episodes = {
                 let label = label("Episodes");
-                let episodes = filter_sort(episodes, filters, sort);
 
                 let episodes: Element<'_, CollectionMessage> = {
                     let content = episodes.map(|thumbnail| {
@@ -412,8 +404,6 @@ impl CollectionPage {
 
     fn compact<'a>(
         &self,
-        filters: &Filter,
-        sort: &Sort,
         mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
@@ -432,7 +422,6 @@ impl CollectionPage {
         } else {
             let movies = {
                 let label = label("Movies");
-                let movies = filter_sort(movies, filters, sort);
 
                 let movies: Element<'_, CollectionMessage> = {
                     let content = movies.map(|thumbnail| {
@@ -457,7 +446,6 @@ impl CollectionPage {
         } else {
             let shows = {
                 let label = label("Shows");
-                let shows = filter_sort(shows, filters, sort);
 
                 let shows: Element<'_, CollectionMessage> = {
                     let content = shows.map(|thumbnail| {
@@ -481,7 +469,6 @@ impl CollectionPage {
         } else {
             let seasons = {
                 let label = label("Seasons");
-                let seasons = filter_sort(seasons, filters, sort);
 
                 let seasons: Element<'_, CollectionMessage> = {
                     let content = seasons.map(|thumbnail| {
@@ -505,7 +492,6 @@ impl CollectionPage {
         } else {
             let episodes = {
                 let label = label("Episodes");
-                let episodes = filter_sort(episodes, filters, sort);
 
                 let episodes: Element<'_, CollectionMessage> = {
                     let content = episodes.map(|thumbnail| {
@@ -531,8 +517,6 @@ impl CollectionPage {
     fn grid<'a>(
         &self,
         now: Instant,
-        filters: &Filter,
-        sort: &Sort,
         mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
@@ -552,7 +536,6 @@ impl CollectionPage {
         } else {
             let movies = {
                 let label = label("Movies");
-                let movies = filter_sort(movies, filters, sort);
 
                 let movies = movies.map(|thumbnail| {
                     thumbnail.card(
@@ -579,7 +562,6 @@ impl CollectionPage {
         } else {
             let shows = {
                 let label = label("Shows");
-                let shows = filter_sort(shows, filters, sort);
 
                 let shows = shows.map(|show| {
                     show.card(
@@ -607,7 +589,6 @@ impl CollectionPage {
         } else {
             let seasons = {
                 let label = label("Seasons");
-                let seasons = filter_sort(seasons, filters, sort);
 
                 let seasons = seasons.map(|season| {
                     season.card(
@@ -635,7 +616,6 @@ impl CollectionPage {
         } else {
             let episodes = {
                 let label = label("Episodes");
-                let episodes = filter_sort(episodes, filters, sort);
 
                 let episodes = episodes.map(|episode| {
                     episode.card(

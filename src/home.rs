@@ -51,9 +51,7 @@ use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind};
 use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
-use shared::{
-    CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, SearchView, Thumbnail, filter_sort,
-};
+use shared::{CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, SearchView, Thumbnail};
 use shows::{TvShows, TvShowsMessage};
 
 const SIDE_ICON_SPACING: f32 = 8.0;
@@ -1419,7 +1417,7 @@ impl Home {
             let label = text("Recent Movies").size(H4);
             let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
-            let movies = filter_sort(movies.iter(), &self.filters, &self.sort);
+            let movies = movies.iter();
 
             let movies: Element<'_, HomeMessage> = match self.layout {
                 Layout::Grid => {
@@ -1473,7 +1471,7 @@ impl Home {
             let label = text("Recent Shows").size(H4);
             let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
-            let shows = filter_sort(shows.iter(), &self.filters, &self.sort);
+            let shows = shows.iter();
 
             let shows: Element<'_, HomeMessage> = match self.layout {
                 Layout::Grid => {
@@ -2016,10 +2014,10 @@ impl Home {
             (State::Loading(animation), _) => center(loading_svg(animation, now)).into(),
             (State::Recent { shows, movies }, None) => self.recents(now, movies, shows),
             (State::Shows(shows), Some(Page::Shows(page))) => page
-                .view(now, self.filters, self.sort, self.layout, shows.iter())
+                .view(now, self.layout, shows.iter())
                 .map(HomeMessage::Shows),
             (State::Movies(movies), Some(Page::Movies(page))) => page
-                .view(now, self.filters, self.sort, self.layout, movies.iter())
+                .view(now, self.layout, movies.iter())
                 .map(HomeMessage::Movies),
             (State::Collections(collections), Some(Page::Collections(page))) => {
                 page.view(collections.iter()).map(HomeMessage::Collections)
@@ -2048,8 +2046,6 @@ impl Home {
             ) => page
                 .view(
                     now,
-                    self.filters,
-                    self.sort,
                     self.layout,
                     season,
                     episodes.iter(),
@@ -2064,15 +2060,7 @@ impl Home {
                 },
                 Some(Page::Show { page, .. }),
             ) => page
-                .view(
-                    now,
-                    self.filters,
-                    self.sort,
-                    self.layout,
-                    show,
-                    seasons.iter(),
-                    memberships.iter(),
-                )
+                .view(now, self.layout, show, seasons.iter(), memberships.iter())
                 .map(HomeMessage::ShowPage),
             (
                 State::Collection {
@@ -2088,8 +2076,6 @@ impl Home {
             ) => page
                 .view(
                     now,
-                    self.filters,
-                    self.sort,
                     self.layout,
                     collection,
                     movies.iter().peekable(),

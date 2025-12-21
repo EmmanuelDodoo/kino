@@ -366,7 +366,7 @@ impl Filter {
         Some(query.join(&format!(" {} ", mode)))
     }
 
-    pub fn filter<T: Media>(&self, media: &T) -> bool {
+    fn _filter<T: Media>(&self, media: &T) -> bool {
         // Compiler error when new field is added
         let Filter {
             progress,

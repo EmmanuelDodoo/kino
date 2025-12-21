@@ -250,20 +250,6 @@ pub fn data<'a, Message: 'a>(
         .into()
 }
 
-pub fn filter_sort<'a, T: 'a + Media>(
-    thumbnails: impl Iterator<Item = &'a Thumbnail<T>>,
-    filters: &Filter,
-    sort: &Sort,
-) -> impl Iterator<Item = &'a Thumbnail<T>> {
-    let mut temp = thumbnails
-        .filter(|thumbnail| filters.filter(&thumbnail.media))
-        .collect::<Vec<_>>();
-
-    temp.sort_by(|x, y| sort.sort(&x.media, &y.media));
-
-    temp.into_iter()
-}
-
 pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a, Message> {
     let duration = data("Duration", media.duration_short(), CLOCK);
 

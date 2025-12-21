@@ -152,13 +152,11 @@ impl ShowPage {
     fn list<'a>(
         &self,
         now: Instant,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
     ) -> Element<'a, ShowPageMessage> {
         let show = self.id;
 
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.list(
                 now,
                 move |id| ShowPageMessage {
@@ -206,13 +204,11 @@ impl ShowPage {
 
     fn compact<'a>(
         &self,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
     ) -> Element<'a, ShowPageMessage> {
         let show = self.id;
 
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.compact(
                 move |id| ShowPageMessage {
                     id: show,
@@ -247,13 +243,11 @@ impl ShowPage {
     fn grid<'a>(
         &self,
         now: Instant,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
     ) -> Element<'a, ShowPageMessage> {
         let show = self.id;
 
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.card(
                 now,
                 move |id| ShowPageMessage {
@@ -474,8 +468,6 @@ impl ShowPage {
     pub fn view<'a>(
         &self,
         now: Instant,
-        filters: Filter,
-        sort: Sort,
         layout: Layout,
         show: &'a Thumbnail<Show>,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
@@ -487,9 +479,9 @@ impl ShowPage {
 
             match self.tab {
                 Tab::Items => match layout {
-                    Layout::Grid => self.grid(now, &filters, &sort, thumbnails),
-                    Layout::List => self.list(now, &filters, &sort, thumbnails),
-                    Layout::Compact => self.compact(&filters, &sort, thumbnails),
+                    Layout::Grid => self.grid(now, thumbnails),
+                    Layout::List => self.list(now, thumbnails),
+                    Layout::Compact => self.compact(thumbnails),
                 },
                 Tab::Data => data_tab(&show.media, width),
                 Tab::Comments => {

@@ -75,11 +75,9 @@ impl TvShows {
     fn list<'a>(
         &self,
         now: Instant,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.list(
                 now,
                 TvShowsMessage::Add,
@@ -105,11 +103,9 @@ impl TvShows {
 
     fn compact<'a>(
         &self,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.compact(
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
@@ -133,11 +129,9 @@ impl TvShows {
     fn grid<'a>(
         &self,
         now: Instant,
-        filters: &Filter,
-        sort: &Sort,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = filter_sort(thumbnails, filters, sort).map(|thumbnail| {
+        let content = thumbnails.map(|thumbnail| {
             thumbnail.card(
                 now,
                 TvShowsMessage::Add,
@@ -166,15 +160,13 @@ impl TvShows {
     pub fn view<'a>(
         &self,
         now: Instant,
-        filters: Filter,
-        sort: Sort,
         layout: Layout,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
     ) -> Element<'a, TvShowsMessage> {
         match layout {
-            Layout::Grid => self.grid(now, &filters, &sort, thumbnails),
-            Layout::List => self.list(now, &filters, &sort, thumbnails),
-            Layout::Compact => self.compact(&filters, &sort, thumbnails),
+            Layout::Grid => self.grid(now, thumbnails),
+            Layout::List => self.list(now, thumbnails),
+            Layout::Compact => self.compact(thumbnails),
         }
     }
 }
