@@ -108,6 +108,8 @@ impl BootFn<App, app::Message> for BootMode {
                 let dummies = "dummy.txt";
                 let db = db::Database::open_with_dummies(config.db_path(), dummies)
                     .expect("Failed to open dummy database");
+
+                tracing::info!("Starting up Dummies instance");
                 App::boot(config, db, std::iter::empty(), false)
             }
             Self::Dev => {
@@ -115,6 +117,7 @@ impl BootFn<App, app::Message> for BootMode {
                 let db = db::Database::open_with_schema(config.db_path())
                     .expect("Failed to open dev database");
 
+                tracing::info!("Starting up Dev instance");
                 App::boot(config, db, std::iter::empty(), false)
             }
             Self::Prod => {
@@ -122,6 +125,7 @@ impl BootFn<App, app::Message> for BootMode {
                 let db = db::Database::open_with_schema(config.db_path())
                     .expect("Failed to open Database");
 
+                tracing::info!("Starting up Production instance");
                 App::boot(config, db, errors, true)
             }
         }
@@ -146,7 +150,7 @@ struct Playground {
 
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
-        let fonts = utils::load_fonts().map(Message::FontLoad);
+        let fonts = utils::load_icon_fonts().map(Message::FontLoad);
 
         let now = Instant::now();
 

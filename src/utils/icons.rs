@@ -133,7 +133,8 @@ const LOADING_SVG: &[u8] = "<svg xmlns='http://www.w3.org/2000/svg' width='32' h
 pub static LOADING_SVG_HANDLE: LazyLock<iced::widget::svg::Handle> =
     LazyLock::new(|| iced::widget::svg::Handle::from_memory(LOADING_SVG));
 
-pub fn load_fonts() -> iced::Task<Result<(), font::Error>> {
+pub fn load_icon_fonts() -> iced::Task<Result<(), font::Error>> {
+    tracing::info!("loading icon fonts");
     font::load(ICONS)
 }
 

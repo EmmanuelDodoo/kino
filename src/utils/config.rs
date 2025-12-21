@@ -235,6 +235,8 @@ impl Config {
         use directories::ProjectDirs;
         use std::fs::{create_dir_all, read_to_string};
 
+        tracing::info!("Loading Config");
+
         let mut errors = Vec::with_capacity(3);
 
         let project = ProjectDirs::from("", "", "kino").expect("Cannot create project directory");
@@ -246,6 +248,7 @@ impl Config {
 
         let config_path = config_dir.join(Self::CONFIG_PATH);
 
+        tracing::info!("Reading config contents");
         let config = match read_to_string(config_path).map_err(|error| error.kind()) {
             Ok(config) => config,
             Err(std::io::ErrorKind::NotFound) => {
@@ -273,6 +276,7 @@ impl Config {
         use tracing::{Level, span};
         use tracing_subscriber::EnvFilter;
 
+        tracing::info!("preping config");
         let dir = dir.as_ref();
         let log = dir.join(Self::LOG_FILE);
         self.config_dir = Some(dir.to_path_buf());
@@ -322,6 +326,7 @@ impl Config {
     }
 
     pub fn dev() -> Self {
+        tracing::info!("Loading dev config");
         let new = Self {
             general: GeneralSettings::debug_defaults(),
             video: VideoSettings::defaults(),

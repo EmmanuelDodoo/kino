@@ -7,7 +7,6 @@ use iced::{
 };
 use tokio::sync::mpsc;
 
-use crate::db::{self, Query};
 use crate::error::Error;
 use crate::fetch;
 use crate::home::{Home, HomeMessage, shared};
@@ -21,7 +20,11 @@ use crate::settings::{Settings, SettingsMessage};
 use crate::toast;
 use crate::utils::{
     Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort,
-    filter::FilterMode, filter::SearchFilter, load_fonts,
+    filter::FilterMode, filter::SearchFilter, load_icon_fonts,
+};
+use crate::{
+    db::{self, Query},
+    models::Media,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -163,7 +166,7 @@ impl App {
                 .collect(),
         ));
 
-        let load_font = load_fonts().map(Message::FontLoad);
+        let load_font = load_icon_fonts().map(Message::FontLoad);
         let load_id = window::oldest().map(Message::WindowId);
 
         let (auth_tx, auth_rx) = mpsc::channel(2);
@@ -240,10 +243,12 @@ impl App {
                 Task::done(msg)
             }
             Message::WindowId(window) => {
+                tracing::info!("Window id obtained");
                 self.window = window;
                 Task::none()
             }
             Message::Refresh(refresh, force) => {
+                tracing::info!("Refreshing");
                 if force
                     || refresh.duration_since(self.last_refresh) >= self.config.refresh_interval()
                 {
@@ -257,6 +262,7 @@ impl App {
                 let Some(own) = &self.window else {
                     return Task::none();
                 };
+                tracing::info!("Initiating App Exit sequence");
 
                 if id != *own {
                     return Task::none();
@@ -269,7 +275,10 @@ impl App {
                     Err(error) => stats.chain(Task::done(Message::error(error))),
                 }
             }
-            Message::Exit(id) => window::close::<Message>(id).discard(),
+            Message::Exit(id) => {
+                tracing::info!("Exiting App");
+                window::close::<Message>(id).discard()
+            }
             Message::PushToast(message, status) => {
                 self.push_toast(toast::Toast::new(message, status));
                 Task::none()
@@ -284,6 +293,7 @@ impl App {
                 Task::none()
             }
             Message::CloseToast(idx) => {
+                tracing::debug!("Closing toast {idx}");
                 self.toasts
                     .remove(idx.min(self.toasts.len().saturating_sub(1)));
 
@@ -305,9 +315,11 @@ impl App {
                 settings.update(ssg)
             }
             Message::Query(query) => {
-                // todo
-                let _res = match query.execute(&self.db) {
-                    Ok(suc) => suc,
+                let _todo = match query.execute(&self.db) {
+                    Ok(suc) => {
+                        tracing::info!("Query success {suc:?}");
+                        suc
+                    }
                     Err(error) => {
                         let msg = Message::error(error.error);
                         return Task::done(msg);
@@ -345,7 +357,10 @@ impl App {
                 };
 
                 match query.execute(&self.db) {
-                    Ok(_todo) => self.home.content_refresh(now),
+                    Ok(todo) => {
+                        tracing::info!("Query success {todo:?}");
+                        self.home.content_refresh(now)
+                    }
                     Err(error) => {
                         // todo
                         let msg = Message::error(error.error);
@@ -425,7 +440,10 @@ impl App {
                         .db
                         .get_collections(collection::Sort::View, SimpleCollection::from_row)
                     {
-                        Ok(collection) => collection,
+                        Ok(collections) => {
+                            tracing::info!("Fetched {} Simple Collections", collections.len());
+                            collections
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -439,7 +457,10 @@ impl App {
                 }
                 FetchId::Shows => {
                     let shows = match self.db.get_shows(limit, offset, filter, sort, show_map) {
-                        Ok(shows) => shows,
+                        Ok(shows) => {
+                            tracing::info!("Fetched {} Shows", shows.len());
+                            shows
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -450,7 +471,10 @@ impl App {
                 }
                 FetchId::Movies => {
                     let movies = match self.db.get_movies(limit, offset, filter, sort, movie_map) {
-                        Ok(movies) => movies,
+                        Ok(movies) => {
+                            tracing::info!("Fetched {} Movies", movies.len());
+                            movies
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -461,14 +485,20 @@ impl App {
                 }
                 FetchId::Recents => {
                     let movies = match self.db.get_movies(limit, offset, filter, sort, movie_map) {
-                        Ok(movies) => movies,
+                        Ok(movies) => {
+                            tracing::info!("Fetched {} Recent Movies", movies.len());
+                            movies
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
                         }
                     };
                     let shows = match self.db.get_shows(limit, offset, filter, sort, show_map) {
-                        Ok(shows) => shows,
+                        Ok(shows) => {
+                            tracing::info!("Fetched {} Recent Shows", shows.len());
+                            shows
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -479,7 +509,10 @@ impl App {
                 }
                 FetchId::Show(id) => {
                     let show = match self.db.get_show(id, show_map) {
-                        Ok(show) => show,
+                        Ok(show) => {
+                            tracing::info!("Fetched Show {}", show.media.name());
+                            show
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -490,7 +523,10 @@ impl App {
                         .db
                         .get_show_seasons(id, limit, offset, filter, sort, season_map)
                     {
-                        Ok(seasons) => seasons,
+                        Ok(seasons) => {
+                            tracing::info!("Fetched {} show Seasons", seasons.len());
+                            seasons
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -501,7 +537,10 @@ impl App {
                 }
                 FetchId::Season(id) => {
                     let season = match self.db.get_season(id, season_map) {
-                        Ok(season) => season,
+                        Ok(season) => {
+                            tracing::info!("Fetched season {}", season.media.name());
+                            season
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -516,7 +555,10 @@ impl App {
                         sort,
                         episode_map,
                     ) {
-                        Ok(episodes) => episodes,
+                        Ok(episodes) => {
+                            tracing::info!("Fetched {} season episodes", episodes.len());
+                            episodes
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -527,7 +569,10 @@ impl App {
                 }
                 FetchId::Episode(id) => {
                     let episode = match self.db.get_episode(id, episode_map) {
-                        Ok(episode) => episode,
+                        Ok(episode) => {
+                            tracing::info!("Fetched Episode {}", episode.media.name());
+                            episode
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -538,7 +583,10 @@ impl App {
                 }
                 FetchId::Movie(id) => {
                     let movie = match self.db.get_movie(id, movie_map) {
-                        Ok(movie) => movie,
+                        Ok(movie) => {
+                            tracing::info!("Fetched Movie {}", movie.media.name());
+                            movie
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -553,7 +601,10 @@ impl App {
                         .db
                         .get_collections(collection::Sort::default(), Collection::from_row)
                     {
-                        Ok(collection) => collection,
+                        Ok(collections) => {
+                            tracing::info!("Fetched {} Collections", collections.len());
+                            collections
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -564,7 +615,10 @@ impl App {
                 }
                 FetchId::Collection(id) => {
                     let collection = match self.db.get_collection(id, Collection::from_row) {
-                        Ok(collection) => collection,
+                        Ok(collection) => {
+                            tracing::info!("Fetched Collection {}", collection.name);
+                            collection
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -582,7 +636,10 @@ impl App {
                         season_map,
                         episode_map,
                     ) {
-                        Ok(items) => items,
+                        Ok(items) => {
+                            tracing::info!("Fetched Collection items");
+                            items
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -598,7 +655,10 @@ impl App {
                 };
 
                 let dirs = match self.db.get_directories() {
-                    Ok(dirs) => dirs,
+                    Ok(dirs) => {
+                        tracing::info!("Fetched {} Directories", dirs.len());
+                        dirs
+                    }
                     Err(error) => {
                         let msg = Message::error(error);
                         return Task::done(msg);
@@ -611,12 +671,15 @@ impl App {
             }
             Message::LoadSearch(search, filter) => {
                 let items = match self.db.search(
-                    search,
+                    search.clone(),
                     filter,
                     self.config.search_limit(),
                     shared::SearchView::new,
                 ) {
-                    Ok(items) => items,
+                    Ok(items) => {
+                        tracing::info!("Fetched Search {search} items");
+                        items
+                    }
                     Err(error) => {
                         let msg = Message::error(error);
                         return Task::done(msg);
@@ -627,7 +690,10 @@ impl App {
             }
             Message::FetchMembershipIds(item) => {
                 let memberships = match self.db.get_item_membership_ids(item) {
-                    Ok(memberships) => memberships,
+                    Ok(memberships) => {
+                        tracing::info!("Fetched Item {item:?} memberships ids");
+                        memberships
+                    }
                     Err(error) => {
                         let msg = Message::error(error);
                         return Task::done(msg);
@@ -654,7 +720,10 @@ impl App {
                                 SimpleCollection::from_row,
                             )
                         }) {
-                        Ok(memberships) => memberships,
+                        Ok(memberships) => {
+                            tracing::info!("Fetched Item {item:?} memberships ids");
+                            memberships
+                        }
                         Err(error) => {
                             let msg = Message::error(error);
                             return Task::done(msg);
@@ -679,11 +748,17 @@ impl App {
 
                 match id {
                     PlayId::Movie(id) => match self.db.last_watched_movie(id, now) {
-                        Ok(_) => Task::none(),
+                        Ok(_) => {
+                            tracing::info!("Updated {id:?} last watched");
+                            Task::none()
+                        }
                         Err(error) => Task::done(Message::error(error)),
                     },
                     PlayId::Episode(id) => match self.db.last_watched_episode(id, now) {
-                        Ok(_) => Task::none(),
+                        Ok(_) => {
+                            tracing::info!("Updated {id:?} last watched");
+                            Task::none()
+                        }
                         Err(error) => Task::done(Message::error(error)),
                     },
                 }
@@ -697,7 +772,10 @@ impl App {
                         item.duration,
                         item.subtitle_uri.map(|path| path.display().to_string()),
                     ) {
-                        Ok(_) => Task::none(),
+                        Ok(_) => {
+                            tracing::info!("Updated {id:?} statistics");
+                            Task::none()
+                        }
                         Err(error) => Task::done(Message::error(error)),
                     }
                 }
@@ -709,14 +787,20 @@ impl App {
                         item.duration,
                         item.subtitle_uri.map(|path| path.display().to_string()),
                     ) {
-                        Ok(_) => Task::none(),
+                        Ok(_) => {
+                            tracing::info!("Updated {id:?} statistics");
+                            Task::none()
+                        }
                         Err(error) => Task::done(Message::error(error)),
                     }
                 }
             },
             Message::Random => {
                 let random = match self.db.get_random() {
-                    Ok(random) => random,
+                    Ok(random) => {
+                        tracing::info!("Fetched random media {random:?}");
+                        random
+                    }
                     Err(error) => {
                         let msg = Message::error(error);
                         return Task::done(msg);
@@ -732,6 +816,8 @@ impl App {
                 let Some(settings) = self.settings.take() else {
                     return Task::none();
                 };
+
+                tracing::info!("Saving settings");
 
                 self.home.layout(settings.config.layout());
                 self.home
@@ -758,6 +844,7 @@ impl App {
                 let auth = self.config.auth();
 
                 let auth = if !auth.is_empty() {
+                    tracing::info!("Updating API token");
                     let auth_tx = self.auth_tx.clone();
 
                     Task::perform(async move { auth_tx.send(auth).await }, |_| Message::None)
@@ -766,6 +853,7 @@ impl App {
                 };
 
                 let rating = if prev_rating != new_rating {
+                    tracing::info!("Updating TMDB rating option");
                     let rating_tx = self.rating_tx.clone();
 
                     Task::perform(async move { rating_tx.send(new_rating).await }, |_| {
@@ -809,6 +897,7 @@ impl App {
                 Task::batch([home_task, scan])
             }
             Message::ScanComplete(scanned) => {
+                tracing::info!("Directory scan complete");
                 let last_scan = Local::now();
                 let last_scan = models::datetime_to_sql(&last_scan);
 
@@ -980,22 +1069,24 @@ impl App {
             ItemId::Movie(id) => {
                 let item = self.db.get_movie(id, PlayItem::from_movie)?;
                 if item.path.try_exists()? {
+                    tracing::info!("Movie {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
                 } else {
                     Err(Error::Raw(format!(
                         "{} does not exist",
-                        item.path.to_string_lossy()
+                        item.path.display()
                     )))
                 }
             }
             ItemId::Episode(id) => {
                 let item = self.db.get_episode(id, PlayItem::from_episode)?;
                 if item.path.try_exists()? {
+                    tracing::info!("Episode {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
                 } else {
                     Err(Error::Raw(format!(
                         "{} does not exist",
-                        item.path.to_string_lossy()
+                        item.path.display()
                     )))
                 }
             }
@@ -1062,6 +1153,8 @@ impl App {
         self.screen = Screen::Home;
         let stats = match self.player.take() {
             Some(mut player) => {
+                tracing::info!("Exiting player");
+
                 self.config.video = player.settings;
 
                 player.stats()
