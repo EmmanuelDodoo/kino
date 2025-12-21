@@ -32,7 +32,7 @@ const ACTIONS_PADDING: [f32; 2] = [1.5, 1.5];
 const ACTIONS_SIZE: f32 = 10.0;
 const ACTIONS_SPACING: f32 = 4.0;
 const SECTION_SPACING: f32 = 16.0;
-const SLIDER_WIDTH: f32 = 125.0;
+const SLIDER_WIDTH: f32 = 200.0;
 const SLIDER_SPACING: f32 = 4.0;
 
 #[derive(Debug, Clone, Copy)]
@@ -1216,7 +1216,7 @@ impl Settings {
 
             let table = table([names, descriptions, keys], self.config.keystore.home());
 
-            let title = section_label("General");
+            let title = section_label("GENERAL");
             let new = {
                 let icon = icons::icon(icons::ADD).size(TEXT_SIZE);
                 let label = label_maker("New");
@@ -1259,7 +1259,7 @@ impl Settings {
 
             let table = table([names, descriptions, keys], self.config.keystore.player());
 
-            let title = section_label("Playback");
+            let title = section_label("PLAYBACK");
             let new = {
                 let icon = icons::icon(icons::ADD).size(TEXT_SIZE);
                 let label = label_maker("New");
@@ -1302,7 +1302,7 @@ impl Settings {
 
             let table = table([names, descriptions, keys], self.config.keystore.settings());
 
-            let title = section_label("Settings");
+            let title = section_label("SETTINGS");
             let new = {
                 let icon = icons::icon(icons::ADD).size(TEXT_SIZE);
                 let label = label_maker("New");
