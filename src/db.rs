@@ -108,7 +108,7 @@ impl Database {
 
         let filter = filter
             .query(None)
-            .map(|query| format!("WHERE {query}"))
+            .map(|query| format!("AND {query}"))
             .unwrap_or_default();
         let sort = sort
             .query(None)
@@ -162,7 +162,7 @@ impl Database {
 
         let filter = filter
             .query(None)
-            .map(|query| format!("WHERE {query}"))
+            .map(|query| format!("AND {query}"))
             .unwrap_or_default();
         let sort = sort
             .query(None)
