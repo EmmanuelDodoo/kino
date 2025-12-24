@@ -6,7 +6,7 @@ use image::{
 use iced::Color;
 use iced::widget::image::Handle;
 
-const DEFAULT_POSTER: &[u8] = include_bytes!("default.png");
+const DEFAULT_POSTER: &[u8] = include_bytes!("../../resources/images/default_poster.png");
 
 fn open(path: &str) -> Option<DynamicImage> {
     ImageReader::open(path)

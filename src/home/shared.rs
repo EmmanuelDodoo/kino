@@ -51,29 +51,29 @@ pub fn title<'a, Message: 'a + Clone>(
     on_refetch: Message,
     on_remove: Message,
 ) -> Element<'a, Message> {
-    let icon_size = H7;
-    let title = text(name).size(H4);
+    let icon_size = H6;
+    let title = sized_medium(name, H4);
 
     let rename = icon(RENAME).size(icon_size);
     let rename = button(rename)
         .on_press(on_rename)
         .padding(0)
         .style(styles::button::text);
-    let rename = tooltip(rename, "Rename media", tp::Position::Bottom);
+    let rename = tooltip(rename, "Rename media", tp::Position::Top);
 
     let refetch = icon(REFRESH).size(icon_size);
     let refetch = button(refetch)
         .on_press(on_refetch)
         .padding(0)
         .style(styles::button::text);
-    let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Bottom);
+    let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Top);
 
     let delete = icon(DELETE).size(icon_size);
     let delete = button(delete)
         .on_press(on_remove)
         .padding(0)
         .style(styles::button::text_danger);
-    let delete = tooltip(delete, "Delete media", tp::Position::Bottom);
+    let delete = tooltip(delete, "Delete media", tp::Position::Top);
 
     let icons = row!(rename, refetch, delete)
         .spacing(8.0)
@@ -86,10 +86,7 @@ pub fn title<'a, Message: 'a + Clone>(
 }
 
 pub fn duration<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
-    let duration = text(media.duration_full()).size(H8).font(Font {
-        weight: Weight::Semibold,
-        ..Default::default()
-    });
+    let duration = sized_medium(media.duration_full(), H8);
     let icon = icon(HOURGLASS).size(H8);
 
     row!(icon, duration)
@@ -124,13 +121,7 @@ pub fn ratings<'a, T: Media, Message: 'a>(media: &T, show_text: bool) -> Element
                 .align_y(Vertical::Center);
 
             let ratings = if show_text {
-                let text = text(format!("{rating:.1}"))
-                    .size(H8)
-                    .font(Font {
-                        weight: Weight::Semibold,
-                        ..Default::default()
-                    })
-                    .style(color);
+                let text = sized_medium(format!("{rating:.1}"), H8).style(color);
                 row!(text, ratings)
             } else {
                 row!(ratings)
@@ -161,15 +152,9 @@ pub fn progress<'a, T: Media, Message: 'a>(
     color: Option<iced::Color>,
     primary: bool,
 ) -> Element<'a, Message> {
-    let font = Font {
-        family: Family::Monospace,
-        weight: Weight::Semibold,
-        ..Default::default()
-    };
     let progress = (media.progress() * 1000.0).round() / 10.0;
-    let text = text(format!("{}%", progress))
+    let text = mono_bold(format!("{}%", progress))
         .size(H8)
-        .font(font)
         .style(move |theme: &Theme| {
             if color.is_some() {
                 text::Style { color }
@@ -211,10 +196,7 @@ pub fn add_labelled<'a, T: Media, Message: 'a + Clone>(
 ) -> Element<'a, Message> {
     let icon = icon(BOOKMARK).size(P);
 
-    let label = text("Add to collection").size(H8).font(Font {
-        weight: Weight::Semibold,
-        ..Default::default()
-    });
+    let label = sized_medium("Add to collection", H8);
 
     mouse_area(row!(icon, label).align_y(Vertical::Center).spacing(6.0))
         .interaction(mouse::Interaction::Pointer)
@@ -223,13 +205,10 @@ pub fn add_labelled<'a, T: Media, Message: 'a + Clone>(
 }
 
 pub fn synopsis<'a, T: Media, Message: 'a>(media: &'a T) -> Element<'a, Message> {
-    container(text(media.synopsis()).size(P).font(Font {
-        family: Family::Serif,
-        ..Default::default()
-    }))
-    .clip(true)
-    .max_height(44.0)
-    .into()
+    container(regular(media.synopsis()))
+        .clip(true)
+        .max_height(44.0)
+        .into()
 }
 
 pub fn data<'a, Message: 'a>(
@@ -238,11 +217,11 @@ pub fn data<'a, Message: 'a>(
     unicode: char,
 ) -> Element<'a, Message> {
     let size = H7;
-    let value = text(value).size(size);
+    let value = h7(value);
     let value = row!(icon(unicode).size(size), value)
         .spacing(2.0)
         .align_y(Vertical::Center);
-    let label = text(label).size(size);
+    let label = sized_medium(label, H8);
 
     column!(value, label)
         .align_x(Horizontal::Center)
@@ -312,7 +291,7 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
     let size = P;
     let unicode = Icon::new(collection.icon).unicode();
     let icon = icon(unicode).size(size);
-    let text = container(text(&collection.name).size(size))
+    let text = container(regular(&collection.name))
         .max_height(48.0)
         .max_width(275);
 
@@ -449,10 +428,7 @@ impl<T: Media> Thumbnail<T> {
         on_play: impl Fn(T::Id) -> Message + 'a,
         unique: impl Fn(&T) -> Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let title = text(self.media.name()).height(24.0).size(H5).font(Font {
-            weight: Weight::Semibold,
-            ..Default::default()
-        });
+        let title = sized_medium(self.media.name(), H6).height(24.0);
 
         let ratings = ratings(&self.media, true);
 
@@ -579,16 +555,12 @@ impl<T: Media> Thumbnail<T> {
         };
 
         let details = {
-            let font = Font {
-                weight: Weight::Semibold,
-                ..Default::default()
-            };
-            let title = container(text(self.media.name()).font(font).size(H7))
+            let title = container(medium(self.media.name()))
                 .max_height(20.0)
                 .clip(true);
             let ratings = ratings(&self.media, true);
             let release = {
-                let release = text(self.media.release_year()).size(H8).font(font);
+                let release = sized_medium(self.media.release_year(), H8);
                 let icon = icon(CALENDAR).size(H7);
 
                 row!(icon, release).align_y(Vertical::Center).spacing(3.0)
@@ -602,15 +574,7 @@ impl<T: Media> Thumbnail<T> {
         };
 
         let bottom = {
-            let font = Font {
-                family: Family::Serif,
-                weight: Weight::Semibold,
-                ..Default::default()
-            };
-            let duration = text(self.media.duration_full())
-                .size(H8)
-                .font(font)
-                .style(color);
+            let duration = sized_medium(self.media.duration_full(), H8).style(color);
             row!(space::horizontal(), duration)
                 .align_y(Vertical::Center)
                 .padding(padding)
@@ -693,12 +657,6 @@ impl<T: Media> Thumbnail<T> {
         let width = 56.0;
         let size = H7;
 
-        let font = Font {
-            family: font::Family::Serif,
-            weight: font::Weight::Semibold,
-            ..Default::default()
-        };
-
         let img: Element<'a, Message> = match &self.poster {
             Some(handle) => widget::image(handle)
                 .border_radius(IMAGE_RADIUS)
@@ -715,13 +673,7 @@ impl<T: Media> Thumbnail<T> {
             .padding(0)
             .on_press((on_play)(self.media.id()));
 
-        let name = text(self.media.name())
-            .size(size * RATIO)
-            .font(Font {
-                weight: font::Weight::Semibold,
-                ..Default::default()
-            })
-            .width(Length::Fill);
+        let name = medium(self.media.name()).width(Length::Fill);
 
         let name = container(name)
             .clip(true)
@@ -732,12 +684,12 @@ impl<T: Media> Thumbnail<T> {
 
         let progress = {
             let progress = (self.media.progress() * 1000.0).round() / 10.0;
-            let text = text(format!("{}%", progress)).size(size).font(font);
+            let text = mono_bold(format!("{}%", progress)).size(H7);
 
             container(text).align_y(Vertical::Center).width(40.0)
         };
 
-        let duration = container(text(self.media.duration_short()).size(size).font(font))
+        let duration = container(sized_medium(self.media.duration_short(), H7))
             .width(56.0)
             .height(24.0)
             .align_x(Horizontal::Right)
@@ -747,7 +699,7 @@ impl<T: Media> Thumbnail<T> {
             .media
             .recent_short()
             .unwrap_or(String::from("--:--:--"));
-        let recent = container(text(recent).size(size).font(font))
+        let recent = container(sized_medium(recent, H7))
             .height(24.0)
             .width(100.0)
             .align_x(Horizontal::Right)
@@ -844,11 +796,7 @@ impl CollectionThumbnail {
         let padding = [3, 6];
 
         let name = {
-            let font = Font {
-                weight: Weight::Semibold,
-                ..Default::default()
-            };
-            let title = text(&self.collection.name).size(H7).font(font);
+            let title = medium(&self.collection.name);
 
             container(title)
                 .padding(padding)
@@ -963,16 +911,9 @@ impl SearchView {
         };
 
         let name = {
-            let font = Font {
-                weight: font::Weight::Medium,
-                family: font::Family::Monospace,
-                ..Default::default()
-            };
-
             container(
-                text(&self.item.name)
+                mono_bold(&self.item.name)
                     .size(H6)
-                    .font(font)
                     .style(|theme: &Theme| {
                         let color = theme.extended_palette().background.strong.text;
                         text::Style { color: Some(color) }
@@ -991,12 +932,6 @@ impl SearchView {
 
         let top = {
             let size = H8;
-            let font = Font {
-                family: font::Family::Serif,
-                style: font::Style::Italic,
-                weight: font::Weight::Semibold,
-                ..Default::default()
-            };
 
             let media = {
                 let media = match &self.item.id {
@@ -1006,10 +941,12 @@ impl SearchView {
                     ItemId::Episode(_) => "#episode",
                 };
 
-                text(media).size(size).font(font).style(|theme| {
-                    let color = pair(theme);
-                    text::Style { color: Some(color) }
-                })
+                sized_regular(media, size)
+                    .font(bold_italic_font())
+                    .style(|theme| {
+                        let color = pair(theme);
+                        text::Style { color: Some(color) }
+                    })
             };
 
             let tags = {
@@ -1017,10 +954,12 @@ impl SearchView {
                 let tag_len = self.item.tags.len();
 
                 for (i, tag) in self.item.tags.iter().enumerate() {
-                    let text = text(tag).size(size).font(font).style(|theme| {
-                        let color = pair(theme);
-                        text::Style { color: Some(color) }
-                    });
+                    let text = sized_regular(tag, size)
+                        .font(bold_italic_font())
+                        .style(|theme| {
+                            let color = pair(theme);
+                            text::Style { color: Some(color) }
+                        });
 
                     tags.push(Element::from(text));
 

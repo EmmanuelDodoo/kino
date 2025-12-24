@@ -167,7 +167,7 @@ impl CollectionPage {
         let img = collection.collage();
 
         let header = {
-            let title = container(text(&collection.collection.name).size(H4))
+            let title = container(h4(&collection.collection.name))
                 .clip(true)
                 .max_height(56);
 
@@ -189,7 +189,7 @@ impl CollectionPage {
                 .description
                 .as_deref()
                 .unwrap_or_default();
-            let description = container(text(description))
+            let description = container(regular(description))
                 .clip(true)
                 .max_width(750)
                 .height(Length::Fill);
@@ -286,8 +286,8 @@ impl CollectionPage {
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
     ) -> Element<'a, CollectionMessage> {
         let label = |label: &'a str| -> Element<'a, CollectionMessage> {
-            let label = text(label).size(H4);
-            column!(label, rule::horizontal(2.0)).spacing(4.0).into()
+            let label = h6(label);
+            column!(label, rule::horizontal(1.0)).spacing(4.0).into()
         };
         let collection = self.id;
 
@@ -410,8 +410,8 @@ impl CollectionPage {
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
     ) -> Element<'a, CollectionMessage> {
         let label = |label: &'a str| -> Element<'a, CollectionMessage> {
-            let label = text(label).size(H4);
-            column!(label, rule::horizontal(2.0)).spacing(4.0).into()
+            let label = h6(label);
+            column!(label, rule::horizontal(1.0)).spacing(4.0).into()
         };
         let collection = self.id;
 
@@ -523,8 +523,8 @@ impl CollectionPage {
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
     ) -> Element<'a, CollectionMessage> {
         let label = |label: &'a str| -> Element<'a, CollectionMessage> {
-            let label = text(label).size(H4);
-            column!(label, rule::horizontal(2.0)).spacing(4.0).into()
+            let label = h6(label);
+            column!(label, rule::horizontal(1.0)).spacing(4.0).into()
         };
 
         let collection = self.id;
@@ -657,7 +657,7 @@ fn btn<'a>(
     message: Message,
 ) -> Button<'a, CollectionMessage> {
     button(
-        row!(icon(unicode).size(P), text(label).size(H7))
+        row!(icon(unicode).size(P), sized_medium(label, H7))
             .spacing(10.0)
             .align_y(Vertical::Center),
     )

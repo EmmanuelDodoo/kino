@@ -1281,13 +1281,27 @@ impl Home {
 
     fn side(&self, now: Instant) -> Element<'_, HomeMessage> {
         let header = {
-            let icon = icons::icon(icons::LOGO).size(H2);
-            let text = text("Kino").size(H2);
+            let color = |theme: &Theme| {
+                let color = theme
+                    .extended_palette()
+                    .primary
+                    .strong
+                    .color
+                    .scale_alpha(0.85);
 
-            row!(icon, text)
-                .padding([5, 10])
-                .align_y(Vertical::Center)
-                .spacing(12.0)
+                text::Style { color: Some(color) }
+            };
+
+            // let icon = icons::icon(icons::LOGO).size(H3).style(color);
+            let text = display("kino").style(color);
+
+            container(
+                row!( text)
+                    .padding([5, 10])
+                    .align_y(Vertical::Center)
+                    .spacing(12.0),
+            )
+            // .center_x(Length::Fill)
         };
 
         let collections = self
@@ -1296,14 +1310,14 @@ impl Home {
             .filter_map(|collection| match collection.view {
                 CollectionView::Pinned => {
                     let unicode = Icon::new(collection.icon).unicode();
-                    let content = collection_button(
+                    let content = icon_button(
                         unicode,
                         &collection.name,
-                        view_unicode(collection.view),
                         HomeMessage::Goto(PageKind::Collection(collection.id)),
                         self.current_page()
                             .map(|page| page.is_collection(&collection.id))
                             .unwrap_or_default(),
+                        Some(view_unicode(collection.view)),
                     );
 
                     Some(content)
@@ -1317,6 +1331,7 @@ impl Home {
                         self.current_page()
                             .map(|page| page.is_collection(&collection.id))
                             .unwrap_or_default(),
+                        None,
                     );
 
                     Some(content)
@@ -1329,19 +1344,22 @@ impl Home {
                 icons::HOME,
                 "Home",
                 HomeMessage::Home,
-                self.current_page().is_none()
+                self.current_page().is_none(),
+                None,
             ),
             icon_button(
                 icons::SHOW,
                 "Shows",
                 HomeMessage::Goto(Page::goto_shows()),
-                self.current_page().map(Page::is_shows).unwrap_or_default()
+                self.current_page().map(Page::is_shows).unwrap_or_default(),
+                None,
             ),
             icon_button(
                 icons::MOVIE,
                 "Movies",
                 HomeMessage::Goto(Page::goto_movies()),
                 self.current_page().map(Page::is_movies).unwrap_or_default(),
+                None,
             ),
         )
         .extend(collections)
@@ -1350,6 +1368,7 @@ impl Home {
             "New collection",
             HomeMessage::NewCollection,
             false,
+            None,
         ))
         .spacing(16.0)
         .width(Length::Fill);
@@ -1363,7 +1382,7 @@ impl Home {
                 let svg = loading_svg(scanning, now)
                     .height(size * RATIO)
                     .width(size * RATIO);
-                let label = text("Scanning Directories").size(size);
+                let label = sized_medium("Scanning Directories", H6);
 
                 row!(svg, label)
                     .padding([5, 10])
@@ -1371,7 +1390,13 @@ impl Home {
                     .align_y(Vertical::Center)
                     .into()
             }
-            None => icon_button(icons::SCAN, "Scan Directories", HomeMessage::Scan, false),
+            None => icon_button(
+                icons::SCAN,
+                "Scan Directories",
+                HomeMessage::Scan,
+                false,
+                None,
+            ),
         };
 
         let bottom = column!(
@@ -1382,7 +1407,8 @@ impl Home {
                 HomeMessage::Goto(PageKind::Collections),
                 self.current_page()
                     .map(Page::is_collections)
-                    .unwrap_or_default()
+                    .unwrap_or_default(),
+                None
             ),
             // icon_button(
             //     icons::COMMENT,
@@ -1390,13 +1416,21 @@ impl Home {
             //     HomeMessage::Goto(Page::goto_comments()),
             //     self.current_page()
             //         .map(Page::is_comments)
-            //         .unwrap_or_default()
+            //         .unwrap_or_default(),
+            //         None
             // ),
-            icon_button(icons::SETTINGS, "Settings", HomeMessage::Settings, false)
+            icon_button(
+                icons::SETTINGS,
+                "Settings",
+                HomeMessage::Settings,
+                false,
+                None
+            )
         )
         .spacing(12.0);
 
-        let content = column!(collections, bottom,)
+        let content = column!(collections, rule::horizontal(1.0), bottom,)
+            .spacing(4.0)
             .padding([0, 5])
             .height(Length::Fill);
 
@@ -1414,7 +1448,7 @@ impl Home {
         shows: &'a [Thumbnail<Show>],
     ) -> Element<'a, HomeMessage> {
         let movies = {
-            let label = text("Recent Movies").size(H4);
+            let label = h6("Recent Movies");
             let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
             let movies = movies.iter();
@@ -1468,7 +1502,7 @@ impl Home {
         };
 
         let shows = {
-            let label = text("Recent Shows").size(H4);
+            let label = h6("Recent Shows");
             let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
             let shows = shows.iter();
@@ -1549,6 +1583,8 @@ impl Home {
         let size = H8;
         let padding = Padding::new(2.0).horizontal(5.0);
         let spacing = 2.0;
+        let picklist_font = regular_font();
+        let input_font = mono_font();
 
         let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
         let comp = |icon: char, msg: FilterMessage| {
@@ -1559,7 +1595,7 @@ impl Home {
         };
 
         let progress = {
-            let text = text("Progress:").size(size);
+            let text = sized_medium("Progress", H8);
             let progress = pick_list(
                 ProgressKind::ALL,
                 Some(self.filters.progress.kind),
@@ -1568,6 +1604,7 @@ impl Home {
             .padding(padding)
             .width(60.0)
             .handle(picklist_handle(size))
+            .font(picklist_font)
             .text_size(size);
 
             let comp = comp(
@@ -1581,13 +1618,14 @@ impl Home {
         };
 
         let rating = {
-            let text = text("Rating:").size(size);
+            let text = sized_medium("Rating", H8);
             let rating = pick_list(
                 RatingKind::ALL,
                 Some(self.filters.rating.kind),
                 |selected| HomeMessage::Filter(FilterMessage::RatingKind(selected)),
             )
             .padding(padding)
+            .font(picklist_font)
             .width(52.0)
             .handle(picklist_handle(size))
             .text_size(size);
@@ -1600,7 +1638,7 @@ impl Home {
         };
 
         let comments = {
-            let text = text("Comments:").size(size);
+            let text = sized_medium("Comments", H8);
             let icon = self
                 .filters
                 .comments
@@ -1616,6 +1654,7 @@ impl Home {
             let input = text_input("", &content)
                 .width(32.0)
                 .size(size)
+                .font(input_font)
                 .padding(padding)
                 .on_input(|input| HomeMessage::Filter(FilterMessage::CommentsNum(input)));
 
@@ -1625,7 +1664,7 @@ impl Home {
         };
 
         let release = {
-            let text = text("Release:").size(size);
+            let text = sized_medium("Release", H8);
             let icon = self
                 .filters
                 .release
@@ -1640,6 +1679,7 @@ impl Home {
                 .unwrap_or_default();
             let input = text_input("", &content)
                 .width(48.0)
+                .font(input_font)
                 .size(size)
                 .padding(padding)
                 .on_input(|input| HomeMessage::Filter(FilterMessage::ReleaseYear(input)));
@@ -1650,9 +1690,9 @@ impl Home {
         };
 
         let duration = {
-            let hr = text("hrs").size(size);
-            let min = text("mins").size(size);
-            let text = text("Duration:").size(size);
+            let hr = sized_regular("hrs", size);
+            let min = sized_regular("mins", size);
+            let text = sized_medium("Duration", H8);
             let icon = self
                 .filters
                 .duration
@@ -1668,6 +1708,7 @@ impl Home {
             let hours = text_input("", &hours)
                 .width(28.0)
                 .size(size)
+                .font(input_font)
                 .padding(padding)
                 .on_input(|input| HomeMessage::Filter(FilterMessage::DurationHours(input)));
 
@@ -1679,6 +1720,7 @@ impl Home {
             let minutes = text_input("", &minutes)
                 .width(28.0)
                 .size(size)
+                .font(input_font)
                 .padding(padding)
                 .on_input(|input| HomeMessage::Filter(FilterMessage::DurationMinutes(input)));
 
@@ -1692,7 +1734,7 @@ impl Home {
         };
 
         let mode = {
-            let mode = text(self.filters.mode.to_string()).size(size);
+            let mode = sized_medium(self.filters.mode.to_string(), H8);
 
             let button = button(mode)
                 .style(styles::button::background)
@@ -1702,7 +1744,7 @@ impl Home {
             tooltip(button, "Filter combination mode", tp::Position::Bottom)
         };
 
-        let clear = button(text("Clear").size(size))
+        let clear = button(sized_medium("Clear", H8))
             .padding(padding)
             .style(styles::button::text)
             .on_press(HomeMessage::Filter(FilterMessage::Clear));
@@ -1744,7 +1786,7 @@ impl Home {
             let content = match position {
                 Some((order, asc)) => {
                     let label = format!("{sort} {}", order + 1);
-                    let content = text(label).size(size);
+                    let content = sized_medium(label, H8);
 
                     let unicode = if asc { UPS } else { DOWNS };
                     let icon = icon(unicode).size(10.0);
@@ -1760,7 +1802,7 @@ impl Home {
                 }
                 None => {
                     let label = format!("{sort}");
-                    let content = text(label).size(size);
+                    let content = sized_regular(label, size);
 
                     button(content)
                 }
@@ -1782,12 +1824,12 @@ impl Home {
             Element::from(content)
         };
 
-        let clear = button(text("Clear").size(size))
+        let clear = button(h8("Clear"))
             .padding([2, 5])
             .style(styles::button::text)
             .on_press(HomeMessage::Sort(SortMessage::Clear));
 
-        let reverse = button(text("Reverse").size(size))
+        let reverse = button(h8("Reverse"))
             .padding([2, 5])
             .style(styles::button::text)
             .on_press(HomeMessage::Sort(SortMessage::ToggleReverse));
@@ -1816,7 +1858,7 @@ impl Home {
         };
 
         row!(
-            text("Sort by: ").size(size),
+            h8("Sort by: "),
             row(SortKind::VISIBLE.iter().map(|sort| {
                 let order = self.sort.position(*sort);
                 view_sort(*sort, order)
@@ -1967,7 +2009,7 @@ impl Home {
             State::Collections(_) => "Collections",
             State::Collection { collection, .. } => &collection.collection.name,
         };
-        let title = container(text(title).size(H6)).clip(true).height(24);
+        let title = container(h4(title)).clip(true).center_y(40);
 
         let search =
             sized_button(icons::SEARCH, H6).on_press(HomeMessage::OpenView(ViewMessage::Search));
@@ -1982,7 +2024,6 @@ impl Home {
         .spacing(5.0)
         .padding(Padding::ZERO.right(5))
         .align_y(Vertical::Center)
-        .height(H2 * RATIO)
         .width(Length::Fill);
 
         let top = container(column!(top, rule::horizontal(1.0),));
@@ -2661,64 +2702,49 @@ impl Home {
 }
 
 fn icon_button<'a>(
-    unicode: char,
+    left_icon: char,
     value: &'a str,
     message: HomeMessage,
     current: bool,
+    right_icon: Option<char>,
 ) -> Element<'a, HomeMessage> {
     let size = H6;
-    let icon = icons::icon(unicode).size(size);
-    let text = text(value).size(size);
+    let icon = icons::icon(left_icon).size(size);
+    let text = if current {
+        h6(value)
+    } else {
+        sized_medium(value, H6)
+    };
+
+    let text = container(text).max_height(48.0).clip(true);
+
+    let content = row!(icon, text)
+        .align_y(Vertical::Center)
+        .width(Length::Fill)
+        .spacing(SIDE_ICON_SPACING);
+
+    let content = match right_icon {
+        Some(icon) => {
+            let icon = icons::icon(icon).size(size);
+
+            content.push(icon)
+        }
+        None => content,
+    };
 
     container(
-        button(
-            row!(icon, text)
-                .align_y(Vertical::Center)
-                .width(Length::Fill)
-                .spacing(SIDE_ICON_SPACING),
-        )
-        .style(move |theme, status| {
-            if current {
-                styles::button::subtle_primary(theme, status)
-            } else {
-                styles::button::subtler(theme, status)
-            }
-        })
-        .on_press(message),
+        button(content)
+            .style(move |theme, status| {
+                if current {
+                    styles::button::subtle_primary(theme, status)
+                } else {
+                    styles::button::subtler(theme, status)
+                }
+            })
+            .on_press(message),
     )
     .clip(true)
     .max_height(48.0)
-    .into()
-}
-
-fn collection_button<'a>(
-    icon: char,
-    value: &'a str,
-    view: char,
-    message: HomeMessage,
-    current: bool,
-) -> Element<'a, HomeMessage> {
-    let size = H6;
-    let icon = icons::icon(icon).size(size);
-    let text = container(text(value).size(size))
-        .max_height(48.0)
-        .clip(true);
-    let view = icons::icon(view).size(size);
-
-    button(
-        row!(icon, text, view)
-            .align_y(Vertical::Center)
-            .width(Length::Fill)
-            .spacing(SIDE_ICON_SPACING),
-    )
-    .style(move |theme, status| {
-        if current {
-            styles::button::subtle_primary(theme, status)
-        } else {
-            styles::button::subtler(theme, status)
-        }
-    })
-    .on_press(message)
     .into()
 }
 
@@ -2767,7 +2793,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     }
 
     let name = {
-        let label = text("Name");
+        let label = bold("Name");
 
         let value = config.name.as_str();
         let is_empty = config.empty_name;
@@ -2775,6 +2801,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let input = text_input("", value)
             .id(config.name_input.clone())
             .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
+            .font(regular_font())
             .padding(padding)
             .style(move |theme: &Theme, status| {
                 let error = theme.extended_palette().danger.strong.color;
@@ -2794,13 +2821,14 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     };
 
     let description = {
-        let label = text("Description");
+        let label = bold("Description");
 
         let content = &config.description;
         let editor = text_editor(content)
             .on_action(move |action| {
                 HomeMessage::CollectionConfig(ConfigMessage::Description(action))
             })
+            .font(regular_font())
             .padding(padding)
             .style(move |theme, status| {
                 let default = text_editor::default(theme, status);
@@ -2816,7 +2844,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let view = {
         let selected = config.view;
 
-        let label = text("Visibility");
+        let label = bold("Visibility");
 
         let views = [
             CollectionView::Pinned,
@@ -2858,7 +2886,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let icons = {
         let selected = config.icon;
 
-        let label = text("Icon");
+        let label = bold("Icon");
 
         let icons = Icon::all().into_iter().map(|value| {
             let content = center(icon(value.unicode()).size(P));
@@ -2890,13 +2918,13 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     };
 
     let actions = {
-        let save = button("Save")
+        let save = button(medium("Save"))
             .on_press(HomeMessage::CollectionConfig(ConfigMessage::Save))
             .style(styles::button::primary);
 
-        let cancel = button("Cancel")
+        let cancel = button(medium("Cancel"))
             .on_press(HomeMessage::CloseView)
-            .style(styles::button::primary);
+            .style(styles::button::secondary);
 
         column!(row!(save, cancel).spacing(80))
             .align_x(Horizontal::Center)
@@ -2940,7 +2968,7 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
     let input = {
         let filter: Element<'_, HomeMessage> = match state.filter {
             Some(filter) => {
-                let content = row!(filter.to_str(), icon(CANCEL))
+                let content = row!(medium(filter.to_str()), icon(CANCEL))
                     .align_y(Vertical::Center)
                     .spacing(4.0);
 
@@ -2969,6 +2997,7 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
             .id(state.text_input.clone())
             .size(size)
             .icon(icon)
+            .font(regular_font())
             .on_input(|search| HomeMessage::SearchMessage(SearchMessage::Search(search)))
             .on_submit(HomeMessage::SearchMessage(SearchMessage::Load));
 
@@ -2997,13 +3026,13 @@ fn draw_collection_add<'a>(
     collections: impl Iterator<Item = &'a SimpleCollection>,
     is_empty: bool,
 ) -> Element<'a, HomeMessage> {
-    let title = text("Collections").size(H6);
+    let title = h6("Collections");
 
     fn btn(collection: &SimpleCollection, selected: bool) -> Element<'_, HomeMessage> {
         let size = P;
         let unicode = Icon::new(collection.icon).unicode();
         let icon = icons::icon(unicode).size(size);
-        let text = container(text(&collection.name).size(size))
+        let text = container(regular(&collection.name))
             .max_height(48.0)
             .max_width(275);
         let check = checkbox(selected).on_toggle(|value| {
@@ -3053,32 +3082,26 @@ fn draw_collection_add<'a>(
         });
 
     let new = button(
-        row!(icons::icon(icons::ADD).size(H7), text("New").size(H7))
+        row!(icons::icon(icons::ADD).size(H7), sized_bold("New", H7))
             .align_y(Vertical::Center)
             .spacing(8),
     )
     .padding([2, 4])
     .on_press(HomeMessage::NewCollection)
-    .style(move |theme, status| {
-        let default = styles::button::text(theme, status);
-
-        let border = default.border.rounded(5.0);
-
-        button::Style { border, ..default }
-    });
+    .style(styles::button::text);
 
     let collections = column!(new, collections)
         .spacing(5.0)
         .align_x(Horizontal::Right);
 
     let actions = {
-        let save = button("Save")
+        let save = button(medium("Save"))
             .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Save))
             .style(styles::button::primary);
 
-        let cancel = button("Cancel")
+        let cancel = button(medium("Cancel"))
             .on_press(HomeMessage::CloseView)
-            .style(styles::button::primary);
+            .style(styles::button::secondary);
 
         row!(save, cancel).spacing(100)
     };
@@ -3091,18 +3114,18 @@ fn draw_collection_add<'a>(
 }
 
 fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
-    let title = text("Rating").size(H4);
+    let title = h4("Rating");
 
     let size = H6;
 
     let value: Element<'_, HomeMessage> = {
         let size = H6;
-        let extra = text("/5").size(H7);
+        let extra = sized_regular("/5", H7);
 
         let value: Element<'_, HomeMessage> = match state {
             Rating::Value(value) => {
                 let rating = (value * 100.0).round() / 100.0;
-                mouse_area(text(format!("{rating:.2}")).size(size))
+                mouse_area(h6(format!("{rating:.2}")))
                     .interaction(mouse::Interaction::Text)
                     .on_press(HomeMessage::Rating(RatingMessage::Type))
                     .into()
@@ -3110,6 +3133,7 @@ fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
             Rating::Input { id, input } => text_input("", input)
                 .id(id.clone())
                 .size(size)
+                .font(regular_font())
                 .width(48.0)
                 .on_submit(HomeMessage::Rating(RatingMessage::Submit))
                 .on_input(|input| HomeMessage::Rating(RatingMessage::Input(input)))
@@ -3175,6 +3199,7 @@ fn draw_rename<'a>(
     let input = text_input(placeholder, value)
         .on_input(|new| HomeMessage::Rename(RenameMessage::Input(new)))
         .on_submit(HomeMessage::Rename(RenameMessage::Submit))
+        .font(regular_font())
         .id(input.clone())
         .size(H7)
         .width(250)

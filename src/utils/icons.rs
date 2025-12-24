@@ -8,8 +8,8 @@ use std::sync::LazyLock;
 use super::styles;
 use super::typo::*;
 
-static ICONS: &[u8] = include_bytes!("../../assets/kino-icons.ttf");
-pub const NAME: &str = "kino-icons";
+pub static ICONS: &[u8] = include_bytes!("../../resources/fonts/kino-icons.ttf");
+const NAME: &str = "kino-icons";
 pub const FONT: Font = Font::with_name(NAME);
 
 pub const LOGO: char = '\u{e80b}';
@@ -133,7 +133,7 @@ const LOADING_SVG: &[u8] = "<svg xmlns='http://www.w3.org/2000/svg' width='32' h
 pub static LOADING_SVG_HANDLE: LazyLock<iced::widget::svg::Handle> =
     LazyLock::new(|| iced::widget::svg::Handle::from_memory(LOADING_SVG));
 
-pub fn load_icon_fonts() -> iced::Task<Result<(), font::Error>> {
+pub(super) fn load_icon_fonts() -> iced::Task<Result<(), font::Error>> {
     tracing::info!("loading icon fonts");
     font::load(ICONS)
 }

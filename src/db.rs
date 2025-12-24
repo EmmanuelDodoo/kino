@@ -1265,7 +1265,7 @@ impl Database {
 
         if !exists {
             tracing::info!("writing DB schema");
-            let schema = include_str!("../schema.sql");
+            let schema = include_str!("../resources/db/schema.sql");
             conn.execute_batch(schema)?;
 
             tracing::info!("writing DB dummies");
@@ -1283,7 +1283,7 @@ impl Database {
 
         if !exists {
             tracing::info!("writing DB schema");
-            let schema = include_str!("../schema.sql");
+            let schema = include_str!("../resources/db/schema.sql");
             conn.execute_batch(schema)?;
             Ok(conn)
         } else {

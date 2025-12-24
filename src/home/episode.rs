@@ -132,7 +132,7 @@ impl EpisodePage {
                 })
                 .style(styles::button::text)
                 .padding(0);
-            let release = text(episode.media.release_year()).size(H7);
+            let release = sized_medium(episode.media.release_year(), H7);
 
             let details = row!(release, separator(), duration)
                 .spacing(6)
@@ -144,10 +144,15 @@ impl EpisodePage {
         let item = "Overview";
         let tabs = Tab::ALL.into_iter().map(|tab| {
             let is_selected = self.tab == tab;
+            let text = if is_selected {
+                bold(tab.to_str(item))
+            } else {
+                regular(tab.to_str(item))
+            };
 
             Element::from(
                 column!(
-                    button(text(tab.to_str(item)).size(H7))
+                    button(text)
                         .on_press(EpisodePageMessage {
                             id,
                             message: Message::Tab(tab)
@@ -179,7 +184,7 @@ impl EpisodePage {
 
             match self.tab {
                 Tab::Items => {
-                    let synopsis = text(episode.media.synopsis());
+                    let synopsis = regular(episode.media.synopsis());
 
                     scrollable(column!(synopsis).spacing(4.0).width(width))
                         .spacing(4.0)
@@ -190,7 +195,7 @@ impl EpisodePage {
                     let comments = ["Some comment here: "; 7]
                         .into_iter()
                         .enumerate()
-                        .map(|(i, comment)| Element::from(text(format!("{comment}{i}"))));
+                        .map(|(i, comment)| Element::from(regular(format!("{comment}{i}"))));
 
                     let comments =
                         scrollable(column(comments).spacing(4.0).width(Length::Fill)).spacing(4.0);
@@ -216,7 +221,7 @@ impl EpisodePage {
         let actions = center_x(
             row!(
                 button(
-                    row!(icon(PLAY).size(H5), text("Play").size(H5))
+                    row!(icon(PLAY).size(H5), sized_medium("Play", P))
                         .spacing(16.0)
                         .align_y(Vertical::Center),
                 )
@@ -226,7 +231,7 @@ impl EpisodePage {
                     message: Message::Play
                 })
                 .style(|theme, status| {
-                    let default = styles::button::subtlest(theme, status);
+                    let default = styles::button::primary(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -234,7 +239,7 @@ impl EpisodePage {
                 button(
                     row!(
                         icon(ADD_COLLECTION).size(H5),
-                        text("Add to Collection").size(H5)
+                        sized_medium("Add to Collection", P)
                     )
                     .spacing(16.0)
                     .align_y(Vertical::Center),
@@ -245,7 +250,7 @@ impl EpisodePage {
                     message: Message::AddCollection
                 })
                 .style(|theme, status| {
-                    let default = styles::button::subtlest(theme, status);
+                    let default = styles::button::primary(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }

@@ -319,19 +319,19 @@ impl SeasonPage {
                 })
                 .style(styles::button::text)
                 .padding(0);
-            let release = text(season.media.release_year()).size(H7);
+            let release = sized_medium(season.media.release_year(), H7);
 
             let details = row!(release, separator(), duration)
                 .spacing(6)
                 .align_y(Vertical::Center);
 
-            let synopsis = container(text(season.media.synopsis()))
+            let synopsis = container(regular(season.media.synopsis()))
                 .max_width(750)
                 .height(Length::Fill);
 
             let actions = row!(
                 button(
-                    row!(icon(PLAY).size(P), text("Resume").size(H7))
+                    row!(icon(PLAY).size(H5), sized_medium("Play", P))
                         .spacing(10.0)
                         .align_y(Vertical::Center),
                 )
@@ -341,15 +341,15 @@ impl SeasonPage {
                     message: Message::Resume
                 })
                 .style(|theme, status| {
-                    let default = styles::button::subtlest(theme, status);
+                    let default = styles::button::primary(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
                 }),
                 button(
                     row!(
-                        icon(ADD_COLLECTION).size(P),
-                        text("Add to Collection").size(H7)
+                        icon(ADD_COLLECTION).size(H5),
+                        sized_medium("Add to Collection", P)
                     )
                     .spacing(10.0)
                     .align_y(Vertical::Center),
@@ -360,7 +360,7 @@ impl SeasonPage {
                     message: Message::AddSelf
                 })
                 .style(|theme, status| {
-                    let default = styles::button::subtlest(theme, status);
+                    let default = styles::button::primary(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -383,7 +383,7 @@ impl SeasonPage {
         };
 
         let backdrop: Element<'_, SeasonPageMessage> = {
-            let height = img_height + 68.5;
+            let height = img_height + 71.0;
 
             season.backdrop(Length::Fill, height)
         };
@@ -393,10 +393,15 @@ impl SeasonPage {
         let item = "Episodes";
         let tabs = Tab::ALL.into_iter().map(move |tab| {
             let is_selected = self.tab == tab;
+            let text = if is_selected {
+                bold(tab.to_str(item))
+            } else {
+                regular(tab.to_str(item))
+            };
 
             Element::from(
                 column!(
-                    button(text(tab.to_str(item)).size(H7))
+                    button(text)
                         .padding([3, 6])
                         .on_press(SeasonPageMessage {
                             id,
@@ -469,7 +474,7 @@ impl SeasonPage {
                     let comments = ["Some comment here: "; 7]
                         .into_iter()
                         .enumerate()
-                        .map(|(i, comment)| Element::from(text(format!("{comment}{i}"))));
+                        .map(|(i, comment)| Element::from(regular(format!("{comment}{i}"))));
 
                     let comments =
                         scrollable(column(comments).spacing(4.0).width(Length::Fill)).spacing(4.0);

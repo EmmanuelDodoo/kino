@@ -20,7 +20,7 @@ use crate::settings::{Settings, SettingsMessage};
 use crate::toast;
 use crate::utils::{
     Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort,
-    filter::FilterMode, filter::SearchFilter, load_icon_fonts,
+    filter::FilterMode, filter::SearchFilter, load_fonts,
 };
 use crate::{
     db::{self, Query},
@@ -57,7 +57,6 @@ pub struct MediaUpdate {
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    FontLoad(Result<(), font::Error>),
     ExitRequested(window::Id),
     Exit(window::Id),
     WindowId(Option<window::Id>),
@@ -166,7 +165,6 @@ impl App {
                 .collect(),
         ));
 
-        let load_font = load_icon_fonts().map(Message::FontLoad);
         let load_id = window::oldest().map(Message::WindowId);
 
         let (auth_tx, auth_rx) = mpsc::channel(2);
@@ -201,7 +199,7 @@ impl App {
 
         let new = Self::new(config, db, home, auth_tx, rating_tx);
 
-        let tasks = Task::batch([load_errors, load_font, load_id, home_tasks, fetcher]);
+        let tasks = Task::batch([load_errors, load_id, home_tasks, fetcher]);
 
         (new, tasks)
     }
@@ -236,12 +234,6 @@ impl App {
         match message {
             Message::None => Task::none(),
             Message::Animate => Task::none(),
-            Message::FontLoad(Ok(_)) => Task::none(),
-            Message::FontLoad(Err(_)) => {
-                let msg = Message::error("Font load error");
-
-                Task::done(msg)
-            }
             Message::WindowId(window) => {
                 tracing::info!("Window id obtained");
                 self.window = window;

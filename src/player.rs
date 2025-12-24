@@ -21,18 +21,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::app::Message;
 use crate::home::shared::Icon;
 use crate::models::{CollectionId, SimpleCollection};
 use crate::utils::{
     self, PlayId, PlayItem, PlayerAction, Playlist, SubtitleDescription, SubtitleFont,
     VideoSettings, convert_color_str, draw_subtitles, empty,
-    icons::{self, sized_button},
+    icons::{self, CANCEL, sized_button},
     loading_animation, loading_svg, modal_container, picklist_handle, styles, tooltip, trim_path,
     typo::{self, *},
 };
 use crate::variants;
 use crate::widgets::{self, modal, toggler};
-use crate::{app::Message, utils::CANCEL};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Subtitle {
@@ -753,9 +753,9 @@ impl Manager {
 
     fn top(&self) -> Element<'_, ManagerMessage> {
         let title: Element<'_, ManagerMessage> = match &self.state {
-            State::Ready(player) => container(text(&player.item.name).size(H6))
+            State::Ready(player) => container(sized_medium(&player.item.name, H4))
                 .style(styles::container::text)
-                .max_height(24)
+                .height(36)
                 .clip(true)
                 .into(),
             State::Loading(_) | State::Idle => empty(),
@@ -825,7 +825,7 @@ impl Manager {
                     (*position as u64 % 3600) / 60,
                     (*position as u64 % 3600) % 60,
                 );
-                let spent = container(text(spent)).style(styles::container::text);
+                let spent = container(medium(spent)).style(styles::container::text);
 
                 let remaining = duration.as_secs().saturating_sub(*position as u64);
                 let total = format!(
@@ -834,14 +834,14 @@ impl Manager {
                     (remaining % 3600) / 60,
                     (remaining % 3600) % 60,
                 );
-                let total = container(text(total)).style(styles::container::text);
+                let total = container(medium(total)).style(styles::container::text);
 
                 let slider = widgets::slider::VideoSlider::new(
                     0.0..=duration.as_secs_f64(),
                     *position,
                     ManagerMessage::Seek,
                     thumbnails,
-                    Font::default(),
+                    mono_font(),
                     duration,
                 )
                 .step(0.1)
@@ -880,13 +880,7 @@ impl Manager {
             let volume = tooltip(volume, volume_text, tp);
 
             let speed = container(
-                text(format!("{:.02}x", self.settings.speed))
-                    .size(icon_size / (typo::RATIO))
-                    .font(Font {
-                        family: font::Family::Monospace,
-                        weight: font::Weight::Semibold,
-                        ..Default::default()
-                    }),
+                mono_bold(format!("{:.02}x", self.settings.speed)).size(icon_size / (typo::RATIO)),
             )
             .style(styles::container::text);
             let speed = tooltip(
@@ -1942,14 +1936,8 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
     let padding = [6, 12];
 
     let title = {
-        let font = Font {
-            family: font::Family::Serif,
-            weight: font::Weight::Semibold,
-            ..Default::default()
-        };
-
         let content = row!(
-            text("Playlist").font(font).size(H7),
+            h6("Playlist"),
             space::horizontal(),
             button(icons::icon(CANCEL).size(H6))
                 .on_press(ManagerMessage::ClosePanel)
@@ -1963,7 +1951,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
     };
 
     let items = playlist.items().map(|(idx, item, current)| {
-        let size = H8;
+        let size = H7;
 
         let duration = item.duration;
         let hrs = duration / 3600;
@@ -1971,11 +1959,6 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         let mins = (duration % 3600) / 60;
 
         let secs = duration % 60;
-
-        let font = Font {
-            family: font::Family::Serif,
-            ..Default::default()
-        };
 
         let color = move |theme: &Theme| {
             let color = theme.extended_palette().primary.base.color;
@@ -1985,16 +1968,25 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
             }
         };
 
-        let name = container(
-            text(&item.name)
-                .font(font)
-                .size(size)
-                .height(16)
-                .style(color),
-        )
-        .max_width(width * 0.75);
+        let name = if current {
+            medium(&item.name)
+        } else {
+            regular(&item.name)
+        }
+        .size(size);
+
+        let name = container(name.height(24).style(color)).max_width(width * 0.75);
+
         let duration = format!("{hrs:02}:{mins:02}:{secs:02}");
-        let duration = text(duration).size(size).font(font).height(16).style(color);
+
+        let duration = if current {
+            bold(duration)
+        } else {
+            regular(duration)
+        }
+        .size(size)
+        .height(24)
+        .style(color);
 
         button(
             row!(name, space::horizontal(), duration)
@@ -2051,7 +2043,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         );
 
         let auto_next = tooltip(
-            toggler(auto_next).size(H7).on_toggle(|toggle| {
+            toggler(auto_next).on_toggle(|toggle| {
                 ManagerMessage::Playlist(PlaylistMessge::ToggleAutoNext(toggle))
             }),
             "Play next media",
@@ -2089,13 +2081,13 @@ fn draw_collection_add<'a>(
     is_empty: bool,
     collections: impl Iterator<Item = &'a SimpleCollection>,
 ) -> Element<'a, ManagerMessage> {
-    let title = text("Collections").size(H6);
+    let title = h6("Collections");
 
     fn btn(collection: &SimpleCollection, selected: bool) -> Element<'_, ManagerMessage> {
         let size = P;
         let unicode = Icon::new(collection.icon).unicode();
         let icon = icons::icon(unicode).size(size);
-        let text = container(text(&collection.name).size(size))
+        let text = container(regular(&collection.name))
             .max_height(48.0)
             .max_width(275);
         let check = checkbox(selected).on_toggle(|value| {
@@ -2146,15 +2138,15 @@ fn draw_collection_add<'a>(
         });
 
     let actions = {
-        let save = button("Save")
+        let save = button(medium("Save"))
             .on_press(ManagerMessage::CollectionAddMessage(
                 CollectionAddMessage::Save,
             ))
             .style(styles::button::primary);
 
-        let cancel = button("Cancel")
+        let cancel = button(medium("Cancel"))
             .on_press(ManagerMessage::CloseView)
-            .style(styles::button::primary);
+            .style(styles::button::secondary);
 
         row!(save, cancel).spacing(100)
     };
@@ -2181,22 +2173,11 @@ fn draw_config<'a>(
     let padding = [2, 5];
     let spacing = 8;
 
-    let header = text("Video Config")
-        .size(H6)
-        .font(Font {
-            family: font::Family::Serif,
-            weight: font::Weight::Semibold,
-            ..Default::default()
-        })
-        .center()
-        .width(Length::Fill);
+    let header = h6("Video Config").center().width(Length::Fill);
 
     let tabs = ConfigTab::VARIANTS.iter().map(|tab| {
         let current = *tab == curr_tab;
-        let text = text(format!("{tab:?}")).size(H7).font(font::Font {
-            weight: font::Weight::Semibold,
-            ..Default::default()
-        });
+        let text = h7(format!("{tab:?}"));
         container(
             button(text)
                 .width(Length::Fill)
@@ -2224,6 +2205,7 @@ fn draw_config<'a>(
                 let input = text_input("", &amt)
                     .width(input_width)
                     .size(size)
+                    .font(regular_font())
                     .align_x(Horizontal::Right)
                     .padding(padding)
                     .on_input(ConfigMessage::VolumeAmt);
@@ -2240,6 +2222,7 @@ fn draw_config<'a>(
                 let input = text_input("", &amt)
                     .width(input_width)
                     .size(size)
+                    .font(regular_font())
                     .align_x(Horizontal::Right)
                     .padding(padding)
                     .on_input(ConfigMessage::SpeedAmt);
@@ -2256,6 +2239,7 @@ fn draw_config<'a>(
                 let input = text_input("", &amt)
                     .width(input_width)
                     .size(size)
+                    .font(regular_font())
                     .align_x(Horizontal::Right)
                     .padding(padding)
                     .on_input(ConfigMessage::SeekAmt);
@@ -2274,6 +2258,7 @@ fn draw_config<'a>(
                 let input = text_input("", &amt)
                     .width(input_width)
                     .size(size)
+                    .font(regular_font())
                     .align_x(Horizontal::Right)
                     .padding(padding)
                     .on_input(ConfigMessage::SeekShiftAmt);
@@ -2301,7 +2286,7 @@ fn draw_config<'a>(
                     .shift_step(0.1)
                     .width(slider_width);
 
-                let gamma = text(format!("{:.01}", config.filters.gamma)).size(size);
+                let gamma = sized_regular(format!("{:.01}", config.filters.gamma), size);
                 let slider = row!(gamma, slider).spacing(4.0).align_y(Vertical::Center);
 
                 row!(label, space::horizontal(), slider).align_y(Vertical::Center)
@@ -2319,7 +2304,7 @@ fn draw_config<'a>(
                 .shift_step(0.1)
                 .width(slider_width);
 
-                let brightness = text(format!("{:.01}", config.filters.brightness)).size(size);
+                let brightness = sized_regular(format!("{:.01}", config.filters.brightness), size);
                 let slider = row!(brightness, slider)
                     .spacing(4.0)
                     .align_y(Vertical::Center);
@@ -2335,7 +2320,7 @@ fn draw_config<'a>(
                     .shift_step(0.1)
                     .width(slider_width);
 
-                let contrast = text(format!("{:.01}", config.filters.contrast)).size(size);
+                let contrast = sized_regular(format!("{:.01}", config.filters.contrast), size);
                 let slider = row!(contrast, slider)
                     .spacing(4.0)
                     .align_y(Vertical::Center);
@@ -2351,7 +2336,7 @@ fn draw_config<'a>(
                     .shift_step(0.1)
                     .width(slider_width);
 
-                let hue = text(format!("{:.01}", config.filters.hue)).size(size);
+                let hue = sized_regular(format!("{:.01}", config.filters.hue), size);
                 let slider = row!(hue, slider).spacing(4.0).align_y(Vertical::Center);
 
                 row!(label, space::horizontal(), slider).align_y(Vertical::Center)
@@ -2369,7 +2354,7 @@ fn draw_config<'a>(
                 .shift_step(0.1)
                 .width(slider_width);
 
-                let saturation = text(format!("{:.01}", config.filters.saturation)).size(size);
+                let saturation = sized_regular(format!("{:.01}", config.filters.saturation), size);
                 let slider = row!(saturation, slider)
                     .spacing(4.0)
                     .align_y(Vertical::Center);
@@ -2388,7 +2373,7 @@ fn draw_config<'a>(
                 let add = button(
                     row!(
                         icons::icon(icons::FILE_UP).size(size),
-                        text("Load Subtitles").size(size)
+                        sized_regular("Load Subtitles", size)
                     )
                     .spacing(8.0)
                     .align_y(Vertical::Center),
@@ -2401,13 +2386,7 @@ fn draw_config<'a>(
                 let path: Element<'_, ConfigMessage> = match path {
                     Some(path) => button(
                         row!(
-                            container(text(path).size(size).font(Font {
-                                weight: font::Weight::Semibold,
-                                ..Default::default()
-                            }))
-                            .max_width(250)
-                            .height(20)
-                            .clip(true),
+                            container(mono(path)).max_width(250).height(20).clip(true),
                             icons::icon(icons::CANCEL).size(size)
                         )
                         .spacing(4)
@@ -2470,6 +2449,7 @@ fn draw_config<'a>(
                     let input = text_input("", &amt)
                         .width(input_width)
                         .size(size)
+                        .font(regular_font())
                         .align_x(Horizontal::Right)
                         .padding(padding)
                         .on_input(ConfigMessage::SubSize);
@@ -2487,6 +2467,7 @@ fn draw_config<'a>(
                     let input = text_input("", text_color)
                         .width(color_width)
                         .size(size)
+                        .font(regular_font())
                         .align_x(Horizontal::Right)
                         .padding(padding)
                         .on_input(ConfigMessage::SubColor);
@@ -2502,6 +2483,7 @@ fn draw_config<'a>(
                     let input = text_input("", background_color)
                         .width(color_width)
                         .size(size)
+                        .font(regular_font())
                         .align_x(Horizontal::Right)
                         .padding(padding)
                         .on_input(ConfigMessage::SubBackground);
@@ -2587,9 +2569,5 @@ fn draw_config<'a>(
 }
 
 fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
-    text(label).size(H7).font(Font {
-        family: font::Family::Serif,
-        weight: font::Weight::Semibold,
-        ..Default::default()
-    })
+    sized_medium(label, H7)
 }

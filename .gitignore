@@ -1,4 +1,4 @@
 /target
 .nvim
-.media
-assets/test.mkv
+assets
+.dev

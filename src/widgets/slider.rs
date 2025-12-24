@@ -138,6 +138,11 @@ where
         self
     }
 
+    pub fn thumbnail_font(mut self, font: impl Into<Renderer::Font>) -> Self {
+        self.thumbnail_font = font.into();
+        self
+    }
+
     /// Sets the optional "shift" step for the [`Slider`].
     ///
     /// If set, this value is used as the step while the shift key is pressed.

@@ -66,6 +66,18 @@ fn main() -> iced::Result {
 
     let mode = args.next();
 
+    let icon = {
+        let data = include_bytes!("../resources/logo/logo-v2-amber.png");
+
+        let format = None;
+
+        iced::window::icon::from_file_data(data, format).unwrap()
+    };
+
+    let mut fonts = typo_fonts();
+    fonts.push(icons::ICONS.into());
+
+    #[allow(unused_variables)]
     let mode = match mode.as_deref() {
         Some("dev") => BootMode::Dev,
         Some("dummies") => BootMode::Dummies,
@@ -78,18 +90,29 @@ fn main() -> iced::Result {
         App::subscription,
         App::view
     )
-        .exit_on_close_request(false)
+        // .exit_on_close_request(false)
         .theme(App::theme)
 
-        // iced::application::timed(
-        //     Playground::boot,
-        //     Playground::update,
-        //     Playground::subscription,
-        //     Playground::view,
-        // )
-        //     .theme(Playground::theme)
+    // iced::application::timed(
+    //     Playground::boot,
+    //     Playground::update,
+    //     Playground::subscription,
+    //     Playground::view,
+    // )
+    //     .theme(Playground::theme)
 
-        .window_size(Size::new(1200.0, 750.0))
+        .settings(iced::Settings {
+            // default_font: regular_font(),
+            fonts,
+            ..Default::default()
+
+        })
+        .window(window::Settings {
+            icon: Some(icon),
+            size: Size::new(1200.0, 750.0),
+            exit_on_close_request: false,
+            ..Default::default()
+        })
         .run()
 }
 
@@ -134,34 +157,20 @@ impl BootFn<App, app::Message> for BootMode {
 
 #[derive(Debug, Clone)]
 enum Message {
-    FontLoad(Result<(), iced::font::Error>),
-    Iced(bool),
-    Custom(bool),
-    Extra(bool),
     None,
 }
 
 struct Playground {
     now: Instant,
-    iced: bool,
-    custom: bool,
-    extra: bool,
 }
 
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
-        let fonts = utils::load_icon_fonts().map(Message::FontLoad);
-
         let now = Instant::now();
 
-        let new = Self {
-            now,
-            iced: false,
-            custom: false,
-            extra: false,
-        };
+        let new = Self { now };
 
-        (new, Task::batch([fonts]))
+        (new, Task::none())
     }
 
     fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
@@ -169,45 +178,20 @@ impl Playground {
 
         match message {
             Message::None => Task::none(),
-            Message::FontLoad(Ok(_)) => Task::none(),
-            Message::FontLoad(Err(error)) => {
-                tracing::error!("{error:?}");
-                Task::none()
-            }
-            Message::Iced(toggle) => {
-                self.iced = toggle;
-                Task::none()
-            }
-            Message::Custom(toggle) => {
-                self.custom = toggle;
-                Task::none()
-            }
-            Message::Extra(toggle) => {
-                self.extra = toggle;
-                Task::none()
-            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        // let iced = widget::toggler(self.iced)
-        //     .on_toggle(Message::Iced)
-        //     .label("Iced");
-        // let custom = widgets::toggler(self.custom)
-        //     .on_toggle(Message::Custom)
-        //     .duration(Duration::from_millis(200))
-        //     .label("Custom");
-        // let extra = widgets::toggler(self.extra)
-        //     .on_toggle(Message::Extra)
-        //     .label("Extra");
-        //
-        // let content = column!(iced, custom, extra).spacing(20.0);
-        let handle = image::Handle::from_path("assets/fantastic.qal.png");
+        let content = "The jump 1234";
 
-        let content = image(handle.clone())
-            .height(400)
-            .width(400.0 * 2.0 / 3.0)
-            .content_fit(ContentFit::Contain);
+        let norm = text(content).size(P).font(bold_italic_font());
+        let dummy = text(content).size(P).font(Font {
+            weight: font::Weight::Semibold,
+            style: font::Style::Italic,
+            ..Default::default()
+        });
+
+        let content = column!(norm, dummy).spacing(12);
 
         let content = center(content);
 

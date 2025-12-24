@@ -4,7 +4,7 @@ use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
     self, AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
     SettingsAction, SubtitleDescription, SubtitleFont, VideoFilters, VideoSettings,
-    convert_color_str, empty, icons, modal_container, picklist_handle, sized_button, styles,
+    convert_color_str, empty, icons, icons::sized_button, modal_container, picklist_handle, styles,
     tooltip, trim_path, typo::*,
 };
 use crate::widgets::{modal, toast, toggler};
@@ -22,8 +22,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const PADDING: [f32; 2] = [20.0, 24.0];
-const TEXT_SIZE: f32 = H7;
-const TOGGLER_SIZE: f32 = TEXT_SIZE * RATIO * RATIO;
+const TEXT_SIZE: f32 = P;
 const INPUT_WIDTH: f32 = 48.0;
 const SPACING: f32 = 6.0;
 const INPUT_PADDING: [f32; 2] = [3.5, 5.0];
@@ -957,11 +956,7 @@ impl Settings {
 
     fn side(&self) -> Element<'_, SettingsMessage> {
         let header = {
-            let text = text("Settings").size(H4).font(font::Font {
-                weight: font::Weight::Semibold,
-                family: font::Family::Serif,
-                ..Default::default()
-            });
+            let text = h4("Settings");
 
             container(text).padding([5, 10]).align_y(Vertical::Center)
         };
@@ -1007,13 +1002,7 @@ impl Settings {
             Page::Keybinds => "Keybindings",
         };
 
-        let title = container(text(title).size(H6).font(font::Font {
-            family: font::Family::Serif,
-            weight: font::Weight::Semibold,
-            ..Default::default()
-        }))
-        .height(28.0)
-        .center_x(Length::Fill);
+        let title = container(h6(title)).height(28.0).center_x(Length::Fill);
 
         let content: Element<'_, SettingsMessage> = match self.page {
             Page::General => self.general(),
@@ -1037,8 +1026,10 @@ impl Settings {
             .on_scroll(SettingsMessage::Scroll);
 
         let actions = {
-            let save = button("Save").on_press(SettingsMessage::Save);
-            let cancel = button("Cancel").on_press(SettingsMessage::Cancel);
+            let save = button(medium("Save")).on_press(SettingsMessage::Save);
+            let cancel = button(medium("Cancel"))
+                .style(styles::button::secondary)
+                .on_press(SettingsMessage::Cancel);
 
             let actions = row!(save, cancel).spacing(100.0).align_y(Vertical::Center);
 
@@ -1424,11 +1415,7 @@ fn side_button<'a>(
     message: SettingsMessage,
     current: bool,
 ) -> Element<'a, SettingsMessage> {
-    let size = P;
-    let text = text(value).size(size).font(font::Font {
-        weight: font::Weight::Semibold,
-        ..Default::default()
-    });
+    let text = bold(value);
 
     container(
         button(text)
@@ -1477,10 +1464,11 @@ fn directory_draw<'a>(
     let path = trim_path(Path::new(&directory.path), 5);
     let label = span(path)
         .strikethrough(matches!(operation, Operation::Delete))
+        .font(mono_font())
         .size(size);
     let label = rich_text([label]).on_link_click(|_: ()| MediaMessage::None);
 
-    let tag = text(directory.media_type.to_string()).size(size / (RATIO * RATIO));
+    let tag = regular(directory.media_type.to_string()).size(size / (RATIO * RATIO));
 
     let tag = button(tag)
         .padding([2, 5])
@@ -1518,17 +1506,13 @@ fn pick_task() -> Task<Message> {
 
 fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a, SettingsMessage> {
     let size = TEXT_SIZE;
-    let font = label_font();
 
     let folder = {
         let path = trim_path(path, 3);
 
-        let path = text(path).size(size).font(Font {
-            style: font::Style::Italic,
-            ..Default::default()
-        });
+        let path = mono(path).size(size);
 
-        let label = text("Folder: ").size(size).font(font).width(100.0);
+        let label = sized_bold("Folder: ", size).width(100.0);
 
         let folder = row!(label, path).align_y(Vertical::Center).spacing(8);
 
@@ -1543,11 +1527,13 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
 
     let kind = {
         let handle = picklist_handle(size);
-        let label = text("Media type: ").size(size).font(font).width(100.0);
+        let label = sized_bold("Media type: ", size).width(100.0);
 
         let lst = pick_list(MediaType::ALL, Some(*kind), |kind| {
             SettingsMessage::FolderSelection(FolderSelectionMessage::Kind(kind))
         })
+        .style(picklist_style)
+        .font(regular_font())
         .padding([2, 5])
         .handle(handle)
         .text_size(size);
@@ -1556,13 +1542,15 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
     };
 
     let actions = {
-        let submit = button("Save").on_press(SettingsMessage::FolderSelection(
+        let submit = button(medium("Save")).on_press(SettingsMessage::FolderSelection(
             FolderSelectionMessage::Submit,
         ));
 
-        let cancel = button("Cancel").on_press(SettingsMessage::FolderSelection(
-            FolderSelectionMessage::Cancel,
-        ));
+        let cancel = button(medium("Cancel"))
+            .style(styles::button::secondary)
+            .on_press(SettingsMessage::FolderSelection(
+                FolderSelectionMessage::Cancel,
+            ));
 
         center_x(row!(submit, cancel).align_y(Vertical::Center).spacing(36))
     };
@@ -1608,6 +1596,8 @@ fn draw_capture_key<'a>(
                 pick_list(HomeAction::VARIANTS, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::General(Some(action)))
                 })
+                .style(picklist_style)
+                .font(regular_font())
                 .handle(picklist_handle(size))
                 .padding(padding)
                 .text_size(size)
@@ -1618,6 +1608,8 @@ fn draw_capture_key<'a>(
                 pick_list(PlayerAction::VARIANTS, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::Video(Some(action)))
                 })
+                .style(picklist_style)
+                .font(regular_font())
                 .handle(picklist_handle(size))
                 .padding(padding)
                 .text_size(size)
@@ -1628,6 +1620,8 @@ fn draw_capture_key<'a>(
                 pick_list(SettingsAction::VARIANTS, *selected, |action| {
                     SettingsMessage::KeyAction(KeyAction::Settings(Some(action)))
                 })
+                .style(picklist_style)
+                .font(regular_font())
                 .handle(picklist_handle(size))
                 .padding(padding)
                 .text_size(size)
@@ -1642,8 +1636,11 @@ fn draw_capture_key<'a>(
     let set = set_action && keypress.is_some();
 
     let btns = {
-        let save = button("Save").on_press_maybe(set.then_some(SettingsMessage::SaveKeyBinding));
-        let cancel = button("Cancel").on_press(SettingsMessage::Cancel);
+        let save =
+            button(medium("Save")).on_press_maybe(set.then_some(SettingsMessage::SaveKeyBinding));
+        let cancel = button(medium("Cancel"))
+            .style(styles::button::secondary)
+            .on_press(SettingsMessage::Cancel);
 
         let actions = row!(save, cancel).spacing(80.0).align_y(Vertical::Center);
 
@@ -1657,29 +1654,16 @@ fn draw_capture_key<'a>(
     modal_container(content).width(300).into()
 }
 
-fn label_font() -> Font {
-    Font {
-        weight: font::Weight::Semibold,
-        ..Default::default()
-    }
-}
-
 fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
-    text(label).size(TEXT_SIZE).font(label_font())
+    sized_medium(label, TEXT_SIZE)
 }
 
 fn section_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
-    let font = Font {
-        family: font::Family::Serif,
-        weight: font::Weight::Semibold,
-        ..Default::default()
-    };
-
-    text(label).size(TEXT_SIZE * RATIO * RATIO).font(font)
+    sized_bold(label, TEXT_SIZE * RATIO)
 }
 
 fn table_header<'a>(label: &'a str) -> text::Text<'a> {
-    text(label).size(TEXT_SIZE / RATIO).font(label_font())
+    sized_bold(label, TEXT_SIZE / RATIO)
 }
 
 fn table_name<'a>(
@@ -1690,7 +1674,7 @@ fn table_name<'a>(
         .padding(0)
         .on_press(SettingsMessage::ClearAllBindings(action));
     let clear = binding_tooltip(clear, "Remove all bindings");
-    let label = text(label).size(TEXT_SIZE / RATIO).font(label_font());
+    let label = bold(label).size(TEXT_SIZE / RATIO);
 
     row!(label, space::horizontal(), clear)
         .align_y(Vertical::Center)
@@ -1698,10 +1682,7 @@ fn table_name<'a>(
 }
 
 fn table_description<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
-    text(label).size(TEXT_SIZE).font(Font {
-        family: font::Family::Serif,
-        ..Default::default()
-    })
+    sized_regular(label, TEXT_SIZE)
 }
 
 fn table_keys<'a>(page: Page, keys: &[KeyPress]) -> Element<'a, SettingsMessage> {
@@ -1718,10 +1699,7 @@ fn table_keys<'a>(page: Page, keys: &[KeyPress]) -> Element<'a, SettingsMessage>
 }
 
 fn table_key<'a>(key: &KeyPress) -> Element<'a, SettingsMessage> {
-    let content = text(key.to_string()).size(TEXT_SIZE / RATIO).font(Font {
-        family: font::Family::Monospace,
-        ..Default::default()
-    });
+    let content = mono(key.to_string()).size(TEXT_SIZE);
 
     let content = container(content)
         .padding(5)
@@ -1764,9 +1742,7 @@ fn draw_subtitles<'a>(
             .on_press(SubtitleMessage::ToggleSubtitles)
             .style(styles::button::text);
 
-        let toggle = toggler(show_subtitles)
-            .on_toggle(SubtitleMessage::Subtitles)
-            .size(TOGGLER_SIZE);
+        let toggle = toggler(show_subtitles).on_toggle(SubtitleMessage::Subtitles);
 
         row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
     };
@@ -1779,6 +1755,7 @@ fn draw_subtitles<'a>(
         let input = text_input("", &amt)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
+            .font(regular_font())
             .align_x(Horizontal::Right)
             .padding(INPUT_PADDING)
             .on_input(SubtitleMessage::SubSize);
@@ -1798,6 +1775,7 @@ fn draw_subtitles<'a>(
         let input = text_input("", text_color)
             .width(color_width)
             .size(TEXT_SIZE)
+            .font(regular_font())
             .align_x(Horizontal::Right)
             .padding(INPUT_PADDING)
             .on_input(SubtitleMessage::SubColor);
@@ -1811,6 +1789,7 @@ fn draw_subtitles<'a>(
         let input = text_input("", background_color)
             .width(color_width)
             .size(TEXT_SIZE)
+            .font(regular_font())
             .align_x(Horizontal::Right)
             .padding(INPUT_PADDING)
             .on_input(SubtitleMessage::SubBackground);
@@ -1864,6 +1843,7 @@ fn draw_general<'a>(
         let input = text_input("Interval in seconds", &interval)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
+            .font(regular_font())
             .padding(INPUT_PADDING)
             .on_input(GeneralMessage::Refresh)
             .align_x(Horizontal::Right);
@@ -1889,6 +1869,7 @@ fn draw_general<'a>(
         let input = text_input("", &recents)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
+            .font(regular_font())
             .padding(INPUT_PADDING)
             .align_x(Horizontal::Right)
             .on_input(GeneralMessage::Recents);
@@ -1914,6 +1895,7 @@ fn draw_general<'a>(
         let input = text_input("", &searches)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
+            .font(regular_font())
             .padding(INPUT_PADDING)
             .align_x(Horizontal::Right)
             .on_input(GeneralMessage::Search);
@@ -1945,6 +1927,7 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
         let label = label_maker("Content layout ");
 
         let layouts = pick_list(Layout::VARIANTS, Some(*layout), AppearanceMessage::Layout)
+            .font(regular_font())
             .handle(handle.clone())
             .padding(LIST_PADDING)
             .text_size(TEXT_SIZE)
@@ -1959,6 +1942,7 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
         let label = label_maker("Theme ");
 
         let theme = pick_list(AppTheme::VARIANTS, Some(*theme), AppearanceMessage::Theme)
+            .font(regular_font())
             .handle(handle.clone())
             .padding(LIST_PADDING)
             .text_size(TEXT_SIZE)
@@ -1986,7 +1970,7 @@ fn draw_media<'a>(
             let add = button(
                 row!(
                     icons::icon(icons::FOLDER_ADD).size(TEXT_SIZE),
-                    text("Add Folder").size(TEXT_SIZE)
+                    sized_medium("Add Folder", TEXT_SIZE)
                 )
                 .spacing(8.0)
                 .align_y(Vertical::Center),
@@ -2037,9 +2021,7 @@ fn draw_media<'a>(
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
-        let toggle = toggler(scan_discoverer)
-            .on_toggle(MediaMessage::ScanDiscoverer)
-            .size(TOGGLER_SIZE);
+        let toggle = toggler(scan_discoverer).on_toggle(MediaMessage::ScanDiscoverer);
 
         row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
     };
@@ -2055,9 +2037,7 @@ fn draw_media<'a>(
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
-        let toggle = toggler(restore_deleted)
-            .on_toggle(MediaMessage::RestoreDeleted)
-            .size(TOGGLER_SIZE);
+        let toggle = toggler(restore_deleted).on_toggle(MediaMessage::RestoreDeleted);
 
         row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
     };
@@ -2070,6 +2050,7 @@ fn draw_media<'a>(
         let input = text_input("Depth", &depth)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
+            .font(regular_font())
             .padding(INPUT_PADDING)
             .on_input(MediaMessage::MovieDepth)
             .align_x(Horizontal::Right);
@@ -2112,6 +2093,7 @@ fn draw_metadata<'a>(
 
         let interval = fetching_interval.as_secs().to_string();
         let input = text_input("Interval in seconds", &interval)
+            .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .padding(INPUT_PADDING)
@@ -2139,9 +2121,7 @@ fn draw_metadata<'a>(
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
-        let toggle = toggler(tmdb_rating)
-            .on_toggle(MetadataMessage::TMDBRating)
-            .size(TOGGLER_SIZE);
+        let toggle = toggler(tmdb_rating).on_toggle(MetadataMessage::TMDBRating);
 
         row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
     };
@@ -2151,6 +2131,7 @@ fn draw_metadata<'a>(
         let icon = help("The TMDB© API Read Access Token used for fetching media metadata");
 
         let input = text_input("Token", auth_token)
+            .font(mono_font())
             .width(475)
             .size(TEXT_SIZE)
             .padding(INPUT_PADDING)
@@ -2186,7 +2167,7 @@ fn draw_playback<'a>(
     let volume = {
         let label = label_maker("Default Volume ");
 
-        let value = text(format!("{volume:.2}")).size(TEXT_SIZE / RATIO);
+        let value = sized_regular(format!("{volume:.2}"), TEXT_SIZE / RATIO);
         let volume = slider(0.0..=1.0, volume, PlaybackMessage::Volume)
             .step(0.05)
             .shift_step(0.1)
@@ -2207,6 +2188,7 @@ fn draw_playback<'a>(
 
         let amt = format!("{:.02}", volume_change_amt);
         let input = text_input("", &amt)
+            .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
@@ -2225,7 +2207,7 @@ fn draw_playback<'a>(
     let speed = {
         let label = label_maker("Default Speed ");
 
-        let value = text(format!("{speed:.2}")).size(TEXT_SIZE / RATIO);
+        let value = sized_regular(format!("{speed:.2}"), TEXT_SIZE / RATIO);
         let speed = slider(0.5..=2.5, speed, PlaybackMessage::Speed)
             .step(0.1)
             .shift_step(0.2)
@@ -2246,6 +2228,7 @@ fn draw_playback<'a>(
 
         let amt = format!("{:.02}", speed_change_amt);
         let input = text_input("", &amt)
+            .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
@@ -2271,9 +2254,7 @@ fn draw_playback<'a>(
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
-        let toggle = toggler(auto_start)
-            .on_toggle(PlaybackMessage::AutoStart)
-            .size(TOGGLER_SIZE);
+        let toggle = toggler(auto_start).on_toggle(PlaybackMessage::AutoStart);
 
         row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
     };
@@ -2288,9 +2269,7 @@ fn draw_playback<'a>(
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
-        let toggle = toggler(auto_next)
-            .on_toggle(PlaybackMessage::AutoNext)
-            .size(TOGGLER_SIZE);
+        let toggle = toggler(auto_next).on_toggle(PlaybackMessage::AutoNext);
 
         row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
     };
@@ -2303,6 +2282,7 @@ fn draw_playback<'a>(
 
         let amt = format!("{:.02}", completion_point);
         let input = text_input("", &amt)
+            .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
@@ -2329,6 +2309,7 @@ fn draw_playback<'a>(
 
         let amt = format!("{:.02}", completion_watch_time);
         let input = text_input("", &amt)
+            .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
@@ -2379,6 +2360,7 @@ fn draw_seeking<'a>(
 
         let interval = thumbnail_interval.to_string();
         let input = text_input("", &interval)
+            .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
@@ -2405,6 +2387,7 @@ fn draw_seeking<'a>(
 
         let amt = format!("{:.02}", seek_change_amt);
         let input = text_input("", &amt)
+            .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
@@ -2427,6 +2410,7 @@ fn draw_seeking<'a>(
 
         let amt = format!("{:.02}", seek_shift_change_amt);
         let input = text_input("", &amt)
+            .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .align_x(Horizontal::Right)
@@ -2463,7 +2447,7 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
             .shift_step(0.1)
             .width(SLIDER_WIDTH);
 
-        let gamma = text(format!("{:.01}", filters.gamma)).size(TEXT_SIZE);
+        let gamma = sized_regular(format!("{:.01}", filters.gamma), TEXT_SIZE);
         let slider = row!(gamma, slider)
             .spacing(SLIDER_SPACING)
             .align_y(Vertical::Center);
@@ -2483,7 +2467,7 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
         .shift_step(0.1)
         .width(SLIDER_WIDTH);
 
-        let brightness = text(format!("{:.01}", filters.brightness)).size(TEXT_SIZE);
+        let brightness = sized_regular(format!("{:.01}", filters.brightness), TEXT_SIZE);
         let slider = row!(brightness, slider)
             .spacing(SLIDER_SPACING)
             .align_y(Vertical::Center);
@@ -2499,7 +2483,7 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
             .shift_step(0.1)
             .width(SLIDER_WIDTH);
 
-        let contrast = text(format!("{:.01}", filters.contrast)).size(TEXT_SIZE);
+        let contrast = sized_regular(format!("{:.01}", filters.contrast), TEXT_SIZE);
         let slider = row!(contrast, slider)
             .spacing(SLIDER_SPACING)
             .align_y(Vertical::Center);
@@ -2515,7 +2499,7 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
             .shift_step(0.1)
             .width(SLIDER_WIDTH);
 
-        let hue = text(format!("{:.01}", filters.hue)).size(TEXT_SIZE);
+        let hue = sized_regular(format!("{:.01}", filters.hue), TEXT_SIZE);
         let slider = row!(hue, slider)
             .spacing(SLIDER_SPACING)
             .align_y(Vertical::Center);
@@ -2535,7 +2519,7 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
         .shift_step(0.1)
         .width(SLIDER_WIDTH);
 
-        let saturation = text(format!("{:.01}", filters.saturation)).size(TEXT_SIZE);
+        let saturation = sized_regular(format!("{:.01}", filters.saturation), TEXT_SIZE);
         let slider = row!(saturation, slider)
             .spacing(SLIDER_SPACING)
             .align_y(Vertical::Center);

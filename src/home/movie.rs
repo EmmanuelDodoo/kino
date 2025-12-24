@@ -132,7 +132,7 @@ impl MoviePage {
                 })
                 .style(styles::button::text)
                 .padding(0);
-            let release = text(movie.media.release_year()).size(H7);
+            let release = sized_medium(movie.media.release_year(), H7);
 
             let details = row!(release, separator(), duration)
                 .spacing(6)
@@ -142,7 +142,7 @@ impl MoviePage {
             let tag_len = movie.media.tags.len();
 
             for (i, tag) in movie.media.tags.iter().enumerate() {
-                tags.push(Element::from(text(tag).size(H7)));
+                tags.push(Element::from(h8(tag)));
 
                 if i < tag_len - 1 {
                     tags.push(separator())
@@ -156,10 +156,15 @@ impl MoviePage {
         let item = "Overview";
         let tabs = Tab::ALL.into_iter().map(|tab| {
             let is_selected = self.tab == tab;
+            let text = if is_selected {
+                bold(tab.to_str(item))
+            } else {
+                regular(tab.to_str(item))
+            };
 
             Element::from(
                 column!(
-                    button(text(tab.to_str(item)).size(H7))
+                    button(text)
                         .on_press(MoviePageMessage {
                             id,
                             message: Message::Tab(tab)
@@ -191,7 +196,7 @@ impl MoviePage {
 
             match self.tab {
                 Tab::Items => {
-                    let synopsis = text(movie.media.synopsis());
+                    let synopsis = regular(movie.media.synopsis());
 
                     scrollable(column!(synopsis).spacing(4.0).width(width))
                         .spacing(4.0)
@@ -202,7 +207,7 @@ impl MoviePage {
                     let comments = ["Some comment here: "; 7]
                         .into_iter()
                         .enumerate()
-                        .map(|(i, comment)| Element::from(text(format!("{comment}{i}"))));
+                        .map(|(i, comment)| Element::from(regular(format!("{comment}{i}"))));
 
                     let comments =
                         scrollable(column(comments).spacing(4.0).width(Length::Fill)).spacing(4.0);
@@ -228,7 +233,7 @@ impl MoviePage {
         let actions = center_x(
             row!(
                 button(
-                    row!(icon(PLAY).size(H5), text("Play").size(H5))
+                    row!(icon(PLAY).size(H5), sized_medium("Play", P))
                         .spacing(16.0)
                         .align_y(Vertical::Center),
                 )
@@ -238,7 +243,7 @@ impl MoviePage {
                     message: Message::Play
                 })
                 .style(|theme, status| {
-                    let default = styles::button::subtlest(theme, status);
+                    let default = styles::button::primary(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }
@@ -246,7 +251,7 @@ impl MoviePage {
                 button(
                     row!(
                         icon(ADD_COLLECTION).size(H5),
-                        text("Add to Collection").size(H5)
+                        sized_medium("Add to Collection", P)
                     )
                     .spacing(16.0)
                     .align_y(Vertical::Center),
@@ -257,7 +262,7 @@ impl MoviePage {
                     message: Message::AddCollection
                 })
                 .style(|theme, status| {
-                    let default = styles::button::subtlest(theme, status);
+                    let default = styles::button::primary(theme, status);
                     let border = default.border.rounded(5);
 
                     button::Style { border, ..default }

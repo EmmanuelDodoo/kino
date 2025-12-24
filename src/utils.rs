@@ -7,18 +7,16 @@ use iced::animation::{Animation, Easing};
 use iced::widget::image;
 use std::path::{Path, PathBuf};
 
-use crate::error::*;
+use crate::error::{Error, GStreamerError};
 use crate::variants;
 
 pub mod config;
 pub use config::*;
 pub mod playlist;
 pub use playlist::*;
-pub mod icons;
-pub use icons::*;
-pub mod typo;
-pub use typo::*;
 pub mod filter;
+pub mod icons;
+pub mod typo;
 pub use filter::Filter;
 pub mod sort;
 pub use sort::{Sort, SortKind};
@@ -31,6 +29,10 @@ pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
     iced::widget::Space::new().width(0).height(0).into()
 }
 
+pub fn load_fonts() -> iced::Task<Result<(), iced::font::Error>> {
+    iced::Task::batch([])
+}
+
 pub fn loading_svg(
     animation: &Animation<bool>,
     now: iced::time::Instant,
@@ -38,7 +40,7 @@ pub fn loading_svg(
     use iced::widget::svg::{Style, Svg};
     use iced::{Radians, Rotation};
 
-    let handle = &*LOADING_SVG_HANDLE;
+    let handle = &*icons::LOADING_SVG_HANDLE;
     let rotation = animation.interpolate(0.0, std::f32::consts::TAU, now);
     let rotation = Rotation::Floating(Radians(rotation));
 
@@ -71,7 +73,7 @@ pub fn tooltip<'a, Message: 'a>(
 
     tooltip(
         content,
-        container(text(label).size(H8))
+        container(typo::sized_regular(label, typo::H8))
             .clip(true)
             .max_width(350)
             .max_height(100)
@@ -168,7 +170,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
         background_color,
     } = description;
 
-    let content = text(subtitles)
+    let content = typo::regular(subtitles)
         .size(size.max(5))
         .color(u32_to_rgba(color))
         .font(font)
