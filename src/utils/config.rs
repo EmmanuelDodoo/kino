@@ -919,14 +919,14 @@ mod keys {
 
             let modifiers = match self.modifiers {
                 Some(modifiers) => {
-                    format!(" + {}", modifiers)
+                    format!("{} + ", modifiers)
                 }
                 None => String::default(),
             };
 
             write!(
                 f,
-                "{}{modifiers}",
+                "{modifiers}{}",
                 match &self.key {
                     Key::Named(named) => format!("{named:?}"),
                     Key::Character(character) => format!("{character}"),
