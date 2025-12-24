@@ -985,7 +985,7 @@ impl Settings {
             .height(Length::Fill);
 
         let content = container(content).style(|theme| {
-            let default = styles::container::bw(theme);
+            let default = styles::container::bw3(theme);
             let border = default.border.rounded(2.5);
 
             container::Style { border, ..default }
@@ -1421,9 +1421,9 @@ fn side_button<'a>(
             .width(Length::Fill)
             .style(move |theme, status| {
                 if current {
-                    styles::button::subtle_primary(theme, status)
+                    styles::button::background_primary(theme, status)
                 } else {
-                    styles::button::subtler(theme, status)
+                    styles::button::subtlest(theme, status)
                 }
             })
             .on_press(message),
@@ -1464,7 +1464,7 @@ fn directory_draw<'a>(
     let label = span(path)
         .strikethrough(matches!(operation, Operation::Delete))
         .font(mono_font())
-        .size(size);
+        .size(size / RATIO);
     let label = rich_text([label]).on_link_click(|_: ()| MediaMessage::None);
 
     let tag = regular(directory.media_type.to_string()).size(size / (RATIO * RATIO));
@@ -1556,7 +1556,9 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
 
     let content = column!(folder, kind, actions).spacing(20);
 
-    modal_container(content).max_width(450).into()
+    modal_container(content).max_width(450)
+        .padding([12, 16])
+        .into()
 }
 
 fn draw_capture_key<'a>(
@@ -1568,11 +1570,11 @@ fn draw_capture_key<'a>(
         Some(keypress) => {
             let keypress = table_key(keypress);
             container(keypress)
-                .align_y(Vertical::Center)
-                .align_x(Horizontal::Center)
         }
-        None => container(""),
+        None => container("Press a Key"),
     }
+    .center_x(Length::Fill)
+    .center_y(40)
     .height(40)
     .width(Length::Fill)
     .padding([2, 4])
@@ -1673,7 +1675,7 @@ fn table_name<'a>(
         .padding(0)
         .on_press(SettingsMessage::ClearAllBindings(action));
     let clear = binding_tooltip(clear, "Remove all bindings");
-    let label = sized_medium(label,TEXT_SIZE / RATIO);
+    let label = sized_medium(label, TEXT_SIZE / RATIO);
 
     row!(label, space::horizontal(), clear)
         .align_y(Vertical::Center)
@@ -1823,7 +1825,7 @@ fn section<'a, Message: 'a>(
 
     let content = container(content)
         .padding(PADDING)
-        .style(styles::container::bw2);
+        .style(styles::container::bw3);
 
     column!(header, content).spacing(SPACING).into()
 }

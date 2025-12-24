@@ -2,6 +2,7 @@ use iced::{Background, Border, Color, Theme, border, color, theme, widget};
 
 const SLATE: Color = Color::from_rgb8(144, 161, 185);
 const SLATE2: Color = Color::from_rgb8(202, 213, 226);
+pub const RADIUS: f32 = 2.5;
 
 pub mod container {
     use super::*;
@@ -39,15 +40,15 @@ pub mod container {
         style(theme.extended_palette().primary.strong)
     }
 
-    pub fn bw(theme: &Theme) -> Style {
+    pub fn bw2(theme: &Theme) -> Style {
         style(theme.extended_palette().background.weaker)
     }
 
-    pub fn bw2(theme: &Theme) -> Style {
+    pub fn bw3(theme: &Theme) -> Style {
         style(theme.extended_palette().background.weakest)
     }
 
-    pub fn bw3(theme: &Theme) -> Style {
+    pub fn bw(theme: &Theme) -> Style {
         style(theme.extended_palette().background.weak)
     }
 
@@ -57,6 +58,14 @@ pub mod container {
 
     pub fn bs(theme: &Theme) -> Style {
         style(theme.extended_palette().background.strong)
+    }
+
+    pub fn bs2(theme: &Theme) -> Style {
+        style(theme.extended_palette().background.stronger)
+    }
+
+    pub fn bs3(theme: &Theme) -> Style {
+        style(theme.extended_palette().background.strongest)
     }
 
     pub fn dark(theme: &Theme) -> Style {
@@ -100,7 +109,7 @@ pub mod button {
         Style {
             background: Some(Background::Color(pair.color)),
             text_color: pair.text,
-            border: border::rounded(2),
+            border: border::rounded(RADIUS),
             ..Style::default()
         }
     }
@@ -385,6 +394,29 @@ pub mod button {
         let palette = theme.extended_palette();
         let pair = theme::palette::Pair {
             color: palette.background.weaker.color,
+            text: palette.primary.strong.color,
+        };
+
+        let base = styled(pair);
+
+        match status {
+            Status::Active => base,
+            Status::Pressed => Style {
+                background: Some(Background::Color(palette.background.strongest.color)),
+                ..base
+            },
+            Status::Hovered => Style {
+                background: Some(palette.background.strong.color.into()),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
+    pub fn weak_primary(theme: &Theme, status: Status) -> Style {
+        let palette = theme.extended_palette();
+        let pair = theme::palette::Pair {
+            color: palette.background.weak.color,
             text: palette.primary.strong.color,
         };
 

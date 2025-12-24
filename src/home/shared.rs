@@ -3,6 +3,7 @@ use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Filter, Sort, collage, sample_complement, styles};
 use crate::utils::{default_poster, empty, tooltip};
+use crate::variants;
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
@@ -23,24 +24,26 @@ pub const LIST_HEIGHT: f32 = 150.0;
 pub const LIST_WIDTH: f32 = LIST_HEIGHT * 5.5 / 10.0;
 pub const IMAGE_RADIUS: f32 = 7.0;
 
+variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum Tab {
-    #[default]
-    Items,
-    Data,
-    Comments,
-    Collections,
+    pub enum Tab {
+        #[default]
+        Items,
+        Data,
+        // Comments,
+        Collections,
+    }
 }
 
 impl Tab {
-    pub const ALL: [Self; 4] = [Self::Items, Self::Data, Self::Comments, Self::Collections];
+    // pub const ALL: [Self; 3] = [Self::Items, Self::Data, Self::Collections];
 
     pub fn to_str(self, item: &str) -> &str {
         match self {
             Self::Items => item,
             Self::Data => "Data",
             Self::Collections => "Collections",
-            Self::Comments => "Comments",
+            // Self::Comments => "Comments",
         }
     }
 }
@@ -220,10 +223,14 @@ pub fn data<'a, Message: 'a>(
     unicode: char,
 ) -> Element<'a, Message> {
     let size = H7;
-    let value = h7(value);
-    let value = row!(icon(unicode).size(size), value)
-        .spacing(2.0)
-        .align_y(Vertical::Center);
+    let color = |theme: &Theme| text::Style {
+        color: Some(theme.extended_palette().primary.weak.color),
+    };
+
+    let value = h7(value).style(color);
+    let icon = icon(unicode).size(size).style(color);
+
+    let value = row!(icon, value).spacing(2.0).align_y(Vertical::Center);
     let label = sized_medium(label, H8);
 
     column!(value, label)
@@ -952,6 +959,7 @@ impl SearchView {
                     })
             };
 
+            let has_tags = !self.item.tags.is_empty();
             let tags = {
                 let mut tags = vec![];
                 let tag_len = self.item.tags.len();
@@ -980,9 +988,13 @@ impl SearchView {
                 container(rule::vertical(2.0)).height(H8).clip(true).into()
             };
 
-            row!(media, vert, tags)
-                .spacing(5.0)
-                .align_y(Vertical::Center)
+            if has_tags {
+                row!(media, vert, tags)
+            } else {
+                row!(media)
+            }
+            .spacing(5.0)
+            .align_y(Vertical::Center)
         };
 
         let content = column!(top, name, snippet).spacing(2.0);
@@ -1007,7 +1019,7 @@ impl SearchView {
 
         button(content)
             .style(|theme, status| {
-                let default = styles::button::subtle(theme, status);
+                let default = styles::button::subtlest(theme, status);
                 let border = default.border.rounded(IMAGE_RADIUS);
 
                 button::Style { border, ..default }

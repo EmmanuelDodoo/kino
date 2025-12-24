@@ -5,9 +5,9 @@
 
 -- Insert TV Shows
 INSERT INTO tv_show (id, directory, path, name, original_name, poster, tags, synopsis, release, created_at, backdrop) VALUES
-('0199cff2-667c-7c73-b6c2-6e0f1276d32f', '0199de91-1a9d-73d2-a819-a4dfbadf8228', 'digital','Digital Horizons some long ass text for testing limit','Digital Horizons', '.dev/images/show.png', 'sci-fi,drama,technology', 'A gripping tale of AI consciousness and human connection in a near-future world.', '2023-02-01', '2023-01-01T10:00:00Z', '.dev/images/show3.png'),
-('0199cffc-ead6-7ab3-a961-cc4c146e4fc8', '0199de91-1a9d-73d2-a819-a4dfbadf8228','Mystery Manor', 'Mystery Manor','Mystery Manor', '.dev/images/show.png', 'mystery,thriller,crime', 'Detective Sarah Chen solves impossible crimes in a mansion full of secrets.', '2023-03-03', '2023-05-15T09:00:00Z', '.dev/images/show3.png'),
-('0199cffd-c688-79d2-8018-bad6db895ff5', '0199de91-1a9d-73d2-a819-a4dfbadf8228', 'Culinary Quest', 'Culinary Quest','Culinary Quest', '.dev/images/show.png', 'cooking,competition,reality', 'Top chefs compete in exotic locations for the ultimate culinary title.', '2024-04-04', '2024-05-15T09:00:00Z', '.dev/images/show3.png');
+('0199cff2-667c-7c73-b6c2-6e0f1276d32f', '0199de91-1a9d-73d2-a819-a4dfbadf8227', 'digital','Digital Horizons some long ass text for testing limit','Digital Horizons', '.dev/images/show.png', 'sci-fi,drama,technology', 'A gripping tale of AI consciousness and human connection in a near-future world.', '2023-02-01', '2023-01-01T10:00:00Z', '.dev/images/show3.png'),
+('0199cffc-ead6-7ab3-a961-cc4c146e4fc8', '0199de91-1a9d-73d2-a819-a4dfbadf8227','Mystery Manor', 'Mystery Manor','Mystery Manor', '.dev/images/show.png', 'mystery,thriller,crime', 'Detective Sarah Chen solves impossible crimes in a mansion full of secrets.', '2023-03-03', '2023-05-15T09:00:00Z', '.dev/images/show3.png'),
+('0199cffd-c688-79d2-8018-bad6db895ff5', '0199de91-1a9d-73d2-a819-a4dfbadf8227', 'Culinary Quest', 'Culinary Quest','Culinary Quest', '.dev/images/show.png', 'cooking,competition,reality', 'Top chefs compete in exotic locations for the ultimate culinary title.', '2024-04-04', '2024-05-15T09:00:00Z', '.dev/images/show3.png');
 
 -- Insert Seasons
 INSERT INTO season (id, path, name, original_name, poster, synopsis, release, created_at, show_id, season_number) VALUES

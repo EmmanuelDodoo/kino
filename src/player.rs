@@ -2179,11 +2179,11 @@ fn draw_config<'a>(
             button(text)
                 .width(Length::Fill)
                 .style(move |theme, status| {
-                    if current {
-                        styles::button::background_primary(theme, status)
-                    } else {
-                        styles::button::subtle(theme, status)
-                    }
+                if current {
+                    styles::button::background_primary(theme, status)
+                } else {
+                    styles::button::subtlest(theme, status)
+                }
                 })
                 .on_press(ManagerMessage::Config(ConfigMessage::Tab(*tab))),
         )
@@ -2539,7 +2539,7 @@ fn draw_config<'a>(
 
     let side = container(side).style(|theme| {
         let default = styles::container::bw3(theme);
-        let border = default.border.rounded(5.0);
+        let border = default.border.rounded(styles::RADIUS);
 
         container::Style { border, ..default }
     });

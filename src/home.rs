@@ -1285,7 +1285,7 @@ impl Home {
                 let color = theme
                     .extended_palette()
                     .primary
-                    .strong
+                    .weak
                     .color
                     .scale_alpha(0.85);
 
@@ -1296,7 +1296,7 @@ impl Home {
             let text = display("kino").style(color);
 
             container(
-                row!( text)
+                row!(text)
                     .padding([5, 10])
                     .align_y(Vertical::Center)
                     .spacing(12.0),
@@ -1438,6 +1438,7 @@ impl Home {
             .width(275.0)
             .height(Length::Fill);
 
+        let content = container(content).style(styles::container::bw3);
         content.into()
     }
 
@@ -1590,7 +1591,7 @@ impl Home {
         let comp = |icon: char, msg: FilterMessage| {
             icons::sized_button(icon, size * RATIO)
                 .padding([5, 5])
-                .style(styles::button::background)
+                .style(styles::button::subtlest)
                 .on_press(HomeMessage::Filter(msg))
         };
 
@@ -1847,7 +1848,7 @@ impl Home {
                 }))
                 .spacing(8),
             )
-            .style(styles::container::bw)
+            .style(styles::container::bw2)
             .padding([3, 6]);
 
             menu(base, hidden)
@@ -1902,7 +1903,7 @@ impl Home {
                     .style(if self.filters.is_any() {
                         styles::button::background
                     } else {
-                        styles::button::subtler
+                        styles::button::text_primary
                     })
                     .on_press(HomeMessage::ToggleFilter)
                     .padding([5, 5]),
@@ -1927,7 +1928,7 @@ impl Home {
                     .style(if self.sort.is_empty() {
                         styles::button::background
                     } else {
-                        styles::button::subtler
+                        styles::button::text_primary
                     })
                     .on_press(HomeMessage::ToggleSort)
                     .padding([5, 5]),
@@ -2043,7 +2044,6 @@ impl Home {
             content_area
         ))
         .clip(true)
-        .style(styles::container::bb)
         .height(Length::Fill)
         .width(Length::Fill);
 
@@ -2138,7 +2138,7 @@ impl Home {
                 .height(Length::Fill)
                 .padding(3),
         )
-        .style(styles::container::bw);
+        .style(styles::container::bb);
 
         match &self.view {
             None => content.into(),
@@ -2736,9 +2736,9 @@ fn icon_button<'a>(
         button(content)
             .style(move |theme, status| {
                 if current {
-                    styles::button::subtle_primary(theme, status)
+                    styles::button::background_primary(theme, status)
                 } else {
-                    styles::button::subtler(theme, status)
+                    styles::button::subtlest(theme, status)
                 }
             })
             .on_press(message),
@@ -2778,7 +2778,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
                 .on_press(HomeMessage::CollectionConfig(message))
                 .style(move |theme, status| {
                     let default = if selected {
-                        styles::button::subtle_primary(theme, status)
+                        styles::button::weak_primary(theme, status)
                     } else {
                         styles::button::subtle(theme, status)
                     };
@@ -2873,7 +2873,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let views = container(views)
             .padding(padding)
             .style(move |theme: &Theme| {
-                let color = theme.extended_palette().secondary.strong.color;
+                let color = theme.extended_palette().secondary.weak.color;
                 let default = styles::container::transparent(theme);
                 let border = default.border.rounded(radius).color(color).width(1.5);
 
@@ -2907,7 +2907,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let icons = container(icons)
             .padding(padding)
             .style(move |theme: &Theme| {
-                let color = theme.extended_palette().secondary.strong.color;
+                let color = theme.extended_palette().secondary.weak.color;
                 let default = styles::container::transparent(theme);
                 let border = default.border.rounded(radius).color(color).width(1.5);
 
@@ -2975,7 +2975,7 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
                 button(content)
                     .on_press(HomeMessage::SearchMessage(SearchMessage::ClearFilter))
                     .style(|theme, status| {
-                        let default = styles::button::subtle_primary(theme, status);
+                        let default = styles::button::text_primary(theme, status);
                         let border = default.border.rounded(5);
 
                         button::Style { border, ..default }
@@ -3007,6 +3007,7 @@ fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
     let content = column!(input).extend(items).spacing(16.0);
 
     modal_container(content)
+        .padding([8, 8])
         .max_width(550)
         .height(Length::Shrink)
         .into()
@@ -3088,7 +3089,7 @@ fn draw_collection_add<'a>(
     )
     .padding([2, 4])
     .on_press(HomeMessage::NewCollection)
-    .style(styles::button::text);
+    .style(styles::button::text_primary);
 
     let collections = column!(new, collections)
         .spacing(5.0)

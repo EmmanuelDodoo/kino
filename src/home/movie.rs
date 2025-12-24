@@ -154,8 +154,8 @@ impl MoviePage {
         };
 
         let item = "Overview";
-        let tabs = Tab::ALL.into_iter().map(|tab| {
-            let is_selected = self.tab == tab;
+        let tabs = Tab::VARIANTS.into_iter().map(|tab| {
+            let is_selected = self.tab == *tab;
             let text = if is_selected {
                 bold(tab.to_str(item))
             } else {
@@ -167,7 +167,7 @@ impl MoviePage {
                     button(text)
                         .on_press(MoviePageMessage {
                             id,
-                            message: Message::Tab(tab)
+                            message: Message::Tab(*tab)
                         })
                         .style(|theme, status| {
                             let default = styles::button::text_white(theme, status);
@@ -202,18 +202,18 @@ impl MoviePage {
                         .spacing(4.0)
                         .into()
                 }
-                Tab::Comments => {
-                    // todo
-                    let comments = ["Some comment here: "; 7]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, comment)| Element::from(regular(format!("{comment}{i}"))));
-
-                    let comments =
-                        scrollable(column(comments).spacing(4.0).width(Length::Fill)).spacing(4.0);
-
-                    column!(comments).spacing(8.0).width(width).into()
-                }
+                // todo
+                // Tab::Comments => {
+                //     let comments = ["Some comment here: "; 7]
+                //         .into_iter()
+                //         .enumerate()
+                //         .map(|(i, comment)| Element::from(regular(format!("{comment}{i}"))));
+                //
+                //     let comments =
+                //         scrollable(column(comments).spacing(4.0).width(Length::Fill)).spacing(4.0);
+                //
+                //     column!(comments).spacing(8.0).width(width).into()
+                // }
                 Tab::Data => data_tab(&movie.media, width),
                 Tab::Collections => {
                     let collections = memberships.map(|collection| {

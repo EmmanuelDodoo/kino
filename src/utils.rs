@@ -80,7 +80,7 @@ pub fn tooltip<'a, Message: 'a>(
             .padding([3, 6])
             .style(|theme: &Theme| {
                 let color = theme.extended_palette().secondary.weak.color;
-                let default = styles::container::bw(theme);
+                let default = styles::container::bw2(theme);
                 let border = default.border.rounded(5.0).width(1.0).color(color);
                 let shadow = Shadow {
                     color,
@@ -108,7 +108,7 @@ pub fn modal_container<'a, Message: 'a>(
     container(content)
         .padding([8, 12])
         .style(|theme| {
-            let default = styles::container::bw(theme);
+            let default = styles::container::bw2(theme);
             let border = default.border.rounded(5.0);
 
             container::Style { border, ..default }
