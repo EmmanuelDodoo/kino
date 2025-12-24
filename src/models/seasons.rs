@@ -42,8 +42,6 @@ impl SeasonId {
 
 impl From<SeasonId> for ToSqlOutput<'_> {
     fn from(value: SeasonId) -> Self {
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         ToSqlOutput::from(value.0.to_string())
     }
 }
@@ -74,9 +72,6 @@ pub struct Season {
 
 impl Season {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        // let id = SeasonId(row.get::<_, Uuid>("id")?);
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         let id = SeasonId::from_row(row)?;
 
         let path = row.get::<_, String>("path")?;
@@ -103,12 +98,8 @@ impl Season {
 
         let last_watched = row.get::<_, Option<DateTime<Local>>>("last_watched")?;
 
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         let show = ShowId::from_child(row)?;
 
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         let recent_episode = EpisodeId::from_recents(row)?;
 
         let duration = row.get::<_, u64>("duration")?;

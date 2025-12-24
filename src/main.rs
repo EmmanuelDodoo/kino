@@ -102,7 +102,7 @@ fn main() -> iced::Result {
     //     .theme(Playground::theme)
 
         .settings(iced::Settings {
-            // default_font: regular_font(),
+            default_font: regular_font(),
             fonts,
             ..Default::default()
 

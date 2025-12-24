@@ -1403,10 +1403,27 @@ pub struct Success {
     pub rows: usize,
 }
 
+impl Success {
+    pub fn log(&self) {
+        tracing::info!(
+            "Success {:?} on {:?} with {} rows changed",
+            self.op,
+            self.table,
+            self.rows
+        )
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Failure<'a> {
     pub query: Query<'a>,
     pub error: Box<rusqlite::Error>,
+}
+
+impl<'a> Failure<'a> {
+    pub fn log(&self) {
+        tracing::warn!("Failed {:?} on {:?}", self.query.op, self.query.table)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -2038,6 +2055,16 @@ impl BatchResult<'_> {
 
     pub fn has_successes(&self) -> bool {
         !self.successes.is_empty()
+    }
+
+    pub fn log(&self) {
+        for success in &self.successes {
+            success.log()
+        }
+
+        for failed in &self.failures {
+            failed.log()
+        }
     }
 }
 

@@ -76,7 +76,6 @@ pub struct VideoFilters {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default = "VideoSettings::defaults", rename = "Player")]
-// todo filters
 pub struct VideoSettings {
     pub thumbnail_interval: u32,
     pub volume: f64,

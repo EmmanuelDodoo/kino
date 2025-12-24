@@ -11,8 +11,6 @@ pub struct MovieId(Uuid);
 
 impl From<MovieId> for ToSqlOutput<'_> {
     fn from(value: MovieId) -> Self {
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         ToSqlOutput::from(value.0.to_string())
     }
 }
@@ -44,8 +42,6 @@ pub struct MCommentId(Uuid);
 
 impl From<MCommentId> for ToSqlOutput<'_> {
     fn from(value: MCommentId) -> Self {
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         ToSqlOutput::from(value.0.to_string())
     }
 }
@@ -73,7 +69,6 @@ pub struct Movie {
 
 impl Movie {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Movie> {
-        // todo
         let id = MovieId::from_row(row)?;
         let directory = row.get::<_, String>("directory")?;
         let directory = DirectoryId(Uuid::try_parse(&directory).unwrap());
@@ -396,7 +391,6 @@ pub struct MComment {
 
 impl MComment {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        //todo
         let id = row.get::<_, String>("id")?;
         let id = MCommentId(Uuid::try_parse(&id).unwrap());
 

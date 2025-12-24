@@ -877,10 +877,9 @@ impl App {
 
                 let scan = Task::perform(
                     async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth, restore) },
-                    |(todo, res)| {
-                        if let Some(res) = todo {
-                            dbg!(res.successes.len());
-                            dbg!(res.failures.len());
+                    |(batch, res)| {
+                        if let Some(batch) = batch {
+                            batch.log()
                         }
                         Message::ScanComplete(res)
                     },
@@ -894,7 +893,10 @@ impl App {
                 let last_scan = models::datetime_to_sql(&last_scan);
 
                 let _todo = match self.db.last_scans(scanned, last_scan) {
-                    Ok(rows) => rows,
+                    Ok(rows) => {
+                        tracing::info!("Directories last scanned updated {rows} rows");
+                        rows
+                    }
                     Err(error) => {
                         return Task::done(Message::error(error));
                     }
@@ -981,7 +983,7 @@ impl App {
             Status::Error => error!(toast.message),
         }
 
-        self.toasts.push(dbg!(toast));
+        self.toasts.push(toast);
     }
 
     fn push_toasts(&mut self, toasts: impl Iterator<Item = toast::Toast>) {

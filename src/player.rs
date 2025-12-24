@@ -1817,10 +1817,6 @@ fn load_video<Message: 'static + MaybeSend>(
             }
 
             std::thread::sleep(std::time::Duration::from_millis(150));
-            // if let Err(error) = player.video.seek(position, false) {
-            //     return Task::done(Message::error(error));
-            // };
-            //
 
             let progress = if item.progress >= 0.98 {
                 0.0
@@ -2169,6 +2165,7 @@ fn draw_config<'a>(
     text_color: &'a str,
     background_color: &'a str,
 ) -> Element<'a, ManagerMessage> {
+    // todo: Hardware volume, Aspect Ratio
     let size = H7;
     let padding = [2, 5];
     let spacing = 8;
@@ -2373,7 +2370,7 @@ fn draw_config<'a>(
                 let add = button(
                     row!(
                         icons::icon(icons::FILE_UP).size(size),
-                        sized_regular("Load Subtitles", size)
+                        sized_medium("Load Subtitles", size)
                     )
                     .spacing(8.0)
                     .align_y(Vertical::Center),
@@ -2528,7 +2525,6 @@ fn draw_config<'a>(
                     .spacing(spacing)
             };
 
-            // todo: Hardware volume,
             column!(selection).width(Length::Fill).spacing(12).into()
         }
     };

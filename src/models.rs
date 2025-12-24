@@ -168,8 +168,6 @@ pub struct DirectoryId(Uuid);
 
 impl From<DirectoryId> for ToSqlOutput<'_> {
     fn from(value: DirectoryId) -> Self {
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         ToSqlOutput::from(value.0.to_string())
     }
 }
@@ -185,7 +183,6 @@ pub struct Directory {
 
 impl Directory {
     pub(super) fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        //todo
         let id = row.get::<_, String>("id")?;
         let id = DirectoryId(Uuid::try_parse(&id).unwrap());
         let path = row.get::<_, String>("path")?;
@@ -316,20 +313,16 @@ impl Directory {
         }
     }
 
-    pub fn new<'a>(path: String, media_type: MediaType, active: bool) -> (Self, Query<'a>) {
+    pub fn new(path: String, media_type: MediaType, active: bool) -> Self {
         let last_scan = Local::now();
 
-        let new = Self {
+        Self {
             id: DirectoryId(Uuid::now_v7()),
             media_type,
             path,
             active,
             last_scan,
-        };
-
-        let query = new.insert();
-
-        (new, query)
+        }
     }
 }
 

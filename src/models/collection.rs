@@ -27,8 +27,6 @@ impl CollectionId {
 
 impl From<CollectionId> for ToSqlOutput<'_> {
     fn from(value: CollectionId) -> Self {
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         ToSqlOutput::from(value.0.to_string())
     }
 }

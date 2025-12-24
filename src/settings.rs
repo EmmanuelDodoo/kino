@@ -829,8 +829,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    // todo??
-                    let (new, _query) = Directory::new(path, kind, true);
+                    let new = Directory::new(path, kind, true);
 
                     self.directories.push((new, None, Operation::Insert));
                     self.directories_shown = true;
@@ -982,7 +981,7 @@ impl Settings {
 
         let content = column!(header, space::vertical().height(20.0), options)
             .padding(iced::Padding::ZERO.left(12))
-            .width(300.0)
+            .width(275.0)
             .height(Length::Fill);
 
         let content = container(content).style(|theme| {
@@ -1510,7 +1509,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
     let folder = {
         let path = trim_path(path, 3);
 
-        let path = mono(path).size(size);
+        let path = mono(path).size(size / RATIO);
 
         let label = sized_bold("Folder: ", size).width(100.0);
 
@@ -1663,7 +1662,7 @@ fn section_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
 }
 
 fn table_header<'a>(label: &'a str) -> text::Text<'a> {
-    sized_bold(label, TEXT_SIZE / RATIO)
+    sized_medium(label, TEXT_SIZE / RATIO)
 }
 
 fn table_name<'a>(
@@ -1674,7 +1673,7 @@ fn table_name<'a>(
         .padding(0)
         .on_press(SettingsMessage::ClearAllBindings(action));
     let clear = binding_tooltip(clear, "Remove all bindings");
-    let label = bold(label).size(TEXT_SIZE / RATIO);
+    let label = sized_medium(label,TEXT_SIZE / RATIO);
 
     row!(label, space::horizontal(), clear)
         .align_y(Vertical::Center)

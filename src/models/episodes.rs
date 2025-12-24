@@ -39,8 +39,6 @@ impl EpisodeId {
 
 impl From<EpisodeId> for ToSqlOutput<'_> {
     fn from(value: EpisodeId) -> Self {
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         ToSqlOutput::from(value.0.to_string())
     }
 }
@@ -50,8 +48,6 @@ pub struct ECommentId(Uuid);
 
 impl From<ECommentId> for ToSqlOutput<'_> {
     fn from(value: ECommentId) -> Self {
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         ToSqlOutput::from(value.0.to_string())
     }
 }
@@ -80,9 +76,6 @@ pub struct Episode {
 
 impl Episode {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        // let id = SeasonId(row.get::<_, Uuid>("id")?);
-        // todo!: to_string is needed because the raw string is fed into the db via
-        // the dummy inputs. Production shouldn't need this.
         let id = EpisodeId::from_row(row)?;
 
         let path = row.get::<_, String>("path")?;
@@ -108,7 +101,6 @@ impl Episode {
 
         let last_watched = row.get::<_, Option<DateTime<Local>>>("last_watched")?;
 
-        // todo
         let season = SeasonId::from_child(row)?;
 
         let duration = row.get::<_, u64>("duration")?;
@@ -387,7 +379,6 @@ pub struct EComment {
 
 impl EComment {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        //todo
         let id = row.get::<_, String>("id")?;
         let id = ECommentId(Uuid::try_parse(&id).unwrap());
 

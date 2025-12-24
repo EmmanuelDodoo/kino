@@ -131,7 +131,10 @@ pub fn ratings<'a, T: Media, Message: 'a>(media: &T, show_text: bool) -> Element
 
             ratings.into()
         }
-        None => row((0..5).map(|_| Element::from(icon(UNSTAR).size(size).style(color)))).into(),
+        None => row((0..5).map(|_| Element::from(icon(UNSTAR).size(size).style(color))))
+            .align_y(Vertical::Center)
+            .spacing(2.0)
+            .into(),
     }
 }
 
