@@ -240,6 +240,23 @@ impl Episode {
     }
 
     #[must_use]
+    pub fn set_synopsis<'a>(id: EpisodeId, synopsis: String) -> Query<'a> {
+        let sql = "UPDATE episode SET synopsis=:synopsis WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":synopsis", ToSqlOutput::from(synopsis)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Episode,
+            sql,
+            params,
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
     pub fn set_rating<'a>(id: EpisodeId, rating: f32) -> Query<'a> {
         debug_assert!((0.0..=5.0).contains(&rating), "Episode rating out of range");
 

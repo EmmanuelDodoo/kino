@@ -249,6 +249,23 @@ impl Season {
     }
 
     #[must_use]
+    pub fn set_synopsis<'a>(id: SeasonId, synopsis: String) -> Query<'a> {
+        let sql = "UPDATE season SET synopsis=:synopsis WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":synopsis", ToSqlOutput::from(synopsis)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Season,
+            sql,
+            params,
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
     pub fn set_rating<'a>(id: SeasonId, rating: f32) -> Query<'a> {
         debug_assert!((0.0..=5.0).contains(&rating), "Season rating out of range");
 

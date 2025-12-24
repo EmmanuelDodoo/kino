@@ -31,6 +31,7 @@ pub enum Message {
     Rate(Option<f32>),
     Goto(CollectionId),
     Rename(String),
+    Synopsis(String),
     Refetch,
     Remove,
 }
@@ -127,6 +128,14 @@ impl SeasonPage {
                 let msg = HomeMessage::OpenView(ViewMessage::Rename {
                     id: self.id.into(),
                     old: name,
+                });
+
+                Some(msg)
+            }
+            Message::Synopsis(synopsis) => {
+                let msg = HomeMessage::OpenView(ViewMessage::Synopsis {
+                    id: self.id.into(),
+                    old: synopsis,
                 });
 
                 Some(msg)
@@ -325,9 +334,13 @@ impl SeasonPage {
                 .spacing(6)
                 .align_y(Vertical::Center);
 
-            let synopsis = container(regular(season.media.synopsis()))
-                .max_width(750)
-                .height(Length::Fill);
+            let synopsis = edit_synopsis(
+                season.media.synopsis(),
+                SeasonPageMessage {
+                    id,
+                    message: Message::Synopsis(season.media.synopsis().to_owned()),
+                },
+            );
 
             let actions = row!(
                 button(

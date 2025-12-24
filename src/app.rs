@@ -45,6 +45,7 @@ pub enum FetchId {
 pub enum MediaUpdateKind {
     Rating(f32),
     Name(String),
+    Synopsis(String),
     Refetch,
     Remove,
 }
@@ -333,6 +334,12 @@ impl App {
                         ItemId::Movie(id) => Movie::set_name(id, value),
                         ItemId::Season(id) => Season::set_name(id, value),
                         ItemId::Episode(id) => Episode::set_name(id, value),
+                    },
+                    MediaUpdateKind::Synopsis(value) => match id {
+                        ItemId::Show(id) => Show::set_synopsis(id, value),
+                        ItemId::Movie(id) => Movie::set_synopsis(id, value),
+                        ItemId::Season(id) => Season::set_synopsis(id, value),
+                        ItemId::Episode(id) => Episode::set_synopsis(id, value),
                     },
                     MediaUpdateKind::Refetch => match id {
                         ItemId::Show(id) => Show::refetch(id),

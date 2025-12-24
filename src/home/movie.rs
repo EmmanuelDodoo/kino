@@ -24,6 +24,7 @@ pub enum Message {
     Rename(String),
     Refetch,
     Remove,
+    Synopsis(String),
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +74,14 @@ impl MoviePage {
                 let msg = HomeMessage::OpenView(ViewMessage::Rename {
                     id: self.id.into(),
                     old: name,
+                });
+
+                Some(msg)
+            }
+            Message::Synopsis(synopsis) => {
+                let msg = HomeMessage::OpenView(ViewMessage::Synopsis {
+                    id: self.id.into(),
+                    old: synopsis,
                 });
 
                 Some(msg)
@@ -195,13 +204,13 @@ impl MoviePage {
             let width = 750.0;
 
             match self.tab {
-                Tab::Items => {
-                    let synopsis = regular(movie.media.synopsis());
-
-                    scrollable(column!(synopsis).spacing(4.0).width(width))
-                        .spacing(4.0)
-                        .into()
-                }
+                Tab::Items => edit_synopsis(
+                    movie.media.synopsis(),
+                    MoviePageMessage {
+                        id,
+                        message: Message::Synopsis(movie.media.synopsis().to_owned()),
+                    },
+                ),
                 // todo
                 // Tab::Comments => {
                 //     let comments = ["Some comment here: "; 7]

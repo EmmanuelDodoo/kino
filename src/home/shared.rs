@@ -14,7 +14,7 @@ use iced::{
     time::Instant,
     widget::{
         self, button, center, column, container, image::Handle, markdown, mouse_area, row, rule,
-        space, stack, text, tooltip as tp,
+        scrollable, space, stack, text, tooltip as tp,
     },
 };
 
@@ -85,6 +85,15 @@ pub fn title<'a, Message: 'a + Clone>(
     row!(title, icons)
         .spacing(16.0)
         .align_y(Vertical::Center)
+        .into()
+}
+
+pub fn edit_synopsis<'a, Message: 'a + Clone>(synopsis: &'a str, on_edit: Message) -> Element<'a, Message> {
+    let synopsis = regular(synopsis);
+    let edit = button(icon(RENAME)).style(styles::button::text_primary).on_press(on_edit);
+
+    scrollable(column!(synopsis, edit).spacing(8.0))
+        .spacing(4.0)
         .into()
 }
 

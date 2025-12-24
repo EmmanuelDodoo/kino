@@ -235,6 +235,23 @@ impl Movie {
     }
 
     #[must_use]
+    pub fn set_synopsis<'a>(id: MovieId, synopsis: String) -> Query<'a> {
+        let sql = "UPDATE movie SET synopsis=:synopsis WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":synopsis", ToSqlOutput::from(synopsis)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params,
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
     pub fn refetch<'a>(id: MovieId) -> Query<'a> {
         let sql = "UPDATE movie SET tmdb_id=NULL, fetched=FALSE WHERE id=:id";
         let params = [(":id", ToSqlOutput::from(id))];

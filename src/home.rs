@@ -225,6 +225,12 @@ pub enum RenameMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum SynopsisMessage {
+    Action(text_editor::Action),
+    Submit,
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig,
     Add(ItemId),
@@ -232,6 +238,7 @@ pub enum ViewMessage {
     Search,
     Rating(ItemId, Option<f32>),
     Rename { id: ItemId, old: String },
+    Synopsis { id: ItemId, old: String },
 }
 
 #[derive(Debug)]
@@ -249,6 +256,12 @@ pub enum View {
         old: String,
         value: String,
         empty: bool,
+    },
+    Synopsis {
+        id: ItemId,
+        editor: widget::Id,
+        old: String,
+        content: text_editor::Content,
     },
 }
 
@@ -313,6 +326,7 @@ pub enum HomeMessage {
     CollectionAdd(CollectionAddMessage),
     Rating(RatingMessage),
     Rename(RenameMessage),
+    Synopsis(SynopsisMessage),
     Refetch(ItemId),
     Remove(ItemId),
     OpenView(ViewMessage),
@@ -579,6 +593,18 @@ impl Home {
                     });
 
                     Task::batch([self.update_page_scroll(), operation::focus(input)])
+                }
+                ViewMessage::Synopsis { id, old } => {
+                    let editor = widget::Id::unique();
+
+                    self.view = Some(View::Synopsis {
+                        id,
+                        editor: editor.clone(),
+                        content: text_editor::Content::with_text(&old),
+                        old,
+                    });
+
+                    Task::batch([self.update_page_scroll(), operation::focus(editor)])
                 }
             },
             HomeMessage::CollectionConfig(csg) => {
@@ -922,6 +948,26 @@ impl Home {
                         let close = self.close_view();
 
                         Task::batch([Task::done(msg), close])
+                    }
+                }
+            }
+            HomeMessage::Synopsis(ssg) => {
+                let Some(View::Synopsis { id, content, .. }) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match ssg {
+                    SynopsisMessage::Submit => {
+                        let msg = Message::MediaUpdate(MediaUpdate {
+                            id: *id,
+                            kind: MediaUpdateKind::Synopsis(content.text()),
+                        });
+
+                        Task::batch([Task::done(msg), self.close_view()])
+                    }
+                    SynopsisMessage::Action(action) => {
+                        content.perform(action);
+                        Task::none()
                     }
                 }
             }
@@ -1285,7 +1331,7 @@ impl Home {
                 let color = theme
                     .extended_palette()
                     .primary
-                    .weak
+                    .base
                     .color
                     .scale_alpha(0.85);
 
@@ -2167,6 +2213,9 @@ impl Home {
                         empty,
                         ..
                     } => draw_rename(input, old, value, *empty),
+                    View::Synopsis {
+                        editor, content, ..
+                    } => draw_synopsis(editor, content),
                 };
 
                 modal(content, overlay, HomeMessage::CloseView)
@@ -3218,4 +3267,29 @@ fn draw_rename<'a>(
         });
 
     modal_container(input).padding([6, 8]).into()
+}
+
+fn draw_synopsis<'a>(
+    editor: &widget::Id,
+    content: &'a text_editor::Content,
+) -> Element<'a, HomeMessage> {
+    let content = text_editor(content)
+        .id(editor.clone())
+        .font(regular_font())
+        .width(575)
+        .on_action(|action| HomeMessage::Synopsis(SynopsisMessage::Action(action)))
+        .key_binding(|press| {
+            use iced::keyboard::{Key, key::Named};
+            use text_editor::Binding;
+
+            match press.key {
+                Key::Named(Named::Enter) if press.modifiers.shift() => Some(Binding::Custom(
+                    HomeMessage::Synopsis(SynopsisMessage::Submit),
+                )),
+                _ => Binding::from_key_press(press),
+            }
+        })
+        .size(P);
+
+    modal_container(content).padding([6, 6]).into()
 }
