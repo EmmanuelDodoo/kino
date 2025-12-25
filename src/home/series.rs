@@ -34,7 +34,7 @@ pub enum Message {
     Synopsis(String),
     Refetch,
     Remove(String),
-    TMDB,
+    TmdbId,
 }
 
 #[derive(Debug, Clone)]
@@ -151,7 +151,7 @@ impl ShowPage {
                 });
                 Some(msg)
             }
-            Message::TMDB => {
+            Message::TmdbId => {
                 let msg = HomeMessage::OpenView(ViewMessage::TMDBId(self.id.into()));
                 Some(msg)
             }
@@ -411,7 +411,7 @@ impl ShowPage {
         let content = row!(img, header).align_y(Vertical::Center).spacing(36.0);
 
         let item = "Seasons";
-        let tabs = Tab::VARIANTS.into_iter().map(move |tab| {
+        let tabs = Tab::VARIANTS.iter().map(move |tab| {
             let is_selected = self.tab == *tab;
             let text = if is_selected {
                 bold(tab.to_str(item))
@@ -495,7 +495,7 @@ impl ShowPage {
                     Message::Refetch,
                     Message::Remove(show.media.name().to_owned()),
                     Message::Synopsis(show.media.synopsis().to_owned()),
-                    Some(Message::TMDB),
+                    Some(Message::TmdbId),
                 )
                 .map(move |message| ShowPageMessage { id, message }),
                 // todo

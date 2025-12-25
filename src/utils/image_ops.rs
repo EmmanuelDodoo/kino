@@ -8,7 +8,7 @@ use iced::Color;
 use iced::widget::image::Handle;
 
 const DEFAULT_POSTER_PATH: &[u8] = include_bytes!("../../resources/images/default_poster.png");
-pub static DEFAULT_POSTER: LazyLock<Option<Handle>> = LazyLock::new(|| default_poster());
+pub static DEFAULT_POSTER: LazyLock<Option<Handle>> = LazyLock::new(default_poster);
 
 fn open(path: &str) -> Option<DynamicImage> {
     ImageReader::open(path)
@@ -210,7 +210,7 @@ fn adaptive_sample_color_compl(img: &DynamicImage) -> Color {
 pub fn sample_complement(path: &str) -> Option<Color> {
     let img = open(path);
 
-    img.as_ref().map(|img| adaptive_sample_color_compl(img))
+    img.as_ref().map(adaptive_sample_color_compl)
 }
 
 // fn adaptive_sample_color_compl(img: &DynamicImage) -> [u8; 3] {

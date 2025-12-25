@@ -68,7 +68,7 @@ pub fn tooltip<'a, Message: 'a>(
     label: impl iced::widget::text::IntoFragment<'a>,
     position: iced::widget::tooltip::Position,
 ) -> iced::widget::Tooltip<'a, Message> {
-    use iced::widget::{container, text, tooltip};
+    use iced::widget::{container, tooltip};
     use iced::{Shadow, Theme};
 
     tooltip(
@@ -161,7 +161,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
     description: SubtitleDescription,
 ) -> iced::Element<'a, Message> {
     use iced::alignment::Vertical;
-    use iced::widget::{container, text};
+    use iced::widget::container;
 
     let SubtitleDescription {
         size,

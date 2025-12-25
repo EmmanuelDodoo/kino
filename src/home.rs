@@ -6,9 +6,7 @@ use iced::{
     mouse,
     time::{Duration, Instant},
     widget::{
-        self, button, center, checkbox, column, container, grid,
-        image::Allocation,
-        mouse_area,
+        self, button, center, checkbox, column, container, grid, mouse_area,
         operation::{self, scroll_to},
         pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
     },
@@ -44,7 +42,7 @@ use crate::utils::{
 };
 use crate::widgets::{
     menu::{Position, menu},
-    modal, toast,
+    modal,
 };
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};
@@ -272,7 +270,6 @@ pub enum View {
     Synopsis {
         id: ItemId,
         editor: widget::Id,
-        old: String,
         content: text_editor::Content,
     },
     TMDBId {
@@ -627,7 +624,6 @@ impl Home {
                         id,
                         editor: editor.clone(),
                         content: text_editor::Content::with_text(&old),
-                        old,
                     });
 
                     Task::batch([self.update_page_scroll(), operation::focus(editor)])
@@ -2755,7 +2751,6 @@ impl Home {
         )
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn fetched_collection(
         &mut self,
         collection: Collection,
@@ -3433,7 +3428,7 @@ fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
 fn draw_rename<'a>(
     input: &widget::Id,
     placeholder: &str,
-    value: &String,
+    value: &str,
     is_empty: bool,
 ) -> Element<'a, HomeMessage> {
     let input = text_input(placeholder, value)
@@ -3484,7 +3479,7 @@ fn draw_synopsis<'a>(
     modal_container(content).padding([6, 6]).into()
 }
 
-fn draw_tmdb<'a>(input: &widget::Id, value: &String) -> Element<'a, HomeMessage> {
+fn draw_tmdb<'a>(input: &widget::Id, value: &str) -> Element<'a, HomeMessage> {
     let input = text_input("TMDB ID", value)
         .on_input(|new| HomeMessage::TMDBId(TMDBMessage::Input(new)))
         .on_submit(HomeMessage::TMDBId(TMDBMessage::Submit))

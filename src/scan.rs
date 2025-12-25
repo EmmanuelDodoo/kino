@@ -197,6 +197,7 @@ pub fn scan_dir_helper<'a>(
                         .into_iter()
                         .map(|movie| {
                             let scanned = scanned.contains(&movie.path);
+                            #[allow(clippy::nonminimal_bool)]
                             let insert = (scanned && restore && movie.tombstone)
                                 || (scanned && !movie.tombstone);
                             (movie.id, insert)
@@ -349,6 +350,7 @@ pub fn scan_dir_helper<'a>(
                             .into_iter()
                             .map(|episode| {
                                 let scanned = scanned_episodes.contains(&episode.path);
+                                #[allow(clippy::nonminimal_bool)]
                                 let insert = (scanned && restore && episode.tombstone)
                                     || (scanned && !episode.tombstone);
                                 (episode.id, insert)
@@ -381,6 +383,7 @@ pub fn scan_dir_helper<'a>(
                         .into_iter()
                         .map(|season| {
                             let scanned = scanned_seasons.contains(&season.path);
+                            #[allow(clippy::nonminimal_bool)]
                             let insert = (scanned && restore && season.tombstone)
                                 || (scanned && !season.tombstone);
                             (season.id, insert)
@@ -413,6 +416,7 @@ pub fn scan_dir_helper<'a>(
                     .into_iter()
                     .map(|show| {
                         let scanned = scanned_shows.contains(&show.path);
+                        #[allow(clippy::nonminimal_bool)]
                         let insert =
                             (scanned && restore && show.tombstone) || (scanned && !show.tombstone);
                         (show.id, insert)

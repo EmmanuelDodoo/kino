@@ -25,7 +25,7 @@ pub enum Message {
     Refetch,
     Remove(String),
     Synopsis(String),
-    TMDB,
+    TmdbId,
 }
 
 #[derive(Debug, Clone)]
@@ -102,7 +102,7 @@ impl MoviePage {
                 });
                 Some(msg)
             }
-            Message::TMDB => {
+            Message::TmdbId => {
                 let msg = HomeMessage::OpenView(ViewMessage::TMDBId(self.id.into()));
 
                 Some(msg)
@@ -158,7 +158,7 @@ impl MoviePage {
         };
 
         let item = "Overview";
-        let tabs = Tab::VARIANTS.into_iter().map(|tab| {
+        let tabs = Tab::VARIANTS.iter().map(|tab| {
             let is_selected = self.tab == *tab;
             let text = if is_selected {
                 bold(tab.to_str(item))
@@ -219,7 +219,7 @@ impl MoviePage {
                     Message::Refetch,
                     Message::Remove(movie.media.name().to_owned()),
                     Message::Synopsis(movie.media.synopsis().to_owned()),
-                    Some(Message::TMDB),
+                    Some(Message::TmdbId),
                 )
                 .map(move |message| MoviePageMessage { id, message }),
                 Tab::Collections => {

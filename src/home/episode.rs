@@ -140,7 +140,7 @@ impl EpisodePage {
         };
 
         let item = "Overview";
-        let tabs = Tab::VARIANTS.into_iter().map(|tab| {
+        let tabs = Tab::VARIANTS.iter().map(|tab| {
             let is_selected = self.tab == *tab;
             let text = if is_selected {
                 bold(tab.to_str(item))

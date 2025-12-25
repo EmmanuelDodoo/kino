@@ -128,6 +128,7 @@ impl CollectionPage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn view<'a>(
         &'a self,
         now: Instant,

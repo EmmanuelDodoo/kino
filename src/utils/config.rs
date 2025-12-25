@@ -203,7 +203,7 @@ impl Clone for Config {
         } = self;
 
         Self {
-            video: video.clone(),
+            video: *video,
             general: general.clone(),
             keystore: keystore.clone(),
             config_dir: config_dir.clone(),
@@ -252,14 +252,13 @@ impl Config {
             Err(error) => {
                 errors.push(format!("Config file loading error.\n{error}"));
 
-                return (Config::defaults().prep(config_dir), errors);
+                (Config::defaults().prep(config_dir), errors)
             }
         }
     }
 
     fn prep(mut self, dir: impl AsRef<std::path::Path>) -> Self {
         use std::fs::OpenOptions;
-        use tracing::{Level, span};
         use tracing_subscriber::EnvFilter;
 
         tracing::info!("preping config");
@@ -1683,11 +1682,7 @@ mod keys {
 
 mod subtitles {
     use iced::{Font, font};
-    use serde::{
-        Deserialize, Deserializer, Serialize, Serializer,
-        de::{self, Visitor},
-        ser::SerializeStruct,
-    };
+    use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
     #[serde(default = "SubtitleDescription::defaults")]

@@ -1,9 +1,8 @@
 use iced::{
-    Element, Font, Length, Size, Subscription, Task, Theme,
+    Element, Length, Size, Subscription, Task, Theme,
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
     animation::Animation,
-    font,
     time::Instant,
     widget::{
         button, center, checkbox, column, container, image, mouse_area, pick_list, row, rule,
@@ -16,17 +15,14 @@ use iced_video_player::{
 };
 use std::sync::Arc;
 use std::time::Duration;
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashSet, path::PathBuf};
 
 use crate::app::Message;
 use crate::home::shared::Icon;
 use crate::models::{CollectionId, SimpleCollection};
 use crate::utils::{
-    self, PlayId, PlayItem, PlayerAction, Playlist, SubtitleDescription, SubtitleFont,
-    VideoSettings, convert_color_str, draw_subtitles, empty,
+    self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, convert_color_str,
+    draw_subtitles, empty,
     icons::{self, CANCEL, sized_button},
     loading_animation, loading_svg, modal_container, picklist_handle, styles, tooltip, trim_path,
     typo::{self, *},
@@ -1532,10 +1528,10 @@ impl Manager {
                 .video
                 .available_subtitles()
                 .into_iter()
-                .map(|tag| Subtitle::from(tag));
+                .map(Subtitle::from);
 
             player.available_subtitles = std::iter::once(url)
-                .map(|url| Subtitle::Loaded(url))
+                .map(Subtitle::Loaded)
                 .chain(embedded)
                 .collect();
 
@@ -1814,11 +1810,10 @@ fn load_video<Message: 'static + MaybeSend>(
                         .ok()
                 });
 
-            if let Some(url) = subtitles_url.as_ref() {
-                if let Err(error) = video.set_subtitle_url(url) {
+            if let Some(url) = subtitles_url.as_ref()
+                && let Err(error) = video.set_subtitle_url(url) {
                     tracing::error!("Video Subtitle error \n{error}")
                 }
-            }
 
             std::thread::sleep(std::time::Duration::from_millis(150));
 
@@ -1837,10 +1832,10 @@ fn load_video<Message: 'static + MaybeSend>(
 
             video.set_paused(true);
 
-            let loaded_text = subtitles_url.map(|url| Subtitle::Loaded(url));
+            let loaded_text = subtitles_url.map(Subtitle::Loaded);
 
             let curr_text = if loaded_text.is_none() {
-                video.get_text().map(|tag| Subtitle::from(tag))
+                video.get_text().map(Subtitle::from)
             } else {
                 loaded_text.clone()
             };
@@ -1848,7 +1843,7 @@ fn load_video<Message: 'static + MaybeSend>(
             let embedded = video
                 .available_subtitles()
                 .into_iter()
-                .map(|tag| Subtitle::from(tag));
+                .map(Subtitle::from);
 
             let subtitles = loaded_text.into_iter().chain(embedded).collect();
 
@@ -2159,6 +2154,7 @@ fn draw_collection_add<'a>(
     modal_container(content).max_width(400).into()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_config<'a>(
     config: &'a VideoSettings,
     embedded: &'a [Subtitle],

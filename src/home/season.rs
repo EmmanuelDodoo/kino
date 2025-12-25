@@ -386,7 +386,7 @@ impl SeasonPage {
         let content = row!(img, header).align_y(Vertical::Center).spacing(36.0);
 
         let item = "Episodes";
-        let tabs = Tab::VARIANTS.into_iter().map(move |tab| {
+        let tabs = Tab::VARIANTS.iter().map(move |tab| {
             let is_selected = self.tab == *tab;
             let text = if is_selected {
                 bold(tab.to_str(item))

@@ -1,9 +1,8 @@
 use chrono::Local;
 use iced::{
-    Element, Subscription, Task, Theme, font,
+    Element, Subscription, Task, Theme,
     keyboard::{self, Key, Modifiers},
     time::{self, Instant},
-    widget::image,
     window,
 };
 use tokio::sync::mpsc;
@@ -21,7 +20,7 @@ use crate::settings::{Settings, SettingsMessage};
 use crate::toast;
 use crate::utils::{
     Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort,
-    filter::FilterMode, filter::SearchFilter, load_fonts,
+    filter::FilterMode, filter::SearchFilter,
 };
 use crate::{
     db::{self, Query},
@@ -378,7 +377,7 @@ impl App {
                         // todo
                         let msg = Message::error(error.error);
 
-                        return Task::done(msg);
+                        Task::done(msg)
                     }
                 }
             }

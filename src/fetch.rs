@@ -1,6 +1,5 @@
 use crate::db::Database;
 use crate::models::{EpisodeId, MovieId, SeasonId, ShowId};
-use chrono::NaiveDate;
 use reqwest::{
     Client, ClientBuilder,
     header::{ACCEPT, HeaderMap},
@@ -15,7 +14,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
 use tokio::time;
 
-use rusqlite::types::{ToSqlOutput, ValueRef};
+use rusqlite::types::ToSqlOutput;
 
 static CLIENT: LazyLock<Client> = LazyLock::new(|| {
     let mut headers = HeaderMap::new();
@@ -782,8 +781,8 @@ mod shows {
                     (":overview", &ToSqlOutput::from(overview)),
                     (":release", &ToSqlOutput::from(first_air_date)),
                     (":name", &ToSqlOutput::from(name)),
-                    (":poster", &ToSqlOutput::from(poster_path)),
-                    (":backdrop", &ToSqlOutput::from(backdrop_path)),
+                    (":poster", &poster_path),
+                    (":backdrop", &backdrop_path),
                     (":rating", rating),
                 ],
             )?

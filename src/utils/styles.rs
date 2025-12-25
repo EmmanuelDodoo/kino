@@ -1,4 +1,4 @@
-use iced::{Background, Border, Color, Theme, border, color, theme, widget};
+use iced::{Background, Border, Color, Theme, border, theme, widget};
 
 const SLATE: Color = Color::from_rgb8(144, 161, 185);
 const SLATE2: Color = Color::from_rgb8(202, 213, 226);
@@ -6,7 +6,7 @@ pub const RADIUS: f32 = 2.5;
 
 pub mod container {
     use super::*;
-    use widget::container::{self, Style, primary, secondary};
+    use widget::container::{self, Style};
 
     fn style(pair: theme::palette::Pair) -> Style {
         Style {
@@ -103,7 +103,7 @@ pub mod container {
 pub mod button {
     use super::*;
 
-    use widget::button::{self, Status, Style};
+    use widget::button::{Status, Style};
 
     fn styled(pair: theme::palette::Pair) -> Style {
         Style {

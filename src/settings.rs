@@ -3,15 +3,14 @@ use crate::db::Operation;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
     self, AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
-    SettingsAction, SubtitleDescription, SubtitleFont, VideoFilters, VideoSettings,
-    convert_color_str, empty, icons, icons::sized_button, modal_container, picklist_handle, styles,
-    tooltip, trim_path, typo::*,
+    SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, convert_color_str, empty,
+    icons, icons::sized_button, modal_container, picklist_handle, styles, tooltip, trim_path,
+    typo::*,
 };
-use crate::widgets::{modal, toast, toggler};
+use crate::widgets::{modal, toggler};
 use iced::{
-    Border, Element, Length, Padding, Task, Theme,
+    Border, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
-    font::{self, Font},
     widget::{
         button, center_x, column, container, mouse_area, operation, pick_list, rich_text, row,
         rule, scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
@@ -911,10 +910,7 @@ impl Settings {
 
                 match open::that(path) {
                     Ok(_) => Task::none(),
-                    Err(error) => {
-                        println!("{error}");
-                        Task::done(Message::error(error))
-                    }
+                    Err(error) => Task::done(Message::error(error)),
                 }
             }
             SettingsMessage::OpenConfig => {
@@ -1556,7 +1552,8 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
 
     let content = column!(folder, kind, actions).spacing(20);
 
-    modal_container(content).max_width(450)
+    modal_container(content)
+        .max_width(450)
         .padding([12, 16])
         .into()
 }
@@ -2082,7 +2079,7 @@ fn draw_media<'a>(
 }
 
 fn draw_metadata<'a>(
-    auth_token: &String,
+    auth_token: &str,
     fetching_interval: &Duration,
     tmdb_rating: bool,
 ) -> Element<'a, MetadataMessage> {
@@ -2155,6 +2152,7 @@ fn draw_metadata<'a>(
     section("Metadata", content)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_playback<'a>(
     volume: f64,
     volume_change_amt: f64,
