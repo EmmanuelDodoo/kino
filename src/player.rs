@@ -1514,7 +1514,8 @@ impl Manager {
         apply_settings(self.settings, player);
 
         let set_loaded = |player: &mut Player, url: url::Url| {
-            let position = player.video.position();
+            let position = player.position;
+            let position = Duration::from_secs_f64(position);
 
             if let Err(error) = player.video.set_subtitle_url(&url) {
                 return Some(Message::error(error));
@@ -1584,18 +1585,21 @@ impl Manager {
             (Some(_), None) => {
                 let selected_text = player.available_subtitles.first();
                 let changed = selected_text != player.current_text.as_ref();
-                if let Some(subtitle) = selected_text
-                    && changed
-                {
-                    match subtitle {
-                        Subtitle::Loaded(url) => {
+
+                if changed {
+                    match selected_text {
+                        Some(Subtitle::Loaded(url)) => {
                             if let Some(message) = set_loaded(player, url.clone()) {
                                 return Task::done(message);
                             }
                         }
-                        Subtitle::Embedded(tag) => {
+                        Some(Subtitle::Embedded(tag)) => {
                             player.video.set_text(tag.clone());
                             player.current_text = Some(tag.clone().into());
+                        }
+                        None => {
+                            // todo: Only option here is to reload the video so the
+                            // subtitle url is cleared
                         }
                     }
                 }
@@ -2180,11 +2184,11 @@ fn draw_config<'a>(
             button(text)
                 .width(Length::Fill)
                 .style(move |theme, status| {
-                if current {
-                    styles::button::background_primary(theme, status)
-                } else {
-                    styles::button::subtlest(theme, status)
-                }
+                    if current {
+                        styles::button::background_primary(theme, status)
+                    } else {
+                        styles::button::subtlest(theme, status)
+                    }
                 })
                 .on_press(ManagerMessage::Config(ConfigMessage::Tab(*tab))),
         )
@@ -2380,11 +2384,14 @@ fn draw_config<'a>(
                 .style(styles::button::subtle)
                 .on_press(ConfigMessage::SelectFile);
 
-                let path = subtitle.as_ref().map(|path| trim_path(path, 1));
+                let path = subtitle.as_ref().map(|path| trim_path(path, 2));
                 let path: Element<'_, ConfigMessage> = match path {
                     Some(path) => button(
                         row!(
-                            container(mono(path)).max_width(250).height(20).clip(true),
+                            container(mono(path).size(size))
+                                .max_width(250)
+                                .height(20)
+                                .clip(true),
                             icons::icon(icons::CANCEL).size(size)
                         )
                         .spacing(4)
