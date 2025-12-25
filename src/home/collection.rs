@@ -10,7 +10,7 @@ use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, Sort, empty, styles};
 use crate::widgets::menu;
-use iced::Border;
+use iced::{Border, Padding};
 use iced::{
     Element, Length, Task,
     alignment::Vertical,
@@ -155,7 +155,7 @@ impl CollectionPage {
 
         let content = column!(self.top(collection), content)
             .spacing(10)
-            .padding(10);
+            .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }

@@ -9,7 +9,7 @@ use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, Sort, empty, styles};
 use iced::widget::Space;
 use iced::{
-    Element, Length, Task,
+    Element, Length, Padding, Task,
     alignment::{Horizontal, Vertical},
     time::Instant,
     widget::{
@@ -290,8 +290,7 @@ impl SeasonPage {
 
                     message: Message::Scroll(viewpport),
                 }),
-        )
-        .padding(10);
+        );
 
         content.into()
     }
@@ -501,7 +500,9 @@ impl SeasonPage {
             }
         };
 
-        let content = column!(self.top(season), content).spacing(20.0).padding(10);
+        let content = column!(self.top(season), content)
+            .spacing(20.0)
+            .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }

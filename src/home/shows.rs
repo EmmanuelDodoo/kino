@@ -4,7 +4,7 @@ use crate::utils::filter::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, Sort};
 use iced::{
-    Element, Task,
+    Element, Padding, Task,
     time::Instant,
     widget::{self, column, container, grid, operation, scrollable, text},
 };
@@ -96,7 +96,7 @@ impl TvShows {
                 .id(self.scroll.id.clone())
                 .on_scroll(TvShowsMessage::Scroll),
         )
-        .padding(10);
+        .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }
@@ -121,7 +121,7 @@ impl TvShows {
                 .id(self.scroll.id.clone())
                 .on_scroll(TvShowsMessage::Scroll),
         )
-        .padding(10);
+        .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }
@@ -152,7 +152,7 @@ impl TvShows {
                 .id(self.scroll.id.clone())
                 .on_scroll(TvShowsMessage::Scroll),
         )
-        .padding(10);
+        .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }

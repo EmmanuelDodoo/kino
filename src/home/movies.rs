@@ -5,7 +5,7 @@ use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, Sort};
 use iced::{
-    Element, Task,
+    Element, Padding, Task,
     alignment::Vertical,
     time::Instant,
     widget::{self, column, container, grid, operation, row, scrollable, text},
@@ -92,7 +92,7 @@ impl Movies {
                 .id(self.scroll.id.clone())
                 .on_scroll(MoviesMessage::Scroll),
         )
-        .padding(10);
+        .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }
@@ -121,7 +121,7 @@ impl Movies {
                 .id(self.scroll.id.clone())
                 .on_scroll(MoviesMessage::Scroll),
         )
-        .padding(10);
+        .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }
@@ -146,7 +146,7 @@ impl Movies {
                 .id(self.scroll.id.clone())
                 .on_scroll(MoviesMessage::Scroll),
         )
-        .padding(10);
+        .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }

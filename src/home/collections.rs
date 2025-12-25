@@ -3,7 +3,7 @@ use crate::models::CollectionId;
 use crate::utils::filter::*;
 use crate::utils::{Layout, Scroll, Sort};
 use iced::{
-    Element, Task,
+    Element, Padding, Task,
     widget::{self, container, grid, operation, scrollable},
 };
 
@@ -77,7 +77,7 @@ impl Collections {
                 .id(self.scroll.id.clone())
                 .on_scroll(CollectionsMessage::Scroll),
         )
-        .padding(10);
+        .padding(Padding::new(10.0).bottom(0));
 
         content.into()
     }

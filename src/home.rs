@@ -2174,14 +2174,15 @@ impl Home {
             .unwrap_or(true);
 
         let bottom: Element<'_, HomeMessage> = if items > 0 {
-            let padding = Padding::new(2.0).right(10);
+            let padding = Padding::new(3.0).right(10);
 
             let items = sized_medium(format!("{items} items"), H8);
 
-            let content = row!(space::horizontal(), items);
+            let content = row!(space::horizontal(), items).align_y(Vertical::Center);
 
             container(content)
                 .width(Length::Fill)
+                .align_y(Vertical::Center)
                 .align_x(Horizontal::Right)
                 .padding(padding)
                 .style(|theme| {
