@@ -23,7 +23,7 @@ use std::time::Duration;
 
 const PADDING: [f32; 2] = [20.0, 24.0];
 const TEXT_SIZE: f32 = P;
-const INPUT_WIDTH: f32 = 48.0;
+const INPUT_WIDTH: f32 = 56.0;
 const SPACING: f32 = 6.0;
 const INPUT_PADDING: [f32; 2] = [3.5, 5.0];
 const LIST_PADDING: [f32; 2] = [5.0, 10.0];
