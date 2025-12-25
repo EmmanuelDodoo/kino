@@ -1109,7 +1109,7 @@ impl Home {
                         let number = number.trim();
                         if number.is_empty() {
                             self.filters.comments = None;
-                            return Task::none();
+                            return self.content_refresh(now);
                         }
 
                         let Ok(number) = number.parse::<u32>() else {
@@ -1145,7 +1145,7 @@ impl Home {
                                 }
                             }
 
-                            return Task::none();
+                            return self.content_refresh(now);
                         }
 
                         let Ok(minutes) = minutes.parse::<u64>() else {
@@ -1180,7 +1180,7 @@ impl Home {
                                 }
                             }
 
-                            return Task::none();
+                            return self.content_refresh(now);
                         }
 
                         let Ok(hours) = hours.parse::<u64>() else {
@@ -1213,7 +1213,7 @@ impl Home {
 
                         if year.is_empty() {
                             self.filters.release = None;
-                            return Task::none();
+                            return self.content_refresh(now);
                         }
 
                         let Ok(year) = year.parse::<i32>() else {
