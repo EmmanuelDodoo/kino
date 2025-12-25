@@ -177,33 +177,69 @@ fn hsl_to_rgb(hsl: Hsl) -> [u8; 3] {
     ]
 }
 
-fn adaptive_sample_color_compl(img: &DynamicImage) -> [u8; 3] {
+fn adaptive_sample_color_compl(img: &DynamicImage) -> Color {
     // Downscale to 1×1 for average color
-    let small = imageops::resize(img, 2, 2, imageops::FilterType::Triangle);
+    let small = imageops::resize(img, 2, 2, imageops::FilterType::CatmullRom);
     let pixel = small.get_pixel(0, 0);
     let [r, g, b, _] = pixel.0;
 
-    let hsl = rgb_to_hsl(r, g, b);
+    let target = 7.0;
+    let sample = Color::from_rgb8(r, g, b);
+    let mut hsl = rgb_to_hsl(r, g, b);
+    let bg_lum = sample.relative_luminance();
+    let direction = if bg_lum < 0.5 { 1.0 } else { -1.0 };
 
-    // Shift hue by 180 degrees (complementary)
-    let mut sample = hsl;
-    sample.h = (sample.h + 180.0) % 360.0;
+    for _ in 0..20 {
+        let [r, g, b] = hsl_to_rgb(hsl);
+        let rgb = Color::from_rgb8(r, g, b);
 
-    // Adjust luminance for contrast
-    // Dark image → brighter overlay; Bright image → darker overlay
-    sample.l = if sample.l < 0.5 { 0.8 } else { 0.2 };
+        if sample.relative_contrast(rgb) >= target {
+            return rgb;
+        }
+        hsl.l = (hsl.l + direction * 0.05).clamp(0.0, 1.0);
+    }
 
-    // overlay.s = overlay.s.clamp(0.5, 0.9);
-    sample.s = sample.s.min(0.9);
-
-    hsl_to_rgb(sample)
+    // guaranteed fallback
+    if bg_lum < 0.5 {
+        Color::WHITE
+    } else {
+        Color::BLACK
+    }
 }
 
 pub fn sample_complement(path: &str) -> Option<Color> {
     let img = open(path);
 
-    img.as_ref().map(|img| {
-        let color = adaptive_sample_color_compl(img);
-        Color::from_rgb8(color[0], color[1], color[2])
-    })
+    img.as_ref().map(|img| adaptive_sample_color_compl(img))
 }
+
+// fn adaptive_sample_color_compl(img: &DynamicImage) -> [u8; 3] {
+//     // Downscale to 1×1 for average color
+//     let small = imageops::resize(img, 2, 2, imageops::FilterType::CatmullRom);
+//     let pixel = small.get_pixel(0, 0);
+//     let [r, g, b, _] = pixel.0;
+//
+//     let hsl = rgb_to_hsl(r, g, b);
+//
+//     // Shift hue by 180 degrees (complementary)
+//     let mut sample = hsl;
+//     sample.h = (sample.h + 180.0) % 360.0;
+//
+//     // Adjust luminance for contrast
+//     // Dark image → brighter overlay; Bright image → darker overlay
+//     sample.l = if sample.l < 0.5 { 0.8 } else { 0.2 };
+//
+//     // overlay.s = overlay.s.clamp(0.5, 0.9);
+//     sample.s = sample.s.min(0.9);
+//
+//     hsl_to_rgb(sample)
+// }
+//
+// pub fn sample_complement(path: &str) -> Option<Color> {
+//     let img = open(path);
+//
+//     img.as_ref().map(|img| {
+//         let color = adaptive_sample_color_compl(img);
+//         Color::from_rgb8(color[0], color[1], color[2])
+//     })
+// }
