@@ -1927,7 +1927,7 @@ fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
 }
 
 fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, ManagerMessage> {
-    let width = 350.0;
+    let width = 375.0;
     let rule_height = 1.0;
     let padding = [6, 12];
 
@@ -1948,6 +1948,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
 
     let items = playlist.items().map(|(idx, item, current)| {
         let size = H7;
+        let height = 20;
 
         let duration = item.duration;
         let hrs = duration / 3600;
@@ -1971,17 +1972,17 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         }
         .size(size);
 
-        let name = container(name.height(24).style(color)).max_width(width * 0.75);
+        let name = container(name.height(height).style(color)).max_width(width * 0.80);
 
         let duration = format!("{hrs:02}:{mins:02}:{secs:02}");
 
         let duration = if current {
-            bold(duration)
+            medium(duration)
         } else {
             regular(duration)
         }
         .size(size)
-        .height(24)
+        .height(height)
         .style(color);
 
         button(

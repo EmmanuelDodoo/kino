@@ -829,13 +829,8 @@ impl CollectionThumbnail {
             None => {
                 let len = self.collection.name.len().min(2);
                 let name = self.collection.name.get(..len).unwrap_or_default();
-                let font = Font {
-                    weight: Weight::Bold,
-                    family: Family::Cursive,
-                    style: Style::Italic,
-                    ..Default::default()
-                };
 
+                let font = display_font();
                 let text = text(name).size(H1 * 2.75).font(font);
 
                 center(text)
@@ -881,13 +876,8 @@ impl CollectionThumbnail {
                 None => {
                     let len = self.collection.name.len().min(2);
                     let name = self.collection.name.get(..len).unwrap_or_default();
-                    let font = Font {
-                        weight: Weight::Bold,
-                        family: Family::Cursive,
-                        style: Style::Italic,
-                        ..Default::default()
-                    };
 
+                    let font = display_font();
                     let text = text(name).size(H1 * 2.60).font(font);
 
                     center(text)
