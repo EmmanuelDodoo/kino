@@ -1,12 +1,14 @@
 use iced::{
-    Element, Length, Padding, Subscription, Task, Theme,
+    Color, Element, Length, Padding, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
     animation::Animation,
     border::Border,
     mouse,
     time::{Duration, Instant},
     widget::{
-        self, button, center, checkbox, column, container, grid, mouse_area,
+        self, button, center, checkbox, column, container, grid,
+        image::Allocation,
+        mouse_area,
         operation::{self, scroll_to},
         pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
     },
@@ -28,7 +30,8 @@ mod shows;
 use crate::{
     app::{MediaUpdate, MediaUpdateKind},
     models::{
-        Collection, CollectionId, CollectionView, Episode, Movie, Season, Show, SimpleCollection,
+        Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, Season,
+        SeasonId, Show, ShowId, SimpleCollection,
         collection::{ItemId, Items},
     },
 };
@@ -2718,20 +2721,17 @@ impl Home {
     pub fn fetched_collection(
         &mut self,
         collection: Collection,
-        items: (
-            Vec<Thumbnail<Movie>>,
-            Vec<Thumbnail<Show>>,
-            Vec<Thumbnail<Season>>,
-            Vec<Thumbnail<Episode>>,
-        ),
+        movies: Vec<Thumbnail<Movie>>,
+        shows: Vec<Thumbnail<Show>>,
+        seasons: Vec<Thumbnail<Season>>,
+        episodes: Vec<Thumbnail<Episode>>,
     ) -> Task<Message> {
         Task::perform(
             async move {
                 let collection = CollectionThumbnail::new(collection);
-                (collection, items)
+                (collection, movies, shows, seasons, episodes)
             },
-            move |(collection, items)| {
-                let (movies, shows, seasons, episodes) = items;
+            move |(collection, movies, shows, seasons, episodes)| {
                 Message::Home(HomeMessage::FetchedCollection {
                     collection: Box::new(collection),
                     movies,
@@ -2777,6 +2777,78 @@ impl Home {
             }
             _ => Task::none(),
         }
+    }
+
+    pub fn movie_sample(&mut self, id: MovieId, sample: Option<Color>) -> Task<Message> {
+        match &mut self.state {
+            State::Movies(movies)
+            | State::Recent { movies, .. }
+            | State::Collection { movies, .. } => {
+                if let Some(movie) = movies.iter_mut().find(|thumbnail| thumbnail.media.id == id) {
+                    movie.sample(sample);
+                }
+            }
+            State::Movie { movie, .. } if movie.media.id == id => {
+                movie.sample(sample);
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    pub fn show_sample(&mut self, id: ShowId, sample: Option<Color>) -> Task<Message> {
+        match &mut self.state {
+            State::Shows(shows) | State::Recent { shows, .. } | State::Collection { shows, .. } => {
+                if let Some(show) = shows.iter_mut().find(|thumbnail| thumbnail.media.id == id) {
+                    show.sample(sample);
+                }
+            }
+            State::Show { show, .. } if show.media.id == id => {
+                show.sample(sample);
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    pub fn season_sample(&mut self, id: SeasonId, sample: Option<Color>) -> Task<Message> {
+        match &mut self.state {
+            State::Show { seasons, .. } | State::Collection { seasons, .. } => {
+                if let Some(season) = seasons
+                    .iter_mut()
+                    .find(|thumbnail| thumbnail.media.id == id)
+                {
+                    season.sample(sample);
+                }
+            }
+            State::Season { season, .. } if season.media.id == id => {
+                season.sample(sample);
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
+    pub fn episode_sample(&mut self, id: EpisodeId, sample: Option<Color>) -> Task<Message> {
+        match &mut self.state {
+            State::Season { episodes, .. } | State::Collection { episodes, .. } => {
+                if let Some(episode) = episodes
+                    .iter_mut()
+                    .find(|thumbnail| thumbnail.media.id == id)
+                {
+                    episode.sample(sample);
+                }
+            }
+            State::Episode { episode, .. } if episode.media.id == id => {
+                episode.sample(sample);
+            }
+            _ => {}
+        }
+
+        Task::none()
     }
 
     pub fn load(&mut self) -> Task<Message> {

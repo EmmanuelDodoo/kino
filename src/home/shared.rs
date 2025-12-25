@@ -4,6 +4,7 @@ use crate::utils::typo::*;
 use crate::utils::{Filter, Sort, collage, sample_complement, styles};
 use crate::utils::{default_poster, empty, tooltip};
 use crate::variants;
+use iced::Task;
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
@@ -13,8 +14,9 @@ use iced::{
     mouse,
     time::Instant,
     widget::{
-        self, button, center, column, container, image::Handle, markdown, mouse_area, row, rule,
-        scrollable, space, stack, text, tooltip as tp,
+        self, button, center, column, container,
+        image::{Allocation, Error as ImgError, Handle, allocate},
+        markdown, mouse_area, row, rule, scrollable, space, stack, text, tooltip as tp,
     },
 };
 
@@ -378,6 +380,8 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
     .into()
 }
 
+pub type ThumbnailSample<T> = iced::Task<(<T as Media>::Id, Option<iced::Color>)>;
+
 #[derive(Debug, Clone)]
 pub struct Thumbnail<T: Media> {
     poster: Option<Handle>,
@@ -389,8 +393,20 @@ pub struct Thumbnail<T: Media> {
 }
 
 impl<T: Media> Thumbnail<T> {
-    pub fn new(media: T) -> Self {
-        let sample_color = media.poster().and_then(sample_complement);
+    pub fn new(media: T) -> (Self, ThumbnailSample<T>)
+    where
+        <T as Media>::Id: 'static,
+    {
+        let id = media.id();
+        let sample = media
+            .poster()
+            .map(|path| {
+                let path = path.to_owned();
+                iced::Task::future(async move { (id, sample_complement(&path)) })
+            })
+            .unwrap_or_default();
+
+        let sample_color = None;
 
         //todo: Sample color is not great for current default poster
         let poster = match media.poster() {
@@ -400,7 +416,7 @@ impl<T: Media> Thumbnail<T> {
 
         let backdrop = media.backdrop().map(Handle::from_path);
 
-        Self {
+        let new = Self {
             background: Animation::new(false)
                 .duration(iced::time::Duration::from_millis(200))
                 .easing(Easing::EaseInOut),
@@ -411,7 +427,9 @@ impl<T: Media> Thumbnail<T> {
             sample_color,
             backdrop,
             media,
-        }
+        };
+
+        (new, sample)
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
@@ -421,6 +439,10 @@ impl<T: Media> Thumbnail<T> {
     pub fn go_mut(&mut self, new_state: bool, at: Instant) {
         self.background.go_mut(new_state, at);
         self.icon.go_mut(new_state, at);
+    }
+
+    pub fn sample(&mut self, sample: Option<iced::Color>) {
+        self.sample_color = sample;
     }
 
     pub fn id(&self) -> T::Id {

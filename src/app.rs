@@ -3,6 +3,7 @@ use iced::{
     Element, Subscription, Task, Theme, font,
     keyboard::{self, Key, Modifiers},
     time::{self, Instant},
+    widget::image,
     window,
 };
 use tokio::sync::mpsc;
@@ -108,6 +109,10 @@ pub enum Message {
     CaptureKeys(bool),
     Scan,
     ScanComplete(Vec<DirectoryId>),
+    ShowAllocation((ShowId, Option<iced::Color>)),
+    MovieAllocation((MovieId, Option<iced::Color>)),
+    SeasonAllocation((SeasonId, Option<iced::Color>)),
+    EpisodeAllocation((EpisodeId, Option<iced::Color>)),
     None,
 }
 
@@ -464,7 +469,8 @@ impl App {
                     }
                 }
                 FetchId::Shows => {
-                    let shows = match self.db.get_shows(limit, offset, filter, sort, show_map) {
+                    let thumbnails = match self.db.get_shows(limit, offset, filter, sort, show_map)
+                    {
                         Ok(shows) => {
                             tracing::info!("Fetched {} Shows", shows.len());
                             shows
@@ -475,50 +481,93 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_shows(shows)
+                    let mut shows = Vec::with_capacity(thumbnails.len());
+                    let mut samples = Vec::with_capacity(thumbnails.len());
+
+                    for (show, sample) in thumbnails {
+                        shows.push(show);
+                        samples.push(sample.map(Message::ShowAllocation));
+                    }
+
+                    let home_tasks = self.home.fetched_shows(shows);
+                    let samples = Task::batch(samples);
+
+                    Task::batch([home_tasks, samples])
                 }
                 FetchId::Movies => {
-                    let movies = match self.db.get_movies(limit, offset, filter, sort, movie_map) {
-                        Ok(movies) => {
-                            tracing::info!("Fetched {} Movies", movies.len());
-                            movies
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
+                    let thumbnails =
+                        match self.db.get_movies(limit, offset, filter, sort, movie_map) {
+                            Ok(movies) => {
+                                tracing::info!("Fetched {} Movies", movies.len());
+                                movies
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error);
+                                return Task::done(msg);
+                            }
+                        };
 
-                    self.home.fetched_movies(movies)
+                    let mut movies = Vec::with_capacity(thumbnails.len());
+                    let mut samples = Vec::with_capacity(thumbnails.len());
+
+                    for (movie, sample) in thumbnails {
+                        movies.push(movie);
+                        samples.push(sample.map(Message::MovieAllocation));
+                    }
+
+                    let home_tasks = self.home.fetched_movies(movies);
+                    let samples = Task::batch(samples);
+
+                    Task::batch([home_tasks, samples])
                 }
                 FetchId::Recents => {
-                    let movies = match self.db.get_movies(limit, offset, filter, sort, movie_map) {
-                        Ok(movies) => {
-                            tracing::info!("Fetched {} Recent Movies", movies.len());
-                            movies
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-                    let shows = match self.db.get_shows(limit, offset, filter, sort, show_map) {
-                        Ok(shows) => {
-                            tracing::info!("Fetched {} Recent Shows", shows.len());
-                            shows
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
+                    let thumbnails_movies =
+                        match self.db.get_movies(limit, offset, filter, sort, movie_map) {
+                            Ok(movies) => {
+                                tracing::info!("Fetched {} Recent Movies", movies.len());
+                                movies
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error);
+                                return Task::done(msg);
+                            }
+                        };
 
-                    self.home.fetched_recents(movies, shows)
+                    let thumbnails_shows =
+                        match self.db.get_shows(limit, offset, filter, sort, show_map) {
+                            Ok(shows) => {
+                                tracing::info!("Fetched {} Recent Shows", shows.len());
+                                shows
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error);
+                                return Task::done(msg);
+                            }
+                        };
+                    let mut shows = Vec::with_capacity(thumbnails_shows.len());
+                    let mut movies = Vec::with_capacity(thumbnails_movies.len());
+                    let mut samples =
+                        Vec::with_capacity(thumbnails_shows.len() + thumbnails_movies.len());
+
+                    for (show, sample) in thumbnails_shows {
+                        shows.push(show);
+                        samples.push(sample.map(Message::ShowAllocation));
+                    }
+
+                    for (movie, sample) in thumbnails_movies {
+                        movies.push(movie);
+                        samples.push(sample.map(Message::MovieAllocation));
+                    }
+
+                    let samples = Task::batch(samples);
+                    let home_tasks = self.home.fetched_recents(movies, shows);
+
+                    Task::batch([home_tasks, samples])
                 }
                 FetchId::Show(id) => {
-                    let show = match self.db.get_show(id, show_map) {
+                    let (show, show_sample) = match self.db.get_show(id, show_map) {
                         Ok(show) => {
-                            tracing::info!("Fetched Show {}", show.media.name());
+                            tracing::info!("Fetched Show {}", show.0.media.name());
                             show
                         }
                         Err(error) => {
@@ -527,7 +576,7 @@ impl App {
                         }
                     };
 
-                    let seasons = match self
+                    let thumbnail_seasons = match self
                         .db
                         .get_show_seasons(id, limit, offset, filter, sort, season_map)
                     {
@@ -541,12 +590,24 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_show(show, seasons)
+                    let mut seasons = Vec::with_capacity(thumbnail_seasons.len());
+                    let mut samples = Vec::with_capacity(1 + thumbnail_seasons.len());
+                    samples.push(show_sample.map(Message::ShowAllocation));
+
+                    for (season, sample) in thumbnail_seasons {
+                        seasons.push(season);
+                        samples.push(sample.map(Message::SeasonAllocation));
+                    }
+
+                    let home_task = self.home.fetched_show(show, seasons);
+                    let samples = Task::batch(samples);
+
+                    Task::batch([home_task, samples])
                 }
                 FetchId::Season(id) => {
-                    let season = match self.db.get_season(id, season_map) {
+                    let (season, season_sample) = match self.db.get_season(id, season_map) {
                         Ok(season) => {
-                            tracing::info!("Fetched season {}", season.media.name());
+                            tracing::info!("Fetched season {}", season.0.media.name());
                             season
                         }
                         Err(error) => {
@@ -555,7 +616,7 @@ impl App {
                         }
                     };
 
-                    let episodes = match self.db.get_season_episodes(
+                    let thumbnail_episodes = match self.db.get_season_episodes(
                         id,
                         limit,
                         offset,
@@ -573,12 +634,24 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_season(season, episodes)
+                    let mut episodes = Vec::with_capacity(thumbnail_episodes.len());
+                    let mut samples = Vec::with_capacity(1 + thumbnail_episodes.len());
+                    samples.push(season_sample.map(Message::SeasonAllocation));
+
+                    for (episode, sample) in thumbnail_episodes {
+                        episodes.push(episode);
+                        samples.push(sample.map(Message::EpisodeAllocation))
+                    }
+
+                    let samples = Task::batch(samples);
+                    let home_task = self.home.fetched_season(season, episodes);
+
+                    Task::batch([home_task, samples])
                 }
                 FetchId::Episode(id) => {
-                    let episode = match self.db.get_episode(id, episode_map) {
+                    let (episode, sample) = match self.db.get_episode(id, episode_map) {
                         Ok(episode) => {
-                            tracing::info!("Fetched Episode {}", episode.media.name());
+                            tracing::info!("Fetched Episode {}", episode.0.media.name());
                             episode
                         }
                         Err(error) => {
@@ -587,12 +660,15 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_episode(episode)
+                    Task::batch([
+                        self.home.fetched_episode(episode),
+                        sample.map(Message::EpisodeAllocation),
+                    ])
                 }
                 FetchId::Movie(id) => {
-                    let movie = match self.db.get_movie(id, movie_map) {
+                    let (movie, sample) = match self.db.get_movie(id, movie_map) {
                         Ok(movie) => {
-                            tracing::info!("Fetched Movie {}", movie.media.name());
+                            tracing::info!("Fetched Movie {}", movie.0.media.name());
                             movie
                         }
                         Err(error) => {
@@ -601,7 +677,10 @@ impl App {
                         }
                     };
 
-                    self.home.fetched_movie(movie)
+                    Task::batch([
+                        self.home.fetched_movie(movie),
+                        sample.map(Message::MovieAllocation),
+                    ])
                 }
                 FetchId::Collections => {
                     //todo: collection sorts
@@ -633,28 +712,65 @@ impl App {
                         }
                     };
 
-                    let items = match self.db.get_collection_members(
-                        id,
-                        limit,
-                        offset,
-                        filter,
-                        sort,
-                        movie_map,
-                        show_map,
-                        season_map,
-                        episode_map,
-                    ) {
-                        Ok(items) => {
-                            tracing::info!("Fetched Collection items");
-                            items
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
+                    let (thumbnail_movies, thumbnail_shows, thumbnail_seasons, thumbnail_episodes) =
+                        match self.db.get_collection_members(
+                            id,
+                            limit,
+                            offset,
+                            filter,
+                            sort,
+                            movie_map,
+                            show_map,
+                            season_map,
+                            episode_map,
+                        ) {
+                            Ok(items) => {
+                                tracing::info!("Fetched Collection items");
+                                items
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error);
+                                return Task::done(msg);
+                            }
+                        };
 
-                    self.home.fetched_collection(collection, items)
+                    let mut movies = Vec::with_capacity(thumbnail_movies.len());
+                    let mut shows = Vec::with_capacity(thumbnail_shows.len());
+                    let mut seasons = Vec::with_capacity(thumbnail_seasons.len());
+                    let mut episodes = Vec::with_capacity(thumbnail_episodes.len());
+                    let mut samples = Vec::with_capacity(
+                        thumbnail_movies.len()
+                            + thumbnail_shows.len()
+                            + thumbnail_seasons.len()
+                            + thumbnail_episodes.len(),
+                    );
+
+                    for (movie, sample) in thumbnail_movies {
+                        movies.push(movie);
+                        samples.push(sample.map(Message::MovieAllocation));
+                    }
+
+                    for (show, sample) in thumbnail_shows {
+                        shows.push(show);
+                        samples.push(sample.map(Message::ShowAllocation));
+                    }
+
+                    for (season, sample) in thumbnail_seasons {
+                        seasons.push(season);
+                        samples.push(sample.map(Message::SeasonAllocation));
+                    }
+
+                    for (episode, sample) in thumbnail_episodes {
+                        episodes.push(episode);
+                        samples.push(sample.map(Message::EpisodeAllocation));
+                    }
+
+                    let home_task = self
+                        .home
+                        .fetched_collection(collection, movies, shows, seasons, episodes);
+                    let samples = Task::batch(samples);
+
+                    Task::batch([home_task, samples])
                 }
             },
             Message::FetchDirectories => {
@@ -920,6 +1036,10 @@ impl App {
 
                 self.home.scanning(false, now)
             }
+            Message::MovieAllocation((id, sample)) => self.home.movie_sample(id, sample),
+            Message::ShowAllocation((id, sample)) => self.home.show_sample(id, sample),
+            Message::SeasonAllocation((id, sample)) => self.home.season_sample(id, sample),
+            Message::EpisodeAllocation((id, sample)) => self.home.episode_sample(id, sample),
         }
     }
 
@@ -1176,18 +1296,26 @@ impl App {
     }
 }
 
-fn movie_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Movie>> {
+fn movie_map(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<(shared::Thumbnail<Movie>, shared::ThumbnailSample<Movie>)> {
     Movie::from_row(row).map(shared::Thumbnail::new)
 }
 
-fn show_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Show>> {
+fn show_map(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<(shared::Thumbnail<Show>, shared::ThumbnailSample<Show>)> {
     Show::from_row(row).map(shared::Thumbnail::new)
 }
 
-fn season_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Season>> {
+fn season_map(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<(shared::Thumbnail<Season>, shared::ThumbnailSample<Season>)> {
     Season::from_row(row).map(shared::Thumbnail::new)
 }
 
-fn episode_map(row: &rusqlite::Row<'_>) -> rusqlite::Result<shared::Thumbnail<Episode>> {
+fn episode_map(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<(shared::Thumbnail<Episode>, shared::ThumbnailSample<Episode>)> {
     Episode::from_row(row).map(shared::Thumbnail::new)
 }

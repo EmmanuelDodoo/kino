@@ -19,7 +19,7 @@ pub use shows::*;
 use crate::db::{Operation, Query, Table};
 
 pub trait Media {
-    type Id: Copy + Clone + std::hash::Hash + PartialEq + Eq;
+    type Id: Copy + Clone + std::hash::Hash + PartialEq + Eq + Send;
 
     fn name(&self) -> &str;
 
