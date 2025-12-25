@@ -23,7 +23,7 @@ pub enum Message {
     Goto(CollectionId),
     Rename(String),
     Refetch,
-    Remove,
+    Remove(String),
     Synopsis(String),
     TMDB,
 }
@@ -95,8 +95,11 @@ impl MoviePage {
                 let msg = HomeMessage::Refetch(self.id.into());
                 Some(msg)
             }
-            Message::Remove => {
-                let msg = HomeMessage::Remove(self.id.into());
+            Message::Remove(name) => {
+                let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
+                    id: self.id.into(),
+                    name,
+                });
                 Some(msg)
             }
             Message::TMDB => {
@@ -214,7 +217,7 @@ impl MoviePage {
                     width,
                     Message::Rename(movie.media.name().to_owned()),
                     Message::Refetch,
-                    Message::Remove,
+                    Message::Remove(movie.media.name().to_owned()),
                     Message::Synopsis(movie.media.synopsis().to_owned()),
                     Some(Message::TMDB),
                 )

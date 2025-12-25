@@ -246,6 +246,8 @@ pub enum ViewMessage {
     Rename { id: ItemId, old: String },
     Synopsis { id: ItemId, old: String },
     TMDBId(ItemId),
+    RemoveMedia { id: ItemId, name: String },
+    RemoveCollection { id: CollectionId, name: String },
 }
 
 #[derive(Debug)]
@@ -274,6 +276,14 @@ pub enum View {
         id: ItemId,
         input: widget::Id,
         value: String,
+    },
+    RemoveMedia {
+        id: ItemId,
+        name: String,
+    },
+    RemoveCollection {
+        id: CollectionId,
+        name: String,
     },
 }
 
@@ -333,15 +343,15 @@ pub enum HomeMessage {
     Back,
     Forward,
     CollectionConfig(ConfigMessage),
-    RemoveCollection(CollectionId),
+    RemoveCollection,
     SearchMessage(SearchMessage),
     CollectionAdd(CollectionAddMessage),
     Rating(RatingMessage),
     Rename(RenameMessage),
     Synopsis(SynopsisMessage),
     TMDBId(TMDBMessage),
+    RemoveMedia,
     Refetch(ItemId),
-    Remove(ItemId),
     OpenView(ViewMessage),
     AddCollection(ItemId, CollectionId),
     CloseView,
@@ -629,6 +639,16 @@ impl Home {
 
                     Task::batch([self.update_page_scroll(), operation::focus(input)])
                 }
+                ViewMessage::RemoveMedia { id, name } => {
+                    self.view = Some(View::RemoveMedia { id, name });
+
+                    self.update_page_scroll()
+                }
+                ViewMessage::RemoveCollection { id, name } => {
+                    self.view = Some(View::RemoveCollection { id, name });
+
+                    self.update_page_scroll()
+                }
             },
             HomeMessage::CollectionConfig(csg) => {
                 let Some(View::CollectionConfig(mut config)) = self.view.take() else {
@@ -763,12 +783,16 @@ impl Home {
 
                 Task::none()
             }
-            HomeMessage::RemoveCollection(id) => {
+            HomeMessage::RemoveCollection => {
+                let Some(View::RemoveCollection { id, .. }) = self.view.as_ref() else {
+                    return Task::none();
+                };
+
                 let Some((index, _)) = self
                     .collections
                     .iter()
                     .enumerate()
-                    .find(|(_, collection)| collection.id == id)
+                    .find(|(_, collection)| collection.id == *id)
                 else {
                     return Task::none();
                 };
@@ -778,7 +802,7 @@ impl Home {
 
                 let remove = Task::done(Message::Query(query));
 
-                Task::batch([remove, self.back(now, true)])
+                Task::batch([remove, self.back(now, true), self.close_view()])
             }
             HomeMessage::SearchMessage(ssg) => {
                 let Some(View::Search(state, _)) = self.view.as_mut() else {
@@ -1026,15 +1050,19 @@ impl Home {
 
                 Task::done(msg)
             }
-            HomeMessage::Remove(id) => {
+            HomeMessage::RemoveMedia => {
+                let Some(View::RemoveMedia { id, .. }) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
                 let msg = Message::MediaUpdate(MediaUpdate {
-                    id,
+                    id: *id,
                     kind: MediaUpdateKind::Remove,
                 });
 
                 let remove = Task::done(msg);
 
-                Task::batch([self.back(now, true), remove])
+                Task::batch([self.back(now, true), remove, self.close_view()])
             }
             HomeMessage::CloseView => self.close_view(),
             HomeMessage::Back => self.back(now, false),
@@ -2264,6 +2292,12 @@ impl Home {
                         editor, content, ..
                     } => draw_synopsis(editor, content),
                     View::TMDBId { input, value, .. } => draw_tmdb(input, value),
+                    View::RemoveMedia { name, .. } => {
+                        draw_delete_confirm(name, HomeMessage::RemoveMedia)
+                    }
+                    View::RemoveCollection { name, .. } => {
+                        draw_delete_confirm(name, HomeMessage::RemoveCollection)
+                    }
                 };
 
                 modal(content, overlay, HomeMessage::CloseView)
@@ -2813,8 +2847,6 @@ fn icon_button<'a>(
         sized_medium(value, H6)
     };
 
-    let text = container(text).max_height(48.0).clip(true);
-
     let content = row!(icon, text)
         .align_y(Vertical::Center)
         .width(Length::Fill)
@@ -2841,7 +2873,7 @@ fn icon_button<'a>(
             .on_press(message),
     )
     .clip(true)
-    .max_height(48.0)
+    .max_height(56.0)
     .into()
 }
 
@@ -3352,4 +3384,26 @@ fn draw_tmdb<'a>(input: &widget::Id, value: &String) -> Element<'a, HomeMessage>
         .width(250);
 
     modal_container(input).padding([6, 8]).into()
+}
+
+fn draw_delete_confirm<'a>(name: &'a str, message: HomeMessage) -> Element<'a, HomeMessage> {
+    let title = h6("Confirm Deletion");
+
+    let body = sized_medium(format!("Are you sure you want to delete \"{name}\""), P);
+
+    let delete = button(medium("Delete"))
+        .on_press(message)
+        .style(styles::button::danger);
+
+    let cancel = button(medium("Cancel"))
+        .on_press(HomeMessage::CloseView)
+        .style(styles::button::primary);
+
+    let actions = row!(cancel, delete).spacing(80.0).align_y(Vertical::Center);
+
+    let content = column!(title, body, actions)
+        .spacing(40)
+        .align_x(Horizontal::Center);
+
+    modal_container(content).max_width(500).into()
 }

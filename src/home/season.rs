@@ -33,7 +33,7 @@ pub enum Message {
     Rename(String),
     Synopsis(String),
     Refetch,
-    Remove,
+    Remove(String),
 }
 
 #[derive(Debug, Clone)]
@@ -144,8 +144,11 @@ impl SeasonPage {
                 let msg = HomeMessage::Refetch(self.id.into());
                 Some(msg)
             }
-            Message::Remove => {
-                let msg = HomeMessage::Remove(self.id.into());
+            Message::Remove(name) => {
+                let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
+                    id: self.id.into(),
+                    name,
+                });
                 Some(msg)
             }
         }
@@ -466,7 +469,7 @@ impl SeasonPage {
                     width,
                     Message::Rename(season.media.name().to_owned()),
                     Message::Refetch,
-                    Message::Remove,
+                    Message::Remove(season.media.name().to_owned()),
                     Message::Synopsis(season.media.synopsis().to_owned()),
                     None,
                 )

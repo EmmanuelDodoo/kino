@@ -31,7 +31,7 @@ pub enum Message {
     DetailsItem(ItemId),
     Add(ItemId),
     Play(Items),
-    Remove,
+    Remove(String),
     OpenConfig,
     AddNewItem,
     None,
@@ -119,8 +119,9 @@ impl CollectionPage {
 
                 Some(msg)
             }
-            Message::Remove => {
-                let msg = HomeMessage::RemoveCollection(self.id);
+            Message::Remove(name) => {
+                let msg =
+                    HomeMessage::OpenView(ViewMessage::RemoveCollection { id: self.id, name });
 
                 Some(msg)
             }
@@ -243,7 +244,7 @@ impl CollectionPage {
                     .padding(0)
                     .on_press(CollectionMessage {
                         id,
-                        message: Message::Remove,
+                        message: Message::Remove(collection.collection.name.clone()),
                     })
                     .style(|theme, status| {
                         let default = styles::button::text_danger(theme, status);
