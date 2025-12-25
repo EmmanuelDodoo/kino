@@ -2122,17 +2122,28 @@ impl Home {
     }
 
     fn content_area(&self, now: Instant) -> Element<'_, HomeMessage> {
-        let title = match &self.state {
-            State::Recent { .. } => "Recents",
-            State::Shows(_) => "Shows",
-            State::Movies(_) => "Movies",
-            State::Show { show, .. } => show.media.name(),
-            State::Movie { movie, .. } => movie.media.name(),
-            State::Season { season, .. } => season.media.name(),
-            State::Episode { episode, .. } => episode.media.name(),
-            State::Loading(_) => "Loading",
-            State::Collections(_) => "Collections",
-            State::Collection { collection, .. } => &collection.collection.name,
+        let (title, items) = match &self.state {
+            State::Recent { shows, movies } => ("Recents", shows.len() + movies.len()),
+            State::Shows(shows) => ("Shows", shows.len()),
+            State::Movies(movies) => ("Movies", movies.len()),
+            State::Show { show, seasons, .. } => (show.media.name(), seasons.len()),
+            State::Movie { movie, .. } => (movie.media.name(), 0),
+            State::Season {
+                season, episodes, ..
+            } => (season.media.name(), episodes.len()),
+            State::Episode { episode, .. } => (episode.media.name(), 0),
+            State::Loading(_) => ("Loading", 0),
+            State::Collections(collections) => ("Collections", collections.len()),
+            State::Collection {
+                collection,
+                movies,
+                shows,
+                seasons,
+                episodes,
+            } => (
+                collection.collection.name.as_str(),
+                movies.len() + shows.len() + seasons.len() + episodes.len(),
+            ),
         };
         let title = container(h4(title)).clip(true).center_y(40);
 
@@ -2162,10 +2173,36 @@ impl Home {
             .map(|page| page.show_tools())
             .unwrap_or(true);
 
+        let bottom: Element<'_, HomeMessage> = if items > 0 {
+            let padding = Padding::new(2.0).right(10);
+
+            let items = sized_medium(format!("{items} items"), H8);
+
+            let content = row!(space::horizontal(), items);
+
+            container(content)
+                .width(Length::Fill)
+                .align_x(Horizontal::Right)
+                .padding(padding)
+                .style(|theme| {
+                    let default = styles::container::bw3(theme);
+                    let background = default.background.map(|back| back.scale_alpha(0.25));
+
+                    container::Style {
+                        background,
+                        ..default
+                    }
+                })
+                .into()
+        } else {
+            empty()
+        };
+
         let content = container(column!(
             top,
             if show_tools { self.toolbar() } else { empty() },
-            content_area
+            content_area,
+            bottom,
         ))
         .clip(true)
         .height(Length::Fill)
@@ -2260,7 +2297,7 @@ impl Home {
             row!(self.side(now), self.content_area(now))
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .padding(3),
+                .padding(0),
         )
         .style(styles::container::bb);
 
