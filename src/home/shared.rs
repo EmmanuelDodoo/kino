@@ -48,51 +48,14 @@ impl Tab {
     }
 }
 
-pub fn title<'a, Message: 'a + Clone>(
-    name: &'a str,
-    on_rename: Message,
-    on_refetch: Message,
-    on_remove: Message,
-) -> Element<'a, Message> {
-    let icon_size = H6;
-    let title = sized_medium(name, H4);
-
-    let rename = icon(RENAME).size(icon_size);
-    let rename = button(rename)
-        .on_press(on_rename)
-        .padding(0)
-        .style(styles::button::text);
-    let rename = tooltip(rename, "Rename media", tp::Position::Top);
-
-    let refetch = icon(REFRESH).size(icon_size);
-    let refetch = button(refetch)
-        .on_press(on_refetch)
-        .padding(0)
-        .style(styles::button::text);
-    let refetch = tooltip(refetch, "Refetch from TMDB", tp::Position::Top);
-
-    let delete = icon(DELETE).size(icon_size);
-    let delete = button(delete)
-        .on_press(on_remove)
-        .padding(0)
-        .style(styles::button::text_danger);
-    let delete = tooltip(delete, "Delete media", tp::Position::Top);
-
-    let icons = row!(rename, refetch, delete)
-        .spacing(8.0)
-        .align_y(Vertical::Center);
-
-    row!(title, icons)
-        .spacing(16.0)
-        .align_y(Vertical::Center)
-        .into()
+pub fn title<'a, Message: 'a + Clone>(name: &'a str) -> Element<'a, Message> {
+    sized_medium(name, H4).into()
 }
 
-pub fn edit_synopsis<'a, Message: 'a + Clone>(synopsis: &'a str, on_edit: Message) -> Element<'a, Message> {
+pub fn tab_synopsis<'a, Message: 'a + Clone>(synopsis: &'a str) -> Element<'a, Message> {
     let synopsis = regular(synopsis);
-    let edit = button(icon(RENAME)).style(styles::button::text_primary).on_press(on_edit);
 
-    scrollable(column!(synopsis, edit).spacing(8.0))
+    scrollable(column!(synopsis).spacing(8.0))
         .spacing(4.0)
         .into()
 }
@@ -248,7 +211,22 @@ pub fn data<'a, Message: 'a>(
         .into()
 }
 
-pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a, Message> {
+pub fn data_tab<'a, Message: 'a + Clone, T: Media>(
+    media: &T,
+    width: f32,
+    on_rename: Message,
+    on_refetch: Message,
+    on_remove: Message,
+    on_synopsis: Message,
+    on_tmdb: Option<Message>,
+) -> Element<'a, Message> {
+    let sts = {
+        let icon = icon(STATS).size(P);
+        let label = medium("Statistics");
+
+        row!(icon, label).spacing(4.0).align_y(Vertical::Center)
+    };
+
     let duration = data("Duration", media.duration_short(), CLOCK);
 
     let rating = data(
@@ -298,7 +276,75 @@ pub fn data_tab<'a, Message: 'a, T: Media>(media: &T, width: f32) -> Element<'a,
     .align_y(Vertical::Center)
     .width(Length::Fill);
 
-    let content = column!(r1, r2).spacing(30.0);
+    let data = column!(r1, r2).spacing(20.0);
+
+    let data = column!(sts, data).spacing(12.0);
+
+    let ops = {
+        let label = {
+            let icon = icon(EDIT).size(P);
+            let label = medium("Edit");
+
+            row!(icon, label).spacing(4.0).align_y(Vertical::Center)
+        };
+
+        let ops = {
+            let size = H7;
+            let spacing = 4.0;
+            let tp = tp::Position::Top;
+
+            let rename = row!(icon(RENAME).size(size), sized_medium("Name", size))
+                .spacing(spacing)
+                .align_y(Vertical::Center);
+            let rename = button(rename)
+                .style(styles::button::subtler)
+                .on_press(on_rename);
+
+            let synopsis = row!(icon(RENAME).size(size), sized_medium("Overview", size))
+                .spacing(spacing)
+                .align_y(Vertical::Center);
+            let synopsis = button(synopsis)
+                .style(styles::button::subtler)
+                .on_press(on_synopsis);
+
+            let tmdb: Element<'_, Message> = match on_tmdb {
+                Some(message) => {
+                    let tmdb = sized_medium("TMDB ID", size);
+
+                    tooltip(
+                        button(tmdb)
+                            .style(styles::button::subtler)
+                            .on_press(message),
+                        "TMDB id can easily be located as part of the movie/show url. Eg `1233413` from https://www.themoviedb.org/movie/1233413-sinners",
+                        tp,
+                    )
+                    .into()
+                }
+                None => empty(),
+            };
+
+            let refetch = row!(icon(REFRESH).size(size), sized_medium("Refetch", size))
+                .spacing(spacing)
+                .align_y(Vertical::Center);
+            let refetch = button(refetch)
+                .style(styles::button::subtler)
+                .on_press(on_refetch);
+            let refetch = tooltip(refetch, "Refetch from TMDB", tp);
+
+            let remove = row!(icon(DELETE).size(size), sized_medium("Delete", size))
+                .spacing(spacing)
+                .align_y(Vertical::Center);
+            let remove = button(remove)
+                .style(styles::button::danger)
+                .on_press(on_remove);
+
+            row!(rename, synopsis, tmdb, refetch, remove).spacing(8.0)
+        };
+
+        column!(label, ops).spacing(10.0)
+    };
+
+    let content = column!(data, ops).spacing(40.0);
 
     content.width(width).into()
 }

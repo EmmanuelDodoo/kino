@@ -13,6 +13,7 @@ CREATE TABLE directory (
 CREATE TABLE tv_show ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
 	tmdb_id              INTEGER,
+	user_tmdb_id         INTEGER,
 	name                 TEXT NOT NULL    ,
 	original_name	     TEXT NOT NULL,
 	directory            TEXT NOT NULL,
@@ -42,6 +43,7 @@ CREATE INDEX idx_tv_show_directory ON tv_show ( directory );
 CREATE TABLE season ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
 	tmdb_id              INTEGER,
+	user_tmdb_id         INTEGER,
 	name                 TEXT NOT NULL    ,
 	original_name	     TEXT NOT NULL,
 	path        	     TEXT NOT NULL,
@@ -70,6 +72,7 @@ CREATE INDEX idx_season_show_id ON season ( show_id );
 CREATE TABLE episode ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
 	tmdb_id              INTEGER,
+	user_tmdb_id         INTEGER,
 	name                 TEXT NOT NULL    ,
 	original_name	     TEXT NOT NULL,
 	path                 TEXT NOT NULL,
@@ -111,6 +114,7 @@ CREATE INDEX idx_comment_episode_id ON episode_comment ( episode_id );
 CREATE TABLE movie (
 	id		            TEXT NOT NULL PRIMARY KEY,
 	tmdb_id              INTEGER,
+	user_tmdb_id         INTEGER,
 	name		        TEXT NOT NULL,
 	original_name	    TEXT NOT NULL,
 	directory            TEXT NOT NULL,
@@ -617,6 +621,14 @@ BEGIN
 	UPDATE season
 	SET tmdb_id=NULL,
 	fetched=FALSE,
+	removed=NEW.removed
+	WHERE show_id = NEW.id;
+END;
+
+CREATE TRIGGER show_season_user_tmdb_tr AFTER UPDATE OF user_tmdb_id ON tv_show WHEN NEW.user_tmdb_id IS NOT NULL
+BEGIN
+	UPDATE season
+	SET tmdb_id=NULL,
 	removed=NEW.removed
 	WHERE show_id = NEW.id;
 END;

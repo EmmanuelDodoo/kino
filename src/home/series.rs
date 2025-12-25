@@ -34,6 +34,7 @@ pub enum Message {
     Synopsis(String),
     Refetch,
     Remove,
+    TMDB,
 }
 
 #[derive(Debug, Clone)]
@@ -145,6 +146,10 @@ impl ShowPage {
             }
             Message::Remove => {
                 let msg = HomeMessage::Remove(self.id.into());
+                Some(msg)
+            }
+            Message::TMDB => {
+                let msg = HomeMessage::OpenView(ViewMessage::TMDBId(self.id.into()));
                 Some(msg)
             }
         }
@@ -309,21 +314,7 @@ impl ShowPage {
         let header = {
             let separator = || Element::from(text("•").line_height(0.9).size(H4));
 
-            let title = title(
-                show.media.name(),
-                ShowPageMessage {
-                    id,
-                    message: Message::Rename(show.media.name().to_owned()),
-                },
-                ShowPageMessage {
-                    id,
-                    message: Message::Refetch,
-                },
-                ShowPageMessage {
-                    id,
-                    message: Message::Remove,
-                },
-            );
+            let title = title(show.media.name());
 
             let duration = duration(&show.media);
             let rating = button(ratings(&show.media, true))
@@ -354,13 +345,7 @@ impl ShowPage {
                 row(tags).spacing(6).align_y(Vertical::Center)
             };
 
-            let synopsis = edit_synopsis(
-                show.media.synopsis(),
-                ShowPageMessage {
-                    id,
-                    message: Message::Synopsis(show.media.synopsis().to_owned()),
-                },
-            );
+            let synopsis = tab_synopsis(show.media.synopsis());
 
             let actions = row!(
                 button(
@@ -501,7 +486,16 @@ impl ShowPage {
                     Layout::List => self.list(now, thumbnails),
                     Layout::Compact => self.compact(thumbnails),
                 },
-                Tab::Data => data_tab(&show.media, width),
+                Tab::Data => data_tab(
+                    &show.media,
+                    width,
+                    Message::Rename(show.media.name().to_owned()),
+                    Message::Refetch,
+                    Message::Remove,
+                    Message::Synopsis(show.media.synopsis().to_owned()),
+                    Some(Message::TMDB),
+                )
+                .map(move |message| ShowPageMessage { id, message }),
                 // todo
                 // Tab::Comments => {
                 //     let comments = ["Some comment here: "; 7]

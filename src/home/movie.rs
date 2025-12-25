@@ -25,6 +25,7 @@ pub enum Message {
     Refetch,
     Remove,
     Synopsis(String),
+    TMDB,
 }
 
 #[derive(Debug, Clone)]
@@ -98,6 +99,11 @@ impl MoviePage {
                 let msg = HomeMessage::Remove(self.id.into());
                 Some(msg)
             }
+            Message::TMDB => {
+                let msg = HomeMessage::OpenView(ViewMessage::TMDBId(self.id.into()));
+
+                Some(msg)
+            }
         }
     }
 
@@ -117,21 +123,7 @@ impl MoviePage {
         let header = {
             let separator = || Element::from(text("•").size(H3));
 
-            let title = title(
-                movie.media.name(),
-                MoviePageMessage {
-                    id,
-                    message: Message::Rename(movie.media.name().to_owned()),
-                },
-                MoviePageMessage {
-                    id,
-                    message: Message::Refetch,
-                },
-                MoviePageMessage {
-                    id,
-                    message: Message::Remove,
-                },
-            );
+            let title = title(movie.media.name());
 
             let duration = duration(&movie.media);
             let rating = button(ratings(&movie.media, true))
@@ -204,13 +196,7 @@ impl MoviePage {
             let width = 750.0;
 
             match self.tab {
-                Tab::Items => edit_synopsis(
-                    movie.media.synopsis(),
-                    MoviePageMessage {
-                        id,
-                        message: Message::Synopsis(movie.media.synopsis().to_owned()),
-                    },
-                ),
+                Tab::Items => tab_synopsis(movie.media.synopsis()),
                 // todo
                 // Tab::Comments => {
                 //     let comments = ["Some comment here: "; 7]
@@ -223,7 +209,16 @@ impl MoviePage {
                 //
                 //     column!(comments).spacing(8.0).width(width).into()
                 // }
-                Tab::Data => data_tab(&movie.media, width),
+                Tab::Data => data_tab(
+                    &movie.media,
+                    width,
+                    Message::Rename(movie.media.name().to_owned()),
+                    Message::Refetch,
+                    Message::Remove,
+                    Message::Synopsis(movie.media.synopsis().to_owned()),
+                    Some(Message::TMDB),
+                )
+                .map(move |message| MoviePageMessage { id, message }),
                 Tab::Collections => {
                     let collections = memberships.map(|collection| {
                         draw_collection_tab(collection, move |collection| MoviePageMessage {
@@ -289,7 +284,7 @@ impl MoviePage {
 
         container(column!(content, actions))
             .padding([20, 28])
-            .max_height(465.0)
+            .max_height(500.0)
             .align_x(Horizontal::Center)
             .width(Length::Fill)
             .style(|theme| {

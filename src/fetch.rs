@@ -391,6 +391,11 @@ pub async fn fetcher(
 mod movies {
     use super::*;
 
+    struct UserPending {
+        id: MovieId,
+        user_tmdb_id: TMDBId,
+    }
+
     struct PendingData {
         id: MovieId,
         name: String,
@@ -413,6 +418,23 @@ mod movies {
                 let id = MovieId::from_row(row)?;
                 let name = row.get::<_, String>("name")?;
                 Ok(PendingData { id, name })
+            })?
+            .collect()
+    }
+
+    fn fetch_user_pending(db: &Database, limit: u8) -> rusqlite::Result<Vec<UserPending>> {
+        tracing::info!("Querying user pending movie data");
+        let sql = "SELECT movie.id, movie.user_tmdb_id FROM movie WHERE movie.user_tmdb_id IS NOT NULL LIMIT :limit";
+
+        let mut statement = db.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
+                let id = MovieId::from_row(row)?;
+                let user_tmdb_id = TMDBId {
+                    id: row.get::<_, u32>("user_tmdb_id")?,
+                };
+                Ok(UserPending { id, user_tmdb_id })
             })?
             .collect()
     }
@@ -444,7 +466,7 @@ mod movies {
     ) -> rusqlite::Result<usize> {
         tracing::info!("Inserting {} movie data", movies.len());
         let trans = db.transaction()?;
-        let sql = "UPDATE movie SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
+        let sql = "UPDATE movie SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, user_tmdb_id=NULL, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (movie, data) in movies {
@@ -524,6 +546,22 @@ mod movies {
         tracing::info!("Handling movies fetching");
         let images_path = images_path.as_ref();
 
+        if let Ok(pending) =
+            fetch_user_pending(db, limit).inspect_err(|error| tracing::error!("{error}"))
+        {
+            let mut data = Vec::with_capacity(pending.len());
+
+            for movie in pending {
+                if let Some(res) = get_movie(auth, movie.user_tmdb_id).await {
+                    data.push((movie.id, res))
+                }
+            }
+
+            if let Err(error) = insert_data(db, data, rating) {
+                tracing::error!("{error}");
+            }
+        }
+
         if let Ok(pending) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}")) {
             let mut data = Vec::with_capacity(pending.len());
 
@@ -573,6 +611,11 @@ mod movies {
 mod shows {
     use super::*;
 
+    struct UserPending {
+        id: ShowId,
+        user_tmdb_id: TMDBId,
+    }
+
     struct PendingData {
         id: ShowId,
         name: String,
@@ -595,6 +638,23 @@ mod shows {
                 let id = ShowId::from_row(row)?;
                 let name = row.get::<_, String>("name")?;
                 Ok(PendingData { id, name })
+            })?
+            .collect()
+    }
+
+    fn fetch_user_pending(db: &Database, limit: u8) -> rusqlite::Result<Vec<UserPending>> {
+        tracing::info!("Querying user pending show data");
+        let sql = "SELECT tv_show.id, tv_show.user_tmdb_id FROM tv_show WHERE tv_show.user_tmdb_id IS NOT NULL LIMIT :limit";
+
+        let mut statement = db.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":limit", &ToSqlOutput::from(limit))], |row| {
+                let id = ShowId::from_row(row)?;
+                let user_tmdb_id = TMDBId {
+                    id: row.get::<_, u32>("user_tmdb_id")?,
+                };
+                Ok(UserPending { id, user_tmdb_id })
             })?
             .collect()
     }
@@ -626,7 +686,7 @@ mod shows {
     ) -> rusqlite::Result<usize> {
         tracing::info!("Inserting {} show data", shows.len());
         let trans = db.transaction()?;
-        let sql = "UPDATE tv_show SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
+        let sql = "UPDATE tv_show SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, user_tmdb_id=NULL, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (show, data) in shows {
@@ -702,6 +762,22 @@ mod shows {
     ) {
         tracing::info!("Handling show fetching");
         let images_path = images_path.as_ref();
+
+        if let Ok(pending) =
+            fetch_user_pending(db, limit).inspect_err(|error| tracing::error!("{error}"))
+        {
+            let mut data = Vec::with_capacity(pending.len());
+
+            for show in pending {
+                if let Some(res) = get_show(auth, show.user_tmdb_id).await {
+                    data.push((show.id, res))
+                };
+            }
+
+            if let Err(error) = insert_data(db, data, rating) {
+                tracing::error!("{error}");
+            }
+        }
 
         if let Ok(pending) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}")) {
             let mut data = Vec::with_capacity(pending.len());
@@ -959,7 +1035,7 @@ mod episodes {
     ) -> rusqlite::Result<usize> {
         tracing::info!("Inserting {} episode data", episodes.len());
         let trans = db.transaction()?;
-        let sql = "UPDATE episode SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name, rating=rating WHERE id=:id";
+        let sql = "UPDATE episode SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (episode, data) in episodes {

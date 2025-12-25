@@ -305,6 +305,23 @@ impl Show {
         }
     }
 
+    #[must_use]
+    pub fn set_tmdb_id<'a>(id: ShowId, tmdb_id: u32) -> Query<'a> {
+        let sql = "UPDATE tv_show SET user_tmdb_id=:tmdb_id, tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE  WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":tmdb_id", ToSqlOutput::from(tmdb_id)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Show,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,

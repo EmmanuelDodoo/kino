@@ -48,6 +48,7 @@ pub enum MediaUpdateKind {
     Synopsis(String),
     Refetch,
     Remove,
+    TMDBId(u32),
 }
 
 #[derive(Clone, Debug)]
@@ -310,7 +311,7 @@ impl App {
             Message::Query(query) => {
                 let _todo = match query.execute(&self.db) {
                     Ok(suc) => {
-                        tracing::info!("Query success {suc:?}");
+                        tracing::info!("{suc:?}");
                         suc
                     }
                     Err(error) => {
@@ -353,11 +354,19 @@ impl App {
                         ItemId::Season(id) => Season::remove(id),
                         ItemId::Episode(id) => Episode::remove(id),
                     },
+                    MediaUpdateKind::TMDBId(new) => match id {
+                        ItemId::Show(id) => Show::set_tmdb_id(id, new),
+                        ItemId::Movie(id) => Movie::set_tmdb_id(id, new),
+                        ItemId::Episode(_) | ItemId::Season(_) => {
+                            tracing::warn!("Cannot manually set season/episode tmdb id");
+                            return Task::none();
+                        }
+                    },
                 };
 
                 match query.execute(&self.db) {
                     Ok(todo) => {
-                        tracing::info!("Query success {todo:?}");
+                        tracing::info!("{todo:?}");
                         self.home.content_refresh(now)
                     }
                     Err(error) => {

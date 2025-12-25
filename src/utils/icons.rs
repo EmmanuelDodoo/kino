@@ -115,6 +115,7 @@ pub const CALENDAR: char = '\u{e837}';
 pub const NUMBER: char = '\u{e838}';
 pub const EYE: char = '\u{e833}';
 pub const HIDE: char = '\u{e832}';
+pub const STATS: char = '\u{e862}';
 
 pub const ELLIPSIS_VER: char = '\u{e800}';
 pub const ELLIPSIS_HOR: char = '\u{e839}';

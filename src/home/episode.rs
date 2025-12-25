@@ -117,21 +117,7 @@ impl EpisodePage {
         let header = {
             let separator = || Element::from(text("•").size(H3));
 
-            let title = title(
-                episode.media.name(),
-                EpisodePageMessage {
-                    id,
-                    message: Message::Rename(episode.media.name().to_owned()),
-                },
-                EpisodePageMessage {
-                    id,
-                    message: Message::Refetch,
-                },
-                EpisodePageMessage {
-                    id,
-                    message: Message::Remove,
-                },
-            );
+            let title = title(episode.media.name());
 
             let duration = duration(&episode.media);
             let rating = button(ratings(&episode.media, true))
@@ -192,13 +178,7 @@ impl EpisodePage {
             let width = 750.0;
 
             match self.tab {
-                Tab::Items => edit_synopsis(
-                    episode.media.synopsis(),
-                    EpisodePageMessage {
-                        id,
-                        message: Message::Synopsis(episode.media.synopsis().to_owned()),
-                    },
-                ),
+                Tab::Items => tab_synopsis(episode.media.synopsis()),
                 // todo
                 // Tab::Comments => {
                 //     let comments = ["Some comment here: "; 7]
@@ -211,7 +191,16 @@ impl EpisodePage {
                 //
                 //     column!(comments).spacing(8.0).width(width).into()
                 // }
-                Tab::Data => data_tab(&episode.media, width),
+                Tab::Data => data_tab(
+                    &episode.media,
+                    width,
+                    Message::Rename(episode.media.name().to_owned()),
+                    Message::Refetch,
+                    Message::Remove,
+                    Message::Synopsis(episode.media.synopsis().to_owned()),
+                    None,
+                )
+                .map(move |message| EpisodePageMessage { id, message }),
                 Tab::Collections => {
                     let collections = memberships.map(|collection| {
                         draw_collection_tab(collection, move |collection| EpisodePageMessage {
@@ -277,7 +266,7 @@ impl EpisodePage {
 
         container(column!(content, actions))
             .padding([20, 28])
-            .max_height(465.0)
+            .max_height(500.0)
             .align_x(Horizontal::Center)
             .width(Length::Fill)
             .style(|theme| {

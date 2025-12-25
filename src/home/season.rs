@@ -305,21 +305,7 @@ impl SeasonPage {
         let header = {
             let separator = || Element::from(text("•").line_height(0.9).size(H4));
 
-            let title = title(
-                season.media.name(),
-                SeasonPageMessage {
-                    id,
-                    message: Message::Rename(season.media.name().to_owned()),
-                },
-                SeasonPageMessage {
-                    id,
-                    message: Message::Refetch,
-                },
-                SeasonPageMessage {
-                    id,
-                    message: Message::Remove,
-                },
-            );
+            let title = title(season.media.name());
             let duration = duration(&season.media);
             let rating = button(ratings(&season.media, true))
                 .on_press(SeasonPageMessage {
@@ -334,13 +320,7 @@ impl SeasonPage {
                 .spacing(6)
                 .align_y(Vertical::Center);
 
-            let synopsis = edit_synopsis(
-                season.media.synopsis(),
-                SeasonPageMessage {
-                    id,
-                    message: Message::Synopsis(season.media.synopsis().to_owned()),
-                },
-            );
+            let synopsis = tab_synopsis(season.media.synopsis());
 
             let actions = row!(
                 button(
@@ -481,7 +461,16 @@ impl SeasonPage {
                     Layout::List => self.list(now, thumbnails),
                     Layout::Compact => self.compact(thumbnails),
                 },
-                Tab::Data => data_tab(&season.media, width),
+                Tab::Data => data_tab(
+                    &season.media,
+                    width,
+                    Message::Rename(season.media.name().to_owned()),
+                    Message::Refetch,
+                    Message::Remove,
+                    Message::Synopsis(season.media.synopsis().to_owned()),
+                    None,
+                )
+                .map(move |message| SeasonPageMessage { id, message }),
                 // todo
                 // Tab::Comments => {
                 //     let comments = ["Some comment here: "; 7]

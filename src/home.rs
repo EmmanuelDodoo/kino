@@ -231,6 +231,12 @@ pub enum SynopsisMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum TMDBMessage {
+    Input(String),
+    Submit,
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig,
     Add(ItemId),
@@ -239,6 +245,7 @@ pub enum ViewMessage {
     Rating(ItemId, Option<f32>),
     Rename { id: ItemId, old: String },
     Synopsis { id: ItemId, old: String },
+    TMDBId(ItemId),
 }
 
 #[derive(Debug)]
@@ -262,6 +269,11 @@ pub enum View {
         editor: widget::Id,
         old: String,
         content: text_editor::Content,
+    },
+    TMDBId {
+        id: ItemId,
+        input: widget::Id,
+        value: String,
     },
 }
 
@@ -327,6 +339,7 @@ pub enum HomeMessage {
     Rating(RatingMessage),
     Rename(RenameMessage),
     Synopsis(SynopsisMessage),
+    TMDBId(TMDBMessage),
     Refetch(ItemId),
     Remove(ItemId),
     OpenView(ViewMessage),
@@ -605,6 +618,16 @@ impl Home {
                     });
 
                     Task::batch([self.update_page_scroll(), operation::focus(editor)])
+                }
+                ViewMessage::TMDBId(id) => {
+                    let input = widget::Id::unique();
+                    self.view = Some(View::TMDBId {
+                        id,
+                        input: input.clone(),
+                        value: String::new(),
+                    });
+
+                    Task::batch([self.update_page_scroll(), operation::focus(input)])
                 }
             },
             HomeMessage::CollectionConfig(csg) => {
@@ -968,6 +991,30 @@ impl Home {
                     SynopsisMessage::Action(action) => {
                         content.perform(action);
                         Task::none()
+                    }
+                }
+            }
+            HomeMessage::TMDBId(tsg) => {
+                let Some(View::TMDBId { id, value, .. }) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match tsg {
+                    TMDBMessage::Input(new) => {
+                        *value = new;
+                        Task::none()
+                    }
+                    TMDBMessage::Submit => {
+                        let tmdb_id = match value.parse::<u32>() {
+                            Ok(tmdb_id) => tmdb_id,
+                            Err(error) => return Task::done(Message::error(error)),
+                        };
+                        let msg = Message::MediaUpdate(MediaUpdate {
+                            id: *id,
+                            kind: MediaUpdateKind::TMDBId(tmdb_id),
+                        });
+
+                        Task::batch([Task::done(msg), self.close_view()])
                     }
                 }
             }
@@ -2216,6 +2263,7 @@ impl Home {
                     View::Synopsis {
                         editor, content, ..
                     } => draw_synopsis(editor, content),
+                    View::TMDBId { input, value, .. } => draw_tmdb(input, value),
                 };
 
                 modal(content, overlay, HomeMessage::CloseView)
@@ -3292,4 +3340,16 @@ fn draw_synopsis<'a>(
         .size(P);
 
     modal_container(content).padding([6, 6]).into()
+}
+
+fn draw_tmdb<'a>(input: &widget::Id, value: &String) -> Element<'a, HomeMessage> {
+    let input = text_input("TMDB ID", value)
+        .on_input(|new| HomeMessage::TMDBId(TMDBMessage::Input(new)))
+        .on_submit(HomeMessage::TMDBId(TMDBMessage::Submit))
+        .font(regular_font())
+        .id(input.clone())
+        .size(H7)
+        .width(250);
+
+    modal_container(input).padding([6, 8]).into()
 }

@@ -253,7 +253,7 @@ impl Movie {
 
     #[must_use]
     pub fn refetch<'a>(id: MovieId) -> Query<'a> {
-        let sql = "UPDATE movie SET tmdb_id=NULL, fetched=FALSE WHERE id=:id";
+        let sql = "UPDATE movie SET tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE WHERE id=:id";
         let params = [(":id", ToSqlOutput::from(id))];
 
         Query {
@@ -290,6 +290,23 @@ impl Movie {
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":rating", ToSqlOutput::from(rating)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_tmdb_id<'a>(id: MovieId, tmdb_id: u32) -> Query<'a> {
+        let sql = "UPDATE movie SET user_tmdb_id=:tmdb_id, tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":tmdb_id", ToSqlOutput::from(tmdb_id)),
         ];
 
         Query {
