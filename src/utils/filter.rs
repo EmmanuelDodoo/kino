@@ -354,7 +354,7 @@ impl Filter {
             )
         });
         let release =
-            release.map(|release| format!("{prefix}release {} {}", release.comp, release.year));
+            release.map(|release| format!("strftime('%Y', {prefix}release) {} '{}'", release.comp, release.year));
         let duration = duration
             .map(|duration| format!("{prefix}duration {} {}", duration.comp, duration.secs));
 
