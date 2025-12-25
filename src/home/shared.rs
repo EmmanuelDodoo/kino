@@ -1,8 +1,8 @@
 use crate::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
+use crate::utils::{DEFAULT_POSTER, empty, tooltip};
 use crate::utils::{Filter, Sort, collage, sample_complement, styles};
-use crate::utils::{default_poster, empty, tooltip};
 use crate::variants;
 use iced::Task;
 use iced::{
@@ -411,7 +411,7 @@ impl<T: Media> Thumbnail<T> {
         //todo: Sample color is not great for current default poster
         let poster = match media.poster() {
             Some(poster) => Some(Handle::from_path(poster)),
-            None => default_poster(),
+            None => DEFAULT_POSTER.clone(),
         };
 
         let backdrop = media.backdrop().map(Handle::from_path);
@@ -946,7 +946,7 @@ impl SearchView {
     pub fn new(item: SearchItem) -> Self {
         let poster = match &item.poster {
             Some(poster) => Some(Handle::from_path(poster)),
-            None => default_poster(),
+            None => DEFAULT_POSTER.clone(),
         };
         Self {
             snippet: markdown::Content::parse(&item.snippet),

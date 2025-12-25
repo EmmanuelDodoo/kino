@@ -2,11 +2,13 @@ use image::{
     DynamicImage, GenericImage, ImageBuffer, ImageReader, Rgba,
     imageops::{self, FilterType},
 };
+use std::sync::LazyLock;
 
 use iced::Color;
 use iced::widget::image::Handle;
 
-const DEFAULT_POSTER: &[u8] = include_bytes!("../../resources/images/default_poster.png");
+const DEFAULT_POSTER_PATH: &[u8] = include_bytes!("../../resources/images/default_poster.png");
+pub static DEFAULT_POSTER: LazyLock<Option<Handle>> = LazyLock::new(|| default_poster());
 
 fn open(path: &str) -> Option<DynamicImage> {
     ImageReader::open(path)
@@ -23,10 +25,10 @@ fn open(path: &str) -> Option<DynamicImage> {
         })
 }
 
-pub fn default_poster() -> Option<Handle> {
+fn default_poster() -> Option<Handle> {
     use std::io::Cursor;
 
-    let default = Cursor::new(DEFAULT_POSTER);
+    let default = Cursor::new(DEFAULT_POSTER_PATH);
 
     let img = ImageReader::new(default)
         .with_guessed_format()
