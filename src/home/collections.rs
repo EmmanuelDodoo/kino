@@ -73,7 +73,6 @@ impl Collections {
 
         let content = container(
             scrollable(content)
-                .spacing(20.0)
                 .id(self.scroll.id.clone())
                 .on_scroll(CollectionsMessage::Scroll),
         )

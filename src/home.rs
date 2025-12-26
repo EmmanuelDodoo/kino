@@ -1677,7 +1677,6 @@ impl Home {
         };
 
         let content = scrollable(column!(movies, shows).spacing(40.0).padding(10))
-            .spacing(16.0)
             .id(self.scroll.id.clone())
             .on_scroll(HomeMessage::Scroll);
 

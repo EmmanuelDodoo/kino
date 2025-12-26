@@ -147,7 +147,6 @@ impl CollectionPage {
         };
 
         let content = scrollable(content)
-            .spacing(16.0)
             .id(self.scroll.id.clone())
             .on_scroll(move |viewport| CollectionMessage {
                 id,

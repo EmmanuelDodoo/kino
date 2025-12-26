@@ -502,7 +502,11 @@ impl<T: Media> Thumbnail<T> {
                 .content_fit(ContentFit::Fill)
                 .into(),
 
-            None => container(empty()).style(styles::container::dark).into(),
+            None => container(empty())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(styles::container::dark)
+                .into(),
         }
     }
 
