@@ -16,6 +16,7 @@ This document covers advanced usage, tips, configuration and customization optio
 - Year-based filtering currently supports release year only
 - Each sort category can be set independently to ascending or descending
 - Multiple sorts can be applied; their order is shown by the number indicator
+- Click on the ratings within the media details screen to leave your own local rating
 - Supported subtitle extensions are: `srt`, `ass`, `ssa`, `vtt`, `sub`, `sbv`, `ttml`, `dfxp`, `lrc`
 
 ### Searching

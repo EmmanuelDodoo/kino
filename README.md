@@ -5,9 +5,9 @@
 
 A local movie and TV show library manager and player with support for curated collections.
 
-<img src="resources/images/showcase/collection.png" width="460px" alt="Collection image"/>
-<img src="resources/images/showcase/movie.png" width="460px" alt="Movie image"/>
-<img src="resources/images/showcase/player.png" width="460px" alt ="Player iamge"/>
+<img src="resources/images/showcase/collection.png" width="400px" alt="Collection image"/>
+<img src="resources/images/showcase/movie.png" width="400px" alt="Movie image"/>
+<img src="resources/images/showcase/player.png" width="410px" alt ="Player iamge"/>
 
 See the [showcase directory](resources/images/showcase) for more images.
 
