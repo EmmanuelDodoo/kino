@@ -1,13 +1,58 @@
 # Example Config file
 [video]
+thumbnail_interval = 10
+volume = 1.0
+speed = 1.5000000000000004
+volume_change_amt = 0.05
+seek_change_amt = 5.0
+seek_shift_change_amt = 10.0
+speed_change_amt = 0.1
+show_subtitles = true
+muted = false
+auto_start = true
+auto_next = true
+completion_point = 0.95
+completion_watch_time = 0.75
+
+[video.subtitles]
+size = 20
+color = 4286727167
+background_color = 175
+
+[video.filters]
+brightness = 0.0
+contrast = 1.0
+hue = 0.0
+saturation = 1.0
+gamma = 1.0
 
 [general]
+layout = "Grid"
+recents_limit = 5
+search_limit = 5
+theme = "Moonfly"
+scan_discoverer = true
+auth_token = ""
+movie_depth = 2
+restore_deleted = true
+tmdb_rating = true
+
+[general.refresh_interval]
+secs = 600
+nanos = 0
+
+[general.fetching_interval]
+secs = 60
+nanos = 0
+
+[keybindings.player]
+defaults = false
 
 [keybindings.general]
 actions.Back = [ {key = "Enter", modifiers = "Ctrl" } ]
 actions.SearchToggle = [{key = "Space"}]
 defaults = false
 
-[keybindings.player]
-defaults = false
+[[keybindings.general.actions.LayoutToggle]]
+key = "l"
 

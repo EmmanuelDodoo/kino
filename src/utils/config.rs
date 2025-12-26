@@ -16,9 +16,9 @@ variants! {
         GruvboxDark,
         CatppuccinLatte,
         KanagawaWave,
-        #[default]
         TokyoNight,
         TokyoNightLight,
+        #[default]
         Moonfly,
     }
 }

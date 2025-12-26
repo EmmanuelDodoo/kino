@@ -237,8 +237,13 @@ pub fn scan_dir_helper<'a>(
             for show in shows {
                 let ShowPrim { path, seasons } = show;
                 let name = process_name(&path).unwrap_or(path.clone());
-                let (show, query) =
-                    Show::new(dir.id, path.clone(), name, path.clone(), seasons.len() as _);
+                let (show, query) = Show::new(
+                    dir.id,
+                    path.clone(),
+                    name.clone(),
+                    path.clone(),
+                    seasons.len() as _,
+                );
 
                 let new = match query.execute(db) {
                     Ok(succ) => {
@@ -267,7 +272,7 @@ pub fn scan_dir_helper<'a>(
 
                 let mut scanned_seasons = std::collections::HashSet::with_capacity(seasons.len());
 
-                tracing::info!("Scanning seasons");
+                tracing::info!("Scanning {name} seasons");
                 for season in seasons {
                     let SeasonPrim { path, episodes } = season;
                     let number = process_season(&path);
@@ -276,7 +281,7 @@ pub fn scan_dir_helper<'a>(
                         None => path.clone(),
                     };
 
-                    let (season, query) = Season::new(show, name, path.clone(), number);
+                    let (season, query) = Season::new(show, name.clone(), path.clone(), number);
 
                     let new = match query.execute(db) {
                         Ok(succ) => {
@@ -306,7 +311,7 @@ pub fn scan_dir_helper<'a>(
                     let mut scanned_episodes =
                         std::collections::HashSet::with_capacity(episodes.len());
 
-                    tracing::info!("Scanning episodes");
+                    tracing::info!("Scanning {name} episodes");
                     for episode in episodes {
                         let number = process_episode(&episode.path);
                         let name = match number {

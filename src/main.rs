@@ -67,7 +67,7 @@ fn main() -> iced::Result {
     let mode = args.next();
 
     let icon = {
-        let data = include_bytes!("../resources/logo/logo-v2-amber.png");
+        let data = include_bytes!("../resources/logo/logo.png");
 
         let format = None;
 
