@@ -1594,8 +1594,7 @@ impl Manager {
                             player.current_text = Some(tag.clone().into());
                         }
                         None => {
-                            // todo: Only option here is to reload the video so the
-                            // subtitle url is cleared
+                            self.settings.show_subtitles = !self.settings.show_subtitles;
                         }
                     }
                 }
