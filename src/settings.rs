@@ -869,7 +869,7 @@ impl Settings {
             }
             SettingsMessage::NewKeyPress(action) => {
                 self.view = Some(View::CaptureKey { action, key: None });
-                Task::done(Message::CaptureKeys(true))
+                Task::batch([Task::done(Message::CaptureKeys(true)), self.update_scroll()])
             }
             SettingsMessage::KeyAction(action) => {
                 if let Some(View::CaptureKey { action: old, .. }) = self.view.as_mut() {
@@ -901,7 +901,10 @@ impl Settings {
                     }
                 }
 
-                Task::done(Message::CaptureKeys(false))
+                Task::batch([
+                    Task::done(Message::CaptureKeys(false)),
+                    self.update_scroll(),
+                ])
             }
             SettingsMessage::OpenLog => {
                 let Some(path) = self.config.log_path() else {
@@ -1297,7 +1300,7 @@ impl Settings {
             };
 
             let new = button(new)
-                .on_press(SettingsMessage::NewKeyPress(KeyAction::Video(None)))
+                .on_press(SettingsMessage::NewKeyPress(KeyAction::Settings(None)))
                 .style(styles::button::text);
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
