@@ -38,8 +38,6 @@ variants! {
 }
 
 impl Tab {
-    // pub const ALL: [Self; 3] = [Self::Items, Self::Data, Self::Collections];
-
     pub fn to_str(self, item: &str) -> &str {
         match self {
             Self::Items => item,
@@ -231,17 +229,18 @@ pub fn data_tab<'a, Message: 'a + Clone, T: Media>(
 
     let duration = data("Duration", media.duration_short(), CLOCK);
 
-    let rating = data(
-        "Rating",
-        format!("{}/5", media.rating().unwrap_or_default()),
-        STAR,
-    );
+    let rating = {
+        let rating = media.rating().unwrap_or_default();
+
+        (rating * 100.0).round() / 100.0
+    };
+    let rating = data("Rating", format!("{}", rating), STAR);
 
     let comments = data("Comments", media.comments(), NUMBER);
 
     let release = data("Release Date", media.release_my(), CALENDAR);
 
-    let added = data("Date Added", media.added_my(), CALENDAR);
+    let added = data("Date Added", media.added_humaized(), CALENDAR);
 
     let count = data("Watch Count", media.watch_count(), EYE);
 
@@ -250,7 +249,7 @@ pub fn data_tab<'a, Message: 'a + Clone, T: Media>(
 
     let recent = data(
         "Recent Watch",
-        media.recent_short().unwrap_or(String::from(" --:--:--")),
+        media.recent_humanized().unwrap_or(String::from(" --:--:--")),
         CALENDAR,
     );
 
@@ -324,13 +323,13 @@ pub fn data_tab<'a, Message: 'a + Clone, T: Media>(
                 let tmdb = sized_medium("Number", size);
 
                 tooltip(
-                        button(tmdb)
-                            .style(styles::button::subtler)
-                            .on_press(on_tmdb.0),
-                        "Manually set the season/episode number",
-                        tp,
-                    )
-                    .into()
+                    button(tmdb)
+                        .style(styles::button::subtler)
+                        .on_press(on_tmdb.0),
+                    "Manually set the season/episode number",
+                    tp,
+                )
+                .into()
             };
 
             let refetch = row!(icon(REFRESH).size(size), sized_medium("Refetch", size))

@@ -65,6 +65,10 @@ pub trait Media {
         format!("{}", added.format("%b, %Y"))
     }
 
+    fn added_humaized(&self) -> String {
+        humanize_datetime(self.added(), Local::now())
+    }
+
     /// Duration in `(hrs) hours (mins) minutes` format.
     fn duration_full(&self) -> String {
         let duration = self.duration();
@@ -115,6 +119,76 @@ pub trait Media {
         let recent = self.recent();
 
         recent.map(|recent| format!("{}", recent.format("%b %d, %Y")))
+    }
+
+    fn recent_humanized(&self) -> Option<String> {
+        self.recent()
+            .map(|recent| humanize_datetime(recent, Local::now()))
+    }
+}
+
+fn humanize_datetime(from: DateTime<Local>, to: DateTime<Local>) -> String {
+    use std::time::Duration;
+    const SEC: u64 = 1;
+    const MIN: u64 = 60;
+    const HOUR: u64 = MIN * 60;
+    const DAY: u64 = HOUR * 24;
+    const WEEK: u64 = DAY * 7;
+    const MONTH: u64 = WEEK * 4;
+    const YEAR: u64 = 365 * DAY;
+
+    let duration = to.signed_duration_since(from);
+
+    let Ok(duration) = duration.to_std() else {
+        return "??".to_owned();
+    };
+
+    let max = Duration::from_secs(YEAR);
+    let min = Duration::from_secs(SEC);
+
+    if duration > max || duration < min {
+        return from.format("%b %d, %Y").to_string();
+    };
+
+    let format = |value: u64, name: &str| {
+        let single = value <= 1;
+
+        format!("About {value} {name}{} ago", if single { "" } else { "s" })
+    };
+
+    match duration.as_secs() {
+        d if d < SEC => unreachable!(),
+        secs if secs < MIN => format(secs, "second"),
+        mins if mins < HOUR => {
+            let mins = mins / MIN;
+
+            format(mins, "minute")
+        }
+        hours if hours < DAY => {
+            let hours = hours / HOUR;
+
+            format(hours, "hour")
+        }
+        days if days < WEEK => {
+            let days = days / DAY;
+
+            format(days, "day")
+        }
+        weeks if weeks < MONTH => {
+            let weeks = weeks / WEEK;
+
+            format(weeks, "week")
+        }
+        months if months < YEAR => {
+            let months = months / MONTH;
+
+            format(months, "month")
+        }
+        years => {
+            let years = years / YEAR;
+
+            format(years, "year")
+        }
     }
 }
 
