@@ -17,7 +17,8 @@ This document covers advanced usage, tips, configuration and customization optio
 - Each sort category can be set independently to ascending or descending
 - Multiple sorts can be applied; their order is shown by the number indicator
 - Click on the ratings within the media details screen to leave your own local rating
-- Supported subtitle extensions are: `srt`, `ass`, `ssa`, `vtt`, `sub`, `sbv`, `ttml`, `dfxp`, `lrc`
+- Kino supports these subtitle extension types: `srt`, `ass`, `ssa`, `vtt`, `sub`, `sbv`, `ttml`, `dfxp`, `lrc`
+- In the video player, double clicking enters full-screen mode, right clicking opens the video config dialog
 
 ### Searching
 
