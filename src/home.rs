@@ -644,8 +644,8 @@ impl Home {
 
                         Task::done(Message::FetchMembershipIds(item))
                     }
-                    ViewMessage::AddToCollection(id) => self.toggle_search(Some(id)),
-                    ViewMessage::Search => self.toggle_search(None),
+                    ViewMessage::AddToCollection(id) => self.toggle_search(Some(id), now),
+                    ViewMessage::Search => self.toggle_search(None, now),
                     ViewMessage::Rating(id, rating) => {
                         let rating = Rating::Value(rating.unwrap_or_default());
                         self.view = Some(View::Rating { id, rating });
@@ -2627,8 +2627,7 @@ impl Home {
         if let Some(current) = self.current_page
             && current == kind
         {
-            self.view = None;
-            return Task::none();
+            return self.close_view();
         }
 
         let close_view = self.close_view();
@@ -2726,7 +2725,7 @@ impl Home {
             HomeAction::LayoutToggle => self.layout_toggle(),
             HomeAction::RefreshContent => self.content_refresh(now),
             HomeAction::Refresh => self.refresh(now),
-            HomeAction::SearchToggle => self.toggle_search(None),
+            HomeAction::SearchToggle => self.toggle_search(None, now),
             HomeAction::CloseModal => self.close_view(),
             HomeAction::Back => self.back(now, false),
             HomeAction::Forward => self.forward(now),
@@ -2988,7 +2987,12 @@ impl Home {
         self.update_page_scroll()
     }
 
-    pub fn toggle_search(&mut self, collection: Option<CollectionId>) -> Task<Message> {
+    pub fn toggle_search(
+        &mut self,
+        collection: Option<CollectionId>,
+        now: Instant,
+    ) -> Task<Message> {
+        self.unfocus(now);
         let text_input = widget::Id::unique();
         let state = SearchState {
             items: vec![],
