@@ -152,7 +152,10 @@ impl ShowPage {
                 Some(msg)
             }
             Message::TmdbId => {
-                let msg = HomeMessage::OpenView(ViewMessage::TMDBId(self.id.into()));
+                let msg = HomeMessage::OpenView(ViewMessage::TMDBId {
+                    id: self.id.into(),
+                    top_level: true,
+                });
                 Some(msg)
             }
         }
@@ -291,14 +294,12 @@ impl ShowPage {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(
-            scrollable(content)
-                .id(self.scroll.id.clone())
-                .on_scroll(move |viewport| ShowPageMessage {
-                    id: show,
-                    message: Message::Scroll(viewport),
-                }),
-        );
+        let content = container(scrollable(content).id(self.scroll.id.clone()).on_scroll(
+            move |viewport| ShowPageMessage {
+                id: show,
+                message: Message::Scroll(viewport),
+            },
+        ));
 
         content.into()
     }
@@ -494,7 +495,7 @@ impl ShowPage {
                     Message::Refetch,
                     Message::Remove(show.media.name().to_owned()),
                     Message::Synopsis(show.media.synopsis().to_owned()),
-                    Some(Message::TmdbId),
+                    (Message::TmdbId, true),
                 )
                 .map(move |message| ShowPageMessage { id, message }),
                 // todo

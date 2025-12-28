@@ -289,6 +289,24 @@ impl Episode {
         }
     }
 
+    #[must_use]
+    pub fn set_user_number<'a>(id: EpisodeId, number: u32) -> Query<'a> {
+        let sql =
+            "UPDATE episode SET tmdb_id=NULL, episode_number=:number, fetched=FALSE  WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":number", ToSqlOutput::from(number)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Episode,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         season: SeasonId,
         name: String,

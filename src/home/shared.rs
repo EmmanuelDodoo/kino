@@ -220,7 +220,7 @@ pub fn data_tab<'a, Message: 'a + Clone, T: Media>(
     on_refetch: Message,
     on_remove: Message,
     on_synopsis: Message,
-    on_tmdb: Option<Message>,
+    on_tmdb: (Message, bool),
 ) -> Element<'a, Message> {
     let sts = {
         let icon = icon(STATS).size(P);
@@ -309,20 +309,28 @@ pub fn data_tab<'a, Message: 'a + Clone, T: Media>(
                 .style(styles::button::subtler)
                 .on_press(on_synopsis);
 
-            let tmdb: Element<'_, Message> = match on_tmdb {
-                Some(message) => {
-                    let tmdb = sized_medium("TMDB ID", size);
+            let tmdb: Element<'_, Message> = if on_tmdb.1 {
+                let tmdb = sized_medium("TMDB ID", size);
 
-                    tooltip(
+                tooltip(
                         button(tmdb)
                             .style(styles::button::subtler)
-                            .on_press(message),
+                            .on_press(on_tmdb.0),
                         "TMDB id can easily be located as part of the movie/show url. Eg `1233413` from https://www.themoviedb.org/movie/1233413-sinners",
                         tp,
                     )
                     .into()
-                }
-                None => empty(),
+            } else {
+                let tmdb = sized_medium("Number", size);
+
+                tooltip(
+                        button(tmdb)
+                            .style(styles::button::subtler)
+                            .on_press(on_tmdb.0),
+                        "Manually set the season/episode number",
+                        tp,
+                    )
+                    .into()
             };
 
             let refetch = row!(icon(REFRESH).size(size), sized_medium("Refetch", size))

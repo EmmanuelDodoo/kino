@@ -246,7 +246,7 @@ pub enum ViewMessage {
     Rating(ItemId, Option<f32>),
     Rename { id: ItemId, old: String },
     Synopsis { id: ItemId, old: String },
-    TMDBId(ItemId),
+    TMDBId { id: ItemId, top_level: bool },
     RemoveMedia { id: ItemId, name: String },
     RemoveCollection { id: CollectionId, name: String },
 }
@@ -276,6 +276,7 @@ pub enum View {
         id: ItemId,
         input: widget::Id,
         value: String,
+        top_level: bool,
     },
     RemoveMedia {
         id: ItemId,
@@ -628,12 +629,13 @@ impl Home {
 
                     Task::batch([self.update_page_scroll(), operation::focus(editor)])
                 }
-                ViewMessage::TMDBId(id) => {
+                ViewMessage::TMDBId { id, top_level } => {
                     let input = widget::Id::unique();
                     self.view = Some(View::TMDBId {
                         id,
                         input: input.clone(),
                         value: String::new(),
+                        top_level,
                     });
 
                     Task::batch([self.update_page_scroll(), operation::focus(input)])
@@ -1018,7 +1020,13 @@ impl Home {
                 }
             }
             HomeMessage::TMDBId(tsg) => {
-                let Some(View::TMDBId { id, value, .. }) = self.view.as_mut() else {
+                let Some(View::TMDBId {
+                    id,
+                    value,
+                    top_level,
+                    ..
+                }) = self.view.as_mut()
+                else {
                     return Task::none();
                 };
 
@@ -1032,6 +1040,13 @@ impl Home {
                             Ok(tmdb_id) => tmdb_id,
                             Err(error) => return Task::done(Message::error(error)),
                         };
+
+                        if !(*top_level) && tmdb_id == 0 {
+                            return Task::done(Message::error(
+                                "Cannot have a 0 season/episode number",
+                            ));
+                        }
+
                         let msg = Message::MediaUpdate(MediaUpdate {
                             id: *id,
                             kind: MediaUpdateKind::TMDBId(tmdb_id),
@@ -2327,7 +2342,12 @@ impl Home {
                     View::Synopsis {
                         editor, content, ..
                     } => draw_synopsis(editor, content),
-                    View::TMDBId { input, value, .. } => draw_tmdb(input, value),
+                    View::TMDBId {
+                        input,
+                        value,
+                        top_level,
+                        ..
+                    } => draw_tmdb(input, value, *top_level),
                     View::RemoveMedia { name, .. } => {
                         draw_delete_confirm(name, HomeMessage::RemoveMedia)
                     }
@@ -3478,14 +3498,21 @@ fn draw_synopsis<'a>(
     modal_container(content).padding([6, 6]).into()
 }
 
-fn draw_tmdb<'a>(input: &widget::Id, value: &str) -> Element<'a, HomeMessage> {
-    let input = text_input("TMDB ID", value)
-        .on_input(|new| HomeMessage::TMDBId(TMDBMessage::Input(new)))
-        .on_submit(HomeMessage::TMDBId(TMDBMessage::Submit))
-        .font(regular_font())
-        .id(input.clone())
-        .size(H7)
-        .width(250);
+fn draw_tmdb<'a>(input: &widget::Id, value: &str, top_level: bool) -> Element<'a, HomeMessage> {
+    let input = text_input(
+        if top_level {
+            "TMDB ID"
+        } else {
+            "Season/Episode number"
+        },
+        value,
+    )
+    .on_input(|new| HomeMessage::TMDBId(TMDBMessage::Input(new)))
+    .on_submit(HomeMessage::TMDBId(TMDBMessage::Submit))
+    .font(regular_font())
+    .id(input.clone())
+    .size(H7)
+    .width(250);
 
     modal_container(input).padding([6, 8]).into()
 }

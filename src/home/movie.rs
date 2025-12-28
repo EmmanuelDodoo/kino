@@ -103,7 +103,10 @@ impl MoviePage {
                 Some(msg)
             }
             Message::TmdbId => {
-                let msg = HomeMessage::OpenView(ViewMessage::TMDBId(self.id.into()));
+                let msg = HomeMessage::OpenView(ViewMessage::TMDBId {
+                    id: self.id.into(),
+                    top_level: true,
+                });
 
                 Some(msg)
             }
@@ -219,7 +222,7 @@ impl MoviePage {
                     Message::Refetch,
                     Message::Remove(movie.media.name().to_owned()),
                     Message::Synopsis(movie.media.synopsis().to_owned()),
-                    Some(Message::TmdbId),
+                    (Message::TmdbId, true),
                 )
                 .map(move |message| MoviePageMessage { id, message }),
                 Tab::Collections => {

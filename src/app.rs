@@ -361,10 +361,8 @@ impl App {
                     MediaUpdateKind::TMDBId(new) => match id {
                         ItemId::Show(id) => Show::set_tmdb_id(id, new),
                         ItemId::Movie(id) => Movie::set_tmdb_id(id, new),
-                        ItemId::Episode(_) | ItemId::Season(_) => {
-                            tracing::warn!("Cannot manually set season/episode tmdb id");
-                            return Task::none();
-                        }
+                        ItemId::Season(id) => Season::set_user_number(id, new),
+                        ItemId::Episode(id) => Episode::set_user_number(id, new),
                     },
                 };
 

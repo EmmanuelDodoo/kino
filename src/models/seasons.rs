@@ -298,6 +298,24 @@ impl Season {
         }
     }
 
+    #[must_use]
+    pub fn set_user_number<'a>(id: SeasonId, number: u32) -> Query<'a> {
+        let sql =
+            "UPDATE season SET tmdb_id=NULL, season_number=:number, fetched=FALSE  WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":number", ToSqlOutput::from(number)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Season,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         show: ShowId,
         name: String,
