@@ -40,6 +40,23 @@ pub enum KeyAction {
     Settings(Option<SettingsAction>),
 }
 
+impl KeyAction {
+    fn none(&self) -> Self {
+        match self {
+            Self::Video(_) => Self::Video(None),
+            Self::General(_) => Self::General(None),
+            Self::Settings(_) => Self::Settings(None),
+        }
+    }
+
+    fn is_some(&self) -> bool {
+        matches!(
+            self,
+            Self::Video(Some(_)) | Self::Settings(Some(_)) | Self::General(Some(_))
+        )
+    }
+}
+
 impl From<HomeAction> for KeyAction {
     fn from(value: HomeAction) -> Self {
         Self::General(Some(value))
@@ -84,6 +101,7 @@ enum View {
     CaptureKey {
         action: KeyAction,
         key: Option<KeyPress>,
+        conflict: KeyAction,
     },
 }
 
@@ -868,7 +886,11 @@ impl Settings {
                 Task::none()
             }
             SettingsMessage::NewKeyPress(action) => {
-                self.view = Some(View::CaptureKey { action, key: None });
+                self.view = Some(View::CaptureKey {
+                    conflict: action.none(),
+                    action,
+                    key: None,
+                });
                 Task::batch([Task::done(Message::CaptureKeys(true)), self.update_scroll()])
             }
             SettingsMessage::KeyAction(action) => {
@@ -879,7 +901,12 @@ impl Settings {
                 Task::none()
             }
             SettingsMessage::SaveKeyBinding => {
-                let Some(View::CaptureKey { action, key }) = self.view.take() else {
+                let Some(View::CaptureKey {
+                    action,
+                    key,
+                    conflict: _unused,
+                }) = self.view.take()
+                else {
                     return Task::done(Message::CaptureKeys(false));
                 };
 
@@ -944,8 +971,12 @@ impl Settings {
 
                 modal(content, overlay, SettingsMessage::Cancel)
             }
-            Some(View::CaptureKey { action, key }) => {
-                let overlay = draw_capture_key(action, key);
+            Some(View::CaptureKey {
+                action,
+                key,
+                conflict,
+            }) => {
+                let overlay = draw_capture_key(action, key, conflict);
 
                 modal(content, overlay, SettingsMessage::Cancel)
             }
@@ -1370,7 +1401,45 @@ impl Settings {
     }
 
     pub fn captured_key(&mut self, key: KeyPress) -> Task<Message> {
-        if let Some(View::CaptureKey { key: old, .. }) = self.view.as_mut() {
+        if let Some(View::CaptureKey {
+            key: old,
+            action,
+            conflict,
+        }) = self.view.as_mut()
+        {
+            match action {
+                KeyAction::Video(new) => {
+                    let new = new.as_ref();
+                    let current = self.config.keystore.get_player(&key);
+
+                    *conflict = if current.is_some() && current != new {
+                        KeyAction::Video(current.cloned())
+                    } else {
+                        action.none()
+                    };
+                }
+                KeyAction::General(new) => {
+                    let new = new.as_ref();
+                    let current = self.config.keystore.get_home(&key);
+
+                    *conflict = if current.is_some() && current != new {
+                        KeyAction::General(current.cloned())
+                    } else {
+                        action.none()
+                    };
+                }
+                KeyAction::Settings(new) => {
+                    let new = new.as_ref();
+                    let current = self.config.keystore.get_settings(&key);
+
+                    *conflict = if current.is_some() && current != new {
+                        KeyAction::Settings(current.cloned())
+                    } else {
+                        action.none()
+                    };
+                }
+            };
+
             *old = Some(key);
         }
 
@@ -1564,6 +1633,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
 fn draw_capture_key<'a>(
     action: &'a KeyAction,
     keypress: &'a Option<KeyPress>,
+    conflict: &'a KeyAction,
 ) -> Element<'a, SettingsMessage> {
     let size = TEXT_SIZE / RATIO;
     let key = match keypress {
@@ -1586,7 +1656,43 @@ fn draw_capture_key<'a>(
         container::Style { border, ..default }
     });
 
+    let has_conflict = conflict.is_some();
+
+    let conflict: Element<'_, SettingsMessage> = match conflict {
+        KeyAction::General(Some(action)) => medium(format!("Conflicts with {action}"))
+            .size(size / RATIO)
+            .style(|theme| {
+                let color = theme.extended_palette().danger.base.color;
+
+                text::Style { color: Some(color) }
+            })
+            .into(),
+        KeyAction::Video(Some(action)) => medium(format!("Conflicts with {action}"))
+            .size(size / RATIO)
+            .style(|theme| {
+                let color = theme.extended_palette().danger.base.color;
+
+                text::Style { color: Some(color) }
+            })
+            .into(),
+        KeyAction::Settings(Some(action)) => medium(format!("Conflicts with {action}"))
+            .size(size / RATIO)
+            .style(|theme| {
+                let color = theme.extended_palette().danger.base.color;
+
+                text::Style { color: Some(color) }
+            })
+            .into(),
+        _ => empty(),
+    };
+
     let key = column!(label_maker("Key Press").size(size), key).spacing(4.0);
+
+    let key = if has_conflict {
+        key.push(conflict)
+    } else {
+        key
+    };
 
     let (action, set_action) = {
         let label = label_maker("Action").size(size);
