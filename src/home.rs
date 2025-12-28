@@ -362,7 +362,6 @@ pub enum HomeMessage {
         items: Items,
     },
     ToggleLayout,
-    Home,
     Goto(PageKind),
     NewCollection,
     None,
@@ -440,6 +439,8 @@ impl Home {
         Self {
             forward: vec![],
             backward: vec![],
+            current_page: Some(PageKind::Home),
+            pages: [(PageKind::Home, Page::Home)].into(),
 
             layout,
             sort,
@@ -449,8 +450,6 @@ impl Home {
             show_filters: false,
             state: State::Loading(loading_animation(Instant::now())),
             scroll: Scroll::new(),
-            pages: HashMap::default(),
-            current_page: None,
             collections: Vec::default(),
             view: None,
             recent_limit,
@@ -524,26 +523,6 @@ impl Home {
                 };
 
                 self.update_page_scroll()
-            }
-            HomeMessage::Home => {
-                self.unfocus(now);
-                if let Some(old) = self.current_page.take() {
-                    self.backward.push(old);
-                };
-                self.forward.clear();
-                self.state = State::Loading(loading_animation(now));
-
-                let scroll = self.update_scroll().map(|_| Message::None);
-
-                let msg = Message::Fetch {
-                    id: FetchId::Recents,
-                    filters: self.filters,
-                    sort: self.sort,
-                    limit: self.recent_limit,
-                    offset: None,
-                };
-
-                Task::batch([Task::done(msg), scroll])
             }
             HomeMessage::Goto(kind) => self.goto(kind, now),
             HomeMessage::Movies(message) => {
@@ -1535,8 +1514,8 @@ impl Home {
             icon_button(
                 icons::HOME,
                 "Home",
-                HomeMessage::Home,
-                self.current_page().is_none(),
+                HomeMessage::Goto(PageKind::Home),
+                self.current_page().map(Page::is_home).unwrap_or_default(),
                 None,
             ),
             icon_button(
@@ -1756,8 +1735,7 @@ impl Home {
     }
 
     fn navigation(&self) -> Element<'_, HomeMessage> {
-        let can_back =
-            !self.backward.is_empty() || (self.backward.is_empty() && self.current_page.is_some());
+        let can_back = !self.backward.is_empty();
 
         let can_forward = !self.forward.is_empty();
 
@@ -2282,7 +2260,7 @@ impl Home {
     pub fn content(&self, now: Instant) -> Element<'_, HomeMessage> {
         match (&self.state, self.current_page()) {
             (State::Loading(animation), _) => center(loading_svg(animation, now)).into(),
-            (State::Recent { shows, movies }, None) => self.recents(now, movies, shows),
+            (State::Recent { shows, movies }, Some(Page::Home)) => self.recents(now, movies, shows),
             (State::Shows(shows), Some(Page::Shows(page))) => page
                 .view(now, self.layout, shows.iter())
                 .map(HomeMessage::Shows),
@@ -2462,6 +2440,10 @@ impl Home {
 
     pub fn back(&mut self, now: Instant, clear: bool) -> Task<Message> {
         self.unfocus(now);
+        let Some(new) = self.backward.pop() else {
+            return Task::none();
+        };
+
         let (task, id, limit) = match self.current_page.take() {
             Some(current) => {
                 self.state = State::Loading(loading_animation(now));
@@ -2471,30 +2453,6 @@ impl Home {
                     self.forward.push(current);
                 }
 
-                match self.backward.pop() {
-                    Some(new) => {
-                        let page = self
-                            .pages
-                            .get_mut(&new)
-                            .expect("Page cannot be in back without being recorded first");
-                        self.current_page = Some(new);
-                        let task = page.update_scroll().map(|_| Message::None);
-
-                        (task, fetch_kind(new), None)
-                    }
-                    None => (
-                        self.update_scroll().map(|_| Message::None),
-                        FetchId::Recents,
-                        self.recent_limit,
-                    ),
-                }
-            }
-            None => {
-                let Some(new) = self.backward.pop() else {
-                    return Task::none();
-                };
-
-                self.state = State::Loading(loading_animation(now));
                 let page = self
                     .pages
                     .get_mut(&new)
@@ -2503,6 +2461,9 @@ impl Home {
                 let task = page.update_scroll().map(|_| Message::None);
 
                 (task, fetch_kind(new), None)
+            }
+            None => {
+                unreachable!("current page is always non-empty");
             }
         };
 
@@ -2519,12 +2480,13 @@ impl Home {
 
     pub fn forward(&mut self, now: Instant) -> Task<Message> {
         self.unfocus(now);
+        let Some(new) = self.forward.pop() else {
+            return Task::none();
+        };
+
         let (task, id) = match self.current_page.take() {
             Some(current) => {
                 self.backward.push(current);
-                let Some(new) = self.forward.pop() else {
-                    return Task::none();
-                };
 
                 self.state = State::Loading(loading_animation(now));
                 let page = self
@@ -2538,19 +2500,7 @@ impl Home {
                 (task, fetch_kind(new))
             }
             None => {
-                let Some(new) = self.forward.pop() else {
-                    return Task::none();
-                };
-
-                self.state = State::Loading(loading_animation(now));
-                let page = self
-                    .pages
-                    .get_mut(&new)
-                    .expect("Page cannot be in forward without being recorded");
-                self.current_page = Some(new);
-                let task = page.update_scroll().map(|_| Message::None);
-
-                (task, fetch_kind(new))
+                unreachable!("current page is always non-empty");
             }
         };
 
@@ -2631,7 +2581,6 @@ impl Home {
         }
 
         let close_view = self.close_view();
-        self.backward.retain(|back| *back != kind);
 
         if let Some(old) = self.current_page.replace(kind) {
             self.backward.push(old)
@@ -2658,6 +2607,7 @@ impl Home {
         }
 
         let task = match kind {
+            PageKind::Home => self.update_scroll().discard(),
             PageKind::Movies => {
                 let (movies, task) = Movies::boot();
 
@@ -3255,6 +3205,7 @@ fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
 
 fn fetch_kind(kind: PageKind) -> FetchId {
     match kind {
+        PageKind::Home => FetchId::Recents,
         PageKind::Shows => FetchId::Shows,
         PageKind::Movies => FetchId::Movies,
         PageKind::Collections => FetchId::Collections,

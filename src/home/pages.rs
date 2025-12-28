@@ -14,6 +14,7 @@ use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum PageKind {
+    Home,
     Shows,
     Movies,
     Collections,
@@ -37,6 +38,7 @@ impl From<ItemId> for PageKind {
 
 #[derive(Debug, Clone)]
 pub enum Page {
+    Home,
     Shows(TvShows),
     Movies(Movies),
     Comments(()),
@@ -70,6 +72,10 @@ impl Page {
 
     pub fn goto_movies() -> PageKind {
         PageKind::Movies
+    }
+
+    pub fn is_home(&self)-> bool {
+        matches!(self, Self::Home)
     }
 
     pub fn is_shows(&self) -> bool {
@@ -161,6 +167,7 @@ impl Page {
             Self::Movie { page, .. } => page.show_tools(),
             Self::Season { page, .. } => page.show_tools(),
             Self::Show { page, .. } => page.show_tools(),
+            Self::Home => true,
             _ => todo!(),
         }
     }
@@ -173,7 +180,7 @@ impl Page {
             Self::Collection { collection, .. } => collection.update_scroll(),
             Self::Show { page, .. } => page.update_scroll(),
             Self::Season { page, .. } => page.update_scroll(),
-            Self::Movie { .. } | Self::Episode { .. } => Task::none(),
+            Self::Movie { .. } | Self::Episode { .. } | Self::Home => Task::none(),
             _ => todo!(),
         }
     }
