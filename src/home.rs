@@ -404,6 +404,8 @@ pub struct Home {
     recent_limit: Option<i32>,
 
     scanning: Option<Animation<bool>>,
+
+    focused: Option<ItemId>,
 }
 
 impl Home {
@@ -453,13 +455,54 @@ impl Home {
             view: None,
             recent_limit,
             scanning: None,
+            focused: None,
+        }
+    }
+
+    fn unfocus(&mut self, now: Instant) {
+        let Some(id) = self.focused.take() else {
+            return;
+        };
+
+        match (id, &mut self.state) {
+            (_, State::Loading(_)) => {}
+            (ItemId::Show(id), State::Recent { shows, .. })
+            | (ItemId::Show(id), State::Shows(shows))
+            | (ItemId::Show(id), State::Collection { shows, .. }) => {
+                if let Some(item) = shows.iter_mut().find(|show| show.media.id() == id) {
+                    item.go_mut(false, now);
+                }
+            }
+            (ItemId::Movie(id), State::Recent { movies, .. })
+            | (ItemId::Movie(id), State::Movies(movies))
+            | (ItemId::Movie(id), State::Collection { movies, .. }) => {
+                if let Some(item) = movies.iter_mut().find(|movie| movie.media.id() == id) {
+                    item.go_mut(false, now);
+                }
+            }
+            (ItemId::Season(id), State::Show { seasons, .. })
+            | (ItemId::Season(id), State::Collection { seasons, .. }) => {
+                if let Some(item) = seasons.iter_mut().find(|season| season.media.id() == id) {
+                    item.go_mut(false, now);
+                }
+            }
+            (ItemId::Episode(id), State::Season { episodes, .. })
+            | (ItemId::Episode(id), State::Collection { episodes, .. }) => {
+                if let Some(item) = episodes.iter_mut().find(|episode| episode.media.id() == id) {
+                    item.go_mut(false, now);
+                }
+            }
+            _ => {}
         }
     }
 
     pub fn update(&mut self, message: HomeMessage, now: Instant) -> Task<Message> {
         match message {
             HomeMessage::None => Task::none(),
-            HomeMessage::Settings => Task::done(Message::SettingsOpen),
+            HomeMessage::Settings => {
+                self.unfocus(now);
+                Task::done(Message::SettingsOpen)
+            }
             HomeMessage::FetchedCollections(collections) => {
                 self.state = State::Collections(collections);
 
@@ -483,6 +526,7 @@ impl Home {
                 self.update_page_scroll()
             }
             HomeMessage::Home => {
+                self.unfocus(now);
                 if let Some(old) = self.current_page.take() {
                     self.backward.push(old);
                 };
@@ -574,83 +618,86 @@ impl Home {
                     .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
-            HomeMessage::OpenView(view) => match view {
-                ViewMessage::CollectionConfig => {
-                    let State::Collection { collection, .. } = &self.state else {
-                        return Task::none();
-                    };
+            HomeMessage::OpenView(view) => {
+                self.unfocus(now);
+                match view {
+                    ViewMessage::CollectionConfig => {
+                        let State::Collection { collection, .. } = &self.state else {
+                            return Task::none();
+                        };
 
-                    let (config, name_input) =
-                        CollectionConfig::from_collection(&collection.collection);
+                        let (config, name_input) =
+                            CollectionConfig::from_collection(&collection.collection);
 
-                    self.view = Some(View::CollectionConfig(config));
-                    let focus = operation::focus(name_input);
+                        self.view = Some(View::CollectionConfig(config));
+                        let focus = operation::focus(name_input);
 
-                    Task::batch([focus, self.update_page_scroll()])
+                        Task::batch([focus, self.update_page_scroll()])
+                    }
+                    ViewMessage::Add(item) => {
+                        let state = CollectionAddState {
+                            item,
+                            selected: HashSet::new(),
+                            initial: HashSet::new(),
+                        };
+                        self.view = Some(View::CollectionAdd(state));
+
+                        Task::done(Message::FetchMembershipIds(item))
+                    }
+                    ViewMessage::AddToCollection(id) => self.toggle_search(Some(id)),
+                    ViewMessage::Search => self.toggle_search(None),
+                    ViewMessage::Rating(id, rating) => {
+                        let rating = Rating::Value(rating.unwrap_or_default());
+                        self.view = Some(View::Rating { id, rating });
+
+                        self.update_page_scroll()
+                    }
+                    ViewMessage::Rename { id, old } => {
+                        let input = widget::Id::unique();
+                        self.view = Some(View::Rename {
+                            id,
+                            empty: old.is_empty(),
+                            input: input.clone(),
+                            value: old.clone(),
+                            old,
+                        });
+
+                        Task::batch([self.update_page_scroll(), operation::focus(input)])
+                    }
+                    ViewMessage::Synopsis { id, old } => {
+                        let editor = widget::Id::unique();
+
+                        self.view = Some(View::Synopsis {
+                            id,
+                            editor: editor.clone(),
+                            content: text_editor::Content::with_text(&old),
+                        });
+
+                        Task::batch([self.update_page_scroll(), operation::focus(editor)])
+                    }
+                    ViewMessage::TMDBId { id, top_level } => {
+                        let input = widget::Id::unique();
+                        self.view = Some(View::TMDBId {
+                            id,
+                            input: input.clone(),
+                            value: String::new(),
+                            top_level,
+                        });
+
+                        Task::batch([self.update_page_scroll(), operation::focus(input)])
+                    }
+                    ViewMessage::RemoveMedia { id, name } => {
+                        self.view = Some(View::RemoveMedia { id, name });
+
+                        self.update_page_scroll()
+                    }
+                    ViewMessage::RemoveCollection { id, name } => {
+                        self.view = Some(View::RemoveCollection { id, name });
+
+                        self.update_page_scroll()
+                    }
                 }
-                ViewMessage::Add(item) => {
-                    let state = CollectionAddState {
-                        item,
-                        selected: HashSet::new(),
-                        initial: HashSet::new(),
-                    };
-                    self.view = Some(View::CollectionAdd(state));
-
-                    Task::done(Message::FetchMembershipIds(item))
-                }
-                ViewMessage::AddToCollection(id) => self.toggle_search(Some(id)),
-                ViewMessage::Search => self.toggle_search(None),
-                ViewMessage::Rating(id, rating) => {
-                    let rating = Rating::Value(rating.unwrap_or_default());
-                    self.view = Some(View::Rating { id, rating });
-
-                    self.update_page_scroll()
-                }
-                ViewMessage::Rename { id, old } => {
-                    let input = widget::Id::unique();
-                    self.view = Some(View::Rename {
-                        id,
-                        empty: old.is_empty(),
-                        input: input.clone(),
-                        value: old.clone(),
-                        old,
-                    });
-
-                    Task::batch([self.update_page_scroll(), operation::focus(input)])
-                }
-                ViewMessage::Synopsis { id, old } => {
-                    let editor = widget::Id::unique();
-
-                    self.view = Some(View::Synopsis {
-                        id,
-                        editor: editor.clone(),
-                        content: text_editor::Content::with_text(&old),
-                    });
-
-                    Task::batch([self.update_page_scroll(), operation::focus(editor)])
-                }
-                ViewMessage::TMDBId { id, top_level } => {
-                    let input = widget::Id::unique();
-                    self.view = Some(View::TMDBId {
-                        id,
-                        input: input.clone(),
-                        value: String::new(),
-                        top_level,
-                    });
-
-                    Task::batch([self.update_page_scroll(), operation::focus(input)])
-                }
-                ViewMessage::RemoveMedia { id, name } => {
-                    self.view = Some(View::RemoveMedia { id, name });
-
-                    self.update_page_scroll()
-                }
-                ViewMessage::RemoveCollection { id, name } => {
-                    self.view = Some(View::RemoveCollection { id, name });
-
-                    self.update_page_scroll()
-                }
-            },
+            }
             HomeMessage::CollectionConfig(csg) => {
                 let Some(View::CollectionConfig(mut config)) = self.view.take() else {
                     return Task::none();
@@ -785,6 +832,7 @@ impl Home {
                 Task::none()
             }
             HomeMessage::RemoveCollection => {
+                self.unfocus(now);
                 let Some(View::RemoveCollection { id, .. }) = self.view.as_ref() else {
                     return Task::none();
                 };
@@ -1280,7 +1328,7 @@ impl Home {
                     if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
                         show.go_mut(is_hovered, now);
                     };
-
+                    self.focused = Some(ItemId::Show(id));
                     Task::none()
                 }
                 (State::Recent { movies, .. }, ItemId::Movie(id)) => {
@@ -1288,6 +1336,7 @@ impl Home {
                         movie.go_mut(is_hovered, now);
                     }
 
+                    self.focused = Some(ItemId::Movie(id));
                     Task::none()
                 }
                 (State::Recent { .. }, _) => Task::none(),
@@ -1296,6 +1345,7 @@ impl Home {
                         show.go_mut(is_hovered, now);
                     };
 
+                    self.focused = Some(ItemId::Show(id));
                     Task::none()
                 }
                 (State::Shows(_), _) => Task::none(),
@@ -1304,6 +1354,7 @@ impl Home {
                         movie.go_mut(is_hovered, now);
                     }
 
+                    self.focused = Some(ItemId::Movie(id));
                     Task::none()
                 }
                 (State::Movies(_), _) => Task::none(),
@@ -1311,6 +1362,7 @@ impl Home {
                     if let Some(season) = seasons.iter_mut().find(|season| season.media.id == id) {
                         season.go_mut(is_hovered, now);
                     }
+                    self.focused = Some(ItemId::Season(id));
                     Task::none()
                 }
                 (State::Show { .. }, _) => Task::none(),
@@ -1321,6 +1373,7 @@ impl Home {
                         episode.go_mut(is_hovered, now);
                     }
 
+                    self.focused = Some(ItemId::Episode(id));
                     Task::none()
                 }
                 (State::Season { .. }, _) => Task::none(),
@@ -1329,6 +1382,7 @@ impl Home {
                         show.go_mut(is_hovered, now);
                     };
 
+                    self.focused = Some(ItemId::Show(id));
                     Task::none()
                 }
                 (State::Collection { movies, .. }, ItemId::Movie(id)) => {
@@ -1336,6 +1390,7 @@ impl Home {
                         movie.go_mut(is_hovered, now);
                     }
 
+                    self.focused = Some(ItemId::Movie(id));
                     Task::none()
                 }
                 (State::Collection { seasons, .. }, ItemId::Season(id)) => {
@@ -1343,6 +1398,7 @@ impl Home {
                         season.go_mut(is_hovered, now);
                     };
 
+                    self.focused = Some(ItemId::Season(id));
                     Task::none()
                 }
                 (State::Collection { episodes, .. }, ItemId::Episode(id)) => {
@@ -1352,6 +1408,7 @@ impl Home {
                         episode.go_mut(is_hovered, now);
                     }
 
+                    self.focused = Some(ItemId::Episode(id));
                     Task::none()
                 }
             },
@@ -2404,6 +2461,7 @@ impl Home {
     }
 
     pub fn back(&mut self, now: Instant, clear: bool) -> Task<Message> {
+        self.unfocus(now);
         let (task, id, limit) = match self.current_page.take() {
             Some(current) => {
                 self.state = State::Loading(loading_animation(now));
@@ -2460,6 +2518,7 @@ impl Home {
     }
 
     pub fn forward(&mut self, now: Instant) -> Task<Message> {
+        self.unfocus(now);
         let (task, id) = match self.current_page.take() {
             Some(current) => {
                 self.backward.push(current);
@@ -2564,6 +2623,7 @@ impl Home {
     }
 
     pub fn goto(&mut self, kind: PageKind, now: Instant) -> Task<Message> {
+        self.unfocus(now);
         if let Some(current) = self.current_page
             && current == kind
         {
