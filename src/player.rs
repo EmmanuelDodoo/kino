@@ -154,6 +154,21 @@ pub struct Player {
     embedded_audio: Vec<AudioTag>,
 }
 
+impl Player {
+    fn seek_release(&mut self, pause: bool) -> Result<(), String> {
+        self.is_dragging = false;
+        self.last_frame.take();
+
+        self.video
+            .seek(Duration::from_secs_f64(self.position.max(0.0)), false)
+            .map_err(|error| error.to_string())?;
+
+        self.video.set_paused(pause);
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 enum AutoState {
     Loading,
@@ -342,10 +357,22 @@ impl Manager {
                 Task::none()
             }
             ManagerMessage::EndOfStream => {
-                if self.settings.auto_next {
+                if self.settings.auto_next && self.playlist.has_next() {
                     self.play_next(now)
                 } else {
-                    Task::none()
+                    let stats = self.stats().map(Task::done).unwrap_or_default();
+
+                    let State::Ready(player) = &mut self.state else {
+                        return Task::none();
+                    };
+
+                    player.position = 0.0;
+
+                    if let Err(msg) = player.seek_release(true) {
+                        return Task::done(Message::error(msg));
+                    }
+
+                    stats
                 }
             }
             ManagerMessage::NewFrame => {
@@ -381,21 +408,12 @@ impl Manager {
                 Task::none()
             }
             ManagerMessage::SeekRelease => {
-                if let Some(Player {
-                    video,
-                    position,
-                    is_dragging,
-                    last_frame,
-                    ..
-                }) = self.player_mut()
-                {
-                    *is_dragging = false;
-                    last_frame.take();
+                let Some(player) = self.player_mut() else {
+                    return Task::none();
+                };
 
-                    video
-                        .seek(Duration::from_secs_f64(position.max(0.0)), false)
-                        .unwrap();
-                    video.set_paused(false);
+                if let Err(msg) = player.seek_release(false) {
+                    return Task::done(Message::error(msg));
                 }
 
                 Task::none()
@@ -1415,6 +1433,9 @@ impl Manager {
                 Task::batch([stats, load])
             }
             AutoState::Loading => {
+                // todo: I probably want to inform the user the next video is still loading
+                // Idle doesn't do that. Idle is needed so the loaded video is played immediately
+                // after loading though.
                 self.state = State::Idle;
                 stats
             }
@@ -1747,7 +1768,7 @@ impl Manager {
     }
 
     pub fn stats(&mut self) -> Option<Message> {
-        let State::Ready(mut player) = std::mem::replace(&mut self.state, State::Idle) else {
+        let State::Ready(player) = &mut self.state else {
             return None;
         };
 
@@ -1770,7 +1791,7 @@ impl Manager {
 
         self.playlist.update_current(&player.item);
 
-        Some(Message::VideoStats(player.item))
+        Some(Message::VideoStats(player.item.clone()))
     }
 
     pub fn toggle_playlist(&mut self) -> Task<Message> {
@@ -1810,9 +1831,10 @@ fn load_video<Message: 'static + MaybeSend>(
                 });
 
             if let Some(url) = subtitles_url.as_ref()
-                && let Err(error) = video.set_subtitle_url(url) {
-                    tracing::error!("Video Subtitle error \n{error}")
-                }
+                && let Err(error) = video.set_subtitle_url(url)
+            {
+                tracing::error!("Video Subtitle error \n{error}")
+            }
 
             std::thread::sleep(std::time::Duration::from_millis(150));
 
@@ -1839,10 +1861,7 @@ fn load_video<Message: 'static + MaybeSend>(
                 loaded_text.clone()
             };
 
-            let embedded = video
-                .available_subtitles()
-                .into_iter()
-                .map(Subtitle::from);
+            let embedded = video.available_subtitles().into_iter().map(Subtitle::from);
 
             let subtitles = loaded_text.into_iter().chain(embedded).collect();
 
