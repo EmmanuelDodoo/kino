@@ -2459,8 +2459,13 @@ impl Home {
                     .expect("Page cannot be in back without being recorded first");
                 self.current_page = Some(new);
                 let task = page.update_scroll().map(|_| Message::None);
+                let limit = if matches!(new, PageKind::Home) {
+                    self.recent_limit
+                } else {
+                    None
+                };
 
-                (task, fetch_kind(new), None)
+                (task, fetch_kind(new), limit)
             }
             None => {
                 unreachable!("current page is always non-empty");
@@ -2484,7 +2489,7 @@ impl Home {
             return Task::none();
         };
 
-        let (task, id) = match self.current_page.take() {
+        let (task, id, limit) = match self.current_page.take() {
             Some(current) => {
                 self.backward.push(current);
 
@@ -2496,8 +2501,13 @@ impl Home {
 
                 self.current_page = Some(new);
                 let task = page.update_scroll().map(|_| Message::None);
+                let limit = if matches!(new, PageKind::Home) {
+                    self.recent_limit
+                } else {
+                    None
+                };
 
-                (task, fetch_kind(new))
+                (task, fetch_kind(new), limit)
             }
             None => {
                 unreachable!("current page is always non-empty");
@@ -2508,7 +2518,7 @@ impl Home {
             id,
             filters: self.filters,
             sort: self.sort,
-            limit: None,
+            limit,
             offset: None,
         };
 
@@ -2589,12 +2599,17 @@ impl Home {
         self.state = State::Loading(loading_animation(now));
 
         let fid = fetch_kind(kind);
+        let limit = if matches!(kind, PageKind::Home) {
+            self.recent_limit
+        } else {
+            None
+        };
 
         let msg = Message::Fetch {
             id: fid,
             filters: self.filters,
             sort: self.sort,
-            limit: None,
+            limit,
             offset: None,
         };
 
