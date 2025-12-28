@@ -214,6 +214,7 @@ pub enum ManagerMessage {
     ClosePanel,
     Subs(Option<String>),
     Config(ConfigMessage),
+    Error(String),
     None,
 }
 
@@ -280,6 +281,7 @@ impl Manager {
     pub fn update(&mut self, message: ManagerMessage, now: Instant) -> Task<Message> {
         match message {
             ManagerMessage::None => Task::none(),
+            ManagerMessage::Error(error) => Message::error(error).tasked(),
             ManagerMessage::Video(is_next, player) => {
                 let mut player = Arc::try_unwrap(player).unwrap();
 
@@ -1127,6 +1129,7 @@ impl Manager {
                         .width(Length::Fill)
                         .height(Length::Fill)
                         .on_click(handle_clicks)
+                        .on_error(|error| ManagerMessage::Error(error.to_string()))
                         .content_fit(iced::ContentFit::Contain)
                         .on_end_of_stream(ManagerMessage::EndOfStream)
                         .on_new_frame(ManagerMessage::NewFrame)

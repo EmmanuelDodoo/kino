@@ -133,6 +133,10 @@ impl Message {
     pub fn success(message: impl std::fmt::Display) -> Self {
         Message::PushToast(message.to_string(), toast::Status::Success)
     }
+
+    pub fn tasked(self) -> Task<Self> {
+        Task::done(self)
+    }
 }
 
 pub struct App {
