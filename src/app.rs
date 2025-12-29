@@ -7,12 +7,17 @@ use iced::{
 };
 use tokio::sync::mpsc;
 
+use crate::db::{self, Query};
 use crate::error::Error;
 use crate::fetch;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
-    self, Collection, CollectionId, DirectoryId, Episode, EpisodeId, ItemId, Movie, MovieId,
-    Season, SeasonId, Show, ShowId, SimpleCollection, collection, collection::Items,
+    self, Collection, CollectionId, DirectoryId, Episode, EpisodeId, ItemId, Media, Movie, MovieId,
+    Season, SeasonId, Show, ShowId, SimpleCollection, collection,
+    collection::{
+        Items,
+        triggers::{DeleteTrigger, InsertTrigger},
+    },
 };
 use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
 use crate::scan;
@@ -21,10 +26,6 @@ use crate::toast;
 use crate::utils::{
     Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort,
     filter::FilterMode, filter::SearchFilter,
-};
-use crate::{
-    db::{self, Query},
-    models::Media,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -112,6 +113,12 @@ pub enum Message {
     MovieAllocation((MovieId, Option<iced::Color>)),
     SeasonAllocation((SeasonId, Option<iced::Color>)),
     EpisodeAllocation((EpisodeId, Option<iced::Color>)),
+    Triggers {
+        inserts: Vec<(InsertTrigger, bool)>,
+        deletes: Vec<(DeleteTrigger, bool)>,
+        removed_inserts: Vec<InsertTrigger>,
+        removed_deletes: Vec<DeleteTrigger>,
+    },
     None,
 }
 
@@ -713,6 +720,32 @@ impl App {
                         }
                     };
 
+                    let itriggers = match self
+                        .db
+                        .get_collection_inserts(id, InsertTrigger::from_row)
+                    {
+                        Ok(triggers) => {
+                            tracing::info!("Fetched {} collection insert triggers", triggers.len());
+                            triggers
+                        }
+                        Err(error) => {
+                            return Message::error(error).tasked();
+                        }
+                    };
+
+                    let dtriggers = match self
+                        .db
+                        .get_collection_deletes(id, DeleteTrigger::from_row)
+                    {
+                        Ok(triggers) => {
+                            tracing::info!("Fetched {} collection delete triggers", triggers.len());
+                            triggers
+                        }
+                        Err(error) => {
+                            return Message::error(error).tasked();
+                        }
+                    };
+
                     let (thumbnail_movies, thumbnail_shows, thumbnail_seasons, thumbnail_episodes) =
                         match self.db.get_collection_members(
                             id,
@@ -766,9 +799,9 @@ impl App {
                         samples.push(sample.map(Message::EpisodeAllocation));
                     }
 
-                    let home_task = self
-                        .home
-                        .fetched_collection(collection, movies, shows, seasons, episodes);
+                    let home_task = self.home.fetched_collection(
+                        collection, itriggers, dtriggers, movies, shows, seasons, episodes,
+                    );
                     let samples = Task::batch(samples);
 
                     Task::batch([home_task, samples])
@@ -1041,6 +1074,150 @@ impl App {
             Message::ShowAllocation((id, sample)) => self.home.show_sample(id, sample),
             Message::SeasonAllocation((id, sample)) => self.home.season_sample(id, sample),
             Message::EpisodeAllocation((id, sample)) => self.home.episode_sample(id, sample),
+            Message::Triggers {
+                inserts,
+                deletes,
+                removed_inserts,
+                removed_deletes,
+            } => {
+                let mut succs = vec![];
+                let mut fails = vec![];
+
+                for (trigger, roe) in inserts {
+                    match trigger.insert().execute(&self.db) {
+                        Ok(succ) => {
+                            tracing::info!("{succ:?}");
+                            succs.push(succ);
+                        }
+                        Err(fail) => {
+                            tracing::error!("{fail:?}");
+                            fails.push((
+                                format!("{} error.\n{}", trigger.name, fail.error),
+                                toast::Status::Error,
+                            ))
+                        }
+                    };
+
+                    match trigger.save(&self.db) {
+                        Ok(_) => {
+                            tracing::info!("{} saved", trigger.name)
+                        }
+                        Err(error) => {
+                            tracing::error!("Trigger {} save {error:?}", trigger.name);
+                            fails.push((
+                                format!("{} save error.\n{}", trigger.name, error),
+                                toast::Status::Error,
+                            ))
+                        }
+                    }
+
+                    if roe {
+                        match trigger.run_on_existing(&mut self.db) {
+                            Ok(_) => {
+                                tracing::info!("{} run-on-existing successful", trigger.name)
+                            }
+                            Err(error) => {
+                                tracing::error!("{error:?}");
+                                fails.push((
+                                    format!("{} run-on-existing error.\n{}", trigger.name, error),
+                                    toast::Status::Error,
+                                ))
+                            }
+                        }
+                    }
+                }
+
+                for (trigger, roe) in deletes {
+                    match trigger.insert().execute(&self.db) {
+                        Ok(succ) => {
+                            tracing::info!("{succ:?}");
+                            succs.push(succ);
+                        }
+                        Err(fail) => {
+                            tracing::error!("{fail:?}");
+                            fails.push((
+                                format!("{} error.\n{}", trigger.name, fail.error),
+                                toast::Status::Error,
+                            ))
+                        }
+                    };
+
+                    match trigger.save(&self.db) {
+                        Ok(_) => {
+                            tracing::info!("{} saved", trigger.name)
+                        }
+                        Err(error) => {
+                            tracing::error!("Trigger {} save {error:?}", trigger.name);
+                            fails.push((
+                                format!("{} save error.\n{}", trigger.name, error),
+                                toast::Status::Error,
+                            ))
+                        }
+                    }
+
+                    if roe {
+                        match trigger.run_on_existing(&mut self.db) {
+                            Ok(_) => {
+                                tracing::info!("{} run-on-existing successful", trigger.name)
+                            }
+                            Err(error) => {
+                                tracing::error!("{error:?}");
+                                fails.push((
+                                    format!("{} run-on-existing error.\n{}", trigger.name, error),
+                                    toast::Status::Error,
+                                ))
+                            }
+                        }
+                    }
+                }
+
+                for trigger in removed_inserts {
+                    let name = trigger.name.clone();
+                    match trigger.remove(&self.db){
+                        Ok(_) => {
+                            tracing::info!("{} removed", name);
+                        }
+                        Err(error) => {
+                            tracing::error!("Trigger {} remove {error:?}", name);
+                            fails.push((
+                                format!("{} remove error.\n{}", name, error),
+                                toast::Status::Error,
+                            ))
+
+                        }
+                    }
+                }
+
+                for trigger in removed_deletes {
+                    let name = trigger.name.clone();
+                    match trigger.remove(&self.db){
+                        Ok(_) => {
+                            tracing::info!("{} removed", name);
+                        }
+                        Err(error) => {
+                            tracing::error!("Trigger {} remove {error:?}", name);
+                            fails.push((
+                                format!("{} remove error.\n{}", name, error),
+                                toast::Status::Error,
+                            ))
+
+                        }
+                    }
+                }
+
+                let succ = if !succs.is_empty() {
+                    Task::done(Message::success(format!(
+                        "{} trigger successes",
+                        succs.len()
+                    )))
+                } else {
+                    Task::none()
+                };
+
+                let fails = Task::done(Message::PushToasts(fails));
+
+                Task::batch([succ, fails, self.home.refresh(now)])
+            }
         }
     }
 

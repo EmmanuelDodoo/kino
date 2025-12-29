@@ -35,7 +35,7 @@ pub mod utils;
 mod widgets;
 
 use app::App;
-use models::{Directory, ItemId, Media, MediaType, Movie, SearchItem, Show};
+use models::{Directory, ItemId, Media, MediaType, Movie, SearchItem, Show, collection};
 use utils::config::Config;
 use utils::filter;
 use utils::filter::*;
@@ -157,10 +157,13 @@ impl BootFn<App, app::Message> for BootMode {
 
 #[derive(Debug, Clone)]
 enum Message {
+    Set,
+    Get,
     None,
 }
 
 struct Playground {
+    db: db::Database,
     now: Instant,
 }
 
@@ -168,7 +171,10 @@ impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let now = Instant::now();
 
-        let new = Self { now };
+        let new = Self {
+            db: db::Database::open_with_dummies("triggers.db", "dummy.txt").unwrap(),
+            now,
+        };
 
         (new, Task::none())
     }
@@ -177,21 +183,23 @@ impl Playground {
         self.now = now;
 
         match message {
+            Message::Set => {
+                //
+                Task::none()
+            }
+            Message::Get => {
+                //
+                Task::none()
+            }
             Message::None => Task::none(),
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let content = "The jump 1234";
+        let set = button("Set").on_press(Message::Set);
+        let get = button("Get").on_press(Message::Get);
 
-        let norm = text(content).size(P).font(bold_italic_font());
-        let dummy = text(content).size(P).font(Font {
-            weight: font::Weight::Semibold,
-            style: font::Style::Italic,
-            ..Default::default()
-        });
-
-        let content = column!(norm, dummy).spacing(12);
+        let content = row!(set, get).spacing(12.0);
 
         let content = center(content);
 
@@ -206,3 +214,5 @@ impl Playground {
         Some(Theme::Nord)
     }
 }
+
+mod scripts {}

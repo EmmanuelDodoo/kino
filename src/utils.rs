@@ -63,6 +63,14 @@ pub fn loading_animation(now: iced::time::Instant) -> Animation<bool> {
         .go(true, now)
 }
 
+pub fn save_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message> {
+    iced::widget::button(typo::medium("Save")).style(styles::button::primary)
+}
+
+pub fn cancel_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message> {
+    iced::widget::button(typo::medium("Cancel")).style(styles::button::secondary)
+}
+
 pub fn tooltip<'a, Message: 'a>(
     content: impl Into<iced::Element<'a, Message>>,
     label: impl iced::widget::text::IntoFragment<'a>,

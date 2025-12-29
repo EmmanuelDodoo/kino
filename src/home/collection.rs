@@ -34,6 +34,7 @@ pub enum Message {
     Remove(String),
     OpenConfig,
     AddNewItem,
+    Triggers,
     None,
 }
 
@@ -122,6 +123,11 @@ impl CollectionPage {
             Message::Remove(name) => {
                 let msg =
                     HomeMessage::OpenView(ViewMessage::RemoveCollection { id: self.id, name });
+
+                Some(msg)
+            }
+            Message::Triggers => {
+                let msg = HomeMessage::OpenView(ViewMessage::CollectionTriggers);
 
                 Some(msg)
             }
@@ -257,6 +263,7 @@ impl CollectionPage {
             let actions = row!(
                 btn(id, ADD, "Add", Message::AddNewItem),
                 btn(id, EDIT, "Edit", Message::OpenConfig),
+                btn(id, VIDEO_CONFIG, "Rules", Message::Triggers),
                 play,
                 delete
             )

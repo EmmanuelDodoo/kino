@@ -125,6 +125,7 @@ pub const EDIT: char = '\u{e846}';
 pub const EXTERNAL: char = '\u{e859}';
 
 pub const DELETE: char = '\u{e85a}';
+pub const COPY: char = '\u{e864}';
 pub const RENAME: char = '\u{e85b}';
 pub const FILE_UP: char = '\u{e85c}';
 pub const FOLDER_ADD: char = '\u{e85d}';

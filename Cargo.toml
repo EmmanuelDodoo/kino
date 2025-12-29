@@ -16,6 +16,7 @@ gstreamer-base = "0.23"  # basesrc
 gstreamer-pbutils = "0.23"
 gstreamer-video = "0.23"
 html-escape = "0.2"
+humantime = "2.3"
 iced = { git = "https://github.com/iced-rs/iced", rev = "74ac7fc", features = [
   "advanced",
   "hot",
