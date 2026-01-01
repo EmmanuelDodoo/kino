@@ -549,7 +549,7 @@ pub fn draw_collection_triggers<'a>(
                     button(text)
                         .on_press(TriggerMessage::Tab)
                         .style(styles::button::text),
-                    container(iced::widget::Space::new().width(80).height(2)).style(
+                    container(iced::widget::Space::new().width(88).height(2)).style(
                         if view_inserts {
                             styles::container::pb
                         } else {
@@ -574,7 +574,7 @@ pub fn draw_collection_triggers<'a>(
                     button(text)
                         .on_press(TriggerMessage::Tab)
                         .style(styles::button::text),
-                    container(iced::widget::Space::new().width(80).height(2)).style(
+                    container(iced::widget::Space::new().width(88).height(2)).style(
                         if !view_inserts {
                             styles::container::pb
                         } else {
@@ -785,6 +785,7 @@ pub fn draw_insert_trigger<'a>(
 
         let input = |value: &str| -> text_input::TextInput<'_, LogicMessage> {
             text_input("", value)
+                .align_x(Horizontal::Right)
                 .size(size)
                 .font(regular_font())
                 .padding(input_padding)
@@ -873,9 +874,7 @@ pub fn draw_insert_trigger<'a>(
                 .font(regular_font())
                 .text_size(text_size);
 
-            let input = input(last)
-                .on_input(LogicMessage::Last)
-                .align_x(Horizontal::Right);
+            let input = input(last).on_input(LogicMessage::Last);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -899,9 +898,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let duration = duration.to_string();
-            let input = input(&duration)
-                .on_input(LogicMessage::Duration)
-                .align_x(Horizontal::Right);
+            let input = input(&duration).on_input(LogicMessage::Duration);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -925,9 +922,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let progress = format!("{progress:.2}");
-            let input = input(&progress)
-                .on_input(LogicMessage::Progress)
-                .align_x(Horizontal::Right);
+            let input = input(&progress).on_input(LogicMessage::Progress);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -951,9 +946,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let count = count.to_string();
-            let input = input(&count)
-                .on_input(LogicMessage::Watch)
-                .align_x(Horizontal::Right);
+            let input = input(&count).on_input(LogicMessage::Watch);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -976,9 +969,7 @@ pub fn draw_insert_trigger<'a>(
                 .font(regular_font())
                 .text_size(text_size);
 
-            let input = input(release)
-                .on_input(LogicMessage::Release)
-                .align_x(Horizontal::Right);
+            let input = input(release).on_input(LogicMessage::Release);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1002,9 +993,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let rating = format!("{rating:.2}");
-            let input = input(&rating)
-                .on_input(LogicMessage::Rating)
-                .align_x(Horizontal::Right);
+            let input = input(&rating).on_input(LogicMessage::Rating);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1028,9 +1017,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let count = count.to_string();
-            let input = input(&count)
-                .on_input(LogicMessage::Comment)
-                .align_x(Horizontal::Right);
+            let input = input(&count).on_input(LogicMessage::Comment);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1182,6 +1169,7 @@ pub fn draw_delete_trigger<'a>(
                 .size(size)
                 .font(regular_font())
                 .padding(input_padding)
+                .align_x(Horizontal::Right)
                 .width(160)
         };
 
@@ -1267,9 +1255,7 @@ pub fn draw_delete_trigger<'a>(
                 .font(regular_font())
                 .text_size(text_size);
 
-            let input = input(last)
-                .on_input(LogicMessage::Last)
-                .align_x(Horizontal::Right);
+            let input = input(last).on_input(LogicMessage::Last);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1293,9 +1279,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let duration = duration.to_string();
-            let input = input(&duration)
-                .on_input(LogicMessage::Duration)
-                .align_x(Horizontal::Right);
+            let input = input(&duration).on_input(LogicMessage::Duration);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1319,9 +1303,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let progress = format!("{progress:.2}");
-            let input = input(&progress)
-                .on_input(LogicMessage::Progress)
-                .align_x(Horizontal::Right);
+            let input = input(&progress).on_input(LogicMessage::Progress);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1345,9 +1327,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let count = count.to_string();
-            let input = input(&count)
-                .on_input(LogicMessage::Watch)
-                .align_x(Horizontal::Right);
+            let input = input(&count).on_input(LogicMessage::Watch);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1370,9 +1350,7 @@ pub fn draw_delete_trigger<'a>(
                 .font(regular_font())
                 .text_size(text_size);
 
-            let input = input(release)
-                .on_input(LogicMessage::Release)
-                .align_x(Horizontal::Right);
+            let input = input(release).on_input(LogicMessage::Release);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1396,9 +1374,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let rating = format!("{rating:.2}");
-            let input = input(&rating)
-                .on_input(LogicMessage::Rating)
-                .align_x(Horizontal::Right);
+            let input = input(&rating).on_input(LogicMessage::Rating);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1422,9 +1398,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let count = count.to_string();
-            let input = input(&count)
-                .on_input(LogicMessage::Comment)
-                .align_x(Horizontal::Right);
+            let input = input(&count).on_input(LogicMessage::Comment);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
