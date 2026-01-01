@@ -29,6 +29,26 @@ See the [showcase directory](resources/images/showcase) for more images.
 
 Take a look at [the documentation](/resources/docs/README.md) for more.
 
+## Roadmap
+
+- [x] Automatic Collection populating
+
+- [ ] Mini player mode
+
+- [ ] Comments/notes on media
+
+- [ ] Wishlist support
+
+- [ ] Playlist saving and reuse
+
+- [ ] Support for multiple metadata scrappers
+
+- [ ] One-off video playback (without adding to library)
+
+- [ ] Selection modes for building playlists on the fly
+
+- [ ] Subtitle syncing
+
 ## Installation
 
 Note that Kino relies on Gstreamer for video playback. You can install gstreamer by following the instructions [here](https://github.com/sdroege/gstreamer-rs?tab=readme-ov-file#installation)
@@ -51,26 +71,6 @@ cd kino
 cargo build --release
 ./target/release/kino
 ```
-
-## Roadmap
-
-- [ ] Automatic Collection populating
-
-- [ ] Mini player mode
-
-- [ ] Comments/notes on media
-
-- [ ] Wishlist support
-
-- [ ] Playlist saving and reuse
-
-- [ ] Support for multiple metadata scrappers
-
-- [ ] One-off video playback (without adding to library)
-
-- [ ] Selection modes for building playlists on the fly
-
-- [ ] Subtitle syncing
 
 ## Acknowledgement
 

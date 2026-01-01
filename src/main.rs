@@ -214,5 +214,3 @@ impl Playground {
         Some(Theme::Nord)
     }
 }
-
-mod scripts {}

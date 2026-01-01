@@ -676,14 +676,25 @@ pub fn draw_insert_trigger<'a>(
     let title = {
         let size = text_size;
 
+        let kind = regular(trigger.media.to_string()).size(size / RATIO);
+
+        let kind = container(kind).padding([1, 5]).style(|theme| {
+            let default = styles::container::text_ps(theme);
+            let border = default
+                .border
+                .rounded(3.0)
+                .color(default.text_color.unwrap_or_default())
+                .width(0.75);
+
+            container::Style { border, ..default }
+        });
+
         let name = sized_medium(&trigger.name, size);
 
         let expand = if *open { CHEV_DOWN } else { CHEV_LEFT };
-        let expand = icons::icon(expand).size(size).style(|theme| text::Style {
-            color: Some(theme.extended_palette().primary.base.color),
-        });
+        let expand = icons::icon(expand).size(size);
 
-        let name = row!(expand, name)
+        let name = row!(expand, kind, name)
             .width(Length::Fill)
             .align_y(Vertical::Center)
             .spacing(6);
@@ -1068,14 +1079,24 @@ pub fn draw_delete_trigger<'a>(
     let title = {
         let size = text_size;
 
+        let kind = regular(trigger.media.to_string()).size(size / RATIO);
+        let kind = container(kind).padding([1, 5]).style(|theme| {
+            let default = styles::container::text_ps(theme);
+            let border = default
+                .border
+                .rounded(3.0)
+                .color(default.text_color.unwrap_or_default())
+                .width(0.75);
+
+            container::Style { border, ..default }
+        });
+
         let name = sized_medium(&trigger.name, size);
 
         let expand = if *open { CHEV_DOWN } else { CHEV_LEFT };
-        let expand = icons::icon(expand).size(size).style(|theme| text::Style {
-            color: Some(theme.extended_palette().primary.base.color),
-        });
+        let expand = icons::icon(expand).size(size);
 
-        let name = row!(expand, name)
+        let name = row!(expand, kind, name)
             .width(Length::Fill)
             .align_y(Vertical::Center)
             .spacing(6);

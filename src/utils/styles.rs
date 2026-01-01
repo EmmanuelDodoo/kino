@@ -98,6 +98,26 @@ pub mod container {
             ..Default::default()
         }
     }
+
+    pub fn text_pb(theme: &Theme) -> Style {
+        let text_color = theme.extended_palette().primary.base.color;
+
+        Style {
+            text_color: Some(text_color),
+            background: None,
+            ..Default::default()
+        }
+    }
+
+    pub fn text_ps(theme: &Theme) -> Style {
+        let text_color = theme.extended_palette().primary.strong.color;
+
+        Style {
+            text_color: Some(text_color),
+            background: None,
+            ..Default::default()
+        }
+    }
 }
 
 pub mod button {
