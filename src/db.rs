@@ -993,7 +993,7 @@ impl Database {
         duration: u64,
         subtitle_uri: Option<String>,
     ) -> rusqlite::Result<()> {
-        let sql = "UPDATE episode SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_uri=:subtitle_uri WHERE episode.id=:id";
+        let sql = "UPDATE episode SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_uri=:subtitle_uri, last_watched=CURRENT_TIMESTAMP WHERE episode.id=:id";
 
         let mut statement = self.prepare_cached(sql)?;
 
@@ -1020,7 +1020,7 @@ impl Database {
         duration: u64,
         subtitle_uri: Option<String>,
     ) -> rusqlite::Result<usize> {
-        let sql = "UPDATE movie SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_uri=:subtitle_uri WHERE movie.id=:id";
+        let sql = "UPDATE movie SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_uri=:subtitle_uri, last_watched=CURRENT_TIMESTAMP WHERE movie.id=:id";
 
         let mut statement = self.prepare_cached(sql)?;
 
