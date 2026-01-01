@@ -11,7 +11,7 @@ use crate::utils::{
     cancel_btn, empty, icons, icons::*, modal_container, picklist_handle, save_btn, styles,
     tooltip, typo::*,
 };
-use crate::widget::toggler;
+use crate::widgets::toggler;
 use iced::{
     Element, Length, Padding, Theme,
     alignment::{Horizontal, Vertical},
@@ -587,7 +587,7 @@ pub fn draw_collection_triggers<'a>(
                 .spacing(0.0)
             };
 
-            row!(pop, remove).spacing(100)
+            row!(pop, remove).spacing(200)
         };
 
         let new = {
