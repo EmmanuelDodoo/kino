@@ -3,9 +3,9 @@ use crate::db::Operation;
 use crate::models::{Directory, DirectoryId, MediaType};
 use crate::utils::{
     self, AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
-    SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, convert_color_str, empty,
-    icons, icons::sized_button, modal_container, picklist_handle, styles, tooltip, trim_path,
-    typo::*,
+    SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
+    convert_color_str, empty, icons, icons::sized_button, modal_container, picklist_handle,
+    save_btn, styles, tooltip, trim_path, typo::*,
 };
 use crate::widgets::{modal, toggler};
 use iced::{
@@ -1055,10 +1055,8 @@ impl Settings {
             .on_scroll(SettingsMessage::Scroll);
 
         let actions = {
-            let save = button(medium("Save")).on_press(SettingsMessage::Save);
-            let cancel = button(medium("Cancel"))
-                .style(styles::button::secondary)
-                .on_press(SettingsMessage::Cancel);
+            let save = save_btn().on_press(SettingsMessage::Save);
+            let cancel = cancel_btn().on_press(SettingsMessage::Cancel);
 
             let actions = row!(save, cancel).spacing(100.0).align_y(Vertical::Center);
 
@@ -1246,7 +1244,7 @@ impl Settings {
 
             let new = button(new)
                 .on_press(SettingsMessage::NewKeyPress(KeyAction::General(None)))
-                .style(styles::button::text);
+                .style(styles::button::text_primary);
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
@@ -1289,7 +1287,7 @@ impl Settings {
 
             let new = button(new)
                 .on_press(SettingsMessage::NewKeyPress(KeyAction::Video(None)))
-                .style(styles::button::text);
+                .style(styles::button::text_primary);
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
@@ -1332,7 +1330,7 @@ impl Settings {
 
             let new = button(new)
                 .on_press(SettingsMessage::NewKeyPress(KeyAction::Settings(None)))
-                .style(styles::button::text);
+                .style(styles::button::text_primary);
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
@@ -1609,15 +1607,13 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
     };
 
     let actions = {
-        let submit = button(medium("Save")).on_press(SettingsMessage::FolderSelection(
+        let submit = save_btn().on_press(SettingsMessage::FolderSelection(
             FolderSelectionMessage::Submit,
         ));
 
-        let cancel = button(medium("Cancel"))
-            .style(styles::button::secondary)
-            .on_press(SettingsMessage::FolderSelection(
-                FolderSelectionMessage::Cancel,
-            ));
+        let cancel = cancel_btn().on_press(SettingsMessage::FolderSelection(
+            FolderSelectionMessage::Cancel,
+        ));
 
         center_x(row!(submit, cancel).align_y(Vertical::Center).spacing(36))
     };
@@ -1743,11 +1739,8 @@ fn draw_capture_key<'a>(
     let set = set_action && keypress.is_some();
 
     let btns = {
-        let save =
-            button(medium("Save")).on_press_maybe(set.then_some(SettingsMessage::SaveKeyBinding));
-        let cancel = button(medium("Cancel"))
-            .style(styles::button::secondary)
-            .on_press(SettingsMessage::Cancel);
+        let save = save_btn().on_press_maybe(set.then_some(SettingsMessage::SaveKeyBinding));
+        let cancel = cancel_btn().on_press(SettingsMessage::Cancel);
 
         let actions = row!(save, cancel).spacing(80.0).align_y(Vertical::Center);
 

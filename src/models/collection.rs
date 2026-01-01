@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use rusqlite::Result;
 use rusqlite::Row;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef};
 use uuid::Uuid;
@@ -6,20 +7,24 @@ use uuid::Uuid;
 use super::{EpisodeId, MovieId, SeasonId, ShowId, datetime_to_sql};
 use crate::db::{Operation, Query, Table};
 
+use crate::variants;
+
+pub mod triggers;
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CollectionId(Uuid);
 
 impl CollectionId {
-    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+    pub fn from_row(row: &Row<'_>) -> Result<Self> {
         Self::from_row_heler("id", row)
     }
 
     /// Expects relevant column named "collection_id"
-    pub fn from_member(row: &Row<'_>) -> rusqlite::Result<Self> {
+    pub fn from_member(row: &Row<'_>) -> Result<Self> {
         Self::from_row_heler("collection_id", row)
     }
 
-    pub fn from_row_heler(column: &'static str, row: &Row<'_>) -> rusqlite::Result<Self> {
+    pub fn from_row_heler(column: &'static str, row: &Row<'_>) -> Result<Self> {
         row.get::<_, String>(column)
             .map(|id| CollectionId(Uuid::try_parse(&id).unwrap()))
     }
@@ -40,7 +45,7 @@ pub enum ItemId {
 }
 
 impl ItemId {
-    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+    pub fn from_row(row: &Row<'_>) -> Result<Self> {
         let kind = row.get::<_, String>("media_type")?;
 
         match kind.as_str() {
@@ -52,7 +57,7 @@ impl ItemId {
         }
     }
 
-    pub fn from_random(row: &Row<'_>, media: &str) -> rusqlite::Result<Self> {
+    pub fn from_random(row: &Row<'_>, media: &str) -> Result<Self> {
         match media {
             "movie" => MovieId::from_row(row).map(Self::Movie),
             "show" => ShowId::from_row(row).map(Self::Show),
@@ -116,7 +121,7 @@ pub struct SimpleCollection {
 }
 
 impl SimpleCollection {
-    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+    pub fn from_row(row: &Row<'_>) -> Result<Self> {
         let id = CollectionId::from_row(row)?;
 
         let name = row.get::<_, String>("name")?;
@@ -164,12 +169,11 @@ pub struct Collection {
     pub view: CollectionView,
     pub icon: Option<u32>,
     pub theme: Option<u32>,
-    pub custom: Option<String>,
     pub added: DateTime<Local>,
 }
 
 impl Collection {
-    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+    pub fn from_row(row: &Row<'_>) -> Result<Self> {
         let id = CollectionId::from_row(row)?;
 
         let name = row.get::<_, String>("name")?;
@@ -179,7 +183,6 @@ impl Collection {
 
         let icon = row.get::<_, Option<u32>>("icon")?;
         let theme = row.get::<_, Option<u32>>("theme")?;
-        let custom = row.get::<_, Option<String>>("custom")?;
 
         let added = row.get::<_, DateTime<Local>>("created_at")?;
 
@@ -200,7 +203,6 @@ impl Collection {
             view,
             icon,
             theme,
-            custom,
             added,
         })
     }
@@ -214,7 +216,6 @@ impl Collection {
             view,
             icon,
             theme,
-            custom,
             added,
         } = self;
 
@@ -234,11 +235,6 @@ impl Collection {
             None => ToSqlOutput::Owned(Value::Null),
         };
 
-        let custom = match custom {
-            Some(custom) => ToSqlOutput::from(custom.clone()),
-            None => ToSqlOutput::Owned(Value::Null),
-        };
-
         let added = datetime_to_sql(added);
 
         vec![
@@ -248,7 +244,6 @@ impl Collection {
             (":view", view),
             (":icon", icon),
             (":theme", theme),
-            (":custom", custom),
             (":added", added),
         ]
     }
@@ -262,7 +257,6 @@ impl Collection {
             view,
             icon,
             theme,
-            custom,
             added: _added,
         } = self;
 
@@ -282,11 +276,6 @@ impl Collection {
             None => ToSqlOutput::Owned(Value::Null),
         };
 
-        let custom = match custom {
-            Some(custom) => ToSqlOutput::from(custom.clone()),
-            None => ToSqlOutput::Owned(Value::Null),
-        };
-
         vec![
             (":id", id),
             (":name", name),
@@ -294,13 +283,12 @@ impl Collection {
             (":view", view),
             (":icon", icon),
             (":theme", theme),
-            (":custom", custom),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO collection (id, name, description, view, icon, custom, created_at, theme) VALUES (:id, :name, :description, :view, :icon, :custom, :added, :theme)";
+        let sql = "INSERT INTO collection (id, name, description, view, icon, created_at, theme) VALUES (:id, :name, :description, :view, :icon, :added, :theme)";
         let params = self.insert_params();
 
         Query {
@@ -314,7 +302,7 @@ impl Collection {
 
     #[must_use]
     pub fn save<'a>(&self) -> Query<'a> {
-        let sql = "UPDATE collection SET name=:name, description=:description, view=:view, icon=:icon, custom=:custom, theme=:theme WHERE id=:id";
+        let sql = "UPDATE collection SET name=:name, description=:description, view=:view, icon=:icon, theme=:theme WHERE id=:id";
         let params = self.update_params();
 
         Query {
@@ -443,33 +431,12 @@ impl Collection {
         }
     }
 
-    #[must_use]
-    pub fn set_custom<'a>(&mut self, custom: Option<String>) -> Query<'a> {
-        self.custom = custom;
-
-        let sql = "UPDATE collection SET custom=:custom WHERE id=:id";
-        let custom = match &self.custom {
-            Some(custom) => ToSqlOutput::from(custom.clone()),
-            None => ToSqlOutput::Owned(Value::Null),
-        };
-        let params = [(":id", ToSqlOutput::from(self.id)), (":custom", custom)];
-
-        Query {
-            id: self.id.0,
-            table: Table::Collection,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
     pub fn new<'a>(
         name: String,
         description: Option<String>,
         view: CollectionView,
         icon: Option<u32>,
         theme: Option<u32>,
-        custom: Option<String>,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
 
@@ -481,7 +448,6 @@ impl Collection {
             view,
             icon,
             theme,
-            custom,
             added,
         };
 
@@ -570,11 +536,57 @@ impl std::fmt::Display for Sort {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Items {
+variants! {
+#[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum Items {
     All,
     Movies,
     Shows,
     Seasons,
     Episodes,
+}}
+
+impl Items {
+    pub const TAGS: [Items; 2] = [Self::Movies, Self::Shows];
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "all" => Some(Self::All),
+            "movies" => Some(Self::Movies),
+            "shows" => Some(Self::Shows),
+            "seasons" => Some(Self::Seasons),
+            "episodes" => Some(Self::Episodes),
+            _ => None,
+        }
+    }
+}
+
+impl FromSql for Items {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value
+            .as_str()
+            .and_then(|s| Items::from_str(s).ok_or(FromSqlError::InvalidType))
+    }
+}
+
+impl<'a> From<Items> for ToSqlOutput<'a> {
+    fn from(value: Items) -> Self {
+        ToSqlOutput::from(value.to_string())
+    }
+}
+
+impl std::fmt::Display for Items {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::All => "all",
+                Self::Shows => "shows",
+                Self::Movies => "movies",
+                Self::Seasons => "seasons",
+                Self::Episodes => "episodes",
+            }
+        )
+    }
 }

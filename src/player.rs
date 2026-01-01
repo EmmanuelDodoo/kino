@@ -21,10 +21,11 @@ use crate::app::Message;
 use crate::home::shared::Icon;
 use crate::models::{CollectionId, SimpleCollection};
 use crate::utils::{
-    self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, convert_color_str,
+    self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, cancel_btn, convert_color_str,
     draw_subtitles, empty,
     icons::{self, CANCEL, sized_button},
-    loading_animation, loading_svg, modal_container, picklist_handle, styles, tooltip, trim_path,
+    loading_animation, loading_svg, modal_container, picklist_handle, save_btn, styles, tooltip,
+    trim_path,
     typo::{self, *},
 };
 use crate::variants;
@@ -2155,15 +2156,11 @@ fn draw_collection_add<'a>(
         });
 
     let actions = {
-        let save = button(medium("Save"))
-            .on_press(ManagerMessage::CollectionAddMessage(
-                CollectionAddMessage::Save,
-            ))
-            .style(styles::button::primary);
+        let save = save_btn().on_press(ManagerMessage::CollectionAddMessage(
+            CollectionAddMessage::Save,
+        ));
 
-        let cancel = button(medium("Cancel"))
-            .on_press(ManagerMessage::CloseView)
-            .style(styles::button::secondary);
+        let cancel = cancel_btn().on_press(ManagerMessage::CloseView);
 
         row!(save, cancel).spacing(100)
     };

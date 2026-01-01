@@ -16,6 +16,7 @@ use std::collections::{HashMap, HashSet};
 
 mod collection;
 mod collections;
+mod draws;
 mod episode;
 mod movie;
 mod movies;
@@ -25,24 +26,30 @@ mod series;
 pub mod shared;
 mod shows;
 
+use draws::*;
+
 use crate::{
     app::{MediaUpdate, MediaUpdateKind},
     models::{
         Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, Season,
         SeasonId, Show, ShowId, SimpleCollection,
-        collection::{ItemId, Items},
+        collection::{
+            ItemId, Items,
+            triggers::{self, Comparison, DeleteId, DeleteTrigger, InsertId, InsertTrigger, Logic},
+        },
     },
 };
 
 use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
-    self, HomeAction, Layout, Scroll, Sort, SortKind, empty, filter::*, icons, icons::*,
-    loading_animation, loading_svg, modal_container, picklist_handle, styles, tooltip, typo::*,
+    self, HomeAction, Layout, Scroll, Sort, SortKind, cancel_btn, empty, filter::*, icons,
+    icons::*, loading_animation, loading_svg, modal_container, picklist_handle, save_btn, styles,
+    tooltip, typo::*,
 };
 use crate::widgets::{
     menu::{Position, menu},
-    modal,
+    modal, toggler,
 };
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};
@@ -89,7 +96,6 @@ pub enum ConfigMessage {
     Description(text_editor::Action),
     View(CollectionView),
     Icon(Icon),
-    Script(String),
     Save,
 }
 
@@ -102,7 +108,6 @@ pub struct CollectionConfig {
     icon: Icon,
     view: CollectionView,
     theme: Option<u32>,
-    custom: Option<String>,
     name_input: widget::Id,
 }
 
@@ -115,7 +120,6 @@ impl CollectionConfig {
             icon,
             view,
             theme,
-            custom,
             name_input: _text_input,
             empty_name: _empty_name,
         } = self;
@@ -130,7 +134,6 @@ impl CollectionConfig {
         collection.icon = Some(icon.to_u32());
         collection.theme = theme;
         collection.view = view;
-        collection.custom = custom;
     }
 
     pub fn from_collection(collection: &Collection) -> (Self, widget::Id) {
@@ -148,7 +151,6 @@ impl CollectionConfig {
                 view: collection.view,
                 icon: Icon::new(collection.icon),
                 theme: collection.theme,
-                custom: collection.custom.clone(),
                 name_input: name_input.clone(),
             },
             name_input,
@@ -167,7 +169,6 @@ impl CollectionConfig {
                 icon: Icon::new(None),
                 view: CollectionView::Shown,
                 theme: None,
-                custom: None,
                 name_input: name_input.clone(),
             },
             name_input,
@@ -206,6 +207,55 @@ pub enum CollectionAddMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum LogicMessage {
+    Name(String),
+    NameComp(bool),
+    Synopsis(String),
+    SynopsisComp(bool),
+    Tags(String),
+    TagsComp(bool),
+    Last(String),
+    LastComp(Comparison),
+    Duration(String),
+    DurationComp(Comparison),
+    Progress(String),
+    ProgressComp(Comparison),
+    Watch(String),
+    WatchComp(Comparison),
+    Release(String),
+    ReleaseComp(Comparison),
+    Rating(String),
+    RatingComp(Comparison),
+    Comment(String),
+    CommentComp(Comparison),
+}
+
+#[derive(Debug, Clone)]
+pub enum TriggerMessage {
+    Save,
+    GenerateDelete(InsertId),
+    ToggleExpandInsert(InsertId),
+    ToggleExpandDelete(DeleteId),
+    Tab,
+    AddInsert,
+    AddDelete,
+    DuplicateInsert(InsertId),
+    DuplicateDelete(DeleteId),
+    RemoveInsert(InsertId),
+    RemoveDelete(DeleteId),
+    NameInsert(InsertId, String),
+    NameDelete(DeleteId, String),
+    MediaInsert(InsertId, triggers::Media),
+    MediaDelete(DeleteId, triggers::Media),
+    ROEInsert(InsertId, bool),
+    ROEDelete(DeleteId, bool),
+    ToggleROEInsert(InsertId),
+    ToggleROEDelete(DeleteId),
+    LogicInsert(InsertId, LogicMessage),
+    LogicDelete(DeleteId, LogicMessage),
+}
+
+#[derive(Debug, Clone)]
 pub enum Rating {
     Value(f32),
     Input { id: widget::Id, input: String },
@@ -240,6 +290,7 @@ pub enum TMDBMessage {
 #[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig,
+    CollectionTriggers,
     Add(ItemId),
     AddToCollection(CollectionId),
     Search,
@@ -286,6 +337,14 @@ pub enum View {
         id: CollectionId,
         name: String,
     },
+    CollectionTriggers {
+        id: CollectionId,
+        view_inserts: bool,
+        itriggers: Vec<(bool, InsertTrigger, bool, String, String)>,
+        removed_inserts: Vec<InsertTrigger>,
+        dtriggers: Vec<(bool, DeleteTrigger, bool, String, String)>,
+        removed_deletes: Vec<DeleteTrigger>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -318,6 +377,8 @@ enum State {
     },
     Collection {
         collection: Box<CollectionThumbnail>,
+        itriggers: Vec<InsertTrigger>,
+        dtriggers: Vec<DeleteTrigger>,
         shows: Vec<Thumbnail<Show>>,
         movies: Vec<Thumbnail<Movie>>,
         seasons: Vec<Thumbnail<Season>>,
@@ -371,12 +432,15 @@ pub enum HomeMessage {
     FetchedCollections(Vec<CollectionThumbnail>),
     FetchedCollection {
         collection: Box<CollectionThumbnail>,
+        itriggers: Vec<InsertTrigger>,
+        dtriggers: Vec<DeleteTrigger>,
         movies: Vec<Thumbnail<Movie>>,
         shows: Vec<Thumbnail<Show>>,
         seasons: Vec<Thumbnail<Season>>,
         episodes: Vec<Thumbnail<Episode>>,
     },
     Scan,
+    Trigger(TriggerMessage),
 }
 
 pub struct Home {
@@ -509,6 +573,8 @@ impl Home {
             }
             HomeMessage::FetchedCollection {
                 collection,
+                itriggers,
+                dtriggers,
                 movies,
                 shows,
                 seasons,
@@ -516,6 +582,8 @@ impl Home {
             } => {
                 self.state = State::Collection {
                     collection,
+                    itriggers,
+                    dtriggers,
                     shows,
                     movies,
                     seasons,
@@ -613,6 +681,68 @@ impl Home {
 
                         Task::batch([focus, self.update_page_scroll()])
                     }
+                    ViewMessage::CollectionTriggers => {
+                        let State::Collection {
+                            collection,
+                            itriggers,
+                            dtriggers,
+                            ..
+                        } = &self.state
+                        else {
+                            return Task::none();
+                        };
+
+                        self.view = Some(View::CollectionTriggers {
+                            id: collection.collection.id,
+                            view_inserts: true,
+                            itriggers: itriggers
+                                .clone()
+                                .into_iter()
+                                .map(|trigger| {
+                                    let last = trigger
+                                        .logic
+                                        .last_watched
+                                        .as_ref()
+                                        .map(|(_, last)| last.format("%F %R").to_string())
+                                        .unwrap_or_default();
+
+                                    let release = trigger
+                                        .logic
+                                        .release
+                                        .as_ref()
+                                        .map(|(_, release)| release.format("%F").to_string())
+                                        .unwrap_or_default();
+
+                                    (false, trigger, false, last, release)
+                                })
+                                .collect(),
+                            dtriggers: dtriggers
+                                .clone()
+                                .into_iter()
+                                .map(|trigger| {
+                                    let last = trigger
+                                        .logic
+                                        .last_watched
+                                        .as_ref()
+                                        .map(|(_, last)| last.format("%F %R").to_string())
+                                        .unwrap_or_default();
+
+                                    let release = trigger
+                                        .logic
+                                        .release
+                                        .as_ref()
+                                        .map(|(_, release)| release.format("%F").to_string())
+                                        .unwrap_or_default();
+
+                                    (false, trigger, false, last, release)
+                                })
+                                .collect(),
+                            removed_inserts: vec![],
+                            removed_deletes: vec![],
+                        });
+
+                        self.update_page_scroll()
+                    }
                     ViewMessage::Add(item) => {
                         let state = CollectionAddState {
                             item,
@@ -696,13 +826,6 @@ impl Home {
                     ConfigMessage::Icon(icon) => {
                         config.icon = icon;
                     }
-                    ConfigMessage::Script(script) => {
-                        if script.is_empty() {
-                            config.custom = None
-                        } else {
-                            config.custom = Some(script)
-                        }
-                    }
                     ConfigMessage::Save if config.id.is_some() => {
                         let close_view = self.close_view();
 
@@ -747,7 +870,6 @@ impl Home {
                             icon,
                             view,
                             theme,
-                            custom,
                             id: _unused1,
                             name_input: _unused2,
                             empty_name: _empty_name,
@@ -760,14 +882,8 @@ impl Home {
                             Some(description)
                         };
 
-                        let (new, query) = Collection::new(
-                            name,
-                            description,
-                            view,
-                            Some(icon.to_u32()),
-                            theme,
-                            custom,
-                        );
+                        let (new, query) =
+                            Collection::new(name, description, view, Some(icon.to_u32()), theme);
 
                         let new_id = new.id;
                         let simple = SimpleCollection::from_collection(&new);
@@ -777,6 +893,8 @@ impl Home {
                         let close_view = self.close_view();
                         self.state = State::Collection {
                             collection: Box::new(CollectionThumbnail::new(new)),
+                            itriggers: vec![],
+                            dtriggers: vec![],
                             shows: vec![],
                             movies: vec![],
                             episodes: vec![],
@@ -1104,6 +1222,966 @@ impl Home {
                 let remove = Task::done(msg);
 
                 Task::batch([self.back(now, true), remove, self.close_view()])
+            }
+            HomeMessage::Trigger(tsg) => {
+                let Some(View::CollectionTriggers {
+                    id,
+                    view_inserts,
+                    itriggers,
+                    dtriggers,
+                    removed_inserts,
+                    removed_deletes,
+                }) = self.view.as_mut()
+                else {
+                    return Task::none();
+                };
+
+                match tsg {
+                    TriggerMessage::Tab => {
+                        *view_inserts = !*view_inserts;
+                        Task::none()
+                    }
+                    TriggerMessage::AddInsert => {
+                        let new = InsertTrigger::new(
+                            *id,
+                            "Insert Rule",
+                            Logic::default(),
+                            triggers::Media::Movies,
+                        );
+                        itriggers.push((true, new, false, String::default(), String::default()));
+
+                        Task::none()
+                    }
+                    TriggerMessage::AddDelete => {
+                        let new = DeleteTrigger::new(
+                            *id,
+                            "Delete Rule",
+                            Logic::default(),
+                            triggers::Media::Movies,
+                        );
+                        dtriggers.push((true, new, false, String::default(), String::default()));
+
+                        Task::none()
+                    }
+                    TriggerMessage::NameInsert(id, name) => {
+                        if let Some((_, trigger, _, _, _)) = itriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            trigger.name = name;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::NameDelete(id, name) => {
+                        if let Some((_, trigger, _, _, _)) = dtriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            trigger.name = name;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::MediaInsert(id, media) => {
+                        if let Some((_, trigger, _, _, _)) = itriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            trigger.media = media;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::MediaDelete(id, media) => {
+                        if let Some((_, trigger, _, _, _)) = dtriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            trigger.media = media;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::ROEInsert(id, checked) => {
+                        if let Some((_, _, roe, _, _)) = itriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            *roe = checked;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::ROEDelete(id, checked) => {
+                        if let Some((_, _, roe, _, _)) = dtriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            *roe = checked;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::ToggleROEInsert(id) => {
+                        if let Some((_, _, roe, _, _)) = itriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            *roe = !*roe;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::ToggleROEDelete(id) => {
+                        if let Some((_, _, roe, _, _)) = dtriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            *roe = !*roe;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::DuplicateInsert(id) => {
+                        if let Some((idx, (open, trigger, roe, last, release))) = itriggers
+                            .iter()
+                            .enumerate()
+                            .find(|(_, (_, trigger, _, _, _))| trigger.id == id)
+                        {
+                            let name = format!("{} - Copy", trigger.name);
+                            let copy = InsertTrigger::new(
+                                trigger.collection,
+                                name,
+                                trigger.logic.clone(),
+                                trigger.media,
+                            );
+
+                            itriggers.insert(
+                                idx + 1,
+                                (*open, copy, *roe, last.clone(), release.clone()),
+                            );
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::DuplicateDelete(id) => {
+                        if let Some((idx, (open, trigger, roe, last, release))) = dtriggers
+                            .iter()
+                            .enumerate()
+                            .find(|(_, (_, trigger, _, _, _))| trigger.id == id)
+                        {
+                            let name = format!("{} - Copy", trigger.name);
+                            let copy = DeleteTrigger::new(
+                                trigger.collection,
+                                name,
+                                trigger.logic.clone(),
+                                trigger.media,
+                            );
+
+                            dtriggers.insert(
+                                idx + 1,
+                                (*open, copy, *roe, last.clone(), release.clone()),
+                            );
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::RemoveInsert(id) => {
+                        if let Some((idx, _)) = itriggers
+                            .iter()
+                            .enumerate()
+                            .find(|(_, (_, trigger, _, _, _))| trigger.id == id)
+                        {
+                            let (_, trigger, _, _, _) = itriggers.remove(idx);
+                            removed_inserts.push(trigger);
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::RemoveDelete(id) => {
+                        if let Some((idx, _)) = dtriggers
+                            .iter()
+                            .enumerate()
+                            .find(|(_, (_, trigger, _, _, _))| trigger.id == id)
+                        {
+                            let (_, trigger, _, _, _) = dtriggers.remove(idx);
+                            removed_deletes.push(trigger);
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::ToggleExpandInsert(id) => {
+                        if let Some((open, _, _, _, _)) = itriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            *open = !*open;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::ToggleExpandDelete(id) => {
+                        if let Some((open, _, _, _, _)) = dtriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        {
+                            *open = !*open;
+                        }
+
+                        Task::none()
+                    }
+                    TriggerMessage::LogicInsert(id, lsg) => {
+                        let Some((_, trigger, _, last, release)) = itriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        else {
+                            return Task::none();
+                        };
+
+                        match lsg {
+                            LogicMessage::Name(pattern) => {
+                                if pattern.is_empty() {
+                                    trigger.logic.name = None;
+                                    return Task::none();
+                                }
+
+                                match trigger.logic.name.take() {
+                                    Some((not, _)) => {
+                                        trigger.logic.name = Some((not, pattern));
+                                    }
+                                    None => {
+                                        trigger.logic.name = Some((false, pattern));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::NameComp(new) => {
+                                if let Some((not, _)) = trigger.logic.name.as_mut() {
+                                    *not = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Synopsis(pattern) => {
+                                if pattern.is_empty() {
+                                    trigger.logic.synopsis = None;
+                                    return Task::none();
+                                }
+
+                                match trigger.logic.synopsis.take() {
+                                    Some((not, _)) => {
+                                        trigger.logic.synopsis = Some((not, pattern));
+                                    }
+                                    None => {
+                                        trigger.logic.synopsis = Some((false, pattern));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::SynopsisComp(new) => {
+                                if let Some((not, _)) = trigger.logic.synopsis.as_mut() {
+                                    *not = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Tags(pattern) => {
+                                if pattern.is_empty() {
+                                    trigger.logic.tags = None;
+                                    return Task::none();
+                                }
+
+                                match trigger.logic.tags.take() {
+                                    Some((not, _)) => {
+                                        trigger.logic.tags = Some((not, pattern));
+                                    }
+                                    None => {
+                                        trigger.logic.tags = Some((false, pattern));
+                                    }
+                                };
+
+                                if matches!(
+                                    trigger.media,
+                                    triggers::Media::Episodes | triggers::Media::Seasons
+                                ) {
+                                    trigger.media = triggers::Media::Shows;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::TagsComp(new) => {
+                                if let Some((not, _)) = trigger.logic.tags.as_mut() {
+                                    *not = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::LastComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.last_watched.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Last(new) => {
+                                *last = new.clone();
+                                if new.is_empty() {
+                                    trigger.logic.last_watched = None;
+                                    last.clear();
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                match humantime::parse_duration(new) {
+                                    Ok(duration) => {
+                                        if let Some(last_watched) = chrono::TimeDelta::from_std(
+                                            duration,
+                                        )
+                                        .ok()
+                                        .and_then(|duration| {
+                                            chrono::Local::now().checked_sub_signed(duration)
+                                        }) {
+                                            *last = last_watched.format("%F %R").to_string();
+                                            trigger.logic.last_watched =
+                                                Some((Comparison::default(), last_watched))
+                                        };
+
+                                        Task::none()
+                                    }
+                                    Err(_) => {
+                                        let Ok(last_watched) =
+                                            chrono::NaiveDateTime::parse_from_str(new, "%F %R")
+                                                .or_else(|_| {
+                                                    chrono::NaiveDateTime::parse_from_str(new, "%F")
+                                                })
+                                        else {
+                                            let msg =
+                                                Message::error(format!("Invalid input: {new}"));
+                                            return Task::done(msg);
+                                        };
+
+                                        let last_watched = last_watched.and_utc();
+
+                                        *last = last_watched.format("%F %R").to_string();
+                                        trigger.logic.last_watched =
+                                            Some((Comparison::Equal, last_watched.into()));
+
+                                        Task::none()
+                                    }
+                                }
+                            }
+                            LogicMessage::Duration(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.duration = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<u64>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                match trigger.logic.duration.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.duration = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.duration = Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::DurationComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.duration.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Progress(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.progress = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<f32>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                let new = new.min(1.0);
+
+                                match trigger.logic.progress.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.progress = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.progress = Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::ProgressComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.progress.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Watch(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.watch_count = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<u32>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                match trigger.logic.watch_count.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.watch_count = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.watch_count =
+                                            Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::WatchComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.watch_count.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Release(new) => {
+                                *release = new.clone();
+                                if new.is_empty() {
+                                    trigger.logic.release = None;
+                                    release.clear();
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                match humantime::parse_duration(new) {
+                                    Ok(duration) => {
+                                        if let Some(new) = chrono::TimeDelta::from_std(duration)
+                                            .ok()
+                                            .and_then(|duration| {
+                                                chrono::Local::now().checked_sub_signed(duration)
+                                            })
+                                        {
+                                            *release = new.format("%F").to_string();
+                                            trigger.logic.release =
+                                                Some((Comparison::default(), new.date_naive()))
+                                        };
+
+                                        Task::none()
+                                    }
+                                    Err(_) => {
+                                        let Ok(new) = chrono::DateTime::parse_from_str(new, "%F")
+                                        else {
+                                            let msg =
+                                                Message::error(format!("Invalid input: {new}"));
+                                            return Task::done(msg);
+                                        };
+
+                                        *release = new.format("%F").to_string();
+                                        trigger.logic.release =
+                                            Some((Comparison::Equal, new.date_naive()));
+
+                                        Task::none()
+                                    }
+                                }
+                            }
+                            LogicMessage::ReleaseComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.release.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Rating(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.rating = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<f32>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                let new = new.clamp(0.0, 5.0);
+
+                                match trigger.logic.rating.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.rating = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.rating = Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::RatingComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.rating.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Comment(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.comment = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<u32>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                match trigger.logic.comment.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.comment = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.comment = Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::CommentComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.comment.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                        }
+                    }
+                    TriggerMessage::LogicDelete(id, lsg) => {
+                        let Some((_, trigger, _, last, release)) = dtriggers
+                            .iter_mut()
+                            .find(|(_, trigger, _, _, _)| trigger.id == id)
+                        else {
+                            return Task::none();
+                        };
+
+                        match lsg {
+                            LogicMessage::Name(pattern) => {
+                                if pattern.is_empty() {
+                                    trigger.logic.name = None;
+                                    return Task::none();
+                                }
+
+                                match trigger.logic.name.take() {
+                                    Some((not, _)) => {
+                                        trigger.logic.name = Some((not, pattern));
+                                    }
+                                    None => {
+                                        trigger.logic.name = Some((false, pattern));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::NameComp(new) => {
+                                if let Some((not, _)) = trigger.logic.name.as_mut() {
+                                    *not = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Synopsis(pattern) => {
+                                if pattern.is_empty() {
+                                    trigger.logic.synopsis = None;
+                                    return Task::none();
+                                }
+
+                                match trigger.logic.synopsis.take() {
+                                    Some((not, _)) => {
+                                        trigger.logic.synopsis = Some((not, pattern));
+                                    }
+                                    None => {
+                                        trigger.logic.synopsis = Some((false, pattern));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::SynopsisComp(new) => {
+                                if let Some((not, _)) = trigger.logic.synopsis.as_mut() {
+                                    *not = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Tags(pattern) => {
+                                if pattern.is_empty() {
+                                    trigger.logic.tags = None;
+                                    return Task::none();
+                                }
+
+                                match trigger.logic.tags.take() {
+                                    Some((not, _)) => {
+                                        trigger.logic.tags = Some((not, pattern));
+                                    }
+                                    None => {
+                                        trigger.logic.tags = Some((false, pattern));
+                                    }
+                                };
+
+                                if matches!(
+                                    trigger.media,
+                                    triggers::Media::Episodes | triggers::Media::Seasons
+                                ) {
+                                    trigger.media = triggers::Media::Shows;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::TagsComp(new) => {
+                                if let Some((not, _)) = trigger.logic.tags.as_mut() {
+                                    *not = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::LastComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.last_watched.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Last(new) => {
+                                *last = new.clone();
+                                if new.is_empty() {
+                                    trigger.logic.last_watched = None;
+                                    last.clear();
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                match humantime::parse_duration(new) {
+                                    Ok(duration) => {
+                                        if let Some(last_watched) = chrono::TimeDelta::from_std(
+                                            duration,
+                                        )
+                                        .ok()
+                                        .and_then(|duration| {
+                                            chrono::Local::now().checked_sub_signed(duration)
+                                        }) {
+                                            *last = last_watched.format("%F %R").to_string();
+                                            trigger.logic.last_watched =
+                                                Some((Comparison::default(), last_watched))
+                                        };
+
+                                        Task::none()
+                                    }
+                                    Err(_) => {
+                                        let Ok(last_watched) =
+                                            chrono::NaiveDateTime::parse_from_str(new, "%F %R")
+                                                .or_else(|_| {
+                                                    chrono::NaiveDateTime::parse_from_str(new, "%F")
+                                                })
+                                        else {
+                                            let msg =
+                                                Message::error(format!("Invalid input: {new}"));
+                                            return Task::done(msg);
+                                        };
+
+                                        let last_watched = last_watched.and_utc();
+                                        *last = last_watched.format("%F %R").to_string();
+                                        trigger.logic.last_watched =
+                                            Some((Comparison::Equal, last_watched.into()));
+
+                                        Task::none()
+                                    }
+                                }
+                            }
+                            LogicMessage::Duration(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.duration = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<u64>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                match trigger.logic.duration.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.duration = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.duration = Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::DurationComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.duration.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Progress(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.progress = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<f32>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                let new = new.min(1.0);
+
+                                match trigger.logic.progress.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.progress = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.progress = Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::ProgressComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.progress.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Watch(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.watch_count = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<u32>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                match trigger.logic.watch_count.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.watch_count = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.watch_count =
+                                            Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::WatchComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.watch_count.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Release(new) => {
+                                *release = new.clone();
+                                if new.is_empty() {
+                                    trigger.logic.release = None;
+                                    release.clear();
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                match humantime::parse_duration(new) {
+                                    Ok(duration) => {
+                                        if let Some(new) = chrono::TimeDelta::from_std(duration)
+                                            .ok()
+                                            .and_then(|duration| {
+                                                chrono::Local::now().checked_sub_signed(duration)
+                                            })
+                                        {
+                                            *release = new.format("%F").to_string();
+                                            trigger.logic.release =
+                                                Some((Comparison::default(), new.date_naive()))
+                                        };
+
+                                        Task::none()
+                                    }
+                                    Err(_) => {
+                                        let Ok(new) = chrono::DateTime::parse_from_str(new, "%F")
+                                        else {
+                                            let msg =
+                                                Message::error(format!("Invalid input: {new}"));
+                                            return Task::done(msg);
+                                        };
+
+                                        *release = new.format("%F").to_string();
+                                        trigger.logic.release =
+                                            Some((Comparison::Equal, new.date_naive()));
+
+                                        Task::none()
+                                    }
+                                }
+                            }
+                            LogicMessage::ReleaseComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.release.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Rating(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.rating = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<f32>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                let new = new.clamp(0.0, 5.0);
+
+                                match trigger.logic.rating.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.rating = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.rating = Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::RatingComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.rating.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Comment(new) => {
+                                if new.is_empty() {
+                                    trigger.logic.comment = None;
+                                    return Task::none();
+                                }
+
+                                let new = new.trim();
+
+                                let Ok(new) = new.parse::<u32>() else {
+                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    return Task::done(msg);
+                                };
+
+                                match trigger.logic.comment.take() {
+                                    Some((comp, _)) => {
+                                        trigger.logic.comment = Some((comp, new));
+                                    }
+                                    None => {
+                                        trigger.logic.comment = Some((Comparison::default(), new));
+                                    }
+                                };
+
+                                Task::none()
+                            }
+                            LogicMessage::CommentComp(new) => {
+                                if let Some((comp, _)) = trigger.logic.comment.as_mut() {
+                                    *comp = new;
+                                }
+
+                                Task::none()
+                            }
+                        }
+                    }
+                    TriggerMessage::GenerateDelete(id) => {
+                        let Some((idx, (_, trigger, roe, last, release))) = itriggers
+                            .iter()
+                            .enumerate()
+                            .find(|(_, (_, trigger, _, _, _))| trigger.id == id)
+                        else {
+                            return Task::none();
+                        };
+
+                        let name = format!("{} - Delete Rule", trigger.name);
+                        let logic = trigger.logic.not();
+
+                        let delete =
+                            DeleteTrigger::new(trigger.collection, name, logic, trigger.media);
+
+                        let idx = idx.min(dtriggers.len());
+
+                        dtriggers.insert(idx, (true, delete, *roe, last.clone(), release.clone()));
+                        *view_inserts = false;
+
+                        Task::none()
+                    }
+                    TriggerMessage::Save => {
+                        let inserts = itriggers
+                            .iter()
+                            .map(|(_, trigger, roe, _, _)| (trigger.clone(), *roe))
+                            .collect();
+
+                        let deletes = dtriggers
+                            .iter()
+                            .map(|(_, trigger, roe, _, _)| (trigger.clone(), *roe))
+                            .collect();
+
+                        let msg = Message::Triggers {
+                            inserts,
+                            deletes,
+                            removed_inserts: removed_inserts.clone(),
+                            removed_deletes: removed_deletes.clone(),
+                        }
+                        .tasked();
+
+                        let close_view = self.close_view();
+
+                        Task::batch([close_view, msg])
+                    }
+                }
             }
             HomeMessage::CloseView => self.close_view(),
             HomeMessage::Back => self.back(now, false),
@@ -2181,6 +3259,8 @@ impl Home {
             State::Collections(collections) => ("Collections", collections.len()),
             State::Collection {
                 collection,
+                itriggers: _itriggers,
+                dtriggers: _dtriggers,
                 movies,
                 shows,
                 seasons,
@@ -2313,6 +3393,8 @@ impl Home {
             (
                 State::Collection {
                     collection,
+                    itriggers: _itriggers,
+                    dtriggers: _dtriggers,
                     shows,
                     movies,
                     seasons,
@@ -2389,6 +3471,14 @@ impl Home {
                     View::RemoveCollection { name, .. } => {
                         draw_delete_confirm(name, HomeMessage::RemoveCollection)
                     }
+                    View::CollectionTriggers {
+                        itriggers,
+                        dtriggers,
+                        view_inserts,
+                        id: _id,
+                        removed_inserts: _removed_inserts,
+                        removed_deletes: _removed_deletes,
+                    } => draw_collection_triggers(*view_inserts, itriggers, dtriggers),
                 };
 
                 modal(content, overlay, HomeMessage::CloseView)
@@ -2797,6 +3887,8 @@ impl Home {
     pub fn fetched_collection(
         &mut self,
         collection: Collection,
+        itriggers: Vec<InsertTrigger>,
+        dtriggers: Vec<DeleteTrigger>,
         movies: Vec<Thumbnail<Movie>>,
         shows: Vec<Thumbnail<Show>>,
         seasons: Vec<Thumbnail<Season>>,
@@ -2805,11 +3897,15 @@ impl Home {
         Task::perform(
             async move {
                 let collection = CollectionThumbnail::new(collection);
-                (collection, movies, shows, seasons, episodes)
+                (
+                    collection, itriggers, dtriggers, movies, shows, seasons, episodes,
+                )
             },
-            move |(collection, movies, shows, seasons, episodes)| {
+            move |(collection, itriggers, dtriggers, movies, shows, seasons, episodes)| {
                 Message::Home(HomeMessage::FetchedCollection {
                     collection: Box::new(collection),
+                    itriggers,
+                    dtriggers,
                     movies,
                     shows,
                     seasons,
@@ -3038,186 +4134,6 @@ pub fn view_unicode(view: CollectionView) -> char {
     }
 }
 
-fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
-    let width = 550;
-    let height = 550;
-    let radius = 5.0;
-    let padding = Padding::from([6, 6]);
-
-    let icon_height = 40.0;
-    let icon_width = 40.0;
-
-    fn icon_btn<'a>(
-        content: impl Into<Element<'a, HomeMessage>>,
-        selected: bool,
-        message: ConfigMessage,
-        label: &'a str,
-    ) -> Element<'a, HomeMessage> {
-        let radius = 5.0;
-        tooltip(
-            button(content)
-                .padding([0, 0])
-                .on_press(HomeMessage::CollectionConfig(message))
-                .style(move |theme, status| {
-                    let default = if selected {
-                        styles::button::weak_primary(theme, status)
-                    } else {
-                        styles::button::subtle(theme, status)
-                    };
-                    let border = default.border.rounded(radius);
-
-                    button::Style { border, ..default }
-                }),
-            label,
-            tp::Position::Top,
-        )
-        .into()
-    }
-
-    let name = {
-        let label = bold("Name");
-
-        let value = config.name.as_str();
-        let is_empty = config.empty_name;
-
-        let input = text_input("", value)
-            .id(config.name_input.clone())
-            .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
-            .font(regular_font())
-            .padding(padding)
-            .style(move |theme: &Theme, status| {
-                let error = theme.extended_palette().danger.strong.color;
-                let default = text_input::default(theme, status);
-                let border = default.border.rounded(radius);
-                let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {
-                    border.color(error)
-                } else {
-                    border
-                };
-
-                text_input::Style { border, ..default }
-            })
-            .width(Length::Fill);
-
-        column!(label, input).spacing(2)
-    };
-
-    let description = {
-        let label = bold("Description");
-
-        let content = &config.description;
-        let editor = text_editor(content)
-            .on_action(move |action| {
-                HomeMessage::CollectionConfig(ConfigMessage::Description(action))
-            })
-            .font(regular_font())
-            .padding(padding)
-            .style(move |theme, status| {
-                let default = text_editor::default(theme, status);
-                let border = default.border.rounded(radius);
-
-                text_editor::Style { border, ..default }
-            })
-            .height(height as f32 * 0.2);
-
-        column!(label, editor).spacing(2)
-    };
-
-    let view = {
-        let selected = config.view;
-
-        let label = bold("Visibility");
-
-        let views = [
-            CollectionView::Pinned,
-            CollectionView::Shown,
-            CollectionView::Hidden,
-        ]
-        .into_iter()
-        .map(|view| {
-            let unicode = view_unicode(view);
-
-            let content = center(icon(unicode).size(P));
-            let label = match view {
-                CollectionView::Shown => "Shown",
-                CollectionView::Pinned => "Pinned",
-                CollectionView::Hidden => "Hidden",
-            };
-
-            icon_btn(content, view == selected, ConfigMessage::View(view), label)
-        });
-
-        let views = grid(views)
-            .spacing(16)
-            .fluid(icon_width)
-            .height(grid::aspect_ratio(icon_width, icon_height));
-
-        let views = container(views)
-            .padding(padding)
-            .style(move |theme: &Theme| {
-                let color = theme.extended_palette().secondary.weak.color;
-                let default = styles::container::transparent(theme);
-                let border = default.border.rounded(radius).color(color).width(1.5);
-
-                container::Style { border, ..default }
-            });
-
-        column!(label, views).spacing(2)
-    };
-
-    let icons = {
-        let selected = config.icon;
-
-        let label = bold("Icon");
-
-        let icons = Icon::all().into_iter().map(|value| {
-            let content = center(icon(value.unicode()).size(P));
-
-            icon_btn(
-                content,
-                value == selected,
-                ConfigMessage::Icon(value),
-                value.label(),
-            )
-        });
-
-        let icons = grid(icons)
-            .spacing(16)
-            .fluid(icon_width)
-            .height(grid::aspect_ratio(icon_width, icon_height));
-
-        let icons = container(icons)
-            .padding(padding)
-            .style(move |theme: &Theme| {
-                let color = theme.extended_palette().secondary.weak.color;
-                let default = styles::container::transparent(theme);
-                let border = default.border.rounded(radius).color(color).width(1.5);
-
-                container::Style { border, ..default }
-            });
-
-        column!(label, icons).spacing(2)
-    };
-
-    let actions = {
-        let save = button(medium("Save"))
-            .on_press(HomeMessage::CollectionConfig(ConfigMessage::Save))
-            .style(styles::button::primary);
-
-        let cancel = button(medium("Cancel"))
-            .on_press(HomeMessage::CloseView)
-            .style(styles::button::secondary);
-
-        column!(row!(save, cancel).spacing(80))
-            .align_x(Horizontal::Center)
-            .width(Length::Fill)
-    };
-
-    let content = column!(name, description, view, icons, space::vertical(), actions).spacing(16);
-
-    modal_container(content).width(width).height(height).into()
-}
-
 fn fetch_kind(kind: PageKind) -> FetchId {
     match kind {
         PageKind::Home => FetchId::Recents,
@@ -3232,70 +4148,6 @@ fn fetch_kind(kind: PageKind) -> FetchId {
     }
 }
 
-fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
-    state: &'a SearchState,
-    primary: F,
-    theme: &Theme,
-    set_play: bool,
-) -> Element<'a, HomeMessage> {
-    let items = state.items.iter().map(|item| {
-        item.view(
-            theme,
-            HomeMessage::Play,
-            primary.clone(),
-            |_| HomeMessage::None,
-            set_play,
-        )
-    });
-
-    let input = {
-        let filter: Element<'_, HomeMessage> = match state.filter {
-            Some(filter) => {
-                let content = row!(medium(filter.to_str()), icon(CANCEL))
-                    .align_y(Vertical::Center)
-                    .spacing(4.0);
-
-                button(content)
-                    .on_press(HomeMessage::SearchMessage(SearchMessage::ClearFilter))
-                    .style(|theme, status| {
-                        let default = styles::button::text_primary(theme, status);
-                        let border = default.border.rounded(5);
-
-                        button::Style { border, ..default }
-                    })
-                    .into()
-            }
-            None => empty(),
-        };
-
-        let size = H6;
-        let icon = text_input::Icon {
-            font: icons::FONT,
-            code_point: icons::SEARCH,
-            side: text_input::Side::Right,
-            size: Some(size.into()),
-            spacing: 5.0,
-        };
-        let input = text_input("Search Media", &state.search)
-            .id(state.text_input.clone())
-            .size(size)
-            .icon(icon)
-            .font(regular_font())
-            .on_input(|search| HomeMessage::SearchMessage(SearchMessage::Search(search)))
-            .on_submit(HomeMessage::SearchMessage(SearchMessage::Load));
-
-        row!(filter, input).spacing(10.0).align_y(Vertical::Center)
-    };
-
-    let content = column!(input).extend(items).spacing(16.0);
-
-    modal_container(content)
-        .padding([8, 8])
-        .max_width(550)
-        .height(Length::Shrink)
-        .into()
-}
-
 fn sort_collections(collections: &mut [SimpleCollection]) {
     collections.sort_by(|x, y| {
         x.view.cmp(&y.view).then(alphanumeric_sort::compare_str(
@@ -3303,268 +4155,4 @@ fn sort_collections(collections: &mut [SimpleCollection]) {
             y.name.to_lowercase(),
         ))
     });
-}
-
-fn draw_collection_add<'a>(
-    state: &'a CollectionAddState,
-    collections: impl Iterator<Item = &'a SimpleCollection>,
-    is_empty: bool,
-) -> Element<'a, HomeMessage> {
-    let title = h6("Collections");
-
-    fn btn(collection: &SimpleCollection, selected: bool) -> Element<'_, HomeMessage> {
-        let size = P;
-        let unicode = Icon::new(collection.icon).unicode();
-        let icon = icons::icon(unicode).size(size);
-        let text = container(regular(&collection.name))
-            .max_height(48.0)
-            .max_width(275);
-        let check = checkbox(selected).on_toggle(|value| {
-            HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(!value, collection.id))
-        });
-
-        button(
-            row!(icon, text, space::horizontal(), check)
-                .align_y(Vertical::Center)
-                .width(Length::Fill)
-                .spacing(8.0),
-        )
-        .padding([8, 12])
-        .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(
-            selected,
-            collection.id,
-        )))
-        .style(move |theme, status| {
-            let default = if selected {
-                styles::button::subtle(theme, status)
-            } else {
-                styles::button::subtlest(theme, status)
-            };
-
-            let border = default.border.rounded(5.0);
-
-            button::Style { border, ..default }
-        })
-        .into()
-    }
-
-    let collections = column(
-        collections.map(|collection| btn(collection, state.selected.contains(&collection.id))),
-    )
-    .spacing(8.0);
-
-    let collections = scrollable(collections).spacing(16.0);
-
-    let collections = container(collections)
-        .padding(if is_empty { [0, 0] } else { [6, 8] })
-        .style(|theme: &Theme| {
-            let color = theme.extended_palette().secondary.strong.color;
-            let default = styles::container::transparent(theme);
-            let border = default.border.rounded(5).color(color).width(1.5);
-
-            container::Style { border, ..default }
-        });
-
-    let new = button(
-        row!(icons::icon(icons::ADD).size(H7), sized_bold("New", H7))
-            .align_y(Vertical::Center)
-            .spacing(8),
-    )
-    .padding([2, 4])
-    .on_press(HomeMessage::NewCollection)
-    .style(styles::button::text_primary);
-
-    let collections = column!(new, collections)
-        .spacing(5.0)
-        .align_x(Horizontal::Right);
-
-    let actions = {
-        let save = button(medium("Save"))
-            .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Save))
-            .style(styles::button::primary);
-
-        let cancel = button(medium("Cancel"))
-            .on_press(HomeMessage::CloseView)
-            .style(styles::button::secondary);
-
-        row!(save, cancel).spacing(100)
-    };
-
-    let content = column!(title, collections, actions)
-        .spacing(24)
-        .align_x(Horizontal::Center);
-
-    modal_container(content).max_width(400).into()
-}
-
-fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
-    let title = h4("Rating");
-
-    let size = H6;
-
-    let value: Element<'_, HomeMessage> = {
-        let size = H6;
-        let extra = sized_regular("/5", H7);
-
-        let value: Element<'_, HomeMessage> = match state {
-            Rating::Value(value) => {
-                let rating = (value * 100.0).round() / 100.0;
-                mouse_area(h6(format!("{rating:.2}")))
-                    .interaction(mouse::Interaction::Text)
-                    .on_press(HomeMessage::Rating(RatingMessage::Type))
-                    .into()
-            }
-            Rating::Input { id, input } => text_input("", input)
-                .id(id.clone())
-                .size(size)
-                .font(regular_font())
-                .width(48.0)
-                .on_submit(HomeMessage::Rating(RatingMessage::Submit))
-                .on_input(|input| HomeMessage::Rating(RatingMessage::Input(input)))
-                .into(),
-        };
-
-        row!(value, extra)
-            .spacing(2.0)
-            .align_y(Vertical::Center)
-            .into()
-    };
-
-    let ratings = {
-        let rating = match state {
-            Rating::Value(value) => *value,
-            Rating::Input { input, .. } => input.parse::<f32>().unwrap_or_default().clamp(0.0, 5.0),
-        };
-
-        let stars = (rating.trunc() as u8).clamp(0, 5);
-        let rem = 5 - stars;
-        let frac = rating.fract() >= 0.5;
-        let unstars = if frac { rem.saturating_sub(1) } else { rem };
-        let frac = rem - unstars;
-
-        let color = |theme: &Theme| -> text::Style {
-            let color = theme.extended_palette().primary.strong.color;
-            text::Style { color: Some(color) }
-        };
-
-        let stars = (0..stars).map(|_| Element::from(icon(STAR).size(size).style(color)));
-        let frac = (0..frac).map(|_| Element::from(icon(HALF_STAR).size(size).style(color)));
-        let unstars = (0..unstars).map(|_| Element::from(icon(UNSTAR).size(size).style(color)));
-
-        let stars = stars
-            .chain(frac)
-            .chain(unstars)
-            .enumerate()
-            .map(|(idx, elem)| {
-                Element::from(
-                    button(elem)
-                        .on_press(HomeMessage::Rating(RatingMessage::Star((idx + 1) as u8)))
-                        .padding(0)
-                        .style(styles::button::text),
-                )
-            });
-
-        row(stars).spacing(6.0).align_y(Vertical::Center)
-    };
-
-    let content = column!(title, value, ratings)
-        .spacing(16.0)
-        .align_x(Horizontal::Center);
-
-    modal_container(content).max_width(400).into()
-}
-
-fn draw_rename<'a>(
-    input: &widget::Id,
-    placeholder: &str,
-    value: &str,
-    is_empty: bool,
-) -> Element<'a, HomeMessage> {
-    let input = text_input(placeholder, value)
-        .on_input(|new| HomeMessage::Rename(RenameMessage::Input(new)))
-        .on_submit(HomeMessage::Rename(RenameMessage::Submit))
-        .font(regular_font())
-        .id(input.clone())
-        .size(H7)
-        .width(250)
-        .style(move |theme: &Theme, status| {
-            let error = theme.extended_palette().danger.strong.color;
-            let default = text_input::default(theme, status);
-            let border = default.border.rounded(5);
-            let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {
-                border.color(error)
-            } else {
-                border
-            };
-
-            text_input::Style { border, ..default }
-        });
-
-    modal_container(input).padding([6, 8]).into()
-}
-
-fn draw_synopsis<'a>(
-    editor: &widget::Id,
-    content: &'a text_editor::Content,
-) -> Element<'a, HomeMessage> {
-    let content = text_editor(content)
-        .id(editor.clone())
-        .font(regular_font())
-        .width(575)
-        .on_action(|action| HomeMessage::Synopsis(SynopsisMessage::Action(action)))
-        .key_binding(|press| {
-            use iced::keyboard::{Key, key::Named};
-            use text_editor::Binding;
-
-            match press.key {
-                Key::Named(Named::Enter) if press.modifiers.shift() => Some(Binding::Custom(
-                    HomeMessage::Synopsis(SynopsisMessage::Submit),
-                )),
-                _ => Binding::from_key_press(press),
-            }
-        })
-        .size(P);
-
-    modal_container(content).padding([6, 6]).into()
-}
-
-fn draw_tmdb<'a>(input: &widget::Id, value: &str, top_level: bool) -> Element<'a, HomeMessage> {
-    let input = text_input(
-        if top_level {
-            "TMDB ID"
-        } else {
-            "Season/Episode number"
-        },
-        value,
-    )
-    .on_input(|new| HomeMessage::TMDBId(TMDBMessage::Input(new)))
-    .on_submit(HomeMessage::TMDBId(TMDBMessage::Submit))
-    .font(regular_font())
-    .id(input.clone())
-    .size(H7)
-    .width(250);
-
-    modal_container(input).padding([6, 8]).into()
-}
-
-fn draw_delete_confirm<'a>(name: &'a str, message: HomeMessage) -> Element<'a, HomeMessage> {
-    let title = h6("Confirm Deletion");
-
-    let body = sized_medium(format!("Are you sure you want to delete \"{name}\""), P);
-
-    let delete = button(medium("Delete"))
-        .on_press(message)
-        .style(styles::button::danger);
-
-    let cancel = button(medium("Cancel"))
-        .on_press(HomeMessage::CloseView)
-        .style(styles::button::primary);
-
-    let actions = row!(cancel, delete).spacing(80.0).align_y(Vertical::Center);
-
-    let content = column!(title, body, actions)
-        .spacing(40)
-        .align_x(Horizontal::Center);
-
-    modal_container(content).max_width(500).into()
 }

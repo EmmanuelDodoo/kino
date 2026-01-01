@@ -1,0 +1,1431 @@
+use super::{
+    CollectionAddMessage, CollectionAddState, CollectionConfig, ConfigMessage, HomeMessage,
+    LogicMessage, Rating, RatingMessage, RenameMessage, SearchMessage, SearchState,
+    SimpleCollection, SynopsisMessage, TMDBMessage, TriggerMessage, shared::Icon, view_unicode,
+};
+use crate::models::collection::{
+    CollectionView, ItemId,
+    triggers::{self, Comparison, DeleteTrigger, InsertTrigger},
+};
+use crate::utils::{
+    cancel_btn, empty, icons, icons::*, modal_container, picklist_handle, save_btn, styles,
+    tooltip, typo::*,
+};
+use crate::widgets::toggler;
+use iced::{
+    Element, Length, Padding, Theme,
+    alignment::{Horizontal, Vertical},
+    mouse,
+    widget::{
+        self, button, center, checkbox, column, container, grid, mouse_area, pick_list, row, rule,
+        scrollable, space, text, text_editor, text_input, tooltip as tp,
+    },
+};
+
+pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
+    let width = 550;
+    let height = 550;
+    let radius = 5.0;
+    let padding = Padding::from([6, 6]);
+
+    let icon_height = 40.0;
+    let icon_width = 40.0;
+
+    fn icon_btn<'a>(
+        content: impl Into<Element<'a, HomeMessage>>,
+        selected: bool,
+        message: ConfigMessage,
+        label: &'a str,
+    ) -> Element<'a, HomeMessage> {
+        let radius = 5.0;
+        tooltip(
+            button(content)
+                .padding([0, 0])
+                .on_press(HomeMessage::CollectionConfig(message))
+                .style(move |theme, status| {
+                    let default = if selected {
+                        styles::button::weak_primary(theme, status)
+                    } else {
+                        styles::button::subtle(theme, status)
+                    };
+                    let border = default.border.rounded(radius);
+
+                    button::Style { border, ..default }
+                }),
+            label,
+            tp::Position::Top,
+        )
+        .into()
+    }
+
+    let name = {
+        let label = bold("Name");
+
+        let value = config.name.as_str();
+        let is_empty = config.empty_name;
+
+        let input = text_input("", value)
+            .id(config.name_input.clone())
+            .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
+            .font(regular_font())
+            .padding(padding)
+            .style(move |theme: &Theme, status| {
+                let error = theme.extended_palette().danger.strong.color;
+                let default = text_input::default(theme, status);
+                let border = default.border.rounded(radius);
+                let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {
+                    border.color(error)
+                } else {
+                    border
+                };
+
+                text_input::Style { border, ..default }
+            })
+            .width(Length::Fill);
+
+        column!(label, input).spacing(2)
+    };
+
+    let description = {
+        let label = bold("Description");
+
+        let content = &config.description;
+        let editor = text_editor(content)
+            .on_action(move |action| {
+                HomeMessage::CollectionConfig(ConfigMessage::Description(action))
+            })
+            .font(regular_font())
+            .padding(padding)
+            .style(move |theme, status| {
+                let default = text_editor::default(theme, status);
+                let border = default.border.rounded(radius);
+
+                text_editor::Style { border, ..default }
+            })
+            .height(height as f32 * 0.2);
+
+        column!(label, editor).spacing(2)
+    };
+
+    let view = {
+        let selected = config.view;
+
+        let label = bold("Visibility");
+
+        let views = [
+            CollectionView::Pinned,
+            CollectionView::Shown,
+            CollectionView::Hidden,
+        ]
+        .into_iter()
+        .map(|view| {
+            let unicode = view_unicode(view);
+
+            let content = center(icon(unicode).size(P));
+            let label = match view {
+                CollectionView::Shown => "Shown",
+                CollectionView::Pinned => "Pinned",
+                CollectionView::Hidden => "Hidden",
+            };
+
+            icon_btn(content, view == selected, ConfigMessage::View(view), label)
+        });
+
+        let views = grid(views)
+            .spacing(16)
+            .fluid(icon_width)
+            .height(grid::aspect_ratio(icon_width, icon_height));
+
+        let views = container(views)
+            .padding(padding)
+            .style(move |theme: &Theme| {
+                let color = theme.extended_palette().secondary.weak.color;
+                let default = styles::container::transparent(theme);
+                let border = default.border.rounded(radius).color(color).width(1.5);
+
+                container::Style { border, ..default }
+            });
+
+        column!(label, views).spacing(2)
+    };
+
+    let icons = {
+        let selected = config.icon;
+
+        let label = bold("Icon");
+
+        let icons = Icon::all().into_iter().map(|value| {
+            let content = center(icon(value.unicode()).size(P));
+
+            icon_btn(
+                content,
+                value == selected,
+                ConfigMessage::Icon(value),
+                value.label(),
+            )
+        });
+
+        let icons = grid(icons)
+            .spacing(16)
+            .fluid(icon_width)
+            .height(grid::aspect_ratio(icon_width, icon_height));
+
+        let icons = container(icons)
+            .padding(padding)
+            .style(move |theme: &Theme| {
+                let color = theme.extended_palette().secondary.weak.color;
+                let default = styles::container::transparent(theme);
+                let border = default.border.rounded(radius).color(color).width(1.5);
+
+                container::Style { border, ..default }
+            });
+
+        column!(label, icons).spacing(2)
+    };
+
+    let actions = {
+        let save = save_btn().on_press(HomeMessage::CollectionConfig(ConfigMessage::Save));
+
+        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+
+        column!(row!(save, cancel).spacing(80))
+            .align_x(Horizontal::Center)
+            .width(Length::Fill)
+    };
+
+    let content = column!(name, description, view, icons, space::vertical(), actions).spacing(16);
+
+    modal_container(content).width(width).height(height).into()
+}
+
+pub fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
+    state: &'a SearchState,
+    primary: F,
+    theme: &Theme,
+    set_play: bool,
+) -> Element<'a, HomeMessage> {
+    let items = state.items.iter().map(|item| {
+        item.view(
+            theme,
+            HomeMessage::Play,
+            primary.clone(),
+            |_| HomeMessage::None,
+            set_play,
+        )
+    });
+
+    let input = {
+        let filter: Element<'_, HomeMessage> = match state.filter {
+            Some(filter) => {
+                let content = row!(medium(filter.to_str()), icon(CANCEL))
+                    .align_y(Vertical::Center)
+                    .spacing(4.0);
+
+                button(content)
+                    .on_press(HomeMessage::SearchMessage(SearchMessage::ClearFilter))
+                    .style(|theme, status| {
+                        let default = styles::button::text_primary(theme, status);
+                        let border = default.border.rounded(5);
+
+                        button::Style { border, ..default }
+                    })
+                    .into()
+            }
+            None => empty(),
+        };
+
+        let size = H6;
+        let icon = text_input::Icon {
+            font: icons::FONT,
+            code_point: icons::SEARCH,
+            side: text_input::Side::Right,
+            size: Some(size.into()),
+            spacing: 5.0,
+        };
+        let input = text_input("Search Media", &state.search)
+            .id(state.text_input.clone())
+            .size(size)
+            .icon(icon)
+            .font(regular_font())
+            .on_input(|search| HomeMessage::SearchMessage(SearchMessage::Search(search)))
+            .on_submit(HomeMessage::SearchMessage(SearchMessage::Load));
+
+        row!(filter, input).spacing(10.0).align_y(Vertical::Center)
+    };
+
+    let content = column!(input).extend(items).spacing(16.0);
+
+    modal_container(content)
+        .padding([8, 8])
+        .max_width(550)
+        .height(Length::Shrink)
+        .into()
+}
+
+pub fn draw_collection_add<'a>(
+    state: &'a CollectionAddState,
+    collections: impl Iterator<Item = &'a SimpleCollection>,
+    is_empty: bool,
+) -> Element<'a, HomeMessage> {
+    let title = h6("Collections");
+
+    fn btn(collection: &SimpleCollection, selected: bool) -> Element<'_, HomeMessage> {
+        let size = P;
+        let unicode = Icon::new(collection.icon).unicode();
+        let icon = icons::icon(unicode).size(size);
+        let text = container(regular(&collection.name))
+            .max_height(48.0)
+            .max_width(275);
+        let check = checkbox(selected).on_toggle(|value| {
+            HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(!value, collection.id))
+        });
+
+        button(
+            row!(icon, text, space::horizontal(), check)
+                .align_y(Vertical::Center)
+                .width(Length::Fill)
+                .spacing(8.0),
+        )
+        .padding([8, 12])
+        .on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(
+            selected,
+            collection.id,
+        )))
+        .style(move |theme, status| {
+            let default = if selected {
+                styles::button::subtle(theme, status)
+            } else {
+                styles::button::subtlest(theme, status)
+            };
+
+            let border = default.border.rounded(5.0);
+
+            button::Style { border, ..default }
+        })
+        .into()
+    }
+
+    let collections = column(
+        collections.map(|collection| btn(collection, state.selected.contains(&collection.id))),
+    )
+    .spacing(8.0);
+
+    let collections = scrollable(collections).spacing(16.0);
+
+    let collections = container(collections)
+        .padding(if is_empty { [0, 0] } else { [6, 8] })
+        .style(|theme: &Theme| {
+            let color = theme.extended_palette().secondary.strong.color;
+            let default = styles::container::transparent(theme);
+            let border = default.border.rounded(5).color(color).width(1.5);
+
+            container::Style { border, ..default }
+        });
+
+    let new = button(
+        row!(icons::icon(icons::ADD).size(H7), sized_bold("New", H7))
+            .align_y(Vertical::Center)
+            .spacing(8),
+    )
+    .padding([2, 4])
+    .on_press(HomeMessage::NewCollection)
+    .style(styles::button::text_primary);
+
+    let collections = column!(new, collections)
+        .spacing(5.0)
+        .align_x(Horizontal::Right);
+
+    let actions = {
+        let save = save_btn().on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Save));
+
+        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+
+        row!(save, cancel).spacing(100)
+    };
+
+    let content = column!(title, collections, actions)
+        .spacing(24)
+        .align_x(Horizontal::Center);
+
+    modal_container(content).max_width(400).into()
+}
+
+pub fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
+    let title = h4("Rating");
+
+    let size = H6;
+
+    let value: Element<'_, HomeMessage> = {
+        let size = H6;
+        let extra = sized_regular("/5", H7);
+
+        let value: Element<'_, HomeMessage> = match state {
+            Rating::Value(value) => {
+                let rating = (value * 100.0).round() / 100.0;
+                mouse_area(h6(format!("{rating:.2}")))
+                    .interaction(mouse::Interaction::Text)
+                    .on_press(HomeMessage::Rating(RatingMessage::Type))
+                    .into()
+            }
+            Rating::Input { id, input } => text_input("", input)
+                .id(id.clone())
+                .size(size)
+                .font(regular_font())
+                .width(48.0)
+                .on_submit(HomeMessage::Rating(RatingMessage::Submit))
+                .on_input(|input| HomeMessage::Rating(RatingMessage::Input(input)))
+                .into(),
+        };
+
+        row!(value, extra)
+            .spacing(2.0)
+            .align_y(Vertical::Center)
+            .into()
+    };
+
+    let ratings = {
+        let rating = match state {
+            Rating::Value(value) => *value,
+            Rating::Input { input, .. } => input.parse::<f32>().unwrap_or_default().clamp(0.0, 5.0),
+        };
+
+        let stars = (rating.trunc() as u8).clamp(0, 5);
+        let rem = 5 - stars;
+        let frac = rating.fract() >= 0.5;
+        let unstars = if frac { rem.saturating_sub(1) } else { rem };
+        let frac = rem - unstars;
+
+        let color = |theme: &Theme| -> text::Style {
+            let color = theme.extended_palette().primary.strong.color;
+            text::Style { color: Some(color) }
+        };
+
+        let stars = (0..stars).map(|_| Element::from(icon(STAR).size(size).style(color)));
+        let frac = (0..frac).map(|_| Element::from(icon(HALF_STAR).size(size).style(color)));
+        let unstars = (0..unstars).map(|_| Element::from(icon(UNSTAR).size(size).style(color)));
+
+        let stars = stars
+            .chain(frac)
+            .chain(unstars)
+            .enumerate()
+            .map(|(idx, elem)| {
+                Element::from(
+                    button(elem)
+                        .on_press(HomeMessage::Rating(RatingMessage::Star((idx + 1) as u8)))
+                        .padding(0)
+                        .style(styles::button::text),
+                )
+            });
+
+        row(stars).spacing(6.0).align_y(Vertical::Center)
+    };
+
+    let content = column!(title, value, ratings)
+        .spacing(16.0)
+        .align_x(Horizontal::Center);
+
+    modal_container(content).max_width(400).into()
+}
+
+pub fn draw_rename<'a>(
+    input: &widget::Id,
+    placeholder: &str,
+    value: &str,
+    is_empty: bool,
+) -> Element<'a, HomeMessage> {
+    let input = text_input(placeholder, value)
+        .on_input(|new| HomeMessage::Rename(RenameMessage::Input(new)))
+        .on_submit(HomeMessage::Rename(RenameMessage::Submit))
+        .font(regular_font())
+        .id(input.clone())
+        .size(H7)
+        .width(250)
+        .style(move |theme: &Theme, status| {
+            let error = theme.extended_palette().danger.strong.color;
+            let default = text_input::default(theme, status);
+            let border = default.border.rounded(5);
+            let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {
+                border.color(error)
+            } else {
+                border
+            };
+
+            text_input::Style { border, ..default }
+        });
+
+    modal_container(input).padding([6, 8]).into()
+}
+
+pub fn draw_synopsis<'a>(
+    editor: &widget::Id,
+    content: &'a text_editor::Content,
+) -> Element<'a, HomeMessage> {
+    let content = text_editor(content)
+        .id(editor.clone())
+        .font(regular_font())
+        .width(575)
+        .on_action(|action| HomeMessage::Synopsis(SynopsisMessage::Action(action)))
+        .key_binding(|press| {
+            use iced::keyboard::{Key, key::Named};
+            use text_editor::Binding;
+
+            match press.key {
+                Key::Named(Named::Enter) if press.modifiers.shift() => Some(Binding::Custom(
+                    HomeMessage::Synopsis(SynopsisMessage::Submit),
+                )),
+                _ => Binding::from_key_press(press),
+            }
+        })
+        .size(P);
+
+    modal_container(content).padding([6, 6]).into()
+}
+
+pub fn draw_tmdb<'a>(input: &widget::Id, value: &str, top_level: bool) -> Element<'a, HomeMessage> {
+    let input = text_input(
+        if top_level {
+            "TMDB ID"
+        } else {
+            "Season/Episode number"
+        },
+        value,
+    )
+    .on_input(|new| HomeMessage::TMDBId(TMDBMessage::Input(new)))
+    .on_submit(HomeMessage::TMDBId(TMDBMessage::Submit))
+    .font(regular_font())
+    .id(input.clone())
+    .size(H7)
+    .width(250);
+
+    modal_container(input).padding([6, 8]).into()
+}
+
+pub fn draw_delete_confirm<'a>(name: &'a str, message: HomeMessage) -> Element<'a, HomeMessage> {
+    let title = h6("Confirm Deletion");
+
+    let body = sized_medium(format!("Are you sure you want to delete \"{name}\""), P);
+
+    let delete = button(medium("Delete"))
+        .on_press(message)
+        .style(styles::button::danger);
+
+    let cancel = button(medium("Cancel"))
+        .on_press(HomeMessage::CloseView)
+        .style(styles::button::primary);
+
+    let actions = row!(cancel, delete).spacing(80.0).align_y(Vertical::Center);
+
+    let content = column!(title, body, actions)
+        .spacing(40)
+        .align_x(Horizontal::Center);
+
+    modal_container(content).max_width(500).into()
+}
+
+pub fn draw_collection_triggers<'a>(
+    view_inserts: bool,
+    itriggers: &'a [(bool, InsertTrigger, bool, String, String)],
+    dtriggers: &'a [(bool, DeleteTrigger, bool, String, String)],
+) -> Element<'a, HomeMessage> {
+    let title = h6("Collection Rules");
+    let text_size = P;
+    let input_padding = [3.5, 5.0];
+
+    fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+        sized_medium(label, P)
+    }
+
+    let content: Element<'_, TriggerMessage> = {
+        let tabs = {
+            let pop = {
+                let text = "Auto-Populate";
+                let text = if view_inserts {
+                    bold(text)
+                } else {
+                    regular(text)
+                };
+
+                column!(
+                    button(text)
+                        .on_press(TriggerMessage::Tab)
+                        .style(styles::button::text),
+                    container(iced::widget::Space::new().width(88).height(2)).style(
+                        if view_inserts {
+                            styles::container::pb
+                        } else {
+                            styles::container::transparent
+                        }
+                    ),
+                )
+                .align_x(Horizontal::Center)
+                .padding([3, 6])
+                .spacing(0.0)
+            };
+
+            let remove = {
+                let text = "Auto-Remove";
+                let text = if !view_inserts {
+                    bold(text)
+                } else {
+                    regular(text)
+                };
+
+                column!(
+                    button(text)
+                        .on_press(TriggerMessage::Tab)
+                        .style(styles::button::text),
+                    container(iced::widget::Space::new().width(88).height(2)).style(
+                        if !view_inserts {
+                            styles::container::pb
+                        } else {
+                            styles::container::transparent
+                        }
+                    ),
+                )
+                .align_x(Horizontal::Center)
+                .padding([3, 6])
+                .spacing(0.0)
+            };
+
+            row!(pop, remove).spacing(200)
+        };
+
+        let new = {
+            let new = {
+                let icon = icons::icon(icons::ADD).size(text_size * RATIO);
+                let label = label_maker("New");
+
+                row!(icon, label).spacing(8.0).align_y(Vertical::Center)
+            };
+
+            row!(
+                space::horizontal(),
+                button(new)
+                    .on_press(if view_inserts {
+                        TriggerMessage::AddInsert
+                    } else {
+                        TriggerMessage::AddDelete
+                    })
+                    .style(styles::button::text_primary)
+            )
+        };
+
+        let triggers = if view_inserts {
+            let triggers = itriggers.iter().map(|(open, trigger, roe, last, release)| {
+                draw_insert_trigger(open, trigger, roe, last, release, text_size, input_padding)
+            });
+
+            scrollable(column(triggers).spacing(12)).spacing(6)
+        } else {
+            let triggers = dtriggers.iter().map(|(open, trigger, roe, last, release)| {
+                draw_delete_trigger(open, trigger, roe, last, release, text_size, input_padding)
+            });
+
+            scrollable(column(triggers).spacing(12)).spacing(6)
+        };
+
+        column!(tabs, new, triggers)
+            .height(Length::Fill)
+            .spacing(12)
+            .align_x(Horizontal::Center)
+            .into()
+    };
+
+    let actions = {
+        let save = save_btn().on_press(HomeMessage::Trigger(TriggerMessage::Save));
+
+        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+
+        row!(save, cancel).spacing(100)
+    };
+
+    let content = column!(title, content.map(HomeMessage::Trigger), actions)
+        .spacing(24)
+        .align_x(Horizontal::Center);
+
+    let content = modal_container(content)
+        .padding([16, 16])
+        .width(Length::FillPortion(3))
+        .height(Length::FillPortion(4));
+
+    column!(
+        space::vertical(),
+        row!(
+            space::horizontal().width(Length::FillPortion(2)),
+            content,
+            space::horizontal().width(Length::FillPortion(2))
+        ),
+        space::vertical()
+    )
+    .into()
+}
+
+pub fn draw_insert_trigger<'a>(
+    open: &bool,
+    trigger: &'a InsertTrigger,
+    roe: &bool,
+    last: &'a String,
+    release: &'a String,
+    text_size: f32,
+    input_padding: [f32; 2],
+) -> Element<'a, TriggerMessage> {
+    let id = trigger.id;
+    let width = 200;
+    let padding = [10, 12];
+
+    let title = {
+        let size = text_size;
+
+        let kind = regular(trigger.media.to_string()).size(size / RATIO);
+
+        let kind = container(kind).padding([1, 5]).style(|theme| {
+            let default = styles::container::text_ps(theme);
+            let border = default
+                .border
+                .rounded(3.0)
+                .color(default.text_color.unwrap_or_default())
+                .width(0.75);
+
+            container::Style { border, ..default }
+        });
+
+        let name = sized_medium(&trigger.name, size);
+
+        let expand = if *open { CHEV_DOWN } else { CHEV_LEFT };
+        let expand = icons::icon(expand).size(size);
+
+        let name = row!(expand, kind, name)
+            .width(Length::Fill)
+            .align_y(Vertical::Center)
+            .spacing(6);
+
+        let duplicate = button(icons::icon(COPY).size(size))
+            .padding(0)
+            .style(styles::button::text_primary)
+            .on_press(TriggerMessage::DuplicateInsert(id));
+
+        let remove = button(icons::icon(DELETE).size(size))
+            .padding(0)
+            .style(styles::button::text_danger)
+            .on_press(TriggerMessage::RemoveInsert(id));
+
+        button(
+            row!(name, duplicate, remove,)
+                .spacing(8)
+                .align_y(Vertical::Center),
+        )
+        .padding(0)
+        .style(styles::button::text)
+        .on_press(TriggerMessage::ToggleExpandInsert(id))
+    };
+
+    if !*open {
+        let title = container(title)
+            .style(styles::container::bw)
+            .padding(padding);
+        return title.into();
+    }
+
+    let name = {
+        let name = sized_medium("Rule name", text_size);
+        let input = text_input("", &trigger.name)
+            .size(text_size)
+            .on_input(move |name| TriggerMessage::NameInsert(id, name))
+            .font(regular_font())
+            .padding(input_padding)
+            .width(Length::FillPortion(2));
+
+        row!(name, space::horizontal().width(Length::Fill), input).align_y(Vertical::Center)
+    };
+
+    let media = {
+        let label = sized_medium("Target Media", text_size);
+
+        let options = if trigger.logic.tags.is_none() {
+            triggers::Media::VARIANTS
+        } else {
+            triggers::Media::TAGS
+        };
+
+        let pick = pick_list(options, Some(trigger.media), move |media| {
+            TriggerMessage::MediaInsert(id, media)
+        })
+        .width(88.0)
+        .padding([2, 5])
+        .handle(picklist_handle(text_size))
+        .font(regular_font())
+        .text_size(text_size);
+
+        row!(label, space::horizontal(), pick).align_y(Vertical::Center)
+    };
+
+    let roe = {
+        let label = sized_medium("Run on existing media", text_size);
+        let label = button(label)
+            .padding(0)
+            .style(styles::button::text)
+            .on_press(TriggerMessage::ToggleROEInsert(id));
+        let toggle = toggler(*roe).on_toggle(move |checked| TriggerMessage::ROEInsert(id, checked));
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
+    let generate = {
+        let label = sized_medium("Generate Delete Rule", text_size / RATIO);
+
+        button(label)
+            .style(styles::button::subtlest)
+            .on_press(TriggerMessage::GenerateDelete(id))
+    };
+
+    let cond: Element<'_, LogicMessage> = {
+        let title = sized_medium("Conditions", text_size);
+        let size = text_size / RATIO;
+        let pick_padding = [2, 5];
+
+        let input = |value: &str| -> text_input::TextInput<'_, LogicMessage> {
+            text_input("", value)
+                .align_x(Horizontal::Right)
+                .size(size)
+                .font(regular_font())
+                .padding(input_padding)
+                .width(160)
+        };
+
+        let name = {
+            let label = sized_medium("Name contains", size).width(width);
+
+            let (not, name) = trigger
+                .logic
+                .name
+                .as_ref()
+                .map(|(not, name)| (*not, name.as_str()))
+                .unwrap_or((false, ""));
+            let input = input(name).on_input(LogicMessage::Name);
+
+            let not = checkbox(not)
+                .label("NOT")
+                .text_size(size)
+                .on_toggle(LogicMessage::NameComp)
+                .size(size);
+
+            row!(label, space::horizontal(), not, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let synopsis = {
+            let label = sized_medium("Overview contains", size).width(width);
+
+            let (not, synopsis) = trigger
+                .logic
+                .synopsis
+                .as_ref()
+                .map(|(not, synopsis)| (*not, synopsis.as_str()))
+                .unwrap_or((false, ""));
+            let input = input(synopsis).on_input(LogicMessage::Synopsis);
+
+            let not = checkbox(not)
+                .label("NOT")
+                .text_size(size)
+                .on_toggle(LogicMessage::SynopsisComp)
+                .size(size);
+
+            row!(label, space::horizontal(), not, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let tags = {
+            let label = sized_medium("Tags contain", size).width(width);
+
+            let (not, tags) = trigger
+                .logic
+                .tags
+                .as_ref()
+                .map(|(not, tags)| (*not, tags.as_str()))
+                .unwrap_or((false, ""));
+            let input = input(tags).on_input(LogicMessage::Tags);
+
+            let not = checkbox(not)
+                .label("NOT")
+                .text_size(size)
+                .on_toggle(LogicMessage::TagsComp)
+                .size(size);
+
+            row!(label, space::horizontal(), not, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let last = {
+            let label = sized_medium("Last watched", size).width(width);
+
+            let comp = trigger
+                .logic
+                .last_watched
+                .as_ref()
+                .map(|(comp, _)| *comp)
+                .unwrap_or_default();
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::LastComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let input = input(last).on_input(LogicMessage::Last);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let duration = {
+            let label = sized_medium("Duration", size).width(width);
+
+            let (comp, duration) = trigger
+                .logic
+                .duration
+                .as_ref()
+                .map(|(comp, duration)| (*comp, *duration))
+                .unwrap_or((Comparison::default(), 0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::DurationComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let duration = duration.to_string();
+            let input = input(&duration).on_input(LogicMessage::Duration);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let progress = {
+            let label = sized_medium("Progress", size).width(width);
+
+            let (comp, progress) = trigger
+                .logic
+                .progress
+                .as_ref()
+                .map(|(comp, progress)| (*comp, *progress))
+                .unwrap_or((Comparison::default(), 0.0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::ProgressComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let progress = format!("{progress:.2}");
+            let input = input(&progress).on_input(LogicMessage::Progress);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let watch = {
+            let label = sized_medium("Watch count", size).width(width);
+
+            let (comp, count) = trigger
+                .logic
+                .watch_count
+                .as_ref()
+                .map(|(comp, count)| (*comp, *count))
+                .unwrap_or((Comparison::default(), 0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::WatchComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let count = count.to_string();
+            let input = input(&count).on_input(LogicMessage::Watch);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let release = {
+            let label = sized_medium("Release date", size).width(width);
+
+            let comp = trigger
+                .logic
+                .release
+                .as_ref()
+                .map(|(comp, _)| *comp)
+                .unwrap_or_default();
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::ReleaseComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let input = input(release).on_input(LogicMessage::Release);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let rating = {
+            let label = sized_medium("Rating", size).width(width);
+
+            let (comp, rating) = trigger
+                .logic
+                .rating
+                .as_ref()
+                .map(|(comp, rating)| (*comp, *rating))
+                .unwrap_or((Comparison::default(), 0.0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::RatingComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let rating = format!("{rating:.2}");
+            let input = input(&rating).on_input(LogicMessage::Rating);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let comment = {
+            let label = sized_medium("Comments", size).width(width);
+
+            let (comp, count) = trigger
+                .logic
+                .comment
+                .as_ref()
+                .map(|(comp, count)| (*comp, *count))
+                .unwrap_or((Comparison::default(), 0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::CommentComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let count = count.to_string();
+            let input = input(&count).on_input(LogicMessage::Comment);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        column!(
+            title, name, synopsis, tags, last, duration, progress, watch, release, rating, comment
+        )
+        .spacing(4.0)
+        .align_x(Horizontal::Center)
+        .into()
+    };
+
+    let content = column!(
+        title,
+        rule::horizontal(1.0),
+        name,
+        media,
+        roe,
+        generate,
+        cond.map(move |lsg| TriggerMessage::LogicInsert(id, lsg))
+    )
+    .spacing(8.0)
+    .width(Length::Fill);
+
+    let content = container(content)
+        .style(styles::container::bw)
+        .padding(padding);
+    content.into()
+}
+
+pub fn draw_delete_trigger<'a>(
+    open: &bool,
+    trigger: &'a DeleteTrigger,
+    roe: &bool,
+    last: &'a String,
+    release: &'a String,
+    text_size: f32,
+    input_padding: [f32; 2],
+) -> Element<'a, TriggerMessage> {
+    let id = trigger.id;
+    let width = 200;
+    let padding = [10, 12];
+
+    let title = {
+        let size = text_size;
+
+        let kind = regular(trigger.media.to_string()).size(size / RATIO);
+        let kind = container(kind).padding([1, 5]).style(|theme| {
+            let default = styles::container::text_ps(theme);
+            let border = default
+                .border
+                .rounded(3.0)
+                .color(default.text_color.unwrap_or_default())
+                .width(0.75);
+
+            container::Style { border, ..default }
+        });
+
+        let name = sized_medium(&trigger.name, size);
+
+        let expand = if *open { CHEV_DOWN } else { CHEV_LEFT };
+        let expand = icons::icon(expand).size(size);
+
+        let name = row!(expand, kind, name)
+            .width(Length::Fill)
+            .align_y(Vertical::Center)
+            .spacing(6);
+
+        let duplicate = button(icons::icon(COPY).size(size))
+            .padding(0)
+            .style(styles::button::text_primary)
+            .on_press(TriggerMessage::DuplicateDelete(id));
+
+        let remove = button(icons::icon(DELETE).size(size))
+            .padding(0)
+            .style(styles::button::text_danger)
+            .on_press(TriggerMessage::RemoveDelete(id));
+
+        button(
+            row!(name, duplicate, remove,)
+                .spacing(8)
+                .align_y(Vertical::Center),
+        )
+        .padding(0)
+        .style(styles::button::text)
+        .on_press(TriggerMessage::ToggleExpandDelete(id))
+    };
+
+    if !*open {
+        let title = container(title)
+            .style(styles::container::bw)
+            .padding(padding);
+        return title.into();
+    }
+
+    let name = {
+        let name = sized_medium("Rule name", text_size);
+        let input = text_input("", &trigger.name)
+            .size(text_size)
+            .on_input(move |name| TriggerMessage::NameDelete(id, name))
+            .font(regular_font())
+            .padding(input_padding)
+            .width(Length::FillPortion(2));
+
+        row!(name, space::horizontal().width(Length::Fill), input).align_y(Vertical::Center)
+    };
+
+    let media = {
+        let label = sized_medium("Target Media", text_size);
+
+        let options = if trigger.logic.tags.is_none() {
+            triggers::Media::VARIANTS
+        } else {
+            triggers::Media::TAGS
+        };
+
+        let pick = pick_list(options, Some(trigger.media), move |media| {
+            TriggerMessage::MediaDelete(id, media)
+        })
+        .width(88.0)
+        .padding([2, 5])
+        .handle(picklist_handle(text_size))
+        .font(regular_font())
+        .text_size(text_size);
+
+        row!(label, space::horizontal(), pick).align_y(Vertical::Center)
+    };
+
+    let roe = {
+        let label = sized_medium("Run on existing media", text_size);
+        let label = button(label)
+            .padding(0)
+            .style(styles::button::text)
+            .on_press(TriggerMessage::ToggleROEDelete(id));
+        let toggle = toggler(*roe).on_toggle(move |checked| TriggerMessage::ROEDelete(id, checked));
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
+    let cond: Element<'_, LogicMessage> = {
+        let title = sized_medium("Conditions", text_size);
+        let size = text_size / RATIO;
+        let pick_padding = [2, 5];
+
+        let input = |value: &str| -> text_input::TextInput<'_, LogicMessage> {
+            text_input("", value)
+                .size(size)
+                .font(regular_font())
+                .padding(input_padding)
+                .align_x(Horizontal::Right)
+                .width(160)
+        };
+
+        let name = {
+            let label = sized_medium("Name contains", size).width(width);
+
+            let (not, name) = trigger
+                .logic
+                .name
+                .as_ref()
+                .map(|(not, name)| (*not, name.as_str()))
+                .unwrap_or((false, ""));
+            let input = input(name).on_input(LogicMessage::Name);
+
+            let not = checkbox(not)
+                .label("NOT")
+                .text_size(size)
+                .on_toggle(LogicMessage::NameComp)
+                .size(size);
+
+            row!(label, space::horizontal(), not, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let synopsis = {
+            let label = sized_medium("Overview contains", size).width(width);
+
+            let (not, synopsis) = trigger
+                .logic
+                .synopsis
+                .as_ref()
+                .map(|(not, synopsis)| (*not, synopsis.as_str()))
+                .unwrap_or((false, ""));
+            let input = input(synopsis).on_input(LogicMessage::Synopsis);
+
+            let not = checkbox(not)
+                .label("NOT")
+                .text_size(size)
+                .on_toggle(LogicMessage::SynopsisComp)
+                .size(size);
+
+            row!(label, space::horizontal(), not, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let tags = {
+            let label = sized_medium("Tags contain", size).width(width);
+
+            let (not, tags) = trigger
+                .logic
+                .tags
+                .as_ref()
+                .map(|(not, tags)| (*not, tags.as_str()))
+                .unwrap_or((false, ""));
+            let input = input(tags).on_input(LogicMessage::Tags);
+
+            let not = checkbox(not)
+                .label("NOT")
+                .text_size(size)
+                .on_toggle(LogicMessage::TagsComp)
+                .size(size);
+
+            row!(label, space::horizontal(), not, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let last = {
+            let label = sized_medium("Last watched", size).width(width);
+
+            let comp = trigger
+                .logic
+                .last_watched
+                .as_ref()
+                .map(|(comp, _)| *comp)
+                .unwrap_or_default();
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::LastComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let input = input(last).on_input(LogicMessage::Last);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let duration = {
+            let label = sized_medium("Duration", size).width(width);
+
+            let (comp, duration) = trigger
+                .logic
+                .duration
+                .as_ref()
+                .map(|(comp, duration)| (*comp, *duration))
+                .unwrap_or((Comparison::default(), 0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::DurationComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let duration = duration.to_string();
+            let input = input(&duration).on_input(LogicMessage::Duration);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let progress = {
+            let label = sized_medium("Progress", size).width(width);
+
+            let (comp, progress) = trigger
+                .logic
+                .progress
+                .as_ref()
+                .map(|(comp, progress)| (*comp, *progress))
+                .unwrap_or((Comparison::default(), 0.0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::ProgressComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let progress = format!("{progress:.2}");
+            let input = input(&progress).on_input(LogicMessage::Progress);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let watch = {
+            let label = sized_medium("Watch count", size).width(width);
+
+            let (comp, count) = trigger
+                .logic
+                .watch_count
+                .as_ref()
+                .map(|(comp, count)| (*comp, *count))
+                .unwrap_or((Comparison::default(), 0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::WatchComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let count = count.to_string();
+            let input = input(&count).on_input(LogicMessage::Watch);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let release = {
+            let label = sized_medium("Release date", size).width(width);
+
+            let comp = trigger
+                .logic
+                .release
+                .as_ref()
+                .map(|(comp, _)| *comp)
+                .unwrap_or_default();
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::ReleaseComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let input = input(release).on_input(LogicMessage::Release);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let rating = {
+            let label = sized_medium("Rating", size).width(width);
+
+            let (comp, rating) = trigger
+                .logic
+                .rating
+                .as_ref()
+                .map(|(comp, rating)| (*comp, *rating))
+                .unwrap_or((Comparison::default(), 0.0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::RatingComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let rating = format!("{rating:.2}");
+            let input = input(&rating).on_input(LogicMessage::Rating);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        let comment = {
+            let label = sized_medium("Comments", size).width(width);
+
+            let (comp, count) = trigger
+                .logic
+                .comment
+                .as_ref()
+                .map(|(comp, count)| (*comp, *count))
+                .unwrap_or((Comparison::default(), 0));
+
+            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::CommentComp)
+                .padding(pick_padding)
+                .handle(picklist_handle(text_size))
+                .font(regular_font())
+                .text_size(text_size);
+
+            let count = count.to_string();
+            let input = input(&count).on_input(LogicMessage::Comment);
+
+            row!(label, space::horizontal(), comp, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
+        column!(
+            title, name, synopsis, tags, last, duration, progress, watch, release, rating, comment
+        )
+        .spacing(4.0)
+        .align_x(Horizontal::Center)
+        .into()
+    };
+
+    let content = column!(
+        title,
+        rule::horizontal(1.0),
+        name,
+        media,
+        roe,
+        cond.map(move |lsg| TriggerMessage::LogicDelete(id, lsg))
+    )
+    .spacing(8.0)
+    .width(Length::Fill);
+
+    let content = container(content)
+        .style(styles::container::bw)
+        .padding(padding);
+    content.into()
+}

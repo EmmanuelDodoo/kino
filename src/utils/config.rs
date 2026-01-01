@@ -133,7 +133,6 @@ impl VideoSettings {
 pub struct GeneralSettings {
     pub layout: Layout,
     pub refresh_interval: Duration,
-    //todo: Scripted Collections should remove need for this
     pub recents_limit: Option<i32>,
     pub search_limit: Option<i32>,
     pub theme: AppTheme,
@@ -229,7 +228,6 @@ impl Config {
         let config_dir = project.config_local_dir();
         let images = config_dir.join("images");
 
-        // todo: Scripts later on as well
         create_dir_all(images).expect("Cannot create project directory structure");
 
         let config_path = config_dir.join(Self::CONFIG_PATH);
