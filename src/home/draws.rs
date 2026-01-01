@@ -67,6 +67,7 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let input = text_input("", value)
             .id(config.name_input.clone())
             .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
+            .on_submit(HomeMessage::CollectionConfig(ConfigMessage::Save))
             .font(regular_font())
             .padding(padding)
             .style(move |theme: &Theme, status| {
