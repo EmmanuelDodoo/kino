@@ -2684,10 +2684,11 @@ impl Home {
             .height(Length::Fill);
 
         let content = column!(header, space::vertical().height(24.0), content,)
-            .width(275.0)
+            .width(300.0)
             .height(Length::Fill);
 
         let content = container(content).style(styles::container::bw3);
+
         content.into()
     }
 
