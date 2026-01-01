@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -254,7 +254,7 @@ FROM (
 	WHERE item.media_type = 'episode' AND episode.poster IS NOT NULL
 ) 
 ORDER BY collection_id
-LIMIT 4;
+;
 
 CREATE VIEW get_collection AS SELECT collection.*,
 (
