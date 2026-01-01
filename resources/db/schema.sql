@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 0;
+PRAGMA user_version = 1;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -160,7 +160,7 @@ CREATE TABLE collection (
 	description     TEXT,
 	view            TEXT NOT NULL,
 	icon            INT,
-	custom          Text,
+	custom          TEXT,
 	theme           INT,
 	created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
 	removed		BOOLEAN DEFAULT FALSE,

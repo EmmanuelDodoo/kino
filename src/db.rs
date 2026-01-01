@@ -24,6 +24,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 0,
         sql: ""
     },
+    Migration {
+        version: 1,
+        sql: include_str!("../resources/db/migrations/1.sql"),
+    },
 ];
 
 pub struct Database {
