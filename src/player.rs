@@ -177,11 +177,13 @@ enum AutoState {
     Ready(Box<Player>),
 }
 
-#[derive(Debug)]
 enum State {
     Loading(Animation<bool>),
     Idle,
-    Ready(Box<Player>),
+    Ready {
+        player: Box<Player>,
+        awake: Option<keepawake::KeepAwake>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -219,7 +221,6 @@ pub enum ManagerMessage {
     None,
 }
 
-#[derive(Debug)]
 pub struct Manager {
     window: Option<window::Id>,
     playlist: Playlist,
@@ -316,7 +317,13 @@ impl Manager {
                 let last_watched = if !is_next || matches!(&self.state, State::Idle) {
                     let task = Task::done(Message::LastWatched(player.item.id));
                     apply_settings(self.settings, &mut player);
-                    self.state = State::Ready(Box::new(player));
+
+                    let awake = keep_awake().unwrap();
+
+                    self.state = State::Ready {
+                        awake: Some(awake),
+                        player: Box::new(player),
+                    };
 
                     task
                 } else {
@@ -363,11 +370,15 @@ impl Manager {
                 if self.settings.auto_next && self.playlist.has_next() {
                     self.play_next(now)
                 } else {
+                    if let State::Ready { awake, .. } = &mut self.state {
+                        awake.take();
+                    }
+
                     self.stats().map(Task::done).unwrap_or_default()
                 }
             }
             ManagerMessage::NewFrame => {
-                if let State::Ready(player) = &mut self.state
+                if let State::Ready { player, .. } = &mut self.state
                     && !player.is_dragging
                 {
                     player.position = player.video.position().as_secs_f64();
@@ -522,7 +533,11 @@ impl Manager {
 
                         new.extend(remove);
 
-                        if let State::Ready(player) = &mut self.state {
+                        if let State::Ready { player, awake } = &mut self.state {
+                            if awake.is_none() {
+                                *awake = Some(keep_awake().unwrap());
+                            }
+
                             player.video.set_paused(false);
                         }
 
@@ -701,7 +716,7 @@ impl Manager {
                     ConfigMessage::ClearSelected => {
                         subtitle_uri.take();
 
-                        if let State::Ready(player) = &mut self.state {
+                        if let State::Ready { player, .. } = &mut self.state {
                             player
                                 .available_subtitles
                                 .retain(|sub| matches!(sub, Subtitle::Embedded(_)));
@@ -770,7 +785,7 @@ impl Manager {
 
     fn top(&self) -> Element<'_, ManagerMessage> {
         let title: Element<'_, ManagerMessage> = match &self.state {
-            State::Ready(player) => container(sized_medium(&player.item.name, H4))
+            State::Ready { player, .. } => container(sized_medium(&player.item.name, H4))
                 .style(styles::container::text)
                 .height(36)
                 .clip(true)
@@ -875,7 +890,7 @@ impl Manager {
     }
 
     fn is_ready(&self, message: ManagerMessage) -> Option<ManagerMessage> {
-        matches!(&self.state, State::Ready(_)).then_some(message)
+        matches!(&self.state, State::Ready { .. }).then_some(message)
     }
 
     fn media_controls(&self, now: Instant) -> Element<'_, ManagerMessage> {
@@ -966,7 +981,7 @@ impl Manager {
                     .width(size)
                     .height(size)
                     .into(),
-                State::Ready(player) => {
+                State::Ready { player, .. } => {
                     let (icon, message) = if player.video.paused() {
                         (icons::PLAY, ManagerMessage::TogglePlay)
                     } else if player.video.eos() {
@@ -1124,7 +1139,7 @@ impl Manager {
 
     fn video_elem(&self, now: Instant) -> Element<'_, ManagerMessage> {
         match &self.state {
-            State::Ready(player) => {
+            State::Ready { player, .. } => {
                 let video = container(
                     VideoPlayer::new(&player.video)
                         .width(Length::Fill)
@@ -1258,27 +1273,36 @@ impl Manager {
 
     fn player(&self) -> Option<&Player> {
         match &self.state {
-            State::Ready(player) => Some(player),
+            State::Ready { player, .. } => Some(player),
             _ => None,
         }
     }
 
     fn player_mut(&mut self) -> Option<&mut Player> {
         match &mut self.state {
-            State::Ready(player) => Some(player),
+            State::Ready { player, .. } => Some(player),
             _ => None,
         }
     }
 
     fn play_toggle(&mut self) -> Task<Message> {
-        let Some(Player {
-            video, position, ..
-        }) = self.player_mut()
-        else {
+        let State::Ready { player, awake } = &mut self.state else {
             return Task::none();
         };
 
-        if video.eos() && video.paused() {
+        let Player {
+            video, position, ..
+        } = player.as_mut();
+
+        let is_paused = video.paused();
+
+        if is_paused {
+            *awake = Some(keep_awake().unwrap());
+        } else {
+            *awake = None;
+        }
+
+        if video.eos() && is_paused {
             if let Err(error) = video.seek(Duration::from_secs(0), false) {
                 return Message::error(error).tasked();
             }
@@ -1323,7 +1347,7 @@ impl Manager {
     }
 
     fn seek_back(&mut self, shift: bool) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state {
+        if let State::Ready { player, .. } = &mut self.state {
             player.is_dragging = false;
             let amt = if shift {
                 self.settings.seek_shift_change_amt
@@ -1343,7 +1367,7 @@ impl Manager {
     }
 
     fn seek_front(&mut self, shift: bool) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state {
+        if let State::Ready { player, .. } = &mut self.state {
             player.is_dragging = false;
             let duration = player.video.duration().as_secs_f64();
             let amt = if shift {
@@ -1363,7 +1387,7 @@ impl Manager {
     }
 
     fn volume_increase(&mut self) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state {
+        if let State::Ready { player, .. } = &mut self.state {
             self.settings.volume =
                 (self.settings.volume + self.settings.volume_change_amt).min(1.0);
             player.video.set_volume(self.settings.volume);
@@ -1373,7 +1397,7 @@ impl Manager {
     }
 
     fn volume_decrease(&mut self) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state {
+        if let State::Ready { player, .. } = &mut self.state {
             self.settings.volume =
                 (self.settings.volume - self.settings.volume_change_amt).max(0.0);
             player.video.set_volume(self.settings.volume);
@@ -1383,7 +1407,7 @@ impl Manager {
     }
 
     fn mute_toggle(&mut self) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state {
+        if let State::Ready { player, .. } = &mut self.state {
             let mute = !player.video.muted();
             player.video.set_muted(mute);
             self.settings.muted = mute;
@@ -1399,7 +1423,7 @@ impl Manager {
     }
 
     fn speed_increase(&mut self) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state {
+        if let State::Ready { player, .. } = &mut self.state {
             self.settings.speed += self.settings.speed_change_amt;
             player.video.set_speed(self.settings.speed).unwrap();
         }
@@ -1408,7 +1432,7 @@ impl Manager {
     }
 
     fn speed_decrease(&mut self) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state {
+        if let State::Ready { player, .. } = &mut self.state {
             self.settings.speed -= self.settings.speed_change_amt;
             player.video.set_speed(self.settings.speed).unwrap();
         }
@@ -1417,7 +1441,7 @@ impl Manager {
     }
 
     fn speed_reset(&mut self) -> Task<Message> {
-        if let State::Ready(player) = &mut self.state
+        if let State::Ready { player, .. } = &mut self.state
             && player.video.speed() != 1.0
         {
             self.settings.speed = 1.0;
@@ -1471,7 +1495,12 @@ impl Manager {
                 apply_settings(self.settings, &mut player);
                 player.video.set_paused(false);
 
-                self.state = State::Ready(player);
+                let awake = keep_awake().unwrap();
+
+                self.state = State::Ready {
+                    player,
+                    awake: Some(awake),
+                };
 
                 Task::batch([Task::done(last_watched), stats])
             }
@@ -1530,7 +1559,7 @@ impl Manager {
     }
 
     fn save_config(&mut self, config: Modal) -> Task<Message> {
-        let State::Ready(player) = &mut self.state else {
+        let State::Ready { player, awake } = &mut self.state else {
             return Task::none();
         };
 
@@ -1543,7 +1572,7 @@ impl Manager {
             background_color: _background,
         } = config
         else {
-            return Task::none();
+            return self.play_toggle();
         };
 
         let original_uri = player.item.subtitle_uri.clone();
@@ -1676,6 +1705,9 @@ impl Manager {
             }
         }
 
+        if awake.is_none() {
+            *awake = Some(keep_awake().unwrap());
+        }
         player.video.set_paused(false);
 
         Task::none()
@@ -1698,11 +1730,13 @@ impl Manager {
     }
 
     fn collection_add(&mut self) -> Task<Message> {
-        let State::Ready(player) = &mut self.state else {
+        let State::Ready { player, awake } = &mut self.state else {
             return Task::none();
         };
 
         player.video.set_paused(true);
+        awake.take();
+
         let id = player.item.id;
         let view = Modal::CollectionAdd {
             item: id,
@@ -1721,8 +1755,10 @@ impl Manager {
 
     fn video_config(&mut self) -> Task<Message> {
         let (selected_text, selected_audio, subtitle_uri) =
-            if let State::Ready(player) = &mut self.state {
+            if let State::Ready { player, awake } = &mut self.state {
+                awake.take();
                 player.video.set_paused(true);
+
                 (
                     player.current_text.clone(),
                     player.current_audio.clone(),
@@ -1788,7 +1824,7 @@ impl Manager {
     }
 
     pub fn stats(&mut self) -> Option<Message> {
-        let State::Ready(player) = &mut self.state else {
+        let State::Ready { player, .. } = &mut self.state else {
             return None;
         };
 
@@ -2604,4 +2640,12 @@ fn draw_config<'a>(
 
 fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
     sized_medium(label, H7)
+}
+
+fn keep_awake() -> Result<keepawake::KeepAwake, keepawake::Error> {
+    keepawake::Builder::default()
+        .display(true)
+        .app_name("kino")
+        .reason("kino video playback")
+        .create()
 }
