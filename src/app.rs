@@ -277,7 +277,18 @@ impl App {
                     return Task::none();
                 }
 
-                let stats = self.exit_player();
+                self.screen = Screen::Home;
+                let stats = match self.player.take() {
+                    Some(mut player) => {
+                        tracing::info!("Exiting player");
+                        let stats = player.stats().map(Task::done).unwrap_or_default();
+
+                        self.config.video = player.settings;
+
+                        stats
+                    }
+                    None => Task::none(),
+                };
 
                 match self.config.save() {
                     Ok(_) => stats.chain(Task::done(Message::Exit(id))),
@@ -436,9 +447,14 @@ impl App {
             Message::Back => match self.screen {
                 Screen::Home => self.home.back(now, false),
                 Screen::Player => {
-                    let stats = self.exit_player();
+                    self.screen = Screen::Home;
+                    if let Some(player) = self.player.take() {
+                        tracing::info!("Exiting player");
 
-                    Task::batch([self.home.refresh(now), stats])
+                        self.config.video = player.settings;
+                    }
+
+                    self.home.refresh(now)
                 }
                 Screen::Settings => {
                     self.settings.take();
@@ -1173,7 +1189,7 @@ impl App {
 
                 for trigger in removed_inserts {
                     let name = trigger.name.clone();
-                    match trigger.remove(&self.db){
+                    match trigger.remove(&self.db) {
                         Ok(_) => {
                             tracing::info!("{} removed", name);
                         }
@@ -1183,14 +1199,13 @@ impl App {
                                 format!("{} remove error.\n{}", name, error),
                                 toast::Status::Error,
                             ))
-
                         }
                     }
                 }
 
                 for trigger in removed_deletes {
                     let name = trigger.name.clone();
-                    match trigger.remove(&self.db){
+                    match trigger.remove(&self.db) {
                         Ok(_) => {
                             tracing::info!("{} removed", name);
                         }
@@ -1200,7 +1215,6 @@ impl App {
                                 format!("{} remove error.\n{}", name, error),
                                 toast::Status::Error,
                             ))
-
                         }
                     }
                 }
@@ -1455,22 +1469,6 @@ impl App {
                 .map(|settings| settings.action(sat))
                 .unwrap_or_default(),
         }
-    }
-
-    fn exit_player(&mut self) -> Task<Message> {
-        self.screen = Screen::Home;
-        let stats = match self.player.take() {
-            Some(mut player) => {
-                tracing::info!("Exiting player");
-
-                self.config.video = player.settings;
-
-                player.stats()
-            }
-            None => None,
-        };
-
-        stats.map(Task::done).unwrap_or_default()
     }
 }
 

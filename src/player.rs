@@ -363,19 +363,7 @@ impl Manager {
                 if self.settings.auto_next && self.playlist.has_next() {
                     self.play_next(now)
                 } else {
-                    let stats = self.stats().map(Task::done).unwrap_or_default();
-
-                    let State::Ready(player) = &mut self.state else {
-                        return Task::none();
-                    };
-
-                    player.position = 0.0;
-
-                    if let Err(msg) = player.seek_release(true) {
-                        return Task::done(Message::error(msg));
-                    }
-
-                    stats
+                    self.stats().map(Task::done).unwrap_or_default()
                 }
             }
             ManagerMessage::NewFrame => {
@@ -466,7 +454,19 @@ impl Manager {
             }
             ManagerMessage::ToggleFullscreen => self.fullscreen_toggle(),
             ManagerMessage::PreviousScreen => {
-                self.fullscreen_exit().chain(Task::done(Message::Back))
+                let eos = self
+                    .player()
+                    .map(|player| player.video.eos())
+                    .unwrap_or_default();
+
+                let stats = if eos {
+                    Task::none()
+                } else {
+                    self.stats().map(Task::done).unwrap_or_default()
+                };
+
+                self.fullscreen_exit()
+                    .chain(Task::batch([Task::done(Message::Back), stats]))
             }
             ManagerMessage::ToggleSubtitles => self.subtitles_toggle(),
             ManagerMessage::PlayNext => self.play_next(now),
@@ -1271,9 +1271,25 @@ impl Manager {
     }
 
     fn play_toggle(&mut self) -> Task<Message> {
-        if let Some(Player { video, .. }) = self.player_mut() {
+        let Some(Player {
+            video, position, ..
+        }) = self.player_mut()
+        else {
+            return Task::none();
+        };
+
+        if video.eos() && video.paused() {
+            if let Err(error) = video.seek(Duration::from_secs(0), false) {
+                return Message::error(error).tasked();
+            }
+
+            *position = 0.0;
+
+            video.set_paused(false);
+        } else {
             video.set_paused(!video.paused());
         }
+
         Task::none()
     }
 
