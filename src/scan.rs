@@ -27,9 +27,10 @@ static EPISODE_REG: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 #[rustfmt::skip]
-const EXTENSIONS: [&str; 9] = [
+const EXTENSIONS: &[&str] = &[
     "avi",
     "flv",
+    "m4v",
     "mkv",
     "mov",
     "mp4", 

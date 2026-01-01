@@ -41,7 +41,7 @@ Directories in Kino are assigned a single media type: movies or TV shows, never 
 
 Supported video extensions:
 
-`avi`, `flv`, `mkv`, `mov`, `mp4`, `mpgeg`, `mpg`, `webm`, `wmv`
+`avi`, `flv`, `m4v`, `mkv`, `mov`, `mp4`, `mpgeg`, `mpg`, `webm`, `wmv`
 
 ### Regex Patterns
 
