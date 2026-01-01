@@ -119,6 +119,11 @@ pub enum Message {
         removed_inserts: Vec<InsertTrigger>,
         removed_deletes: Vec<DeleteTrigger>,
     },
+    RemoveCollectionItems {
+        collection: CollectionId,
+        items: Items,
+    },
+    RemoveCollection(CollectionId),
     None,
 }
 
@@ -142,7 +147,10 @@ impl Message {
     }
 
     pub fn tasked(self) -> Task<Self> {
-        Task::done(self)
+        match self {
+            Message::None => Task::none(),
+            other => Task::done(other),
+        }
     }
 }
 
@@ -1231,6 +1239,18 @@ impl App {
                 let fails = Task::done(Message::PushToasts(fails));
 
                 Task::batch([succ, fails, self.home.refresh(now)])
+            }
+            Message::RemoveCollection(id) => match self.db.remove_collection(id) {
+                Ok(rows) if rows > 0 => Message::success("Collection Deleted").tasked(),
+                Ok(_) => Task::none(),
+                Err(error) => Message::error(error).tasked(),
+            },
+            Message::RemoveCollectionItems { collection, items } => {
+                match self.db.remove_collection_items(collection, items) {
+                    Ok(rows) if rows > 0 => Message::success("Collection Items removed").tasked(),
+                    Ok(_) => Task::none(),
+                    Err(error) => Message::error(error).tasked(),
+                }
             }
         }
     }

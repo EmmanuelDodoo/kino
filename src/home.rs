@@ -406,6 +406,7 @@ pub enum HomeMessage {
     Forward,
     CollectionConfig(ConfigMessage),
     RemoveCollection,
+    RemoveCollectionItems(CollectionId, Items),
     SearchMessage(SearchMessage),
     CollectionAdd(CollectionAddMessage),
     Rating(RatingMessage),
@@ -944,11 +945,16 @@ impl Home {
                 };
 
                 let old = self.collections.remove(index);
-                let query = old.remove();
-
-                let remove = Task::done(Message::Query(query));
+                let remove = Message::RemoveCollection(old.id).tasked();
 
                 Task::batch([remove, self.back(now, true), self.close_view()])
+            }
+            HomeMessage::RemoveCollectionItems(collection, items) => {
+                self.unfocus(now);
+
+                let remove = Message::RemoveCollectionItems { collection, items }.tasked();
+
+                Task::batch([remove, self.content_refresh(now)])
             }
             HomeMessage::SearchMessage(ssg) => {
                 let Some(View::Search(state, _)) = self.view.as_mut() else {

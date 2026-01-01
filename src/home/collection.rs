@@ -31,6 +31,7 @@ pub enum Message {
     DetailsItem(ItemId),
     Add(ItemId),
     Play(Items),
+    Delete(Items),
     Remove(String),
     OpenConfig,
     AddNewItem,
@@ -128,6 +129,11 @@ impl CollectionPage {
             }
             Message::Triggers => {
                 let msg = HomeMessage::OpenView(ViewMessage::CollectionTriggers);
+
+                Some(msg)
+            }
+            Message::Delete(items) => {
+                let msg = HomeMessage::RemoveCollectionItems(self.id, items);
 
                 Some(msg)
             }
@@ -246,18 +252,51 @@ impl CollectionPage {
             };
 
             let delete = {
-                button(icon(DELETE).size(P))
-                    .padding(0)
-                    .on_press(CollectionMessage {
-                        id,
-                        message: Message::Remove(collection.collection.name.clone()),
-                    })
-                    .style(|theme, status| {
-                        let default = styles::button::text_danger(theme, status);
-                        let border = default.border.rounded(5);
+                let delete = delete_btn(
+                    id,
+                    "Delete",
+                    Message::Remove(collection.collection.name.clone()),
+                );
 
-                        button::Style { border, ..default }
+                let base = container(icon(ELLIPSIS_VER).size(H7))
+                    .style(|theme| {
+                        let pair = theme.extended_palette().background.weakest;
+                        let text = pair.text;
+                        let color = pair.color;
+                        let border = Border::default().rounded(2);
+
+                        container::Style {
+                            background: Some(color.into()),
+                            text_color: Some(text),
+                            border,
+                            ..Default::default()
+                        }
                     })
+                    .padding([8, 3]);
+
+                let actions = column!(
+                    delete_btn(id, "Remove movies", Message::Delete(Items::Movies)),
+                    delete_btn(id, "Remove shows", Message::Delete(Items::Shows)),
+                    delete_btn(id, "Remove seasons", Message::Delete(Items::Seasons)),
+                    delete_btn(id, "Remove episodes", Message::Delete(Items::Episodes)),
+                )
+                .spacing(8);
+
+                let overlay = container(actions).padding([8, 12]).style(|theme| {
+                    let default = styles::container::bordered(theme);
+                    let border = default.border.rounded(8);
+
+                    container::Style { border, ..default }
+                });
+
+                let hidden = menu(base, overlay)
+                    .on_toggle(move |_| CollectionMessage {
+                        id,
+                        message: Message::None,
+                    })
+                    .position(menu::Position::Right);
+
+                row!(delete, hidden).spacing(2.0).align_y(Vertical::Center)
             };
 
             let actions = row!(
@@ -668,6 +707,33 @@ fn btn<'a>(
         row!(icon(unicode).size(P), sized_medium(label, H7))
             .spacing(10.0)
             .align_y(Vertical::Center),
+    )
+    .padding([6, 12])
+    .on_press(CollectionMessage { id, message })
+    .style(|theme, status| {
+        let default = styles::button::subtlest(theme, status);
+        let border = default.border.rounded(5);
+
+        button::Style { border, ..default }
+    })
+}
+
+fn delete_btn<'a>(
+    id: CollectionId,
+    label: &'static str,
+    message: Message,
+) -> Button<'a, CollectionMessage> {
+    button(
+        row!(
+            icon(DELETE).size(P).style(|theme| {
+                text::Style {
+                    color: Some(theme.extended_palette().danger.base.color),
+                }
+            }),
+            sized_medium(label, H7)
+        )
+        .spacing(10.0)
+        .align_y(Vertical::Center),
     )
     .padding([6, 12])
     .on_press(CollectionMessage { id, message })

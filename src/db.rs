@@ -1,7 +1,7 @@
 use crate::models::{
     CollectionId, Directory, DirectoryId, EComment, ECommentId, EpisodeId, MComment, MCommentId,
     MovieId, SearchItem, SeasonId, ShowId,
-    collection::{self, ItemId},
+    collection::{self, ItemId, Items},
 };
 
 use crate::filter::{self, Filter, search::SearchFilter};
@@ -715,6 +715,34 @@ impl Database {
             ItemId::from_row,
         )?
         .collect()
+    }
+
+    pub fn remove_collection(&self, collection: CollectionId) -> rusqlite::Result<usize> {
+        let sql = "UPDATE collection SET removed=TRUE WHERE id=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement.execute(&[(":id", &ToSqlOutput::from(collection))])
+    }
+
+    pub fn remove_collection_items(
+        &self,
+        collection: CollectionId,
+        items: Items,
+    ) -> rusqlite::Result<usize> {
+        let cond = match items {
+            Items::All => "",
+            Items::Shows => "AND media_type = 'show'",
+            Items::Movies => "AND media_type = 'movie'",
+            Items::Seasons => "AND media_type = 'season'",
+            Items::Episodes => "AND media_type = 'episode'",
+        };
+
+        let sql = format!("DELETE FROM collection_item WHERE collection_id=:id {cond}");
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement.execute(&[(":id", &ToSqlOutput::from(collection))])
     }
 
     pub fn toggle_membership(

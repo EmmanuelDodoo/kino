@@ -109,7 +109,7 @@ fn main() -> iced::Result {
         })
         .window(window::Settings {
             icon: Some(icon),
-            size: Size::new(1200.0, 750.0),
+            size: Size::new(1280.0, 800.0),
             exit_on_close_request: false,
             ..Default::default()
         })
