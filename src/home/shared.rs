@@ -1042,7 +1042,7 @@ impl SearchView {
                 let mut tags = vec![];
                 let tag_len = self.item.tags.len();
 
-                for (i, tag) in self.item.tags.iter().enumerate() {
+                for (i, tag) in self.item.tags.iter().enumerate().take(4) {
                     let text = sized_regular(tag, size)
                         .font(bold_italic_font())
                         .style(|theme| {
