@@ -278,7 +278,7 @@ pub fn scan_dir_helper<'a>(
                     let SeasonPrim { path, episodes } = season;
                     let number = process_season(&path);
                     let name = match number {
-                        Some(number) => format!("Season {number}"),
+                        Some(number) => format!("Season {number:02}"),
                         None => path.clone(),
                     };
 
