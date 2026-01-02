@@ -3808,8 +3808,10 @@ impl Home {
 
     pub fn fetch_collections_simple(
         &mut self,
-        collections: Vec<SimpleCollection>,
+        mut collections: Vec<SimpleCollection>,
     ) -> Task<Message> {
+        sort_collections(&mut collections);
+
         self.collections = collections;
         self.update_page_scroll()
     }
@@ -3936,7 +3938,9 @@ impl Home {
         self.update_page_scroll()
     }
 
-    pub fn fetched_memberships(&mut self, fetched: Vec<SimpleCollection>) -> Task<Message> {
+    pub fn fetched_memberships(&mut self, mut fetched: Vec<SimpleCollection>) -> Task<Message> {
+        sort_collections(&mut fetched);
+
         match &mut self.state {
             State::Movie { memberships, .. } => {
                 *memberships = fetched;
