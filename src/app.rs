@@ -142,6 +142,10 @@ impl Message {
         Message::PushToast(error.to_string(), toast::Status::Error)
     }
 
+    pub fn warn(warning: impl std::fmt::Display) -> Self {
+        Message::PushToast(warning.to_string(), toast::Status::Warn)
+    }
+
     pub fn success(message: impl std::fmt::Display) -> Self {
         Message::PushToast(message.to_string(), toast::Status::Success)
     }

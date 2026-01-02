@@ -1565,9 +1565,8 @@ impl Home {
                                                     chrono::NaiveDateTime::parse_from_str(new, "%F")
                                                 })
                                         else {
-                                            let msg =
-                                                Message::error(format!("Invalid input: {new}"));
-                                            return Task::done(msg);
+                                            return Message::warn(format!("Invalid input: {new}"))
+                                                .tasked();
                                         };
 
                                         let last_watched = last_watched.and_utc();
@@ -1704,9 +1703,8 @@ impl Home {
                                     Err(_) => {
                                         let Ok(new) = chrono::DateTime::parse_from_str(new, "%F")
                                         else {
-                                            let msg =
-                                                Message::error(format!("Invalid input: {new}"));
-                                            return Task::done(msg);
+                                            return Message::warn(format!("Invalid input: {new}"))
+                                                .tasked();
                                         };
 
                                         *release = new.format("%F").to_string();
@@ -1918,9 +1916,8 @@ impl Home {
                                                     chrono::NaiveDateTime::parse_from_str(new, "%F")
                                                 })
                                         else {
-                                            let msg =
-                                                Message::error(format!("Invalid input: {new}"));
-                                            return Task::done(msg);
+                                            return Message::warn(format!("Invalid input: {new}"))
+                                                .tasked();
                                         };
 
                                         let last_watched = last_watched.and_utc();
@@ -2056,9 +2053,8 @@ impl Home {
                                     Err(_) => {
                                         let Ok(new) = chrono::DateTime::parse_from_str(new, "%F")
                                         else {
-                                            let msg =
-                                                Message::error(format!("Invalid input: {new}"));
-                                            return Task::done(msg);
+                                            return Message::warn(format!("Invalid input: {new}"))
+                                                .tasked();
                                         };
 
                                         *release = new.format("%F").to_string();
