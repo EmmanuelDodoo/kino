@@ -316,7 +316,7 @@ pub fn scan_dir_helper<'a>(
                     for episode in episodes {
                         let number = process_episode(&episode.path);
                         let name = match number {
-                            Some(number) => format!("Episode {number}"),
+                            Some(number) => format!("Episode {number:02}"),
                             None => episode.name.clone(),
                         };
 

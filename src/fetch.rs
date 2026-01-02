@@ -71,7 +71,6 @@ struct TMDBShow {
 struct TMDBSeason {
     id: u32,
     air_date: Option<String>,
-    name: String,
     overview: Option<String>,
     vote_average: f64,
     poster_path: Option<String>,
@@ -970,14 +969,13 @@ mod seasons {
     ) -> rusqlite::Result<usize> {
         tracing::info!("Inserting {} season data", seasons.len());
         let trans = db.transaction()?;
-        let sql = "UPDATE season SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
+        let sql = "UPDATE season SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (season, data) in seasons {
             let TMDBSeason {
                 id,
                 air_date,
-                name,
                 overview,
                 vote_average,
                 poster_path,
@@ -1003,7 +1001,6 @@ mod seasons {
                     (":id", &ToSqlOutput::from(season)),
                     (":overview", &ToSqlOutput::from(overview)),
                     (":release", &ToSqlOutput::from(air_date)),
-                    (":name", &ToSqlOutput::from(name)),
                     (":poster", &poster_path),
                     (":rating", rating),
                 ],
