@@ -120,7 +120,7 @@ impl Movies {
                 .id(self.scroll.id.clone())
                 .on_scroll(MoviesMessage::Scroll),
         )
-        .padding(Padding::new(10.0).bottom(0));
+        .padding(Padding::new(10.0).right(0).bottom(0));
 
         content.into()
     }
@@ -145,7 +145,7 @@ impl Movies {
                 .id(self.scroll.id.clone())
                 .on_scroll(MoviesMessage::Scroll),
         )
-        .padding(Padding::new(10.0).bottom(0));
+        .padding(Padding::new(10.0).right(0).bottom(0));
 
         content.into()
     }

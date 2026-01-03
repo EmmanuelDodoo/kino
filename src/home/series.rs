@@ -527,7 +527,7 @@ impl ShowPage {
 
         let content = column!(self.top(show), content)
             .spacing(20.0)
-            .padding(Padding::new(10.0).bottom(0));
+            .padding(Padding::new(10.0).right(0).bottom(0));
 
         content.into()
     }

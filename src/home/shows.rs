@@ -96,7 +96,7 @@ impl TvShows {
                 .id(self.scroll.id.clone())
                 .on_scroll(TvShowsMessage::Scroll),
         )
-        .padding(Padding::new(10.0).bottom(0));
+        .padding(Padding::new(10.0).right(0).bottom(0));
 
         content.into()
     }
@@ -121,7 +121,7 @@ impl TvShows {
                 .id(self.scroll.id.clone())
                 .on_scroll(TvShowsMessage::Scroll),
         )
-        .padding(Padding::new(10.0).bottom(0));
+        .padding(Padding::new(10.0).right(0).bottom(0));
 
         content.into()
     }

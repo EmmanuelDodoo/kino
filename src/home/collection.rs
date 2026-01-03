@@ -151,23 +151,15 @@ impl CollectionPage {
         seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
     ) -> Element<'a, CollectionMessage> {
-        let id = self.id;
         let content = match layout {
             Layout::List => self.list(now, movies, shows, seasons, episodes),
             Layout::Grid => self.grid(now, movies, shows, seasons, episodes),
             Layout::Compact => self.compact(movies, shows, seasons, episodes),
         };
 
-        let content = scrollable(content)
-            .id(self.scroll.id.clone())
-            .on_scroll(move |viewport| CollectionMessage {
-                id,
-                message: Message::Scroll(viewport),
-            });
-
         let content = column!(self.top(collection), content)
             .spacing(10)
-            .padding(Padding::new(10.0).bottom(0));
+            .padding(Padding::new(10.0).right(0).bottom(0));
 
         content.into()
     }
@@ -444,7 +436,13 @@ impl CollectionPage {
             content.push(episodes)
         };
 
-        let content = content;
+        let content = scrollable(content)
+            .spacing(20.0)
+            .id(self.scroll.id.clone())
+            .on_scroll(move |viewport| CollectionMessage {
+                id: collection,
+                message: Message::Scroll(viewport),
+            });
 
         content.into()
     }
@@ -556,7 +554,13 @@ impl CollectionPage {
             content.push(episodes)
         };
 
-        let content = content;
+        let content = scrollable(content)
+            .spacing(20.0)
+            .id(self.scroll.id.clone())
+            .on_scroll(move |viewport| CollectionMessage {
+                id: collection,
+                message: Message::Scroll(viewport),
+            });
 
         content.into()
     }
@@ -576,7 +580,9 @@ impl CollectionPage {
 
         let collection = self.id;
 
-        let content = Column::new().spacing(40.0);
+        let content = Column::new()
+            .spacing(40.0)
+            .padding(Padding::new(10.0).bottom(0));
 
         let content = if movies.peek().is_none() {
             content
@@ -684,6 +690,13 @@ impl CollectionPage {
 
             content.push(episodes)
         };
+
+        let content = scrollable(content)
+            .id(self.scroll.id.clone())
+            .on_scroll(move |viewport| CollectionMessage {
+                id: collection,
+                message: Message::Scroll(viewport),
+            });
 
         content.into()
     }

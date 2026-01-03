@@ -2808,9 +2808,16 @@ impl Home {
             column!(label, shows).spacing(10.0)
         };
 
-        let content = scrollable(column!(movies, shows).spacing(40.0).padding(10))
-            .id(self.scroll.id.clone())
-            .on_scroll(HomeMessage::Scroll);
+        let content = if matches!(self.layout, Layout::Grid) {
+            scrollable(column!(movies, shows).spacing(40.0).padding(10))
+                .id(self.scroll.id.clone())
+                .on_scroll(HomeMessage::Scroll)
+        } else {
+            scrollable(column!(movies, shows).spacing(40.0).padding(10))
+                .spacing(20.0)
+                .id(self.scroll.id.clone())
+                .on_scroll(HomeMessage::Scroll)
+        };
 
         content.into()
     }
