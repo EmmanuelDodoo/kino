@@ -109,10 +109,10 @@ pub enum Message {
     CaptureKeys(bool),
     Scan,
     ScanComplete(Vec<DirectoryId>),
-    ShowAllocation((ShowId, Option<iced::Color>)),
-    MovieAllocation((MovieId, Option<iced::Color>)),
-    SeasonAllocation((SeasonId, Option<iced::Color>)),
-    EpisodeAllocation((EpisodeId, Option<iced::Color>)),
+    ShowAllocation((ShowId, Option<(iced::Color, iced::Color)>)),
+    MovieAllocation((MovieId, Option<(iced::Color, iced::Color)>)),
+    SeasonAllocation((SeasonId, Option<(iced::Color, iced::Color)>)),
+    EpisodeAllocation((EpisodeId, Option<(iced::Color, iced::Color)>)),
     Triggers {
         inserts: Vec<(InsertTrigger, bool)>,
         deletes: Vec<(DeleteTrigger, bool)>,
@@ -748,31 +748,33 @@ impl App {
                         }
                     };
 
-                    let itriggers = match self
-                        .db
-                        .get_collection_inserts(id, InsertTrigger::from_row)
-                    {
-                        Ok(triggers) => {
-                            tracing::debug!("Fetched {} collection insert triggers", triggers.len());
-                            triggers
-                        }
-                        Err(error) => {
-                            return Message::error(error).tasked();
-                        }
-                    };
+                    let itriggers =
+                        match self.db.get_collection_inserts(id, InsertTrigger::from_row) {
+                            Ok(triggers) => {
+                                tracing::debug!(
+                                    "Fetched {} collection insert triggers",
+                                    triggers.len()
+                                );
+                                triggers
+                            }
+                            Err(error) => {
+                                return Message::error(error).tasked();
+                            }
+                        };
 
-                    let dtriggers = match self
-                        .db
-                        .get_collection_deletes(id, DeleteTrigger::from_row)
-                    {
-                        Ok(triggers) => {
-                            tracing::debug!("Fetched {} collection delete triggers", triggers.len());
-                            triggers
-                        }
-                        Err(error) => {
-                            return Message::error(error).tasked();
-                        }
-                    };
+                    let dtriggers =
+                        match self.db.get_collection_deletes(id, DeleteTrigger::from_row) {
+                            Ok(triggers) => {
+                                tracing::debug!(
+                                    "Fetched {} collection delete triggers",
+                                    triggers.len()
+                                );
+                                triggers
+                            }
+                            Err(error) => {
+                                return Message::error(error).tasked();
+                            }
+                        };
 
                     let (thumbnail_movies, thumbnail_shows, thumbnail_seasons, thumbnail_episodes) =
                         match self.db.get_collection_members(

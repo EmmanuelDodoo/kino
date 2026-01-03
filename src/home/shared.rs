@@ -397,7 +397,7 @@ pub fn float<'a, Message: 'a>(
 ) -> Element<'a, Message> {
     use iced::{Color, Shadow};
 
-    let color = color.unwrap_or(Color::WHITE).inverse();
+    let color = color.unwrap_or(Color::BLACK);
 
     widget::float(content)
         .scale(float.interpolate(1.0, 1.1, now))
@@ -415,12 +415,13 @@ pub fn float<'a, Message: 'a>(
         .into()
 }
 
-pub type ThumbnailSample<T> = iced::Task<(<T as Media>::Id, Option<iced::Color>)>;
+pub type ThumbnailSample<T> = iced::Task<(<T as Media>::Id, Option<(iced::Color, iced::Color)>)>;
 
 #[derive(Debug, Clone)]
 pub struct Thumbnail<T: Media> {
     poster: Option<Handle>,
     backdrop: Option<Handle>,
+    sample_text: Option<iced::Color>,
     sample_color: Option<iced::Color>,
     background: Animation<bool>,
     icon: Animation<bool>,
@@ -442,8 +443,6 @@ impl<T: Media> Thumbnail<T> {
             })
             .unwrap_or_default();
 
-        let sample_color = None;
-
         //todo: Sample color is not great for current default poster
         let poster = match media.poster() {
             Some(poster) => Some(Handle::from_path(poster)),
@@ -463,7 +462,8 @@ impl<T: Media> Thumbnail<T> {
                 .duration(iced::time::Duration::from_millis(250))
                 .easing(Easing::EaseInOut),
             poster,
-            sample_color,
+            sample_text: None,
+            sample_color: None,
             backdrop,
             media,
         };
@@ -483,8 +483,11 @@ impl<T: Media> Thumbnail<T> {
         self.float.go_mut(new_state, at);
     }
 
-    pub fn sample(&mut self, sample: Option<iced::Color>) {
-        self.sample_color = sample;
+    pub fn sample(&mut self, samples: Option<(iced::Color, iced::Color)>) {
+        if let Some((color, text)) = samples {
+            self.sample_color = Some(color);
+            self.sample_text = Some(text);
+        }
     }
 
     pub fn id(&self) -> T::Id {
@@ -661,7 +664,7 @@ impl<T: Media> Thumbnail<T> {
         on_play: impl Fn(T::Id) -> Message + 'a,
     ) -> Element<'a, Message> {
         let padding = [3, 6];
-        let sample = self.sample_color;
+        let sample = self.sample_text;
 
         let color = move |theme: &Theme| {
             if sample.is_some() {

@@ -4003,7 +4003,7 @@ impl Home {
         }
     }
 
-    pub fn movie_sample(&mut self, id: MovieId, sample: Option<Color>) -> Task<Message> {
+    pub fn movie_sample(&mut self, id: MovieId, sample: Option<(Color, Color)>) -> Task<Message> {
         match &mut self.state {
             State::Movies(movies)
             | State::Recent { movies, .. }
@@ -4021,7 +4021,7 @@ impl Home {
         Task::none()
     }
 
-    pub fn show_sample(&mut self, id: ShowId, sample: Option<Color>) -> Task<Message> {
+    pub fn show_sample(&mut self, id: ShowId, sample: Option<(Color, Color)>) -> Task<Message> {
         match &mut self.state {
             State::Shows(shows) | State::Recent { shows, .. } | State::Collection { shows, .. } => {
                 if let Some(show) = shows.iter_mut().find(|thumbnail| thumbnail.media.id == id) {
@@ -4037,7 +4037,7 @@ impl Home {
         Task::none()
     }
 
-    pub fn season_sample(&mut self, id: SeasonId, sample: Option<Color>) -> Task<Message> {
+    pub fn season_sample(&mut self, id: SeasonId, sample: Option<(Color, Color)>) -> Task<Message> {
         match &mut self.state {
             State::Show { seasons, .. } | State::Collection { seasons, .. } => {
                 if let Some(season) = seasons
@@ -4056,7 +4056,7 @@ impl Home {
         Task::none()
     }
 
-    pub fn episode_sample(&mut self, id: EpisodeId, sample: Option<Color>) -> Task<Message> {
+    pub fn episode_sample(&mut self, id: EpisodeId, sample: Option<(Color, Color)>) -> Task<Message> {
         match &mut self.state {
             State::Season { episodes, .. } | State::Collection { episodes, .. } => {
                 if let Some(episode) = episodes

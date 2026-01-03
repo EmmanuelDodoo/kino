@@ -177,7 +177,7 @@ fn hsl_to_rgb(hsl: Hsl) -> [u8; 3] {
     ]
 }
 
-fn adaptive_sample_color_compl(img: &DynamicImage) -> Color {
+fn adaptive_sample_color_compl(img: &DynamicImage) -> (Color, Color) {
     // Downscale to 1×1 for average color
     let small = imageops::resize(img, 2, 2, imageops::FilterType::CatmullRom);
     let pixel = small.get_pixel(0, 0);
@@ -194,20 +194,20 @@ fn adaptive_sample_color_compl(img: &DynamicImage) -> Color {
         let rgb = Color::from_rgb8(r, g, b);
 
         if sample.relative_contrast(rgb) >= target {
-            return rgb;
+            return (sample, rgb);
         }
         hsl.l = (hsl.l + direction * 0.05).clamp(0.0, 1.0);
     }
 
     // guaranteed fallback
     if bg_lum < 0.5 {
-        Color::WHITE
+        (sample, Color::WHITE)
     } else {
-        Color::BLACK
+        (sample, Color::BLACK)
     }
 }
 
-pub fn sample_complement(path: &str) -> Option<Color> {
+pub fn sample_complement(path: &str) -> Option<(Color, Color)> {
     let img = open(path);
 
     img.as_ref().map(adaptive_sample_color_compl)
