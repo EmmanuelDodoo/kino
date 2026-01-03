@@ -521,7 +521,7 @@ impl Database {
         let vars = repeat(collections.len());
 
         let sql = format!(
-            "SELECT * FROM collection WHERE collection.id IN ({vars}) ORDER BY {} LIMIT {limit} OFFSET {offset}",
+            "SELECT * FROM collection WHERE collection.id IN ({vars}) AND NOT collection.removed ORDER BY {} LIMIT {limit} OFFSET {offset}",
             sort.query()
         );
 
