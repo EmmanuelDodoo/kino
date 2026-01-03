@@ -289,6 +289,8 @@ impl SeasonPage {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
+        let content = container(content).padding(Padding::ZERO.right(16));
+
         let content = container(scrollable(content).id(self.scroll.id.clone()).on_scroll(
             move |viewpport| SeasonPageMessage {
                 id: season,

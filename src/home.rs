@@ -2577,7 +2577,7 @@ impl Home {
 
     pub fn update_page_scroll(&mut self) -> Task<Message> {
         match self.current_page_mut() {
-            None => self.update_scroll().discard(),
+            None | Some(Page::Home) => self.update_scroll().discard(),
             Some(page) => page.update_scroll().discard(),
         }
     }
@@ -2873,12 +2873,16 @@ impl Home {
         };
 
         let content = if matches!(self.layout, Layout::Grid) {
-            scrollable(column!(movies, shows).spacing(40.0).padding(10))
-                .id(self.scroll.id.clone())
-                .on_scroll(HomeMessage::Scroll)
+            scrollable(
+                column!(movies, shows)
+                    .spacing(40.0)
+                    .padding(iced::Padding::new(10.0).right(16)),
+            )
+            .id(self.scroll.id.clone())
+            .on_scroll(HomeMessage::Scroll)
         } else {
             scrollable(column!(movies, shows).spacing(40.0).padding(10))
-                .spacing(20.0)
+                .spacing(10.0)
                 .id(self.scroll.id.clone())
                 .on_scroll(HomeMessage::Scroll)
         };

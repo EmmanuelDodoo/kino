@@ -605,6 +605,8 @@ impl CollectionPage {
                     .fluid(CARD_WIDTH)
                     .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
+                let movies = container(movies).padding(Padding::ZERO.right(6));
+
                 column!(label, movies).spacing(10.0)
             };
             content.push(movies)
@@ -630,6 +632,8 @@ impl CollectionPage {
                     .spacing(16)
                     .fluid(CARD_WIDTH)
                     .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+
+                let shows = container(shows).padding(Padding::ZERO.right(6));
 
                 column!(label, shows).spacing(10.0)
             };
@@ -658,6 +662,8 @@ impl CollectionPage {
                     .fluid(CARD_WIDTH)
                     .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
+                let seasons = container(seasons).padding(Padding::ZERO.right(6));
+
                 column!(label, seasons).spacing(10.0)
             };
 
@@ -684,6 +690,8 @@ impl CollectionPage {
                     .spacing(16)
                     .fluid(CARD_WIDTH)
                     .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+
+                let episodes = container(episodes).padding(Padding::ZERO.right(6));
 
                 column!(label, episodes).spacing(10.0)
             };

@@ -86,12 +86,10 @@ impl Movies {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(
-            scrollable(content)
+        let content =
+            scrollable(container(content).padding(Padding::new(10.0).right(16).bottom(0)))
                 .id(self.scroll.id.clone())
-                .on_scroll(MoviesMessage::Scroll),
-        )
-        .padding(Padding::new(10.0).bottom(0));
+                .on_scroll(MoviesMessage::Scroll);
 
         content.into()
     }
