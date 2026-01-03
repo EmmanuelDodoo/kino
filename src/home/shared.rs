@@ -20,7 +20,7 @@ use iced::{
     },
 };
 
-pub const CARD_HEIGHT: f32 = 400.0;
+pub const CARD_HEIGHT: f32 = 425.0;
 pub const CARD_WIDTH: f32 = CARD_HEIGHT * 2.0 / 3.0;
 pub const LIST_HEIGHT: f32 = 150.0;
 pub const LIST_WIDTH: f32 = LIST_HEIGHT * 5.5 / 10.0;
@@ -249,7 +249,9 @@ pub fn data_tab<'a, Message: 'a + Clone, T: Media>(
 
     let recent = data(
         "Recent Watch",
-        media.recent_humanized().unwrap_or(String::from(" --:--:--")),
+        media
+            .recent_humanized()
+            .unwrap_or(String::from(" --:--:--")),
         CALENDAR,
     );
 
@@ -387,6 +389,32 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
     .into()
 }
 
+pub fn float<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+    float: &'a Animation<bool>,
+    color: Option<iced::Color>,
+    now: Instant,
+) -> Element<'a, Message> {
+    use iced::{Color, Shadow};
+
+    let color = color.unwrap_or(Color::WHITE).inverse();
+
+    widget::float(content)
+        .scale(float.interpolate(1.0, 1.1, now))
+        .translate(move |bounds, viewport| {
+            bounds.zoom(1.1).offset(&viewport.shrink(5)) * float.interpolate(0.0, 1.0, now)
+        })
+        .style(move |_theme| widget::float::Style {
+            shadow: Shadow {
+                color: color.scale_alpha(float.interpolate(0.0, 1.0, now)),
+                blur_radius: float.interpolate(0.0, 20.0, now),
+                ..Shadow::default()
+            },
+            ..widget::float::Style::default()
+        })
+        .into()
+}
+
 pub type ThumbnailSample<T> = iced::Task<(<T as Media>::Id, Option<iced::Color>)>;
 
 #[derive(Debug, Clone)]
@@ -394,8 +422,9 @@ pub struct Thumbnail<T: Media> {
     poster: Option<Handle>,
     backdrop: Option<Handle>,
     sample_color: Option<iced::Color>,
-    pub background: Animation<bool>,
-    pub icon: Animation<bool>,
+    background: Animation<bool>,
+    icon: Animation<bool>,
+    float: Animation<bool>,
     pub media: T,
 }
 
@@ -430,6 +459,9 @@ impl<T: Media> Thumbnail<T> {
             icon: Animation::new(false)
                 .duration(iced::time::Duration::from_millis(100))
                 .easing(Easing::EaseOut),
+            float: Animation::new(false)
+                .duration(iced::time::Duration::from_millis(250))
+                .easing(Easing::EaseInOut),
             poster,
             sample_color,
             backdrop,
@@ -440,12 +472,15 @@ impl<T: Media> Thumbnail<T> {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        self.background.is_animating(now) || self.icon.is_animating(now)
+        self.background.is_animating(now)
+            || self.icon.is_animating(now)
+            || self.float.is_animating(now)
     }
 
     pub fn go_mut(&mut self, new_state: bool, at: Instant) {
         self.background.go_mut(new_state, at);
         self.icon.go_mut(new_state, at);
+        self.float.go_mut(new_state, at);
     }
 
     pub fn sample(&mut self, sample: Option<iced::Color>) {
@@ -641,7 +676,6 @@ impl<T: Media> Thumbnail<T> {
         let top = {
             let progress = progress(&self.media, sample, true);
             let add = mouse_area(icon(BOOKMARK).size(H4).style(color))
-                .interaction(mouse::Interaction::Pointer)
                 .on_press((on_add)(self.media.id()));
 
             container(
@@ -720,28 +754,30 @@ impl<T: Media> Thumbnail<T> {
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
-        .on_exit((on_hover)(self.media.id(), false))
-        .on_enter((on_hover)(self.media.id(), true))
-        .interaction(iced::mouse::Interaction::Pointer)
         .on_press((on_play)(self.media.id()));
 
         let img = self.poster_helper();
 
         let content = stack![img, overlay].width(CARD_WIDTH).height(Length::Fill);
 
-        let content = column!(content, details)
+        let content = container(column!(content, details))
+            .padding(4)
             .width(CARD_WIDTH)
-            .height(CARD_HEIGHT);
-
-        let content = button(content)
-            .padding(10)
-            .style(|theme, status| {
-                let default = styles::button::subtlest(theme, status);
+            .height(CARD_HEIGHT)
+            .style(|theme| {
+                let default = styles::container::bw3(theme);
                 let border = default.border.rounded(IMAGE_RADIUS);
 
-                button::Style { border, ..default }
-            })
-            .on_press((on_select)(self.media.id()));
+                container::Style { border, ..default }
+            });
+
+        let content = float(content, &self.float, self.sample_color, now);
+
+        let content = mouse_area(content)
+            .interaction(mouse::Interaction::Pointer)
+            .on_press((on_select)(self.media.id()))
+            .on_exit((on_hover)(self.media.id(), false))
+            .on_enter((on_hover)(self.media.id(), true));
 
         content.into()
     }
