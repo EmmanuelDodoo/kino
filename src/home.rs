@@ -2511,7 +2511,7 @@ impl Home {
         scroll_to(self.scroll.id.clone(), self.scroll.offset)
     }
 
-    fn update_page_scroll(&mut self) -> Task<Message> {
+    pub fn update_page_scroll(&mut self) -> Task<Message> {
         match self.current_page_mut() {
             None => self.update_scroll().discard(),
             Some(page) => page.update_scroll().discard(),

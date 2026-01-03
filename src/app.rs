@@ -1009,6 +1009,8 @@ impl App {
                 self.home
                     .recents_limit(settings.config.general.recents_limit);
 
+                let home_scroll = self.home.update_page_scroll();
+
                 let (config, dirs) = settings.save();
                 let writer = self.config.span_writer.take();
 
@@ -1049,7 +1051,7 @@ impl App {
                     Task::none()
                 };
 
-                Task::batch([auth, rating, dir])
+                Task::batch([auth, home_scroll, rating, dir])
             }
             Message::Layout(layout) => {
                 self.config.general.layout = layout;
