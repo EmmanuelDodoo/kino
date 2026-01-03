@@ -1328,11 +1328,11 @@ impl Database {
         let conn = Database::open(path)?;
 
         if !exists {
-            tracing::info!("writing DB schema");
+            tracing::debug!("writing DB schema");
             let schema = include_str!("../resources/db/schema.sql");
             conn.execute_batch(schema)?;
 
-            tracing::info!("writing DB dummies");
+            tracing::debug!("writing DB dummies");
             let dummies = read_to_string(dummies)?;
             conn.execute_batch(&dummies)?;
             Ok(conn)
@@ -1346,7 +1346,7 @@ impl Database {
         let conn = Database::open(db)?;
 
         if !exists {
-            tracing::info!("writing DB schema");
+            tracing::debug!("writing DB schema");
             let schema = include_str!("../resources/db/schema.sql");
             conn.execute_batch(schema)?;
             Ok(conn)
@@ -1356,7 +1356,7 @@ impl Database {
     }
 
     pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Database> {
-        tracing::info!("Opening DB connection");
+        tracing::debug!("Opening DB connection");
         let conn = rusqlite::Connection::open(path)?;
 
         Ok(Database { conn })
@@ -1364,7 +1364,7 @@ impl Database {
 }
 
 fn apply_migration(mut db: Database) -> rusqlite::Result<Database> {
-    tracing::info!("Initiating DB migration application");
+    tracing::debug!("Initiating DB migration application");
     let curr_version: u64 = db.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     let mut new_version = curr_version;
     let trans = db.transaction()?;
@@ -1374,7 +1374,7 @@ fn apply_migration(mut db: Database) -> rusqlite::Result<Database> {
             continue;
         }
 
-        tracing::info!("Applying DB migration at version {}", migration.version);
+        tracing::debug!("Applying DB migration at version {}", migration.version);
         trans.execute_batch(migration.sql)?;
         new_version = migration.version;
     }
@@ -1382,7 +1382,7 @@ fn apply_migration(mut db: Database) -> rusqlite::Result<Database> {
     trans.execute(&format!("PRAGMA user_version = {new_version}"), [])?;
     trans.commit()?;
 
-    tracing::info!("Ending DB migration application");
+    tracing::debug!("Ending DB migration application");
     Ok(db)
 }
 
@@ -1471,7 +1471,7 @@ pub struct Success {
 
 impl Success {
     pub fn log(&self) {
-        tracing::info!(
+        tracing::debug!(
             "Success {:?} on {:?} with {} rows changed",
             self.op,
             self.table,

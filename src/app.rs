@@ -264,12 +264,12 @@ impl App {
             Message::None => Task::none(),
             Message::Animate => Task::none(),
             Message::WindowId(window) => {
-                tracing::info!("Window id obtained");
+                tracing::debug!("Window id obtained");
                 self.window = window;
                 Task::none()
             }
             Message::Refresh(refresh, force) => {
-                tracing::info!("Refreshing");
+                tracing::debug!("Refreshing");
                 if force
                     || refresh.duration_since(self.last_refresh) >= self.config.refresh_interval()
                 {
@@ -283,7 +283,7 @@ impl App {
                 let Some(own) = &self.window else {
                     return Task::none();
                 };
-                tracing::info!("Initiating App Exit sequence");
+                tracing::debug!("Initiating App Exit sequence");
 
                 if id != *own {
                     return Task::none();
@@ -292,7 +292,7 @@ impl App {
                 self.screen = Screen::Home;
                 let stats = match self.player.take() {
                     Some(mut player) => {
-                        tracing::info!("Exiting player");
+                        tracing::debug!("Exiting player");
                         let stats = player.stats().map(Task::done).unwrap_or_default();
 
                         self.config.video = player.settings;
@@ -308,7 +308,7 @@ impl App {
                 }
             }
             Message::Exit(id) => {
-                tracing::info!("Exiting App");
+                tracing::debug!("Exiting App");
                 window::close::<Message>(id).discard()
             }
             Message::PushToast(message, status) => {
@@ -325,7 +325,7 @@ impl App {
                 Task::none()
             }
             Message::CloseToast(idx) => {
-                tracing::debug!("Closing toast {idx}");
+                tracing::debug!("Closdebugast {idx}");
                 self.toasts
                     .remove(idx.min(self.toasts.len().saturating_sub(1)));
 
@@ -349,7 +349,7 @@ impl App {
             Message::Query(query) => {
                 let _todo = match query.execute(&self.db) {
                     Ok(suc) => {
-                        tracing::info!("{suc:?}");
+                        tracing::debug!("{suc:?}");
                         suc
                     }
                     Err(error) => {
@@ -402,7 +402,7 @@ impl App {
 
                 match query.execute(&self.db) {
                     Ok(todo) => {
-                        tracing::info!("{todo:?}");
+                        tracing::debug!("{todo:?}");
                         self.home.content_refresh(now)
                     }
                     Err(error) => {
@@ -461,7 +461,7 @@ impl App {
                 Screen::Player => {
                     self.screen = Screen::Home;
                     if let Some(player) = self.player.take() {
-                        tracing::info!("Exiting player");
+                        tracing::debug!("Exiting player");
 
                         self.config.video = player.settings;
                     }
@@ -490,7 +490,7 @@ impl App {
                         .get_collections(collection::Sort::View, SimpleCollection::from_row)
                     {
                         Ok(collections) => {
-                            tracing::info!("Fetched {} Simple Collections", collections.len());
+                            tracing::debug!("Fetched {} Simple Collections", collections.len());
                             collections
                         }
                         Err(error) => {
@@ -508,7 +508,7 @@ impl App {
                     let thumbnails = match self.db.get_shows(limit, offset, filter, sort, show_map)
                     {
                         Ok(shows) => {
-                            tracing::info!("Fetched {} Shows", shows.len());
+                            tracing::debug!("Fetched {} Shows", shows.len());
                             shows
                         }
                         Err(error) => {
@@ -534,7 +534,7 @@ impl App {
                     let thumbnails =
                         match self.db.get_movies(limit, offset, filter, sort, movie_map) {
                             Ok(movies) => {
-                                tracing::info!("Fetched {} Movies", movies.len());
+                                tracing::debug!("Fetched {} Movies", movies.len());
                                 movies
                             }
                             Err(error) => {
@@ -560,7 +560,7 @@ impl App {
                     let thumbnails_movies =
                         match self.db.get_movies(limit, offset, filter, sort, movie_map) {
                             Ok(movies) => {
-                                tracing::info!("Fetched {} Recent Movies", movies.len());
+                                tracing::debug!("Fetched {} Recent Movies", movies.len());
                                 movies
                             }
                             Err(error) => {
@@ -572,7 +572,7 @@ impl App {
                     let thumbnails_shows =
                         match self.db.get_shows(limit, offset, filter, sort, show_map) {
                             Ok(shows) => {
-                                tracing::info!("Fetched {} Recent Shows", shows.len());
+                                tracing::debug!("Fetched {} Recent Shows", shows.len());
                                 shows
                             }
                             Err(error) => {
@@ -603,7 +603,7 @@ impl App {
                 FetchId::Show(id) => {
                     let (show, show_sample) = match self.db.get_show(id, show_map) {
                         Ok(show) => {
-                            tracing::info!("Fetched Show {}", show.0.media.name());
+                            tracing::debug!("Fetched Show {}", show.0.media.name());
                             show
                         }
                         Err(error) => {
@@ -617,7 +617,7 @@ impl App {
                         .get_show_seasons(id, limit, offset, filter, sort, season_map)
                     {
                         Ok(seasons) => {
-                            tracing::info!("Fetched {} show Seasons", seasons.len());
+                            tracing::debug!("Fetched {} show Seasons", seasons.len());
                             seasons
                         }
                         Err(error) => {
@@ -643,7 +643,7 @@ impl App {
                 FetchId::Season(id) => {
                     let (season, season_sample) = match self.db.get_season(id, season_map) {
                         Ok(season) => {
-                            tracing::info!("Fetched season {}", season.0.media.name());
+                            tracing::debug!("Fetched season {}", season.0.media.name());
                             season
                         }
                         Err(error) => {
@@ -661,7 +661,7 @@ impl App {
                         episode_map,
                     ) {
                         Ok(episodes) => {
-                            tracing::info!("Fetched {} season episodes", episodes.len());
+                            tracing::debug!("Fetched {} season episodes", episodes.len());
                             episodes
                         }
                         Err(error) => {
@@ -687,7 +687,7 @@ impl App {
                 FetchId::Episode(id) => {
                     let (episode, sample) = match self.db.get_episode(id, episode_map) {
                         Ok(episode) => {
-                            tracing::info!("Fetched Episode {}", episode.0.media.name());
+                            tracing::debug!("Fetched Episode {}", episode.0.media.name());
                             episode
                         }
                         Err(error) => {
@@ -704,7 +704,7 @@ impl App {
                 FetchId::Movie(id) => {
                     let (movie, sample) = match self.db.get_movie(id, movie_map) {
                         Ok(movie) => {
-                            tracing::info!("Fetched Movie {}", movie.0.media.name());
+                            tracing::debug!("Fetched Movie {}", movie.0.media.name());
                             movie
                         }
                         Err(error) => {
@@ -725,7 +725,7 @@ impl App {
                         .get_collections(collection::Sort::default(), Collection::from_row)
                     {
                         Ok(collections) => {
-                            tracing::info!("Fetched {} Collections", collections.len());
+                            tracing::debug!("Fetched {} Collections", collections.len());
                             collections
                         }
                         Err(error) => {
@@ -739,7 +739,7 @@ impl App {
                 FetchId::Collection(id) => {
                     let collection = match self.db.get_collection(id, Collection::from_row) {
                         Ok(collection) => {
-                            tracing::info!("Fetched Collection {}", collection.name);
+                            tracing::debug!("Fetched Collection {}", collection.name);
                             collection
                         }
                         Err(error) => {
@@ -753,7 +753,7 @@ impl App {
                         .get_collection_inserts(id, InsertTrigger::from_row)
                     {
                         Ok(triggers) => {
-                            tracing::info!("Fetched {} collection insert triggers", triggers.len());
+                            tracing::debug!("Fetched {} collection insert triggers", triggers.len());
                             triggers
                         }
                         Err(error) => {
@@ -766,7 +766,7 @@ impl App {
                         .get_collection_deletes(id, DeleteTrigger::from_row)
                     {
                         Ok(triggers) => {
-                            tracing::info!("Fetched {} collection delete triggers", triggers.len());
+                            tracing::debug!("Fetched {} collection delete triggers", triggers.len());
                             triggers
                         }
                         Err(error) => {
@@ -787,7 +787,7 @@ impl App {
                             episode_map,
                         ) {
                             Ok(items) => {
-                                tracing::info!("Fetched Collection items");
+                                tracing::debug!("Fetched Collection items");
                                 items
                             }
                             Err(error) => {
@@ -842,7 +842,7 @@ impl App {
 
                 let dirs = match self.db.get_directories() {
                     Ok(dirs) => {
-                        tracing::info!("Fetched {} Directories", dirs.len());
+                        tracing::debug!("Fetched {} Directories", dirs.len());
                         dirs
                     }
                     Err(error) => {
@@ -863,7 +863,7 @@ impl App {
                     shared::SearchView::new,
                 ) {
                     Ok(items) => {
-                        tracing::info!("Fetched Search {search} items");
+                        tracing::debug!("Fetched Search {search} items");
                         items
                     }
                     Err(error) => {
@@ -877,7 +877,7 @@ impl App {
             Message::FetchMembershipIds(item) => {
                 let memberships = match self.db.get_item_membership_ids(item) {
                     Ok(memberships) => {
-                        tracing::info!("Fetched Item {item:?} memberships ids");
+                        tracing::debug!("Fetched Item {item:?} memberships ids");
                         memberships
                     }
                     Err(error) => {
@@ -907,7 +907,7 @@ impl App {
                             )
                         }) {
                         Ok(memberships) => {
-                            tracing::info!("Fetched Item {item:?} memberships ids");
+                            tracing::debug!("Fetched Item {item:?} memberships ids");
                             memberships
                         }
                         Err(error) => {
@@ -935,14 +935,14 @@ impl App {
                 match id {
                     PlayId::Movie(id) => match self.db.last_watched_movie(id, now) {
                         Ok(_) => {
-                            tracing::info!("Updated {id:?} last watched");
+                            tracing::debug!("Updated {id:?} last watched");
                             Task::none()
                         }
                         Err(error) => Task::done(Message::error(error)),
                     },
                     PlayId::Episode(id) => match self.db.last_watched_episode(id, now) {
                         Ok(_) => {
-                            tracing::info!("Updated {id:?} last watched");
+                            tracing::debug!("Updated {id:?} last watched");
                             Task::none()
                         }
                         Err(error) => Task::done(Message::error(error)),
@@ -959,7 +959,7 @@ impl App {
                         item.subtitle_uri.map(|path| path.display().to_string()),
                     ) {
                         Ok(_) => {
-                            tracing::info!("Updated {id:?} statistics");
+                            tracing::debug!("Updated {id:?} statistics");
                             Task::none()
                         }
                         Err(error) => Task::done(Message::error(error)),
@@ -974,7 +974,7 @@ impl App {
                         item.subtitle_uri.map(|path| path.display().to_string()),
                     ) {
                         Ok(_) => {
-                            tracing::info!("Updated {id:?} statistics");
+                            tracing::debug!("Updated {id:?} statistics");
                             Task::none()
                         }
                         Err(error) => Task::done(Message::error(error)),
@@ -984,7 +984,7 @@ impl App {
             Message::Random => {
                 let random = match self.db.get_random() {
                     Ok(random) => {
-                        tracing::info!("Fetched random media {random:?}");
+                        tracing::debug!("Fetched random media {random:?}");
                         random
                     }
                     Err(error) => {
@@ -1003,7 +1003,7 @@ impl App {
                     return Task::none();
                 };
 
-                tracing::info!("Saving settings");
+                tracing::debug!("Saving settings");
 
                 self.home.layout(settings.config.layout());
                 self.home
@@ -1030,7 +1030,7 @@ impl App {
                 let auth = self.config.auth();
 
                 let auth = if !auth.is_empty() {
-                    tracing::info!("Updating API token");
+                    tracing::debug!("Updating API token");
                     let auth_tx = self.auth_tx.clone();
 
                     Task::perform(async move { auth_tx.send(auth).await }, |_| Message::None)
@@ -1039,7 +1039,7 @@ impl App {
                 };
 
                 let rating = if prev_rating != new_rating {
-                    tracing::info!("Updating TMDB rating option");
+                    tracing::debug!("Updating TMDB rating option");
                     let rating_tx = self.rating_tx.clone();
 
                     Task::perform(async move { rating_tx.send(new_rating).await }, |_| {
@@ -1082,13 +1082,13 @@ impl App {
                 Task::batch([home_task, scan])
             }
             Message::ScanComplete(scanned) => {
-                tracing::info!("Directory scan complete");
+                tracing::debug!("Directory scan complete");
                 let last_scan = Local::now();
                 let last_scan = models::datetime_to_sql(&last_scan);
 
                 let _todo = match self.db.last_scans(scanned, last_scan) {
                     Ok(rows) => {
-                        tracing::info!("Directories last scanned updated {rows} rows");
+                        tracing::debug!("Directories last scanned updated {rows} rows");
                         rows
                     }
                     Err(error) => {
@@ -1114,7 +1114,7 @@ impl App {
                 for (trigger, roe) in inserts {
                     match trigger.insert().execute(&self.db) {
                         Ok(succ) => {
-                            tracing::info!("{succ:?}");
+                            tracing::debug!("{succ:?}");
                             succs.push(succ);
                         }
                         Err(fail) => {
@@ -1128,7 +1128,7 @@ impl App {
 
                     match trigger.save(&self.db) {
                         Ok(_) => {
-                            tracing::info!("{} saved", trigger.name)
+                            tracing::debug!("{} saved", trigger.name)
                         }
                         Err(error) => {
                             tracing::error!("Trigger {} save {error:?}", trigger.name);
@@ -1142,7 +1142,7 @@ impl App {
                     if roe {
                         match trigger.run_on_existing(&mut self.db) {
                             Ok(_) => {
-                                tracing::info!("{} run-on-existing successful", trigger.name)
+                                tracing::debug!("{} run-on-existing successful", trigger.name)
                             }
                             Err(error) => {
                                 tracing::error!("{error:?}");
@@ -1158,7 +1158,7 @@ impl App {
                 for (trigger, roe) in deletes {
                     match trigger.insert().execute(&self.db) {
                         Ok(succ) => {
-                            tracing::info!("{succ:?}");
+                            tracing::debug!("{succ:?}");
                             succs.push(succ);
                         }
                         Err(fail) => {
@@ -1172,7 +1172,7 @@ impl App {
 
                     match trigger.save(&self.db) {
                         Ok(_) => {
-                            tracing::info!("{} saved", trigger.name)
+                            tracing::debug!("{} saved", trigger.name)
                         }
                         Err(error) => {
                             tracing::error!("Trigger {} save {error:?}", trigger.name);
@@ -1186,7 +1186,7 @@ impl App {
                     if roe {
                         match trigger.run_on_existing(&mut self.db) {
                             Ok(_) => {
-                                tracing::info!("{} run-on-existing successful", trigger.name)
+                                tracing::debug!("{} run-on-existing successful", trigger.name)
                             }
                             Err(error) => {
                                 tracing::error!("{error:?}");
@@ -1203,7 +1203,7 @@ impl App {
                     let name = trigger.name.clone();
                     match trigger.remove(&self.db) {
                         Ok(_) => {
-                            tracing::info!("{} removed", name);
+                            tracing::debug!("{} removed", name);
                         }
                         Err(error) => {
                             tracing::error!("Trigger {} remove {error:?}", name);
@@ -1219,7 +1219,7 @@ impl App {
                     let name = trigger.name.clone();
                     match trigger.remove(&self.db) {
                         Ok(_) => {
-                            tracing::info!("{} removed", name);
+                            tracing::debug!("{} removed", name);
                         }
                         Err(error) => {
                             tracing::error!("Trigger {} remove {error:?}", name);
@@ -1415,7 +1415,7 @@ impl App {
             ItemId::Movie(id) => {
                 let item = self.db.get_movie(id, PlayItem::from_movie)?;
                 if item.path.try_exists()? {
-                    tracing::info!("Movie {} Play item fetched", item.name);
+                    tracing::debug!("Movie {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
                 } else {
                     Err(Error::Raw(format!(
@@ -1427,7 +1427,7 @@ impl App {
             ItemId::Episode(id) => {
                 let item = self.db.get_episode(id, PlayItem::from_episode)?;
                 if item.path.try_exists()? {
-                    tracing::info!("Episode {} Play item fetched", item.name);
+                    tracing::debug!("Episode {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
                 } else {
                     Err(Error::Raw(format!(

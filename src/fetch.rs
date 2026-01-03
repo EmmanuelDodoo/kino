@@ -88,7 +88,7 @@ struct TMDBEpisode {
 }
 
 async fn get_config(auth: &str) -> reqwest::Result<ImageConfig> {
-    tracing::info!("fetching image configuration");
+    tracing::debug!("fetching image configuration");
     #[derive(Deserialize)]
     struct Response {
         images: ImageConfig,
@@ -108,7 +108,7 @@ async fn get_config(auth: &str) -> reqwest::Result<ImageConfig> {
 
 async fn search_item(auth: &str, snippet: impl AsRef<str>, movie: bool) -> Option<TMDBId> {
     let snippet = snippet.as_ref();
-    tracing::info!("Searching for media item: {snippet}");
+    tracing::debug!("Searching for media item: {snippet}");
 
     #[derive(Deserialize)]
     struct Response {
@@ -135,7 +135,7 @@ async fn search_item(auth: &str, snippet: impl AsRef<str>, movie: bool) -> Optio
 }
 
 async fn get_movie(auth: &str, id: TMDBId) -> Option<TMDBMovie> {
-    tracing::info!("Fetching movie {}", id.id);
+    tracing::debug!("Fetching movie {}", id.id);
     let response: TMDBMovie = CLIENT
         .get(format!("https://api.themoviedb.org/3/movie/{}", id.id))
         .bearer_auth(auth)
@@ -153,7 +153,7 @@ async fn get_movie(auth: &str, id: TMDBId) -> Option<TMDBMovie> {
 }
 
 async fn get_show(auth: &str, id: TMDBId) -> Option<TMDBShow> {
-    tracing::info!("Fetching show {}", id.id);
+    tracing::debug!("Fetching show {}", id.id);
     let response: TMDBShow = CLIENT
         .get(format!("https://api.themoviedb.org/3/tv/{}", id.id))
         .bearer_auth(auth)
@@ -171,7 +171,7 @@ async fn get_show(auth: &str, id: TMDBId) -> Option<TMDBShow> {
 }
 
 async fn get_season(auth: &str, show: TMDBId, number: u32) -> Option<TMDBSeason> {
-    tracing::info!("Fetching show {} season {number}", show.id);
+    tracing::debug!("Fetching show {} season {number}", show.id);
     let response: TMDBSeason = CLIENT
         .get(format!(
             "https://api.themoviedb.org/3/tv/{}/season/{number}",
@@ -192,7 +192,7 @@ async fn get_season(auth: &str, show: TMDBId, number: u32) -> Option<TMDBSeason>
 }
 
 async fn get_episode(auth: &str, show: TMDBId, season: u32, number: u32) -> Option<TMDBEpisode> {
-    tracing::info!("Fetching show {} season {season} episode {number}", show.id);
+    tracing::debug!("Fetching show {} season {season} episode {number}", show.id);
     let response: TMDBEpisode = CLIENT
         .get(format!(
             "https://api.themoviedb.org/3/tv/{}/season/{season}/episode/{number}",
@@ -219,7 +219,7 @@ async fn download(
     poster: bool,
     path: impl AsRef<Path>,
 ) -> bool {
-    tracing::info!("Downloading image at {}", path.as_ref().display());
+    tracing::debug!("Downloading image at {}", path.as_ref().display());
 
     let size = if poster {
         let len = config.poster_sizes.len();
@@ -332,7 +332,7 @@ pub async fn fetcher(
     images_path: impl AsRef<Path>,
     interval: std::time::Duration,
 ) {
-    tracing::info!("Starting up Fetcher instance");
+    tracing::debug!("Starting up Fetcher instance");
     let mut db = match Database::open(db) {
         Ok(db) => db,
         Err(error) => {
@@ -355,7 +355,7 @@ pub async fn fetcher(
         if !auth_rx.is_empty()
             && let Some(new_auth) = auth_rx.recv().await
         {
-            tracing::info!("New API token received");
+            tracing::debug!("New API token received");
             auth = new_auth;
             image_config = get_config(&auth)
                 .await
@@ -370,7 +370,7 @@ pub async fn fetcher(
         if !rating_rx.is_empty()
             && let Some(new_rating) = rating_rx.recv().await
         {
-            tracing::info!("New TMDB rating option received");
+            tracing::debug!("New TMDB rating option received");
             rating = new_rating
         }
 
@@ -409,7 +409,7 @@ mod movies {
     }
 
     fn fetch_data(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingData>> {
-        tracing::info!("Querying pending movie data");
+        tracing::debug!("Querying pending movie data");
         let sql = "SELECT movie.id, movie.name FROM movie WHERE movie.tmdb_id IS NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -424,7 +424,7 @@ mod movies {
     }
 
     fn fetch_user_pending(db: &Database, limit: u8) -> rusqlite::Result<Vec<UserPending>> {
-        tracing::info!("Querying user pending movie data");
+        tracing::debug!("Querying user pending movie data");
         let sql = "SELECT movie.id, movie.user_tmdb_id FROM movie WHERE movie.user_tmdb_id IS NOT NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -441,7 +441,7 @@ mod movies {
     }
 
     fn fetch_image(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingImage>> {
-        tracing::info!("Querying pending movie images");
+        tracing::debug!("Querying pending movie images");
         let sql = "SELECT movie.id, movie.poster, movie.backdrop FROM movie WHERE movie.tmdb_id IS NOT NULL AND NOT movie.fetched LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -465,7 +465,7 @@ mod movies {
         movies: Vec<(MovieId, TMDBMovie)>,
         rating: bool,
     ) -> rusqlite::Result<usize> {
-        tracing::info!("Inserting {} movie data", movies.len());
+        tracing::debug!("Inserting {} movie data", movies.len());
         let trans = db.transaction()?;
         let sql = "UPDATE movie SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, user_tmdb_id=NULL, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
@@ -534,7 +534,7 @@ mod movies {
     ) -> rusqlite::Result<usize> {
         use rusqlite::types::ToSqlOutput;
 
-        tracing::info!("Inserting {} movie images", images.len());
+        tracing::debug!("Inserting {} movie images", images.len());
         let trans = db.transaction()?;
         let sql =
             "UPDATE movie SET  poster=:poster, backdrop=:backdrop, fetched=:fetched WHERE id=:id";
@@ -574,7 +574,7 @@ mod movies {
         images_path: impl AsRef<Path>,
         rating: bool,
     ) {
-        tracing::info!("Handling movies fetching");
+        tracing::debug!("Handling movies fetching");
         let images_path = images_path.as_ref();
 
         if let Ok(pending) =
@@ -675,7 +675,7 @@ mod shows {
     }
 
     fn fetch_data(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingData>> {
-        tracing::info!("Querying pending show data");
+        tracing::debug!("Querying pending show data");
         let sql = "SELECT tv_show.id, tv_show.name FROM tv_show WHERE tv_show.tmdb_id IS NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -690,7 +690,7 @@ mod shows {
     }
 
     fn fetch_user_pending(db: &Database, limit: u8) -> rusqlite::Result<Vec<UserPending>> {
-        tracing::info!("Querying user pending show data");
+        tracing::debug!("Querying user pending show data");
         let sql = "SELECT tv_show.id, tv_show.user_tmdb_id FROM tv_show WHERE tv_show.user_tmdb_id IS NOT NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -707,7 +707,7 @@ mod shows {
     }
 
     fn fetch_image(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingImage>> {
-        tracing::info!("Querying pending show images");
+        tracing::debug!("Querying pending show images");
         let sql = "SELECT tv_show.id, tv_show.poster, tv_show.backdrop FROM tv_show WHERE tv_show.tmdb_id IS NOT NULL AND NOT tv_show.fetched LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -731,7 +731,7 @@ mod shows {
         shows: Vec<(ShowId, TMDBShow)>,
         rating: bool,
     ) -> rusqlite::Result<usize> {
-        tracing::info!("Inserting {} show data", shows.len());
+        tracing::debug!("Inserting {} show data", shows.len());
         let trans = db.transaction()?;
         let sql = "UPDATE tv_show SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, user_tmdb_id=NULL, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
@@ -796,7 +796,7 @@ mod shows {
         db: &mut Database,
         images: Vec<(ShowId, Option<String>, Option<String>)>,
     ) -> rusqlite::Result<usize> {
-        tracing::info!("Inserting {} show images", images.len());
+        tracing::debug!("Inserting {} show images", images.len());
         let trans = db.transaction()?;
         let sql =
             "UPDATE tv_show SET  poster=:poster, backdrop=:backdrop, fetched=:fetched WHERE id=:id";
@@ -836,7 +836,7 @@ mod shows {
         images_path: impl AsRef<Path>,
         rating: bool,
     ) {
-        tracing::info!("Handling show fetching");
+        tracing::debug!("Handling show fetching");
         let images_path = images_path.as_ref();
 
         if let Ok(pending) =
@@ -931,7 +931,7 @@ mod seasons {
     }
 
     fn fetch_data(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingData>> {
-        tracing::info!("Querying pending season data");
+        tracing::debug!("Querying pending season data");
         let sql = "SELECT season.id, season.season_number, tv_show.tmdb_id AS show_tmdb_id FROM season INNER JOIN tv_show ON season.show_id=tv_show.id AND tv_show.tmdb_id NOT NULL AND season.tmdb_id IS NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -948,7 +948,7 @@ mod seasons {
     }
 
     fn fetch_image(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingImage>> {
-        tracing::info!("Querying pending season images");
+        tracing::debug!("Querying pending season images");
         let sql = "SELECT season.id, season.poster FROM season WHERE season.tmdb_id IS NOT NULL AND NOT season.fetched LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -967,7 +967,7 @@ mod seasons {
         seasons: Vec<(SeasonId, TMDBSeason)>,
         rating: bool,
     ) -> rusqlite::Result<usize> {
-        tracing::info!("Inserting {} season data", seasons.len());
+        tracing::debug!("Inserting {} season data", seasons.len());
         let trans = db.transaction()?;
         let sql = "UPDATE season SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, rating=:rating WHERE id=:id";
         let mut rows = 0;
@@ -1016,7 +1016,7 @@ mod seasons {
         db: &mut Database,
         images: Vec<(SeasonId, Option<String>)>,
     ) -> rusqlite::Result<usize> {
-        tracing::info!("Inserting {} season images", images.len());
+        tracing::debug!("Inserting {} season images", images.len());
         let trans = db.transaction()?;
         let sql = "UPDATE season SET poster=:poster, fetched=:fetched WHERE id=:id";
         let mut rows = 0;
@@ -1049,7 +1049,7 @@ mod seasons {
         images_path: impl AsRef<Path>,
         rating: bool,
     ) {
-        tracing::info!("Handling season fethcing");
+        tracing::debug!("Handling season fethcing");
         let images_path = images_path.as_ref();
         if let Ok(seasons) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}")) {
             let mut data = Vec::with_capacity(seasons.len());
@@ -1110,7 +1110,7 @@ mod episodes {
     }
 
     fn fetch_data(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingData>> {
-        tracing::info!("Querying pending episode data");
+        tracing::debug!("Querying pending episode data");
         let sql = "SELECT id, episode_number, season_number, show_tmdb_id FROM get_episode_data WHERE show_tmdb_id NOT NULL AND tmdb_id IS NULL LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -1133,7 +1133,7 @@ mod episodes {
     }
 
     fn fetch_image(db: &Database, limit: u8) -> rusqlite::Result<Vec<PendingImage>> {
-        tracing::info!("Querying pending episode images");
+        tracing::debug!("Querying pending episode images");
         let sql = "SELECT episode.id, episode.poster FROM episode WHERE episode.tmdb_id IS NOT NULL AND NOT episode.fetched LIMIT :limit";
 
         let mut statement = db.prepare_cached(sql)?;
@@ -1152,7 +1152,7 @@ mod episodes {
         episodes: Vec<(EpisodeId, TMDBEpisode)>,
         rating: bool,
     ) -> rusqlite::Result<usize> {
-        tracing::info!("Inserting {} episode data", episodes.len());
+        tracing::debug!("Inserting {} episode data", episodes.len());
         let trans = db.transaction()?;
         let sql = "UPDATE episode SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
@@ -1205,7 +1205,7 @@ mod episodes {
         db: &mut Database,
         images: Vec<(EpisodeId, Option<String>)>,
     ) -> rusqlite::Result<usize> {
-        tracing::info!("Inserting {} episode images", images.len());
+        tracing::debug!("Inserting {} episode images", images.len());
         let trans = db.transaction()?;
         let sql = "UPDATE episode SET poster=:poster, fetched=:fetched WHERE id=:id";
         let mut rows = 0;
@@ -1238,7 +1238,7 @@ mod episodes {
         images_path: impl AsRef<Path>,
         rating: bool,
     ) {
-        tracing::info!("Handling episode fetching");
+        tracing::debug!("Handling episode fetching");
         let images_path = images_path.as_ref();
         if let Ok(episodes) = fetch_data(db, limit).inspect_err(|error| tracing::error!("{error}"))
         {

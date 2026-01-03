@@ -67,7 +67,7 @@ pub fn scan_dir<'a>(
     movie_depth: u8,
     restore: bool,
 ) -> Option<BatchResult<'a>> {
-    tracing::info!("Scanning directory {}", dir.path);
+    tracing::debug!("Scanning directory {}", dir.path);
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
             tracing::error!(
@@ -105,7 +105,7 @@ pub fn scan_dirs<'a>(
     movie_depth: u8,
     restore: bool,
 ) -> (Option<BatchResult<'a>>, Vec<DirectoryId>) {
-    tracing::info!("Scanning {} directories", dirs.len());
+    tracing::debug!("Scanning {} directories", dirs.len());
     let discoverer = if discoverer {
         if let Err(error) = gstreamer::init().map_err(error::GStreamerError::Glib) {
             tracing::error!("Scan directories gstreamer init error. Error \n{error}");
@@ -156,7 +156,7 @@ pub fn scan_dir_helper<'a>(
 
     match dir.media_type {
         MediaType::Movies => {
-            tracing::info!("Scanning movie directory {}", dir.path);
+            tracing::debug!("Scanning movie directory {}", dir.path);
             if let Some(videos) = scan_video_dir(&dir.path, discoverer, movie_depth, None) {
                 let mut scanned = std::collections::HashSet::with_capacity(videos.len());
 
@@ -179,7 +179,7 @@ pub fn scan_dir_helper<'a>(
                     tombstone: bool,
                 }
 
-                tracing::info!("Fetching Directory movies");
+                tracing::debug!("Fetching Directory movies");
                 if let Ok(dir_movies) = db
                     .get_dir_movies(dir.id, |row| {
                         let id = MovieId::from_row(row)?;
@@ -205,7 +205,7 @@ pub fn scan_dir_helper<'a>(
                         })
                         .collect();
 
-                    tracing::info!("Performing movies insert/remove");
+                    tracing::debug!("Performing movies insert/remove");
                     if let Err(error) = db.insert_remove_movies(movies) {
                         tracing::error!("{error}")
                     };
@@ -231,7 +231,7 @@ pub fn scan_dir_helper<'a>(
                 tombstone: bool,
             }
 
-            tracing::info!("Scanning shows directory {}", dir.path);
+            tracing::debug!("Scanning shows directory {}", dir.path);
             let shows = scan_shows(&dir.path, discoverer)?;
             let mut scanned_shows = std::collections::HashSet::with_capacity(shows.len());
 
@@ -273,7 +273,7 @@ pub fn scan_dir_helper<'a>(
 
                 let mut scanned_seasons = std::collections::HashSet::with_capacity(seasons.len());
 
-                tracing::info!("Scanning {name} seasons");
+                tracing::debug!("Scanning {name} seasons");
                 for season in seasons {
                     let SeasonPrim { path, episodes } = season;
                     let number = process_season(&path);
@@ -312,7 +312,7 @@ pub fn scan_dir_helper<'a>(
                     let mut scanned_episodes =
                         std::collections::HashSet::with_capacity(episodes.len());
 
-                    tracing::info!("Scanning {name} episodes");
+                    tracing::debug!("Scanning {name} episodes");
                     for episode in episodes {
                         let number = process_episode(&episode.path);
                         let name = match number {
@@ -337,7 +337,7 @@ pub fn scan_dir_helper<'a>(
                         }
                     }
 
-                    tracing::info!("Fetching season episodes");
+                    tracing::debug!("Fetching season episodes");
                     if let Ok(dir_episodes) = db
                         .get_season_episodes_removed(season, |row| {
                             let id = EpisodeId::from_row(row)?;
@@ -363,14 +363,14 @@ pub fn scan_dir_helper<'a>(
                             })
                             .collect();
 
-                        tracing::info!("Performing episodes insert/remove");
+                        tracing::debug!("Performing episodes insert/remove");
                         if let Err(error) = db.insert_remove_episodes(episodes) {
                             tracing::error!("{error}")
                         };
                     };
                 }
 
-                tracing::info!("Fetching show seasons");
+                tracing::debug!("Fetching show seasons");
                 if let Ok(dir_seasons) = db
                     .get_show_seasons_removed(show, |row| {
                         let id = SeasonId::from_row(row)?;
@@ -396,14 +396,14 @@ pub fn scan_dir_helper<'a>(
                         })
                         .collect();
 
-                    tracing::info!("Performing season insert/remove");
+                    tracing::debug!("Performing season insert/remove");
                     if let Err(error) = db.insert_remove_seasons(seasons) {
                         tracing::error!("{error}")
                     };
                 };
             }
 
-            tracing::info!("Fetching Directory shows");
+            tracing::debug!("Fetching Directory shows");
             if let Ok(dir_shows) = db
                 .get_dir_shows(dir.id, |row| {
                     let id = ShowId::from_row(row)?;
@@ -429,7 +429,7 @@ pub fn scan_dir_helper<'a>(
                     })
                     .collect();
 
-                tracing::info!("Performing movies insert/remove");
+                tracing::debug!("Performing movies insert/remove");
                 if let Err(error) = db.insert_remove_shows(shows) {
                     tracing::error!("{error}")
                 };
@@ -544,7 +544,7 @@ fn scan_video_dir(
 ) -> Option<Vec<Video>> {
     let path = path.as_ref();
 
-    tracing::info!("Scanning video directory {}", path.display());
+    tracing::debug!("Scanning video directory {}", path.display());
 
     let path = path
         .canonicalize()
@@ -612,7 +612,7 @@ fn scan_video_dir(
 
 /// Returns the (path, name) if valid extension and valid utf8 name
 fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<(String, String, u64)> {
-    tracing::info!("Scanning file path {}", path.display());
+    tracing::debug!("Scanning file path {}", path.display());
     let is_video = path
         .extension()
         .and_then(|ext| ext.to_str())

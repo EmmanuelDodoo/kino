@@ -220,7 +220,7 @@ impl Config {
         use directories::ProjectDirs;
         use std::fs::{create_dir_all, read_to_string};
 
-        tracing::info!("Loading Config");
+        tracing::debug!("Loading Config");
 
         let mut errors = Vec::with_capacity(3);
 
@@ -232,7 +232,7 @@ impl Config {
 
         let config_path = config_dir.join(Self::CONFIG_PATH);
 
-        tracing::info!("Reading config contents");
+        tracing::debug!("Reading config contents");
         let config = match read_to_string(config_path).map_err(|error| error.kind()) {
             Ok(config) => config,
             Err(std::io::ErrorKind::NotFound) => {
@@ -259,7 +259,7 @@ impl Config {
         use std::fs::OpenOptions;
         use tracing_subscriber::EnvFilter;
 
-        tracing::info!("preping config");
+        tracing::debug!("preping config");
         let dir = dir.as_ref();
         let log = dir.join(Self::LOG_FILE);
         self.config_dir = Some(dir.to_path_buf());
@@ -267,7 +267,7 @@ impl Config {
         match OpenOptions::new().append(true).create(true).open(log) {
             Ok(log) => {
                 let (non_blocking, writer_guard) = tracing_appender::non_blocking(log);
-                let filter = EnvFilter::new("error,kino=info");
+                let filter = EnvFilter::new("error,kino=debug");
 
                 self.span_writer = Some(writer_guard);
 
@@ -309,7 +309,7 @@ impl Config {
     }
 
     pub fn dev() -> Self {
-        tracing::info!("Loading dev config");
+        tracing::debug!("Loading dev config");
         let new = Self {
             general: GeneralSettings::debug_defaults(),
             video: VideoSettings::defaults(),

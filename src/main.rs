@@ -132,7 +132,7 @@ impl BootFn<App, app::Message> for BootMode {
                 let db = db::Database::open_with_dummies(config.db_path(), dummies)
                     .expect("Failed to open dummy database");
 
-                tracing::info!("Starting up Dummies instance");
+                tracing::debug!("Starting up Dummies instance");
                 App::boot(config, db, std::iter::empty(), false)
             }
             Self::Dev => {
@@ -140,7 +140,7 @@ impl BootFn<App, app::Message> for BootMode {
                 let db = db::Database::open_with_schema(config.db_path())
                     .expect("Failed to open dev database");
 
-                tracing::info!("Starting up Dev instance");
+                tracing::debug!("Starting up Dev instance");
                 App::boot(config, db, std::iter::empty(), false)
             }
             Self::Prod => {
@@ -148,7 +148,7 @@ impl BootFn<App, app::Message> for BootMode {
                 let db = db::Database::open_with_schema(config.db_path())
                     .expect("Failed to open Database");
 
-                tracing::info!("Starting up Production instance");
+                tracing::debug!("Starting up Production instance");
                 App::boot(config, db, errors, true)
             }
         }
