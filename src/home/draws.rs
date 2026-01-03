@@ -742,10 +742,10 @@ pub fn draw_insert_trigger<'a>(
     let media = {
         let label = sized_medium("Target Media", text_size);
 
-        let options = if trigger.logic.tags.is_none() {
+        let options = if trigger.logic.tags.is_none() && trigger.logic.dir.is_none() {
             triggers::Media::VARIANTS
         } else {
-            triggers::Media::TAGS
+            triggers::Media::ROOTS
         };
 
         let pick = pick_list(options, Some(trigger.media), move |media| {
@@ -859,6 +859,28 @@ pub fn draw_insert_trigger<'a>(
                 .align_y(Vertical::Center)
         };
 
+        let dir = {
+            let label = sized_medium("Directory contains", size).width(width);
+
+            let (not, dir) = trigger
+                .logic
+                .dir
+                .as_ref()
+                .map(|(not, dir)| (*not, dir.as_str()))
+                .unwrap_or((false, ""));
+            let input = input(dir).on_input(LogicMessage::Dir);
+
+            let not = checkbox(not)
+                .label("NOT")
+                .text_size(size)
+                .on_toggle(LogicMessage::DirComp)
+                .size(size);
+
+            row!(label, space::horizontal(), not, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
         let last = {
             let label = sized_medium("Last watched", size).width(width);
 
@@ -1026,7 +1048,8 @@ pub fn draw_insert_trigger<'a>(
         };
 
         column!(
-            title, name, synopsis, tags, last, duration, progress, watch, release, rating, comment
+            title, name, synopsis, tags, dir, last, duration, progress, watch, release, rating,
+            comment
         )
         .spacing(4.0)
         .align_x(Horizontal::Center)
@@ -1131,10 +1154,10 @@ pub fn draw_delete_trigger<'a>(
     let media = {
         let label = sized_medium("Target Media", text_size);
 
-        let options = if trigger.logic.tags.is_none() {
+        let options = if trigger.logic.tags.is_none() && trigger.logic.dir.is_none() {
             triggers::Media::VARIANTS
         } else {
-            triggers::Media::TAGS
+            triggers::Media::ROOTS
         };
 
         let pick = pick_list(options, Some(trigger.media), move |media| {
@@ -1240,6 +1263,28 @@ pub fn draw_delete_trigger<'a>(
                 .align_y(Vertical::Center)
         };
 
+        let dir = {
+            let label = sized_medium("Directory contains", size).width(width);
+
+            let (not, dir) = trigger
+                .logic
+                .dir
+                .as_ref()
+                .map(|(not, dir)| (*not, dir.as_str()))
+                .unwrap_or((false, ""));
+            let input = input(dir).on_input(LogicMessage::Dir);
+
+            let not = checkbox(not)
+                .label("NOT")
+                .text_size(size)
+                .on_toggle(LogicMessage::DirComp)
+                .size(size);
+
+            row!(label, space::horizontal(), not, input)
+                .spacing(6.0)
+                .align_y(Vertical::Center)
+        };
+
         let last = {
             let label = sized_medium("Last watched", size).width(width);
 
@@ -1407,7 +1452,8 @@ pub fn draw_delete_trigger<'a>(
         };
 
         column!(
-            title, name, synopsis, tags, last, duration, progress, watch, release, rating, comment
+            title, name, synopsis, tags, dir, last, duration, progress, watch, release, rating,
+            comment
         )
         .spacing(4.0)
         .align_x(Horizontal::Center)

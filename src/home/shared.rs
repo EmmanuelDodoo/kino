@@ -1075,10 +1075,11 @@ impl SearchView {
 
             let has_tags = !self.item.tags.is_empty();
             let tags = {
+                let max = 4;
                 let mut tags = vec![];
-                let tag_len = self.item.tags.len();
+                let tag_len = self.item.tags.len().min(max);
 
-                for (i, tag) in self.item.tags.iter().enumerate().take(4) {
+                for (i, tag) in self.item.tags.iter().enumerate().take(max) {
                     let text = sized_regular(tag, size)
                         .font(bold_italic_font())
                         .style(|theme| {

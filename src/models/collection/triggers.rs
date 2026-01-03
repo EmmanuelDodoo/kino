@@ -17,7 +17,7 @@ variants! {
 }
 
 impl Media {
-    pub const TAGS: &[Self] = &[Self::Movies, Self::Shows];
+    pub const ROOTS: &[Self] = &[Self::Movies, Self::Shows];
 
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
@@ -148,6 +148,7 @@ pub struct Logic {
     pub name: Option<(bool, String)>,
     pub synopsis: Option<(bool, String)>,
     pub tags: Option<(bool, String)>,
+    pub dir: Option<(bool, String)>,
     pub last_watched: Option<(Comparison, DateTime<Local>)>,
     pub duration: Option<(Comparison, u64)>,
     pub progress: Option<(Comparison, f32)>,
@@ -165,6 +166,7 @@ impl Logic {
             name,
             synopsis,
             tags,
+            dir,
             last_watched,
             duration,
             progress,
@@ -177,6 +179,7 @@ impl Logic {
         name.is_some()
             || synopsis.is_some()
             || tags.is_some()
+            || dir.is_some()
             || last_watched.is_some()
             || duration.is_some()
             || progress.is_some()
@@ -195,6 +198,7 @@ impl Logic {
             name,
             synopsis,
             tags,
+            dir,
             last_watched,
             duration,
             progress,
@@ -220,6 +224,17 @@ impl Logic {
             tags.as_ref().map(|(not, pattern)| {
                 format!(
                     "{prefix}.tags {}LIKE '%{pattern}%'",
+                    if *not { "NOT " } else { "" }
+                )
+            }),
+            dir.as_ref().map(|(not, pattern)| {
+                format!(
+                    "EXISTS (
+                        SELECT 1
+                        FROM directory
+                        WHERE directory.id = {prefix}.directory
+                        AND directory.path {}LIKE '%{pattern}%'
+                    )",
                     if *not { "NOT " } else { "" }
                 )
             }),
@@ -269,6 +284,7 @@ impl Logic {
             name,
             synopsis,
             tags,
+            dir,
             last_watched,
             duration,
             progress,
@@ -285,6 +301,9 @@ impl Logic {
             .as_ref()
             .map(|(comp, pattern)| (!*comp, pattern.clone()));
         let tags = tags
+            .as_ref()
+            .map(|(comp, pattern)| (!*comp, pattern.clone()));
+        let dir = dir
             .as_ref()
             .map(|(comp, pattern)| (!*comp, pattern.clone()));
 
@@ -308,6 +327,7 @@ impl Logic {
             name,
             synopsis,
             tags,
+            dir,
             last_watched,
             duration,
             progress,
@@ -325,6 +345,7 @@ impl std::fmt::Display for Logic {
             name,
             synopsis,
             tags,
+            dir,
             last_watched,
             duration,
             progress,
@@ -342,6 +363,8 @@ impl std::fmt::Display for Logic {
                 .map(|(comp, pattern)| format!("synopsis-{comp}-{pattern}")),
             tags.as_ref()
                 .map(|(comp, pattern)| format!("tags-{comp}-{pattern}")),
+            dir.as_ref()
+                .map(|(comp, pattern)| format!("dir-{comp}-{pattern}")),
             last_watched.as_ref().map(|(comparison, date)| {
                 format!(
                     "last_watched-{comparison}-{}",
@@ -409,6 +432,7 @@ impl std::str::FromStr for Logic {
         let mut name = None;
         let mut synopsis = None;
         let mut tags = None;
+        let mut dir = None;
         let mut last_watched = None;
         let mut duration = None;
         let mut progress = None;
@@ -469,6 +493,22 @@ impl std::str::FromStr for Logic {
                     };
 
                     tags = Some((comparison, pattern));
+                }
+                Some("dir") => {
+                    if dir.is_some() {
+                        return Err(());
+                    }
+
+                    let Some(comparison) = fields.next().and_then(|comp| comp.parse::<bool>().ok())
+                    else {
+                        return Err(());
+                    };
+
+                    let Some(pattern) = fields.next().map(ToOwned::to_owned) else {
+                        return Err(());
+                    };
+
+                    dir = Some((comparison, pattern));
                 }
                 Some("last_watched") => {
                     if last_watched.is_some() {
@@ -598,6 +638,7 @@ impl std::str::FromStr for Logic {
             name,
             synopsis,
             tags,
+            dir,
             last_watched,
             duration,
             progress,
@@ -721,7 +762,7 @@ impl InsertTrigger {
 
     pub fn save(&self, db: &Database) -> Result<()> {
         if !self.logic.is_some() {
-            return Ok(())
+            return Ok(());
         }
 
         let query = self.query("NEW");
@@ -754,7 +795,7 @@ impl InsertTrigger {
 
     pub fn run_on_existing(&self, db: &mut Database) -> Result<()> {
         if !self.logic.is_some() {
-            return Ok(())
+            return Ok(());
         }
         let trans = db.transaction()?;
 
@@ -965,7 +1006,7 @@ impl DeleteTrigger {
 
     pub fn save(&self, db: &Database) -> Result<()> {
         if !self.logic.is_some() {
-            return Ok(())
+            return Ok(());
         }
         let table = self.media.to_table();
 
@@ -986,7 +1027,7 @@ impl DeleteTrigger {
 
     pub fn run_on_existing(&self, db: &mut Database) -> Result<()> {
         if !self.logic.is_some() {
-            return Ok(())
+            return Ok(());
         }
         let trans = db.transaction()?;
 

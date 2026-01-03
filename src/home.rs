@@ -214,6 +214,8 @@ pub enum LogicMessage {
     SynopsisComp(bool),
     Tags(String),
     TagsComp(bool),
+    Dir(String),
+    DirComp(bool),
     Last(String),
     LastComp(Comparison),
     Duration(String),
@@ -1525,6 +1527,37 @@ impl Home {
 
                                 Task::none()
                             }
+                            LogicMessage::Dir(pattern) => {
+                                if pattern.is_empty() {
+                                    trigger.logic.dir = None;
+                                    return Task::none();
+                                }
+
+                                match trigger.logic.dir.take() {
+                                    Some((not, _)) => {
+                                        trigger.logic.dir = Some((not, pattern));
+                                    }
+                                    None => {
+                                        trigger.logic.dir = Some((false, pattern));
+                                    }
+                                };
+
+                                if matches!(
+                                    trigger.media,
+                                    triggers::Media::Episodes | triggers::Media::Seasons
+                                ) {
+                                    trigger.media = triggers::Media::Shows;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::DirComp(new) => {
+                                if let Some((not, _)) = trigger.logic.dir.as_mut() {
+                                    *not = new;
+                                }
+
+                                Task::none()
+                            }
                             LogicMessage::LastComp(new) => {
                                 if let Some((comp, _)) = trigger.logic.last_watched.as_mut() {
                                     *comp = new;
@@ -1871,6 +1904,37 @@ impl Home {
                             }
                             LogicMessage::TagsComp(new) => {
                                 if let Some((not, _)) = trigger.logic.tags.as_mut() {
+                                    *not = new;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::Dir(pattern) => {
+                                if pattern.is_empty() {
+                                    trigger.logic.dir = None;
+                                    return Task::none();
+                                }
+
+                                match trigger.logic.dir.take() {
+                                    Some((not, _)) => {
+                                        trigger.logic.dir = Some((not, pattern));
+                                    }
+                                    None => {
+                                        trigger.logic.dir = Some((false, pattern));
+                                    }
+                                };
+
+                                if matches!(
+                                    trigger.media,
+                                    triggers::Media::Episodes | triggers::Media::Seasons
+                                ) {
+                                    trigger.media = triggers::Media::Shows;
+                                }
+
+                                Task::none()
+                            }
+                            LogicMessage::DirComp(new) => {
+                                if let Some((not, _)) = trigger.logic.dir.as_mut() {
                                     *not = new;
                                 }
 
