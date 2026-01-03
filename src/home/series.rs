@@ -296,12 +296,15 @@ impl ShowPage {
 
         let content = container(content).padding(Padding::ZERO.right(16));
 
-        let content = container(scrollable(content).id(self.scroll.id.clone()).on_scroll(
-            move |viewport| ShowPageMessage {
-                id: show,
-                message: Message::Scroll(viewport),
-            },
-        ));
+        let content = container(
+            scrollable(content)
+                .height(Length::Fill)
+                .id(self.scroll.id.clone())
+                .on_scroll(move |viewport| ShowPageMessage {
+                    id: show,
+                    message: Message::Scroll(viewport),
+                }),
+        );
 
         content.into()
     }

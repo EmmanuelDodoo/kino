@@ -291,13 +291,16 @@ impl SeasonPage {
 
         let content = container(content).padding(Padding::ZERO.right(16));
 
-        let content = container(scrollable(content).id(self.scroll.id.clone()).on_scroll(
-            move |viewpport| SeasonPageMessage {
-                id: season,
+        let content = container(
+            scrollable(content)
+                .height(Length::Fill)
+                .id(self.scroll.id.clone())
+                .on_scroll(move |viewpport| SeasonPageMessage {
+                    id: season,
 
-                message: Message::Scroll(viewpport),
-            },
-        ));
+                    message: Message::Scroll(viewpport),
+                }),
+        );
 
         content.into()
     }

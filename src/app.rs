@@ -222,7 +222,7 @@ impl App {
         let (home, home_tasks) = Home::boot(
             config.layout(),
             Filter::new(FilterMode::default()),
-            Sort::recents(),
+            Sort::name(),
             config.general.recents_limit,
         );
 

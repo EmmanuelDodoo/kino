@@ -14,7 +14,7 @@ impl Sort {
         }
     }
 
-    pub fn new_with_name() -> Self {
+    pub fn name() -> Self {
         let mut new = Self::new();
         new.push(SortKind::Name);
 
