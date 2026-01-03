@@ -482,7 +482,7 @@ impl Home {
         let recents = Task::done(Message::Fetch {
             id: FetchId::Recents,
             filters,
-            sort,
+            sort: Sort::recents(),
             limit: recent_limit,
             offset: None,
         });
@@ -3544,7 +3544,7 @@ impl Home {
             return Task::none();
         };
 
-        let (task, id, limit) = match self.current_page.take() {
+        let (task, msg) = match self.current_page.take() {
             Some(current) => {
                 self.state = State::Loading(loading_animation(now));
                 if clear {
@@ -3565,22 +3565,14 @@ impl Home {
                     None
                 };
 
-                (task, fetch_kind(new), limit)
+                (task, fetch_kind(new, self.filters, self.sort, limit, None))
             }
             None => {
                 unreachable!("current page is always non-empty");
             }
         };
 
-        let msg = Message::Fetch {
-            id,
-            filters: self.filters,
-            sort: self.sort,
-            limit,
-            offset: None,
-        };
-
-        Task::batch([Task::done(msg), task])
+        Task::batch([msg.tasked(), task])
     }
 
     pub fn forward(&mut self, now: Instant) -> Task<Message> {
@@ -3589,7 +3581,7 @@ impl Home {
             return Task::none();
         };
 
-        let (task, id, limit) = match self.current_page.take() {
+        let (task, msg) = match self.current_page.take() {
             Some(current) => {
                 self.backward.push(current);
 
@@ -3607,22 +3599,14 @@ impl Home {
                     None
                 };
 
-                (task, fetch_kind(new), limit)
+                (task, fetch_kind(new, self.filters, self.sort, limit, None))
             }
             None => {
                 unreachable!("current page is always non-empty");
             }
         };
 
-        let msg = Message::Fetch {
-            id,
-            filters: self.filters,
-            sort: self.sort,
-            limit,
-            offset: None,
-        };
-
-        Task::batch([Task::done(msg), task])
+        Task::batch([msg.tasked(), task])
     }
 
     pub fn content_refresh(&mut self, now: Instant) -> Task<Message> {
@@ -3643,13 +3627,7 @@ impl Home {
 
         self.state = State::Loading(loading_animation(now));
 
-        let msg = Message::Fetch {
-            id,
-            filters: self.filters,
-            sort: self.sort,
-            limit,
-            offset: None,
-        };
+        let msg = fetch_kind_aux(id, self.filters, self.sort, limit, None);
 
         Task::done(msg)
     }
@@ -3698,25 +3676,17 @@ impl Home {
         self.forward.clear();
         self.state = State::Loading(loading_animation(now));
 
-        let fid = fetch_kind(kind);
         let limit = if matches!(kind, PageKind::Home) {
             self.recent_limit
         } else {
             None
         };
-
-        let msg = Message::Fetch {
-            id: fid,
-            filters: self.filters,
-            sort: self.sort,
-            limit,
-            offset: None,
-        };
+        let msg = fetch_kind(kind, self.filters, self.sort, limit, None).tasked();
 
         if let Some(page) = self.pages.get_mut(&kind) {
             let scroll = page.update_scroll().discard();
 
-            let tsk = Task::done(msg).chain(scroll);
+            let tsk = msg.chain(scroll);
 
             return Task::batch([tsk, close_view]);
         }
@@ -3781,7 +3751,7 @@ impl Home {
             }
         };
 
-        Task::batch([Task::done(msg), close_view, task])
+        Task::batch([msg, close_view, task])
     }
 
     pub fn action(&mut self, action: HomeAction, now: Instant) -> Task<Message> {
@@ -4148,8 +4118,14 @@ pub fn view_unicode(view: CollectionView) -> char {
     }
 }
 
-fn fetch_kind(kind: PageKind) -> FetchId {
-    match kind {
+fn fetch_kind(
+    kind: PageKind,
+    filters: Filter,
+    sort: Sort,
+    limit: Option<i32>,
+    offset: Option<i32>,
+) -> Message {
+    let id = match kind {
         PageKind::Home => FetchId::Recents,
         PageKind::Shows => FetchId::Shows,
         PageKind::Movies => FetchId::Movies,
@@ -4159,6 +4135,29 @@ fn fetch_kind(kind: PageKind) -> FetchId {
         PageKind::Episode(id) => FetchId::Episode(id),
         PageKind::Movie(id) => FetchId::Movie(id),
         PageKind::Collection(id) => FetchId::Collection(id),
+    };
+
+    fetch_kind_aux(id, filters, sort, limit, offset)
+}
+
+fn fetch_kind_aux(
+    id: FetchId,
+    filters: Filter,
+    sort: Sort,
+    limit: Option<i32>,
+    offset: Option<i32>,
+) -> Message {
+    Message::Fetch {
+        id,
+        filters,
+        // sort,
+        sort: if matches!(id, FetchId::Recents) {
+            Sort::recents()
+        } else {
+            sort
+        },
+        limit,
+        offset,
     }
 }
 
