@@ -410,7 +410,7 @@ pub fn float<'a, Message: 'a>(
                 blur_radius: float.interpolate(0.0, 20.0, now),
                 ..Shadow::default()
             },
-            ..widget::float::Style::default()
+            shadow_border_radius: IMAGE_RADIUS.into(),
         })
         .into()
 }
