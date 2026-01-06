@@ -104,6 +104,7 @@ pub fn tooltip<'a, Message: 'a>(
             }),
         position,
     )
+    .delay(iced::time::Duration::from_millis(500))
     .gap(2.0)
 }
 
