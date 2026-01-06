@@ -644,21 +644,11 @@ pub fn draw_collection_triggers<'a>(
         .spacing(24)
         .align_x(Horizontal::Center);
 
-    let content = modal_container(content)
+    modal_container(content)
         .padding([16, 16])
-        .width(Length::FillPortion(3))
-        .height(Length::FillPortion(4));
-
-    column!(
-        space::vertical(),
-        row!(
-            space::horizontal().width(Length::FillPortion(2)),
-            content,
-            space::horizontal().width(Length::FillPortion(2))
-        ),
-        space::vertical()
-    )
-    .into()
+        .width(700)
+        .height(700)
+        .into()
 }
 
 pub fn draw_insert_trigger<'a>(
