@@ -57,7 +57,7 @@ pub fn collage<'a>(
     width: u32,
     height: u32,
 ) -> Option<Handle> {
-    let imgs: Vec<DynamicImage> = paths.filter_map(open).take(3).collect();
+    let imgs: Vec<DynamicImage> = paths.filter_map(open).take(4).collect();
 
     if imgs.is_empty() {
         return None;
@@ -65,49 +65,97 @@ pub fn collage<'a>(
 
     let len = imgs.len();
     let mut canvas: ImageBuffer<Rgba<u8>, Vec<_>> = ImageBuffer::new(width, height);
+    let filter = FilterType::Triangle;
 
-    let mut flip = true;
-    let mut img_width = 0;
-    let mut img_height = 0;
+    match len {
+        0 => return None,
+        1 => {
+            let img = imgs.first().expect("collage len");
+            let img = img.resize_to_fill(width, height, filter);
 
-    for (i, img) in imgs.into_iter().enumerate() {
-        let remaining_height = height.saturating_sub(img_height);
-        let remaining_width = width.saturating_sub(img_width);
-        let last = i == len - 1;
-
-        if flip {
-            let width = if last {
-                remaining_width
-            } else {
-                remaining_width / 2
-            };
-            let height = remaining_height;
-            let img = img.resize_to_fill(width, height, FilterType::Triangle);
-
-            if let Err(error) = canvas.copy_from(&img, img_width, img_height) {
+            if let Err(error) = canvas.copy_from(&img, 0, 0) {
                 tracing::error!("Collection collage error: Error\n{error}");
-                continue;
             };
+        }
+        2 => {
+            let first = imgs.first().expect("collage len");
+            let sec = imgs.get(1).expect("collage len");
+            let first_width = width / 2;
 
-            img_width += width;
-        } else {
-            let width = remaining_width;
-            let height = if last {
-                remaining_height
-            } else {
-                remaining_height / 2
-            };
-            let img = img.resize_to_fill(width, height, FilterType::Triangle);
+            let first = first.resize_to_fill(first_width, height, filter);
 
-            if let Err(error) = canvas.copy_from(&img, img_width, img_height) {
+            if let Err(error) = canvas.copy_from(&first, 0, 0) {
                 tracing::error!("Collection collage error: Error\n{error}");
-                continue;
             };
 
-            img_height += height;
+            let sec_width = width.saturating_sub(first_width);
+            let sec = sec.resize_to_fill(sec_width, height, filter);
+
+            if let Err(error) = canvas.copy_from(&sec, first_width, 0) {
+                tracing::error!("Collection collage error: Error\n{error}");
+            };
+        }
+        3 => {
+            let first = imgs.first().expect("collage len");
+            let sec = imgs.get(1).expect("collage len");
+            let third = imgs.get(2).expect("collage len");
+
+            let first_width = width / 2;
+            let sec_height = height / 2;
+
+            let first = first.resize_to_fill(first_width, height, filter);
+
+            if let Err(error) = canvas.copy_from(&first, 0, 0) {
+                tracing::error!("Collection collage error: Error\n{error}");
+            };
+
+            let sec_width = width.saturating_sub(first_width);
+            let sec = sec.resize_to_fill(sec_width, sec_height, filter);
+
+            if let Err(error) = canvas.copy_from(&sec, first_width, 0) {
+                tracing::error!("Collection collage error: Error\n{error}");
+            };
+
+            let third_height = height.saturating_sub(sec_height);
+            let third = third.resize_to_fill(sec_width, third_height, filter);
+
+            if let Err(error) = canvas.copy_from(&third, first_width, sec_height) {
+                tracing::error!("Collection collage error: Error\n{error}");
+            };
         }
 
-        flip = !flip;
+        _ => {
+            let first = imgs.first().expect("collage len");
+            let sec = imgs.get(1).expect("collage len");
+            let third = imgs.get(2).expect("collage len");
+            let fourth = imgs.get(3).expect("collage len");
+
+            let first_width = width / 2;
+            let first_height = height / 2;
+
+            let first = first.resize_to_fill(first_width, first_height, filter);
+            if let Err(error) = canvas.copy_from(&first, 0, 0) {
+                tracing::error!("Collection collage error: Error\n{error}");
+            };
+
+            let sec_width = width.saturating_sub(first_width);
+            let sec = sec.resize_to_fill(sec_width, first_height, filter);
+            if let Err(error) = canvas.copy_from(&sec, first_width, 0) {
+                tracing::error!("Collection collage error: Error\n{error}");
+            };
+
+            let third_height = height.saturating_sub(first_height);
+            let third = third.resize_to_fill(first_width, third_height, filter);
+
+            if let Err(error) = canvas.copy_from(&third, 0, first_height) {
+                tracing::error!("Collection collage error: Error\n{error}");
+            };
+
+            let fourth = fourth.resize_to_fill(sec_width, third_height, filter);
+            if let Err(error) = canvas.copy_from(&fourth, first_width, first_height) {
+                tracing::error!("Collection collage error: Error\n{error}");
+            };
+        }
     }
 
     Some(Handle::from_rgba(

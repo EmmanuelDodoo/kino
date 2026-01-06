@@ -870,8 +870,8 @@ pub struct CollectionThumbnail {
 }
 
 impl CollectionThumbnail {
-    pub const HEIGHT: u32 = 200;
-    pub const WIDTH: u32 = 200;
+    pub const HEIGHT: u32 = 250;
+    pub const WIDTH: u32 = 250;
 
     pub const CARD_HEIGHT: f32 = CARD_HEIGHT * 0.85;
     pub const CARD_WIDTH: f32 = Self::CARD_HEIGHT * 0.85;
