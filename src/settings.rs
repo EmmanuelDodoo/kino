@@ -1,6 +1,6 @@
 use crate::app::Message;
 use crate::db::Operation;
-use crate::models::{Directory, DirectoryId, MediaType};
+use crate::models::{Directory, DirectoryId, MediaType, humanize_datetime};
 use crate::utils::{
     self, AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
     SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
@@ -12,8 +12,8 @@ use iced::{
     Border, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
     widget::{
-        button, center_x, column, container, mouse_area, operation, pick_list, rich_text, row,
-        rule, scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
+        button, center_x, checkbox, column, container, mouse_area, operation, pick_list, rich_text,
+        row, rule, scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
 
@@ -157,7 +157,9 @@ pub enum MediaMessage {
     RestoreDeleted(bool),
     ToggleRestore,
     ToggleDirShow,
-    ToggleDirectory(DirectoryId),
+    Scan(DirectoryId, bool),
+    ScanAll,
+    ToggleDirectoryAdd(DirectoryId),
     ToggleDirKind(DirectoryId),
     AddFolder,
     IncrMovieDepth,
@@ -247,6 +249,76 @@ pub enum SettingsMessage {
     None,
 }
 
+#[derive(Debug, Clone)]
+struct Dir {
+    dir: Directory,
+    toggled: Option<bool>,
+    operation: Operation,
+    original_media: MediaType,
+    scan: bool,
+}
+
+impl Dir {
+    fn new(dir: Directory) -> Self {
+        Self {
+            toggled: None,
+            operation: Operation::Insert,
+            original_media: dir.media_type,
+            scan: true,
+            dir,
+        }
+    }
+
+    fn fetched(dir: Directory) -> Self {
+        Self {
+            toggled: Some(false),
+            operation: Operation::Update,
+            original_media: dir.media_type,
+            scan: false,
+            dir,
+        }
+    }
+
+    fn toggle_add(&mut self) {
+        self.operation = match self.operation {
+            Operation::Update => Operation::Delete,
+            Operation::Insert => Operation::Delete,
+            Operation::Delete if self.toggled.is_none() => Operation::Insert,
+            Operation::Delete => Operation::Update,
+        };
+    }
+
+    fn toggle_kind(&mut self) {
+        self.dir.media_type = match self.dir.media_type {
+            MediaType::Shows => MediaType::Movies,
+            MediaType::Movies => MediaType::Shows,
+        };
+
+        if let Some(toggled) = self.toggled.as_mut() {
+            self.scan = self.dir.media_type != self.original_media;
+            *toggled = !*toggled;
+        }
+    }
+
+    fn save(self) -> Option<(Directory, Option<Operation>, bool)> {
+        match self.toggled {
+            Some(false) if matches!(self.operation, Operation::Update) && !self.scan => None,
+            None if matches!(self.operation, Operation::Delete) => None,
+            _ => {
+                let operation = if self.original_media != self.dir.media_type
+                    || matches!(self.operation, Operation::Insert)
+                {
+                    Some(self.operation)
+                } else {
+                    None
+                };
+
+                Some((self.dir, operation, self.scan))
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Settings {
     pub config: Config,
@@ -259,7 +331,7 @@ pub struct Settings {
     text_color: String,
     background_color: String,
 
-    pub directories: Vec<(Directory, Option<bool>, Operation)>,
+    directories: Vec<Dir>,
     directories_shown: bool,
 }
 
@@ -431,31 +503,16 @@ impl Settings {
                     self.directories_shown = !self.directories_shown;
                     Task::none()
                 }
-                MediaMessage::ToggleDirectory(id) => {
-                    if let Some((_, new, operation)) =
-                        self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
-                    {
-                        *operation = match operation {
-                            Operation::Update => Operation::Delete,
-                            Operation::Insert => Operation::Delete,
-                            Operation::Delete if new.is_none() => Operation::Insert,
-                            Operation::Delete => Operation::Update,
-                        };
-                    }
+                MediaMessage::ToggleDirectoryAdd(id) => {
+                    if let Some(dir) = self.directories.iter_mut().find(|dir| dir.dir.id == id) {
+                        dir.toggle_add();
+                    };
+
                     Task::none()
                 }
                 MediaMessage::ToggleDirKind(id) => {
-                    if let Some((dir, new, _)) =
-                        self.directories.iter_mut().find(|(dir, _, _)| dir.id == id)
-                    {
-                        dir.media_type = match dir.media_type {
-                            MediaType::Shows => MediaType::Movies,
-                            MediaType::Movies => MediaType::Shows,
-                        };
-
-                        if let Some(toggled) = new {
-                            *toggled = !*toggled;
-                        }
+                    if let Some(dir) = self.directories.iter_mut().find(|dir| dir.dir.id == id) {
+                        dir.toggle_kind();
                     }
 
                     Task::none()
@@ -466,6 +523,21 @@ impl Settings {
                 }
                 MediaMessage::ToggleScanDiscover => {
                     self.config.general.scan_discoverer = !self.config.general.scan_discoverer;
+                    Task::none()
+                }
+                MediaMessage::Scan(id, scan) => {
+                    if let Some(dir) = self.directories.iter_mut().find(|dir| dir.dir.id == id) {
+                        dir.scan = scan;
+                    }
+
+                    Task::none()
+                }
+                MediaMessage::ScanAll => {
+                    for dir in self.directories.iter_mut() {
+                        dir.scan = true;
+                    }
+
+                    self.directories_shown = true;
                     Task::none()
                 }
                 MediaMessage::ScanDiscoverer(enable) => {
@@ -833,7 +905,7 @@ impl Settings {
                 }
                 FolderSelectionMessage::Submit => {
                     let Some(View::FolderSelection { path, kind }) = self.view.take() else {
-                        return Task::none();
+                        return self.update_scroll();
                     };
 
                     let path = path.canonicalize().unwrap().display().to_string();
@@ -842,13 +914,15 @@ impl Settings {
                         .map(ToOwned::to_owned)
                         .unwrap_or(path);
 
-                    if self.directories.iter().any(|(dir, _, _)| dir.path == path) {
-                        return Task::none();
+                    if self.directories.iter().any(|dir| dir.dir.path == path) {
+                        return self.update_scroll();
                     }
 
-                    let new = Directory::new(path, kind, true);
+                    let dir = Directory::new(path, kind, true);
 
-                    self.directories.push((new, None, Operation::Insert));
+                    let dir = Dir::new(dir);
+
+                    self.directories.push(dir);
                     self.directories_shown = true;
 
                     self.update_scroll()
@@ -1453,22 +1527,16 @@ impl Settings {
     }
 
     pub fn fetched_directories(&mut self, dirs: Vec<Directory>) {
-        self.directories.extend(
-            dirs.into_iter()
-                .map(|dirs| (dirs, Some(false), Operation::Update)),
-        );
+        self.directories.extend(dirs.into_iter().map(Dir::fetched));
     }
 
-    pub fn save(self) -> (Config, Vec<(Directory, Operation)>) {
-        let directories = self
-            .directories
-            .into_iter()
-            .filter_map(|(dir, new, op)| match new {
-                Some(false) if matches!(op, Operation::Update) => None,
-                _ => Some((dir, op)),
-            })
-            .collect();
-
+    pub fn save(
+        self,
+    ) -> (
+        Config,
+        impl Iterator<Item = (Directory, Option<Operation>, bool)>,
+    ) {
+        let directories = self.directories.into_iter().filter_map(|dir| dir.save());
         let config = self.config;
 
         (config, directories)
@@ -1507,53 +1575,6 @@ fn help<'a, Message: 'a>(label: &'a str) -> Tooltip<'a, Message> {
         label,
         Position::Right,
     )
-}
-
-fn directory_draw<'a>(
-    directory: &'a Directory,
-    operation: Operation,
-    size: f32,
-) -> Element<'a, MediaMessage> {
-    let icon = if matches!(operation, Operation::Delete) {
-        icons::ADD
-    } else {
-        icons::MINUS
-    };
-    let icon = icons::icon(icon).size(size / RATIO);
-
-    let icon_btn = button(icon)
-        .padding([6, 6])
-        .on_press(MediaMessage::ToggleDirectory(directory.id))
-        .style(styles::button::subtler);
-
-    let path = trim_path(Path::new(&directory.path), 5);
-    let label = span(path)
-        .strikethrough(matches!(operation, Operation::Delete))
-        .font(mono_font())
-        .size(size / RATIO);
-    let label = rich_text([label]).on_link_click(|_: ()| MediaMessage::None);
-
-    let tag = regular(directory.media_type.to_string()).size(size / (RATIO * RATIO));
-
-    let tag = button(tag)
-        .padding([2, 5])
-        .style(|theme, status| {
-            let default = styles::button::text_primary(theme, status);
-            let border = default
-                .border
-                .rounded(3.0)
-                .color(default.text_color)
-                .width(0.75);
-
-            button::Style { border, ..default }
-        })
-        .on_press(MediaMessage::ToggleDirKind(directory.id));
-
-    row!(tag, label, space::horizontal(), icon_btn)
-        .align_y(Vertical::Center)
-        .clip(true)
-        .spacing(12)
-        .into()
 }
 
 async fn pick_folder() -> Option<PathBuf> {
@@ -2057,7 +2078,7 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
 }
 
 fn draw_media<'a>(
-    directories: &'a [(Directory, Option<bool>, Operation)],
+    directories: &'a [Dir],
     directories_shown: bool,
     scan_discoverer: bool,
     restore_deleted: bool,
@@ -2067,17 +2088,31 @@ fn draw_media<'a>(
         let top = {
             let label = label_maker("Media Directories");
 
+            let size = TEXT_SIZE / RATIO;
+
             let add = button(
                 row!(
-                    icons::icon(icons::FOLDER_ADD).size(TEXT_SIZE),
-                    sized_medium("Add Folder", TEXT_SIZE)
+                    icons::icon(icons::FOLDER_ADD).size(size * RATIO),
+                    sized_medium("Add Folder", size)
                 )
-                .spacing(8.0)
+                .spacing(4.0)
                 .align_y(Vertical::Center),
             )
             .padding([3, 6])
             .style(styles::button::text_primary)
             .on_press(MediaMessage::AddFolder);
+
+            let scan = button(
+                row!(
+                    icons::icon(icons::REFRESH).size(size * RATIO),
+                    sized_medium("Scan All", size)
+                )
+                .spacing(4.0)
+                .align_y(Vertical::Center),
+            )
+            .padding([3, 6])
+            .style(styles::button::text_primary)
+            .on_press(MediaMessage::ScanAll);
 
             let icon = if directories_shown {
                 icons::CHEV_UP
@@ -2085,7 +2120,9 @@ fn draw_media<'a>(
                 icons::CHEV_DOWN
             };
             let icon = icons::icon(icon).size(TEXT_SIZE);
-            let right = row!(add, icon).spacing(6.0).align_y(Vertical::Center);
+
+            // let actions = row!(add, scan).spacing(6.0).align_y(Vertical::Center);
+            let right = row!(add, scan, icon).spacing(6.0).align_y(Vertical::Center);
 
             let content = row!(label, space::horizontal(), right).align_y(Vertical::Center);
 
@@ -2094,14 +2131,84 @@ fn draw_media<'a>(
                 .interaction(iced::mouse::Interaction::Pointer)
         };
 
+        let size = TEXT_SIZE;
+        let header_size = size / RATIO;
+
+        let kind = table::column(table_header("Media").size(header_size), |dir: &Dir| {
+            let tag = regular(dir.dir.media_type.to_string()).size(size / (RATIO * RATIO));
+
+            button(tag)
+                .padding([2, 5])
+                .style(|theme, status| {
+                    let default = styles::button::text_primary(theme, status);
+                    let border = default
+                        .border
+                        .rounded(3.0)
+                        .color(default.text_color)
+                        .width(0.75);
+
+                    button::Style { border, ..default }
+                })
+                .on_press(MediaMessage::ToggleDirKind(dir.dir.id))
+        })
+        .align_y(Vertical::Center);
+
+        let path = table::column(table_header("Path").size(header_size), |dir: &Dir| {
+            let path = trim_path(Path::new(&dir.dir.path), 5);
+
+            let path = span(path)
+                .strikethrough(matches!(dir.operation, Operation::Delete))
+                .font(mono_font())
+                .size(size / RATIO);
+
+            rich_text([path]).on_link_click(|_: ()| MediaMessage::None)
+        })
+        .width(Length::Fill)
+        .align_y(Vertical::Center);
+
+        let last = table::column(
+            table_header("Last scanned").size(header_size),
+            |dir: &Dir| {
+                let last = if dir.toggled.is_some() {
+                    humanize_datetime(dir.dir.last_scan, chrono::Local::now())
+                } else {
+                    "--:--".to_owned()
+                };
+
+                sized_italic(last, size / RATIO)
+            },
+        )
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center);
+
+        let scan = table::column(table_header("Scan").size(header_size), |dir: &Dir| {
+            checkbox(dir.scan).on_toggle(|scan| MediaMessage::Scan(dir.dir.id, scan))
+        })
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center);
+
+        let add = table::column(table_header("Add/Remove").size(header_size), |dir: &Dir| {
+            let deleted = matches!(dir.operation, Operation::Delete);
+            let icon = if deleted { icons::ADD } else { icons::DELETE };
+
+            let icon = icons::icon(icon).size(size);
+
+            button(icon)
+                .padding([6, 6])
+                .on_press(MediaMessage::ToggleDirectoryAdd(dir.dir.id))
+                .style(move |theme, status| {
+                    if deleted {
+                        styles::button::text_primary(theme, status)
+                    } else {
+                        styles::button::text_danger(theme, status)
+                    }
+                })
+        })
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center);
+
         let dirs: Element<'_, MediaMessage> = if directories_shown && !directories.is_empty() {
-            column(
-                directories
-                    .iter()
-                    .map(|(dir, _, operation)| directory_draw(dir, *operation, TEXT_SIZE)),
-            )
-            .spacing(12)
-            .into()
+            table([kind, path, last, scan, add], directories).into()
         } else {
             empty()
         };

@@ -442,7 +442,6 @@ pub enum HomeMessage {
         seasons: Vec<Thumbnail<Season>>,
         episodes: Vec<Thumbnail<Episode>>,
     },
-    Scan,
     Trigger(TriggerMessage),
 }
 
@@ -2546,7 +2545,6 @@ impl Home {
                     collections: vec![(collection, true)],
                 })
             }
-            HomeMessage::Scan => Task::done(Message::Scan),
         }
     }
 
@@ -2594,7 +2592,7 @@ impl Home {
             .and_then(|kind| self.pages.get_mut(kind))
     }
 
-    fn side(&self, now: Instant) -> Element<'_, HomeMessage> {
+    fn side(&self) -> Element<'_, HomeMessage> {
         let header = {
             let color = |theme: &Theme| {
                 let color = theme
@@ -2691,31 +2689,7 @@ impl Home {
             .width(Length::Fill)
             .height(Length::Fill);
 
-        let scanning: Element<'_, HomeMessage> = match &self.scanning {
-            Some(scanning) => {
-                let size = H6;
-                let svg = loading_svg(scanning, now)
-                    .height(size * RATIO)
-                    .width(size * RATIO);
-                let label = sized_medium("Scanning Directories", H6);
-
-                row!(svg, label)
-                    .padding([5, 10])
-                    .spacing(SIDE_ICON_SPACING)
-                    .align_y(Vertical::Center)
-                    .into()
-            }
-            None => icon_button(
-                icons::SCAN,
-                "Scan Directories",
-                HomeMessage::Scan,
-                false,
-                None,
-            ),
-        };
-
         let bottom = column!(
-            scanning,
             icon_button(
                 icons::LIBRARY,
                 "Collections",
@@ -3378,12 +3352,32 @@ impl Home {
             .map(|page| page.show_tools())
             .unwrap_or(true);
 
-        let bottom: Element<'_, HomeMessage> = if items > 0 {
+        let bottom: Element<'_, HomeMessage> = if items > 0 || self.scanning.is_some() {
+            let size = H8;
             let padding = Padding::new(3.0).right(10);
 
-            let items = sized_medium(format!("{items} items"), H8);
+            let items = sized_medium(format!("{items} items"), size);
 
-            let content = row!(space::horizontal(), items).align_y(Vertical::Center);
+            let scanning: Element<'_, HomeMessage> =
+                match &self.scanning {
+                    Some(scanning) => {
+                        let label = sized_medium("Scanning Directories", size);
+
+                        let svg = loading_svg(scanning, now).height(size).width(size).style(
+                            |theme, _| widget::svg::Style {
+                                color: Some(theme.extended_palette().primary.base.color),
+                            },
+                        );
+
+                        row!(svg, label)
+                            .spacing(4.0)
+                            .align_y(Vertical::Center)
+                            .into()
+                    }
+                    None => empty(),
+                };
+
+            let content = row!(scanning, space::horizontal(), items).align_y(Vertical::Center);
 
             container(content)
                 .width(Length::Fill)
@@ -3502,7 +3496,7 @@ impl Home {
 
     pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, HomeMessage> {
         let content = container(
-            row!(self.side(now), self.content_area(now))
+            row!(self.side(), self.content_area(now))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(0),

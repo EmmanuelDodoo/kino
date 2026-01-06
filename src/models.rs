@@ -127,7 +127,7 @@ pub trait Media {
     }
 }
 
-fn humanize_datetime(from: DateTime<Local>, to: DateTime<Local>) -> String {
+pub fn humanize_datetime(from: DateTime<Local>, to: DateTime<Local>) -> String {
     use std::time::Duration;
     const SEC: u64 = 1;
     const MIN: u64 = 60;

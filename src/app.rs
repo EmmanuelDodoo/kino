@@ -12,8 +12,8 @@ use crate::error::Error;
 use crate::fetch;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
-    self, Collection, CollectionId, DirectoryId, Episode, EpisodeId, ItemId, Media, Movie, MovieId,
-    Season, SeasonId, Show, ShowId, SimpleCollection, collection,
+    self, Collection, CollectionId, Directory, DirectoryId, Episode, EpisodeId, ItemId, Media,
+    Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, collection,
     collection::{
         Items,
         triggers::{DeleteTrigger, InsertTrigger},
@@ -1013,7 +1013,7 @@ impl App {
 
                 let home_scroll = self.home.update_page_scroll();
 
-                let (config, dirs) = settings.save();
+                let (config, directories) = settings.save();
                 let writer = self.config.span_writer.take();
 
                 let prev_rating = self.config.general.tmdb_rating;
@@ -1022,14 +1022,36 @@ impl App {
                 self.config = config;
                 self.config.span_writer = writer;
 
+                let mut scans = vec![];
+                let mut dirs = vec![];
+
+                for (dir, op, scan) in directories {
+                    if scan {
+                        scans.push(dir.clone())
+                    }
+
+                    if let Some(op) = op {
+                        dirs.push((dir, op))
+                    }
+                }
+
                 let dir = match self.db.toggle_directories(dirs) {
-                    Ok(true) => Task::batch([
-                        Task::done(Message::success("Directories Updated!")),
-                        Task::done(Message::Scan),
-                    ]),
-                    Ok(false) => Task::done(Message::None),
-                    Err(error) => Task::done(Message::error(error)),
+                    Ok(true) => Message::success("Directories Updated!").tasked(),
+                    Ok(false) => Message::None.tasked(),
+                    Err(error) => Message::error(error).tasked(),
                 };
+
+                let home_task = if !scans.is_empty() {
+                    self.home.scanning(true, now)
+                } else {
+                    Task::none()
+                };
+                let discoverer = self.config.general.scan_discoverer;
+                let db_path = self.config.db_path();
+                let movie_depth = self.config.general.movie_depth;
+                let restore = self.config.general.restore_deleted;
+
+                let scans = scan_task(db_path, scans, discoverer, movie_depth, restore);
 
                 let auth = self.config.auth();
 
@@ -1053,7 +1075,7 @@ impl App {
                     Task::none()
                 };
 
-                Task::batch([auth, home_scroll, rating, dir])
+                Task::batch([auth, home_scroll, rating, dir, home_task]).chain(scans)
             }
             Message::Layout(layout) => {
                 self.config.general.layout = layout;
@@ -1067,21 +1089,13 @@ impl App {
                     }
                 };
 
-                let discoverer = self.config.general.scan_discoverer;
                 let home_task = self.home.scanning(true, now);
+                let discoverer = self.config.general.scan_discoverer;
                 let db_path = self.config.db_path();
                 let movie_depth = self.config.general.movie_depth;
                 let restore = self.config.general.restore_deleted;
 
-                let scan = Task::perform(
-                    async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth, restore) },
-                    |(batch, res)| {
-                        if let Some(batch) = batch {
-                            batch.log()
-                        }
-                        Message::ScanComplete(res)
-                    },
-                );
+                let scan = scan_task(db_path, dirs, discoverer, movie_depth, restore);
 
                 Task::batch([home_task, scan])
             }
@@ -1522,4 +1536,22 @@ fn episode_map(
     row: &rusqlite::Row<'_>,
 ) -> rusqlite::Result<(shared::Thumbnail<Episode>, shared::ThumbnailSample<Episode>)> {
     Episode::from_row(row).map(shared::Thumbnail::new)
+}
+
+fn scan_task(
+    db_path: std::path::PathBuf,
+    dirs: Vec<Directory>,
+    discoverer: bool,
+    movie_depth: u8,
+    restore: bool,
+) -> Task<Message> {
+    Task::perform(
+        async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth, restore) },
+        |(batch, res)| {
+            if let Some(batch) = batch {
+                batch.log()
+            }
+            Message::ScanComplete(res)
+        },
+    )
 }
