@@ -334,9 +334,14 @@ impl SeasonPage {
 
             let synopsis = tab_synopsis(season.media.synopsis());
 
+            let play = if season.media.progress() > 0.0 || season.media.progress() == 1.0 {
+                "Resume"
+            } else {
+                "Play"
+            };
             let actions = row!(
                 button(
-                    row!(icon(PLAY).size(H5), sized_medium("Play", P))
+                    row!(icon(PLAY).size(H5), sized_medium(play, P))
                         .spacing(10.0)
                         .align_y(Vertical::Center),
                 )

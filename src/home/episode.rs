@@ -228,10 +228,15 @@ impl EpisodePage {
             }
         };
 
+        let play = if episode.media.progress() > 0.0 || episode.media.progress() == 1.0 {
+            "Resume"
+        } else {
+            "Play"
+        };
         let actions = center_x(
             row!(
                 button(
-                    row!(icon(PLAY).size(H5), sized_medium("Play", P))
+                    row!(icon(PLAY).size(H5), sized_medium(play, P))
                         .spacing(16.0)
                         .align_y(Vertical::Center),
                 )

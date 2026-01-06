@@ -20,7 +20,7 @@ use iced::{
     },
 };
 
-pub const CARD_HEIGHT: f32 = 425.0;
+pub const CARD_HEIGHT: f32 = 450.0;
 pub const CARD_WIDTH: f32 = CARD_HEIGHT * 2.0 / 3.0;
 pub const LIST_HEIGHT: f32 = 150.0;
 pub const LIST_WIDTH: f32 = LIST_HEIGHT * 5.5 / 10.0;
@@ -823,7 +823,10 @@ impl<T: Media> Thumbnail<T> {
             let progress = (self.media.progress() * 1000.0).round() / 10.0;
             let text = mono_bold(format!("{}%", progress)).size(H7);
 
-            container(text).align_y(Vertical::Center).align_x(Horizontal::Right).width(32.0)
+            container(text)
+                .align_y(Vertical::Center)
+                .align_x(Horizontal::Right)
+                .width(32.0)
         };
 
         let duration = container(sized_medium(self.media.duration_short(), H7))
@@ -832,10 +835,7 @@ impl<T: Media> Thumbnail<T> {
             .align_x(Horizontal::Right)
             .align_y(Vertical::Center);
 
-        let recent = self
-            .media
-            .recent_short()
-            .unwrap_or(String::from("--:--"));
+        let recent = self.media.recent_short().unwrap_or(String::from("--:--"));
         let recent = container(sized_medium(recent, H7))
             .height(24.0)
             .width(100.0)
