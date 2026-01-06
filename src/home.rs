@@ -3212,6 +3212,7 @@ impl Home {
 
     fn toolbar(&self) -> Element<'_, HomeMessage> {
         let size = P;
+        let tp = tp::Position::Top;
 
         let filter = {
             let icon = if self.show_filters {
@@ -3234,7 +3235,7 @@ impl Home {
                     .on_press(HomeMessage::ToggleFilter)
                     .padding([5, 5]),
                 "Filters",
-                tp::Position::Bottom,
+                tp,
             )
         };
 
@@ -3259,7 +3260,7 @@ impl Home {
                     .on_press(HomeMessage::ToggleSort)
                     .padding([5, 5]),
                 "Sort",
-                tp::Position::Bottom,
+                tp,
             )
         };
 
@@ -3281,17 +3282,17 @@ impl Home {
             tooltip(
                 icons::sized_button(icons::REFRESH, size).on_press(HomeMessage::RefreshContent),
                 "Refresh",
-                tp::Position::Bottom
+                tp
             ),
             tooltip(
                 icons::sized_button(icons::RAND, size).on_press(HomeMessage::Random),
                 "Random media",
-                tp::Position::Bottom
+                tp
             ),
             tooltip(
                 icons::sized_button(self.layout.icon(), size).on_press(HomeMessage::ToggleLayout),
                 self.layout.to_string(),
-                tp::Position::Bottom
+                tp
             ),
         )
         .align_y(Vertical::Center)
