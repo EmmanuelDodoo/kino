@@ -823,11 +823,11 @@ impl<T: Media> Thumbnail<T> {
             let progress = (self.media.progress() * 1000.0).round() / 10.0;
             let text = mono_bold(format!("{}%", progress)).size(H7);
 
-            container(text).align_y(Vertical::Center).width(40.0)
+            container(text).align_y(Vertical::Center).align_x(Horizontal::Right).width(32.0)
         };
 
         let duration = container(sized_medium(self.media.duration_short(), H7))
-            .width(56.0)
+            .width(72.0)
             .height(24.0)
             .align_x(Horizontal::Right)
             .align_y(Vertical::Center);
@@ -835,7 +835,7 @@ impl<T: Media> Thumbnail<T> {
         let recent = self
             .media
             .recent_short()
-            .unwrap_or(String::from("--:--:--"));
+            .unwrap_or(String::from("--:--"));
         let recent = container(sized_medium(recent, H7))
             .height(24.0)
             .width(100.0)
