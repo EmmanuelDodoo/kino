@@ -4,7 +4,7 @@ use crate::utils::filter::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, Sort};
 use iced::{
-    Element, Padding, Task,
+    Element, Length, Padding, Task,
     time::Instant,
     widget::{self, column, container, grid, operation, scrollable, text},
 };
@@ -148,6 +148,7 @@ impl TvShows {
 
         let content =
             scrollable(container(content).padding(Padding::new(10.0).right(16).bottom(0)))
+                .height(Length::Fill)
                 .id(self.scroll.id.clone())
                 .on_scroll(TvShowsMessage::Scroll);
 

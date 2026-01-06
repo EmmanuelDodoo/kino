@@ -2875,6 +2875,7 @@ impl Home {
         let content = if matches!(self.layout, Layout::Grid) {
             scrollable(
                 column!(movies, shows)
+                    .height(Length::Fill)
                     .spacing(40.0)
                     .padding(iced::Padding::new(10.0).right(16)),
             )
@@ -4056,7 +4057,11 @@ impl Home {
         Task::none()
     }
 
-    pub fn episode_sample(&mut self, id: EpisodeId, sample: Option<(Color, Color)>) -> Task<Message> {
+    pub fn episode_sample(
+        &mut self,
+        id: EpisodeId,
+        sample: Option<(Color, Color)>,
+    ) -> Task<Message> {
         match &mut self.state {
             State::Season { episodes, .. } | State::Collection { episodes, .. } => {
                 if let Some(episode) = episodes

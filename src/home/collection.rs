@@ -701,6 +701,7 @@ impl CollectionPage {
 
         let content = scrollable(content)
             .id(self.scroll.id.clone())
+            .height(Length::Fill)
             .on_scroll(move |viewport| CollectionMessage {
                 id: collection,
                 message: Message::Scroll(viewport),

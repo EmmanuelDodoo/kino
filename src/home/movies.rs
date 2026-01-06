@@ -5,7 +5,7 @@ use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, Sort};
 use iced::{
-    Element, Padding, Task,
+    Element, Length, Padding, Task,
     alignment::Vertical,
     time::Instant,
     widget::{self, column, container, grid, operation, row, scrollable, text},
@@ -88,6 +88,7 @@ impl Movies {
 
         let content =
             scrollable(container(content).padding(Padding::new(10.0).right(16).bottom(0)))
+                .height(Length::Fill)
                 .id(self.scroll.id.clone())
                 .on_scroll(MoviesMessage::Scroll);
 
