@@ -236,8 +236,8 @@ pub enum LogicMessage {
 pub enum TriggerMessage {
     Save,
     GenerateDelete(InsertId),
-    ToggleExpandInsert(InsertId),
-    ToggleExpandDelete(DeleteId),
+    ToggleExpandInsert(InsertId, bool),
+    ToggleExpandDelete(DeleteId, bool),
     Tab,
     AddInsert,
     AddDelete,
@@ -1418,22 +1418,22 @@ impl Home {
 
                         Task::none()
                     }
-                    TriggerMessage::ToggleExpandInsert(id) => {
+                    TriggerMessage::ToggleExpandInsert(id, toggle) => {
                         if let Some((open, _, _, _, _)) = itriggers
                             .iter_mut()
                             .find(|(_, trigger, _, _, _)| trigger.id == id)
                         {
-                            *open = !*open;
+                            *open = toggle;
                         }
 
                         Task::none()
                     }
-                    TriggerMessage::ToggleExpandDelete(id) => {
+                    TriggerMessage::ToggleExpandDelete(id, toggle) => {
                         if let Some((open, _, _, _, _)) = dtriggers
                             .iter_mut()
                             .find(|(_, trigger, _, _, _)| trigger.id == id)
                         {
-                            *open = !*open;
+                            *open = toggle;
                         }
 
                         Task::none()

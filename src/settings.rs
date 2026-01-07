@@ -7,7 +7,7 @@ use crate::utils::{
     convert_color_str, empty, icons, icons::sized_button, modal_container, picklist_handle,
     save_btn, styles, tooltip, trim_path, typo::*,
 };
-use crate::widgets::{modal, toggler};
+use crate::widgets::{expandable, modal, toggler};
 use iced::{
     Border, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
@@ -156,7 +156,7 @@ pub enum MediaMessage {
     ToggleScanDiscover,
     RestoreDeleted(bool),
     ToggleRestore,
-    ToggleDirShow,
+    ToggleDirShow(bool),
     Scan(DirectoryId, bool),
     ScanAll,
     ToggleDirectoryAdd(DirectoryId),
@@ -499,8 +499,8 @@ impl Settings {
                         self.config.general.movie_depth.saturating_sub(1);
                     Task::none()
                 }
-                MediaMessage::ToggleDirShow => {
-                    self.directories_shown = !self.directories_shown;
+                MediaMessage::ToggleDirShow(show) => {
+                    self.directories_shown = show;
                     Task::none()
                 }
                 MediaMessage::ToggleDirectoryAdd(id) => {
@@ -2121,99 +2121,94 @@ fn draw_media<'a>(
             };
             let icon = icons::icon(icon).size(TEXT_SIZE);
 
-            // let actions = row!(add, scan).spacing(6.0).align_y(Vertical::Center);
             let right = row!(add, scan, icon).spacing(6.0).align_y(Vertical::Center);
 
-            let content = row!(label, space::horizontal(), right).align_y(Vertical::Center);
-
-            mouse_area(content)
-                .on_press(MediaMessage::ToggleDirShow)
-                .interaction(iced::mouse::Interaction::Pointer)
+            row!(label, space::horizontal(), right).align_y(Vertical::Center)
         };
 
-        let size = TEXT_SIZE;
-        let header_size = size / RATIO;
+        let dirs = {
+            let size = TEXT_SIZE;
+            let header_size = size / RATIO;
 
-        let kind = table::column(table_header("Media").size(header_size), |dir: &Dir| {
-            let tag = regular(dir.dir.media_type.to_string()).size(size / (RATIO * RATIO));
+            let kind = table::column(table_header("Media").size(header_size), |dir: &Dir| {
+                let tag = regular(dir.dir.media_type.to_string()).size(size / (RATIO * RATIO));
 
-            button(tag)
-                .padding([2, 5])
-                .style(|theme, status| {
-                    let default = styles::button::text_primary(theme, status);
-                    let border = default
-                        .border
-                        .rounded(3.0)
-                        .color(default.text_color)
-                        .width(0.75);
+                button(tag)
+                    .padding([2, 5])
+                    .style(|theme, status| {
+                        let default = styles::button::text_primary(theme, status);
+                        let border = default
+                            .border
+                            .rounded(3.0)
+                            .color(default.text_color)
+                            .width(0.75);
 
-                    button::Style { border, ..default }
-                })
-                .on_press(MediaMessage::ToggleDirKind(dir.dir.id))
-        })
-        .align_y(Vertical::Center);
+                        button::Style { border, ..default }
+                    })
+                    .on_press(MediaMessage::ToggleDirKind(dir.dir.id))
+            })
+            .align_y(Vertical::Center);
 
-        let path = table::column(table_header("Path").size(header_size), |dir: &Dir| {
-            let path = trim_path(Path::new(&dir.dir.path), 5);
+            let path = table::column(table_header("Path").size(header_size), |dir: &Dir| {
+                let path = trim_path(Path::new(&dir.dir.path), 5);
 
-            let path = span(path)
-                .strikethrough(matches!(dir.operation, Operation::Delete))
-                .font(mono_font())
-                .size(size / RATIO);
+                let path = span(path)
+                    .strikethrough(matches!(dir.operation, Operation::Delete))
+                    .font(mono_font())
+                    .size(size / RATIO);
 
-            rich_text([path]).on_link_click(|_: ()| MediaMessage::None)
-        })
-        .width(Length::Fill)
-        .align_y(Vertical::Center);
+                rich_text([path]).on_link_click(|_: ()| MediaMessage::None)
+            })
+            .width(Length::Fill)
+            .align_y(Vertical::Center);
 
-        let last = table::column(
-            table_header("Last scanned").size(header_size),
-            |dir: &Dir| {
-                let last = if dir.toggled.is_some() {
-                    humanize_datetime(dir.dir.last_scan, chrono::Local::now())
-                } else {
-                    "--:--".to_owned()
-                };
-
-                sized_italic(last, size / RATIO)
-            },
-        )
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center);
-
-        let scan = table::column(table_header("Scan").size(header_size), |dir: &Dir| {
-            checkbox(dir.scan).on_toggle(|scan| MediaMessage::Scan(dir.dir.id, scan))
-        })
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center);
-
-        let add = table::column(table_header("Add/Remove").size(header_size), |dir: &Dir| {
-            let deleted = matches!(dir.operation, Operation::Delete);
-            let icon = if deleted { icons::ADD } else { icons::DELETE };
-
-            let icon = icons::icon(icon).size(size);
-
-            button(icon)
-                .padding([6, 6])
-                .on_press(MediaMessage::ToggleDirectoryAdd(dir.dir.id))
-                .style(move |theme, status| {
-                    if deleted {
-                        styles::button::text_primary(theme, status)
+            let last = table::column(
+                table_header("Last scanned").size(header_size),
+                |dir: &Dir| {
+                    let last = if dir.toggled.is_some() {
+                        humanize_datetime(dir.dir.last_scan, chrono::Local::now())
                     } else {
-                        styles::button::text_danger(theme, status)
-                    }
-                })
-        })
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center);
+                        "--:--".to_owned()
+                    };
 
-        let dirs: Element<'_, MediaMessage> = if directories_shown && !directories.is_empty() {
-            table([kind, path, last, scan, add], directories).into()
-        } else {
-            empty()
+                    sized_italic(last, size / RATIO)
+                },
+            )
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center);
+
+            let scan = table::column(table_header("Scan").size(header_size), |dir: &Dir| {
+                checkbox(dir.scan).on_toggle(|scan| MediaMessage::Scan(dir.dir.id, scan))
+            })
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center);
+
+            let add = table::column(table_header("Add/Remove").size(header_size), |dir: &Dir| {
+                let deleted = matches!(dir.operation, Operation::Delete);
+                let icon = if deleted { icons::ADD } else { icons::DELETE };
+
+                let icon = icons::icon(icon).size(size);
+
+                button(icon)
+                    .padding([6, 6])
+                    .on_press(MediaMessage::ToggleDirectoryAdd(dir.dir.id))
+                    .style(move |theme, status| {
+                        if deleted {
+                            styles::button::text_primary(theme, status)
+                        } else {
+                            styles::button::text_danger(theme, status)
+                        }
+                    })
+            })
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center);
+            table([kind, path, last, scan, add], directories)
         };
 
-        column!(top, space::horizontal(), dirs).spacing(6.0)
+        expandable(top, dirs)
+            .expanded(directories_shown)
+            .on_expand(MediaMessage::ToggleDirShow)
+            .spacing(6.0)
     };
 
     let discoverer = {

@@ -11,7 +11,7 @@ use crate::utils::{
     cancel_btn, empty, icons, icons::*, modal_container, picklist_handle, save_btn, styles,
     tooltip, typo::*,
 };
-use crate::widgets::toggler;
+use crate::widgets::{expandable, toggler};
 use iced::{
     Element, Length, Padding, Theme,
     alignment::{Horizontal, Vertical},
@@ -613,16 +613,16 @@ pub fn draw_collection_triggers<'a>(
 
         let triggers = if view_inserts {
             let triggers = itriggers.iter().map(|(open, trigger, roe, last, release)| {
-                draw_insert_trigger(open, trigger, roe, last, release, text_size, input_padding)
+                draw_insert_trigger(*open, trigger, roe, last, release, text_size, input_padding)
             });
 
-            scrollable(column(triggers).spacing(12)).spacing(6)
+            scrollable(column(triggers).spacing(12).padding(6))
         } else {
             let triggers = dtriggers.iter().map(|(open, trigger, roe, last, release)| {
-                draw_delete_trigger(open, trigger, roe, last, release, text_size, input_padding)
+                draw_delete_trigger(*open, trigger, roe, last, release, text_size, input_padding)
             });
 
-            scrollable(column(triggers).spacing(12)).spacing(6)
+            scrollable(column(triggers).spacing(12).padding(6))
         };
 
         column!(tabs, new, triggers)
@@ -652,7 +652,7 @@ pub fn draw_collection_triggers<'a>(
 }
 
 pub fn draw_insert_trigger<'a>(
-    open: &bool,
+    open: bool,
     trigger: &'a InsertTrigger,
     roe: &bool,
     last: &'a String,
@@ -682,7 +682,7 @@ pub fn draw_insert_trigger<'a>(
 
         let name = sized_medium(&trigger.name, size);
 
-        let expand = if *open { CHEV_DOWN } else { CHEV_LEFT };
+        let expand = if open { CHEV_DOWN } else { CHEV_LEFT };
         let expand = icons::icon(expand).size(size);
 
         let name = row!(expand, kind, name)
@@ -700,22 +700,10 @@ pub fn draw_insert_trigger<'a>(
             .style(styles::button::text_danger)
             .on_press(TriggerMessage::RemoveInsert(id));
 
-        button(
-            row!(name, duplicate, remove,)
-                .spacing(8)
-                .align_y(Vertical::Center),
-        )
-        .padding(0)
-        .style(styles::button::text)
-        .on_press(TriggerMessage::ToggleExpandInsert(id))
+        row!(name, duplicate, remove,)
+            .spacing(8)
+            .align_y(Vertical::Center)
     };
-
-    if !*open {
-        let title = container(title)
-            .style(styles::container::bw)
-            .padding(padding);
-        return title.into();
-    }
 
     let name = {
         let name = sized_medium("Rule name", text_size);
@@ -1047,7 +1035,6 @@ pub fn draw_insert_trigger<'a>(
     };
 
     let content = column!(
-        title,
         rule::horizontal(1.0),
         name,
         media,
@@ -1055,8 +1042,13 @@ pub fn draw_insert_trigger<'a>(
         generate,
         cond.map(move |lsg| TriggerMessage::LogicInsert(id, lsg))
     )
-    .spacing(8.0)
-    .width(Length::Fill);
+    .spacing(8);
+
+    let content = expandable(title, content)
+        .width(Length::Fill)
+        .expanded(open)
+        .spacing(8)
+        .on_expand(move |expand| TriggerMessage::ToggleExpandInsert(id, expand));
 
     let content = container(content)
         .style(styles::container::bw)
@@ -1065,7 +1057,7 @@ pub fn draw_insert_trigger<'a>(
 }
 
 pub fn draw_delete_trigger<'a>(
-    open: &bool,
+    open: bool,
     trigger: &'a DeleteTrigger,
     roe: &bool,
     last: &'a String,
@@ -1094,7 +1086,7 @@ pub fn draw_delete_trigger<'a>(
 
         let name = sized_medium(&trigger.name, size);
 
-        let expand = if *open { CHEV_DOWN } else { CHEV_LEFT };
+        let expand = if open { CHEV_DOWN } else { CHEV_LEFT };
         let expand = icons::icon(expand).size(size);
 
         let name = row!(expand, kind, name)
@@ -1112,22 +1104,10 @@ pub fn draw_delete_trigger<'a>(
             .style(styles::button::text_danger)
             .on_press(TriggerMessage::RemoveDelete(id));
 
-        button(
-            row!(name, duplicate, remove,)
-                .spacing(8)
-                .align_y(Vertical::Center),
-        )
-        .padding(0)
-        .style(styles::button::text)
-        .on_press(TriggerMessage::ToggleExpandDelete(id))
+        row!(name, duplicate, remove,)
+            .spacing(8)
+            .align_y(Vertical::Center)
     };
-
-    if !*open {
-        let title = container(title)
-            .style(styles::container::bw)
-            .padding(padding);
-        return title.into();
-    }
 
     let name = {
         let name = sized_medium("Rule name", text_size);
@@ -1451,15 +1431,19 @@ pub fn draw_delete_trigger<'a>(
     };
 
     let content = column!(
-        title,
         rule::horizontal(1.0),
         name,
         media,
         roe,
         cond.map(move |lsg| TriggerMessage::LogicDelete(id, lsg))
     )
-    .spacing(8.0)
-    .width(Length::Fill);
+    .spacing(8);
+
+    let content = expandable(title, content)
+        .width(Length::Fill)
+        .expanded(open)
+        .spacing(8)
+        .on_expand(move |expand| TriggerMessage::ToggleExpandDelete(id, expand));
 
     let content = container(content)
         .style(styles::container::bw)
