@@ -107,6 +107,7 @@ fn main() -> iced::Result {
             ..Default::default()
 
         })
+        .title("kino")
         .window(window::Settings {
             icon: Some(icon),
             size: Size::new(1280.0, 800.0),
