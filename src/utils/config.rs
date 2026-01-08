@@ -1495,16 +1495,8 @@ mod keys {
                 HomeAction::Forward,
             ),
             (
-                key(Key::Named(Named::NavigateNext), None),
-                HomeAction::Forward,
-            ),
-            (
                 key(Key::Named(Named::BrowserForward), None),
                 HomeAction::Forward,
-            ),
-            (
-                key(Key::Named(Named::NavigatePrevious), None),
-                HomeAction::Back,
             ),
             (key(Key::Named(Named::BrowserBack), None), HomeAction::Back),
             (
@@ -1547,10 +1539,6 @@ mod keys {
         [
             (
                 key(Key::Named(Named::ArrowLeft), Some(KeyModifier::Alt)),
-                PlayerAction::Back,
-            ),
-            (
-                key(Key::Named(Named::NavigatePrevious), None),
                 PlayerAction::Back,
             ),
             (

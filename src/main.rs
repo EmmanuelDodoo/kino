@@ -1,5 +1,4 @@
 #![allow(dead_code, unused_imports)]
-
 use iced::{
     Color, ContentFit, Element, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation,
     Shadow, Size, Subscription, Task, Theme, Vector,
@@ -13,7 +12,7 @@ use iced::{
     widget::{
         self, Space, bottom, bottom_center, button, center, center_x, center_y, column, container,
         float, grid, image, markdown, mouse_area, operation, pick_list, rich_text, row, scrollable,
-        slider, space, span, stack, text, text_input, tooltip,
+        slider, space, span, stack, text, text_input, tooltip as tp,
     },
     window,
 };
@@ -45,7 +44,7 @@ use utils::sort;
 use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Layout, Sort, SortKind, empty, styles};
+use utils::{Layout, Sort, SortKind, empty, styles, tooltip};
 use widgets::*;
 
 // fn _test_main() {
@@ -90,7 +89,6 @@ fn main() -> iced::Result {
         App::subscription,
         App::view
     )
-        // .exit_on_close_request(false)
         .theme(App::theme)
 
     // iced::application::timed(
@@ -158,13 +156,12 @@ impl BootFn<App, app::Message> for BootMode {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Set,
-    Get,
+    Open(bool),
     None,
 }
 
 struct Playground {
-    db: db::Database,
+    open: bool,
     now: Instant,
 }
 
@@ -172,10 +169,7 @@ impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let now = Instant::now();
 
-        let new = Self {
-            db: db::Database::open_with_dummies("triggers.db", "dummy.txt").unwrap(),
-            now,
-        };
+        let new = Self { open: false, now };
 
         (new, Task::none())
     }
@@ -184,12 +178,8 @@ impl Playground {
         self.now = now;
 
         match message {
-            Message::Set => {
-                //
-                Task::none()
-            }
-            Message::Get => {
-                //
+            Message::Open(open) => {
+                self.open = open;
                 Task::none()
             }
             Message::None => Task::none(),
@@ -197,12 +187,25 @@ impl Playground {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let set = button("Set").on_press(Message::Set);
-        let get = button("Get").on_press(Message::Get);
+        let root = container("Root").style(styles::container::pb);
+        let root = tooltip(root, "Testing", tp::Position::Bottom);
+        let content = container("Container").style(styles::container::sb);
+        let content = tooltip(content, "Content", tp::Position::Top);
 
-        let content = row!(set, get).spacing(12.0);
+        let content = expandable(root, content)
+            .expanded(self.open)
+            .spacing(10.0)
+            .on_expand(Message::Open);
 
-        let content = center(content);
+        let extra = container("Extra").style(styles::container::ps);
+
+        let content = column!(content, extra).spacing(16.0);
+
+        let content = container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_y(Vertical::Center);
+        // let content = center(content);
 
         content.into()
     }
