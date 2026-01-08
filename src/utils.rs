@@ -504,6 +504,7 @@ variants! {
         SearchToggle,
         Back,
         Forward,
+        SelectionStart,
     }
 }
 
@@ -518,6 +519,7 @@ impl HomeAction {
             Self::SearchToggle => "Opens the search dialog",
             Self::Back => "Navigates back to the previous page",
             Self::Forward => "Navigates forward to the next page",
+            Self::SelectionStart => "Enters selection mode, adding clicked media to a new playlist",
         }
     }
 }
@@ -536,6 +538,7 @@ impl std::fmt::Display for HomeAction {
                 Self::LayoutToggle => "Layout Toggle",
                 Self::CloseModal => "Close Modal",
                 Self::SettingsOpen => "Settings Open",
+                Self::SelectionStart => "Selection Start",
             }
         )
     }

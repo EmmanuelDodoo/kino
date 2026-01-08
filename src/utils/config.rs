@@ -1532,6 +1532,10 @@ mod keys {
                 HomeAction::SearchToggle,
             ),
             (key(Key::Named(Named::Escape), None), HomeAction::CloseModal),
+            (
+                key(Key::Character("p".into()), None),
+                HomeAction::SelectionStart,
+            ),
         ]
         .into_iter()
     }

@@ -97,7 +97,11 @@ pub enum Message {
     Refresh(Instant, bool),
     LastWatched(PlayId),
     VideoStats(PlayItem),
-    Key {
+    KeyPress {
+        key: Key,
+        modifiers: Modifiers,
+    },
+    KeyRelease {
         key: Key,
         modifiers: Modifiers,
     },
@@ -437,7 +441,7 @@ impl App {
 
                 self.play_items(items, false)
             }
-            Message::Key { key, modifiers } => {
+            Message::KeyPress { key, modifiers } => {
                 let keypress = KeyPress::with_modifiers(key, modifiers);
 
                 if let Some(settings) = self.settings.as_mut()
@@ -445,12 +449,25 @@ impl App {
                 {
                     settings.captured_key(keypress)
                 } else {
-                    self.config
+                    match self
+                        .config
                         .keystore
                         .action(keypress, self.screen)
                         .map(|action| self.action(action, now))
-                        .unwrap_or_default()
+                    {
+                        Some(action) => action,
+                        None if matches!(self.screen, Screen::Home) => {
+                            self.home.command = modifiers.command();
+                            Task::none()
+                        }
+                        _ => Task::none(),
+                    }
                 }
+            }
+            Message::KeyRelease { modifiers, .. } => {
+                self.home.command = modifiers.command();
+
+                Task::none()
             }
             Message::CaptureKeys(capture) => {
                 self.is_capturing_keys = capture;
@@ -1316,12 +1333,14 @@ impl App {
             Subscription::none()
         };
 
-        let keys = keyboard::listen().map(|event| {
-            let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
-                return Message::None;
-            };
-
-            Message::Key { key, modifiers }
+        let keys = keyboard::listen().map(|event| match event {
+            keyboard::Event::KeyPressed { key, modifiers, .. } => {
+                Message::KeyPress { key, modifiers }
+            }
+            keyboard::Event::KeyReleased { key, modifiers, .. } => {
+                Message::KeyRelease { key, modifiers }
+            }
+            _ => Message::None,
         });
 
         let exit = window::close_requests().map(Message::ExitRequested);

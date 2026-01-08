@@ -25,6 +25,7 @@ pub const CARD_WIDTH: f32 = CARD_HEIGHT * 2.0 / 3.0;
 pub const LIST_HEIGHT: f32 = 150.0;
 pub const LIST_WIDTH: f32 = LIST_HEIGHT * 5.5 / 10.0;
 pub const IMAGE_RADIUS: f32 = 7.0;
+const SELECTED_WIDTH: f32 = 2.0;
 
 variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -419,6 +420,7 @@ pub type ThumbnailSample<T> = iced::Task<(<T as Media>::Id, Option<(iced::Color,
 
 #[derive(Debug, Clone)]
 pub struct Thumbnail<T: Media> {
+    pub selected: bool,
     poster: Option<Handle>,
     backdrop: Option<Handle>,
     sample_text: Option<iced::Color>,
@@ -452,6 +454,7 @@ impl<T: Media> Thumbnail<T> {
         let backdrop = media.backdrop().map(Handle::from_path);
 
         let new = Self {
+            selected: false,
             background: Animation::new(false)
                 .duration(iced::time::Duration::from_millis(200))
                 .easing(Easing::EaseInOut),
@@ -642,11 +645,19 @@ impl<T: Media> Thumbnail<T> {
             .align_y(Vertical::Center)
             .height(LIST_HEIGHT);
 
+        let selected = self.selected;
         let content = button(content)
             .padding(10)
-            .style(|theme, status| {
+            .style(move |theme, status| {
                 let default = styles::button::subtlest(theme, status);
                 let border = default.border.rounded(IMAGE_RADIUS);
+                let border = if selected {
+                    border
+                        .width(SELECTED_WIDTH)
+                        .color(theme.extended_palette().primary.strong.color)
+                } else {
+                    border
+                };
 
                 button::Style { border, ..default }
             })
@@ -763,13 +774,22 @@ impl<T: Media> Thumbnail<T> {
 
         let content = stack![img, overlay].width(CARD_WIDTH).height(Length::Fill);
 
+        let selected = self.selected;
         let content = container(column!(content, details))
             .padding(4)
             .width(CARD_WIDTH)
             .height(CARD_HEIGHT)
-            .style(|theme| {
+            .style(move |theme| {
                 let default = styles::container::bw3(theme);
                 let border = default.border.rounded(IMAGE_RADIUS);
+
+                let border = if selected {
+                    border
+                        .width(SELECTED_WIDTH)
+                        .color(theme.extended_palette().primary.strong.color)
+                } else {
+                    border
+                };
 
                 container::Style { border, ..default }
             });
@@ -846,6 +866,7 @@ impl<T: Media> Thumbnail<T> {
             .on_press((on_add)(self.media.id()))
             .padding(0);
 
+        let selected = self.selected;
         button(
             row!(img, name, ratings, progress, duration, recent, add)
                 .spacing(20.0)
@@ -853,9 +874,16 @@ impl<T: Media> Thumbnail<T> {
         )
         .padding([6, 6])
         .on_press((on_select)(self.media.id()))
-        .style(|theme, status| {
+        .style(move |theme, status| {
             let default = styles::button::subtlest(theme, status);
             let border = default.border.rounded(IMAGE_RADIUS);
+            let border = if selected {
+                border
+                    .width(SELECTED_WIDTH)
+                    .color(theme.extended_palette().primary.strong.color)
+            } else {
+                border
+            };
 
             button::Style { border, ..default }
         })

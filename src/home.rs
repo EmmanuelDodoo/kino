@@ -290,6 +290,13 @@ pub enum TMDBMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum SelectionMessage {
+    Select(ItemId),
+    Cancel,
+    Play,
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig,
     CollectionTriggers,
@@ -302,6 +309,7 @@ pub enum ViewMessage {
     TMDBId { id: ItemId, top_level: bool },
     RemoveMedia { id: ItemId, name: String },
     RemoveCollection { id: CollectionId, name: String },
+    Selection,
 }
 
 #[derive(Debug)]
@@ -347,6 +355,7 @@ pub enum View {
         dtriggers: Vec<(bool, DeleteTrigger, bool, String, String)>,
         removed_deletes: Vec<DeleteTrigger>,
     },
+    Selection(Vec<ItemId>),
 }
 
 #[derive(Debug, Clone)]
@@ -415,6 +424,7 @@ pub enum HomeMessage {
     Rename(RenameMessage),
     Synopsis(SynopsisMessage),
     TMDBId(TMDBMessage),
+    Selection(SelectionMessage),
     RemoveMedia,
     Refetch(ItemId),
     OpenView(ViewMessage),
@@ -471,6 +481,8 @@ pub struct Home {
     scanning: Option<Animation<bool>>,
 
     focused: Option<ItemId>,
+
+    pub command: bool,
 }
 
 impl Home {
@@ -521,6 +533,7 @@ impl Home {
             recent_limit,
             scanning: None,
             focused: None,
+            command: false,
         }
     }
 
@@ -577,11 +590,26 @@ impl Home {
                 collection,
                 itriggers,
                 dtriggers,
-                movies,
-                shows,
-                seasons,
-                episodes,
+                mut movies,
+                mut shows,
+                mut seasons,
+                mut episodes,
             } => {
+                if let Some(View::Selection(selected)) = &self.view {
+                    for media in &mut movies {
+                        media.selected = selected.contains(&media.media.id.into());
+                    }
+                    for media in &mut shows {
+                        media.selected = selected.contains(&media.media.id.into());
+                    }
+                    for media in &mut seasons {
+                        media.selected = selected.contains(&media.media.id.into());
+                    }
+                    for media in &mut episodes {
+                        media.selected = selected.contains(&media.media.id.into());
+                    }
+                }
+
                 self.state = State::Collection {
                     collection,
                     itriggers,
@@ -807,6 +835,7 @@ impl Home {
 
                         self.update_page_scroll()
                     }
+                    ViewMessage::Selection => self.selection(),
                 }
             }
             HomeMessage::CollectionConfig(csg) => {
@@ -829,7 +858,7 @@ impl Home {
                         config.icon = icon;
                     }
                     ConfigMessage::Save if config.id.is_some() => {
-                        let close_view = self.close_view();
+                        let close_view = self.close_view(true);
 
                         let State::Collection { collection, .. } = &mut self.state else {
                             return Task::none();
@@ -892,7 +921,7 @@ impl Home {
                         self.collections.push(simple);
                         sort_collections(&mut self.collections);
 
-                        let close_view = self.close_view();
+                        let close_view = self.close_view(true);
                         self.state = State::Collection {
                             collection: Box::new(CollectionThumbnail::new(new)),
                             itriggers: vec![],
@@ -948,7 +977,7 @@ impl Home {
                 let old = self.collections.remove(index);
                 let remove = Message::RemoveCollection(old.id).tasked();
 
-                Task::batch([remove, self.back(now, true), self.close_view()])
+                Task::batch([remove, self.back(now, true), self.close_view(true)])
             }
             HomeMessage::RemoveCollectionItems(collection, items) => {
                 self.unfocus(now);
@@ -1096,7 +1125,7 @@ impl Home {
                             kind: MediaUpdateKind::Rating(value),
                         });
 
-                        let close = self.close_view();
+                        let close = self.close_view(true);
 
                         Task::batch([Task::done(msg), close])
                     }
@@ -1113,7 +1142,7 @@ impl Home {
                             kind: MediaUpdateKind::Rating(value),
                         });
 
-                        let close = self.close_view();
+                        let close = self.close_view(true);
 
                         Task::batch([Task::done(msg), close])
                     }
@@ -1145,7 +1174,7 @@ impl Home {
                             id: *id,
                             kind: MediaUpdateKind::Name(value.clone()),
                         });
-                        let close = self.close_view();
+                        let close = self.close_view(true);
 
                         Task::batch([Task::done(msg), close])
                     }
@@ -1163,7 +1192,7 @@ impl Home {
                             kind: MediaUpdateKind::Synopsis(content.text()),
                         });
 
-                        Task::batch([Task::done(msg), self.close_view()])
+                        Task::batch([Task::done(msg), self.close_view(true)])
                     }
                     SynopsisMessage::Action(action) => {
                         content.perform(action);
@@ -1204,7 +1233,129 @@ impl Home {
                             kind: MediaUpdateKind::TMDBId(tmdb_id),
                         });
 
-                        Task::batch([Task::done(msg), self.close_view()])
+                        Task::batch([Task::done(msg), self.close_view(true)])
+                    }
+                }
+            }
+            HomeMessage::Selection(ssg) => {
+                let Some(View::Selection(selected)) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match ssg {
+                    SelectionMessage::Select(item) => {
+                        let new = !selected.contains(&item);
+
+                        if new {
+                            selected.push(item);
+                        } else {
+                            selected.retain(|selected| *selected != item);
+                        }
+
+                        match (item, &mut self.state) {
+                            (ItemId::Movie(id), State::Recent { movies, .. })
+                            | (ItemId::Movie(id), State::Movies(movies))
+                            | (ItemId::Movie(id), State::Collection { movies, .. }) => {
+                                if let Some(media) =
+                                    movies.iter_mut().find(|item| item.media.id == id)
+                                {
+                                    media.selected = new;
+                                }
+                            }
+                            (ItemId::Show(id), State::Recent { shows, .. })
+                            | (ItemId::Show(id), State::Shows(shows))
+                            | (ItemId::Show(id), State::Collection { shows, .. }) => {
+                                if let Some(media) =
+                                    shows.iter_mut().find(|item| item.media.id == id)
+                                {
+                                    media.selected = new;
+                                }
+                            }
+                            (ItemId::Season(id), State::Show { seasons, .. })
+                            | (ItemId::Season(id), State::Collection { seasons, .. }) => {
+                                if let Some(media) =
+                                    seasons.iter_mut().find(|item| item.media.id == id)
+                                {
+                                    media.selected = new;
+                                }
+                            }
+                            (ItemId::Episode(id), State::Season { episodes, .. })
+                            | (ItemId::Episode(id), State::Collection { episodes, .. }) => {
+                                if let Some(media) =
+                                    episodes.iter_mut().find(|item| item.media.id == id)
+                                {
+                                    media.selected = new;
+                                }
+                            }
+                            _ => {}
+                        }
+
+                        Task::none()
+                    }
+                    SelectionMessage::Cancel => {
+                        match &mut self.state {
+                            State::Loading(_)
+                            | State::Collections(_)
+                            | State::Movie { .. }
+                            | State::Episode { .. } => {}
+                            State::Recent { movies, shows } => {
+                                for media in movies {
+                                    media.selected = false;
+                                }
+                                for media in shows {
+                                    media.selected = false;
+                                }
+                            }
+                            State::Movies(movies) => {
+                                for media in movies {
+                                    media.selected = false;
+                                }
+                            }
+                            State::Shows(shows) => {
+                                for media in shows {
+                                    media.selected = false;
+                                }
+                            }
+                            State::Show { seasons, .. } => {
+                                for media in seasons {
+                                    media.selected = false;
+                                }
+                            }
+                            State::Season { episodes, .. } => {
+                                for media in episodes {
+                                    media.selected = false;
+                                }
+                            }
+                            State::Collection {
+                                movies,
+                                shows,
+                                seasons,
+                                episodes,
+                                ..
+                            } => {
+                                for media in movies {
+                                    media.selected = false;
+                                }
+                                for media in shows {
+                                    media.selected = false;
+                                }
+                                for media in seasons {
+                                    media.selected = false;
+                                }
+
+                                for media in episodes {
+                                    media.selected = false;
+                                }
+                            }
+                        }
+
+                        self.close_view(true)
+                    }
+                    SelectionMessage::Play => {
+                        let play = selected.iter().copied().collect();
+                        let play = Message::PlayItems(play).tasked();
+
+                        Task::batch([play, self.close_view(true)])
                     }
                 }
             }
@@ -1228,7 +1379,7 @@ impl Home {
 
                 let remove = Task::done(msg);
 
-                Task::batch([self.back(now, true), remove, self.close_view()])
+                Task::batch([self.back(now, true), remove, self.close_view(true)])
             }
             HomeMessage::Trigger(tsg) => {
                 let Some(View::CollectionTriggers {
@@ -2242,13 +2393,13 @@ impl Home {
                         }
                         .tasked();
 
-                        let close_view = self.close_view();
+                        let close_view = self.close_view(true);
 
                         Task::batch([close_view, msg])
                     }
                 }
             }
-            HomeMessage::CloseView => self.close_view(),
+            HomeMessage::CloseView => self.close_view(true),
             HomeMessage::Back => self.back(now, false),
             HomeMessage::Forward => self.forward(now),
             HomeMessage::ToggleLayout => self.layout_toggle(),
@@ -2435,105 +2586,124 @@ impl Home {
             HomeMessage::Random => Task::done(Message::Random),
             HomeMessage::RefreshContent => self.content_refresh(now),
             HomeMessage::Play(item) => {
-                let close_view = self.close_view();
-                Task::batch([Task::done(Message::PlayItem(item)), close_view])
+                if matches!(self.view, Some(View::Selection(_))) {
+                    Message::Home(HomeMessage::Selection(SelectionMessage::Select(item))).tasked()
+                } else if self.command {
+                    let selection =
+                        Message::Home(HomeMessage::OpenView(ViewMessage::Selection)).tasked();
+
+                    let selected =
+                        Message::Home(HomeMessage::Selection(SelectionMessage::Select(item)))
+                            .tasked();
+
+                    selection.chain(selected)
+                } else {
+                    let close_view = self.close_view(true);
+                    Task::batch([Task::done(Message::PlayItem(item)), close_view])
+                }
             }
             HomeMessage::PlayCollection { id, items } => {
                 Task::done(Message::PlayCollectionItems { id, items })
             }
-            HomeMessage::Hovered(id, is_hovered) => match (&mut self.state, id) {
-                (State::Loading(_), _)
-                | (State::Episode { .. }, _)
-                | (State::Movie { .. }, _)
-                | (State::Collections(_), _) => Task::none(),
-                (State::Recent { shows, .. }, ItemId::Show(id)) => {
-                    if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
-                        show.go_mut(is_hovered, now);
-                    };
-                    self.focused = Some(ItemId::Show(id));
-                    Task::none()
-                }
-                (State::Recent { movies, .. }, ItemId::Movie(id)) => {
-                    if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
-                        movie.go_mut(is_hovered, now);
+            HomeMessage::Hovered(id, is_hovered) => {
+                let is_hovered = is_hovered && !matches!(self.view, Some(View::Selection(_)));
+
+                match (&mut self.state, id) {
+                    (State::Loading(_), _)
+                    | (State::Episode { .. }, _)
+                    | (State::Movie { .. }, _)
+                    | (State::Collections(_), _) => Task::none(),
+                    (State::Recent { shows, .. }, ItemId::Show(id)) => {
+                        if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
+                            show.go_mut(is_hovered, now);
+                        };
+                        self.focused = Some(ItemId::Show(id));
+                        Task::none()
                     }
+                    (State::Recent { movies, .. }, ItemId::Movie(id)) => {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                            movie.go_mut(is_hovered, now);
+                        }
 
-                    self.focused = Some(ItemId::Movie(id));
-                    Task::none()
-                }
-                (State::Recent { .. }, _) => Task::none(),
-                (State::Shows(shows), ItemId::Show(id)) => {
-                    if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
-                        show.go_mut(is_hovered, now);
-                    };
-
-                    self.focused = Some(ItemId::Show(id));
-                    Task::none()
-                }
-                (State::Shows(_), _) => Task::none(),
-                (State::Movies(movies), ItemId::Movie(id)) => {
-                    if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
-                        movie.go_mut(is_hovered, now);
+                        self.focused = Some(ItemId::Movie(id));
+                        Task::none()
                     }
+                    (State::Recent { .. }, _) => Task::none(),
+                    (State::Shows(shows), ItemId::Show(id)) => {
+                        if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
+                            show.go_mut(is_hovered, now);
+                        };
 
-                    self.focused = Some(ItemId::Movie(id));
-                    Task::none()
-                }
-                (State::Movies(_), _) => Task::none(),
-                (State::Show { seasons, .. }, ItemId::Season(id)) => {
-                    if let Some(season) = seasons.iter_mut().find(|season| season.media.id == id) {
-                        season.go_mut(is_hovered, now);
+                        self.focused = Some(ItemId::Show(id));
+                        Task::none()
                     }
-                    self.focused = Some(ItemId::Season(id));
-                    Task::none()
-                }
-                (State::Show { .. }, _) => Task::none(),
-                (State::Season { episodes, .. }, ItemId::Episode(id)) => {
-                    if let Some(episode) =
-                        episodes.iter_mut().find(|episode| episode.media.id == id)
-                    {
-                        episode.go_mut(is_hovered, now);
+                    (State::Shows(_), _) => Task::none(),
+                    (State::Movies(movies), ItemId::Movie(id)) => {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                            movie.go_mut(is_hovered, now);
+                        }
+
+                        self.focused = Some(ItemId::Movie(id));
+                        Task::none()
                     }
-
-                    self.focused = Some(ItemId::Episode(id));
-                    Task::none()
-                }
-                (State::Season { .. }, _) => Task::none(),
-                (State::Collection { shows, .. }, ItemId::Show(id)) => {
-                    if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
-                        show.go_mut(is_hovered, now);
-                    };
-
-                    self.focused = Some(ItemId::Show(id));
-                    Task::none()
-                }
-                (State::Collection { movies, .. }, ItemId::Movie(id)) => {
-                    if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
-                        movie.go_mut(is_hovered, now);
+                    (State::Movies(_), _) => Task::none(),
+                    (State::Show { seasons, .. }, ItemId::Season(id)) => {
+                        if let Some(season) =
+                            seasons.iter_mut().find(|season| season.media.id == id)
+                        {
+                            season.go_mut(is_hovered, now);
+                        }
+                        self.focused = Some(ItemId::Season(id));
+                        Task::none()
                     }
+                    (State::Show { .. }, _) => Task::none(),
+                    (State::Season { episodes, .. }, ItemId::Episode(id)) => {
+                        if let Some(episode) =
+                            episodes.iter_mut().find(|episode| episode.media.id == id)
+                        {
+                            episode.go_mut(is_hovered, now);
+                        }
 
-                    self.focused = Some(ItemId::Movie(id));
-                    Task::none()
-                }
-                (State::Collection { seasons, .. }, ItemId::Season(id)) => {
-                    if let Some(season) = seasons.iter_mut().find(|show| show.media.id == id) {
-                        season.go_mut(is_hovered, now);
-                    };
-
-                    self.focused = Some(ItemId::Season(id));
-                    Task::none()
-                }
-                (State::Collection { episodes, .. }, ItemId::Episode(id)) => {
-                    if let Some(episode) =
-                        episodes.iter_mut().find(|episode| episode.media.id == id)
-                    {
-                        episode.go_mut(is_hovered, now);
+                        self.focused = Some(ItemId::Episode(id));
+                        Task::none()
                     }
+                    (State::Season { .. }, _) => Task::none(),
+                    (State::Collection { shows, .. }, ItemId::Show(id)) => {
+                        if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
+                            show.go_mut(is_hovered, now);
+                        };
 
-                    self.focused = Some(ItemId::Episode(id));
-                    Task::none()
+                        self.focused = Some(ItemId::Show(id));
+                        Task::none()
+                    }
+                    (State::Collection { movies, .. }, ItemId::Movie(id)) => {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                            movie.go_mut(is_hovered, now);
+                        }
+
+                        self.focused = Some(ItemId::Movie(id));
+                        Task::none()
+                    }
+                    (State::Collection { seasons, .. }, ItemId::Season(id)) => {
+                        if let Some(season) = seasons.iter_mut().find(|show| show.media.id == id) {
+                            season.go_mut(is_hovered, now);
+                        };
+
+                        self.focused = Some(ItemId::Season(id));
+                        Task::none()
+                    }
+                    (State::Collection { episodes, .. }, ItemId::Episode(id)) => {
+                        if let Some(episode) =
+                            episodes.iter_mut().find(|episode| episode.media.id == id)
+                        {
+                            episode.go_mut(is_hovered, now);
+                        }
+
+                        self.focused = Some(ItemId::Episode(id));
+                        Task::none()
+                    }
                 }
-            },
+            }
             HomeMessage::Scroll(viewport) => {
                 self.scroll.offset = viewport.absolute_offset();
                 Task::none()
@@ -3553,6 +3723,11 @@ impl Home {
                         removed_inserts: _removed_inserts,
                         removed_deletes: _removed_deletes,
                     } => draw_collection_triggers(*view_inserts, itriggers, dtriggers),
+                    View::Selection(selected) => {
+                        let selection = draw_selection(selected.len());
+
+                        return modal::transparent(content, selection);
+                    }
                 };
 
                 modal(content, overlay, HomeMessage::CloseView)
@@ -3719,8 +3894,12 @@ impl Home {
         Task::done(Message::Layout(self.layout))
     }
 
-    fn close_view(&mut self) -> Task<Message> {
-        self.view.take();
+    fn close_view(&mut self, selected: bool) -> Task<Message> {
+        if selected || !matches!(self.view, Some(View::Selection(_))) {
+            self.command = false;
+            self.view.take();
+        }
+
         self.update_page_scroll()
     }
 
@@ -3729,10 +3908,10 @@ impl Home {
         if let Some(current) = self.current_page
             && current == kind
         {
-            return self.close_view();
+            return self.close_view(false);
         }
 
-        let close_view = self.close_view();
+        let close_view = self.close_view(false);
 
         if let Some(old) = self.current_page.replace(kind) {
             self.backward.push(old)
@@ -3818,6 +3997,12 @@ impl Home {
         Task::batch([msg, close_view, task])
     }
 
+    fn selection(&mut self) -> Task<Message> {
+        self.view = Some(View::Selection(vec![]));
+
+        self.update_page_scroll()
+    }
+
     pub fn action(&mut self, action: HomeAction, now: Instant) -> Task<Message> {
         match action {
             HomeAction::SettingsOpen => Task::done(Message::SettingsOpen),
@@ -3825,17 +4010,27 @@ impl Home {
             HomeAction::RefreshContent => self.content_refresh(now),
             HomeAction::Refresh => self.refresh(now),
             HomeAction::SearchToggle => self.toggle_search(None, now),
-            HomeAction::CloseModal => self.close_view(),
+            HomeAction::CloseModal => self.close_view(true),
             HomeAction::Back => self.back(now, false),
             HomeAction::Forward => self.forward(now),
+            HomeAction::SelectionStart => self.selection(),
         }
     }
 
     pub fn fetched_recents(
         &mut self,
-        movies: Vec<Thumbnail<Movie>>,
-        shows: Vec<Thumbnail<Show>>,
+        mut movies: Vec<Thumbnail<Movie>>,
+        mut shows: Vec<Thumbnail<Show>>,
     ) -> Task<Message> {
+        if let Some(View::Selection(selected)) = &self.view {
+            for media in &mut movies {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+            for media in &mut shows {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+        }
+
         let state = State::Recent { shows, movies };
 
         self.state = state;
@@ -3853,13 +4048,23 @@ impl Home {
         self.update_page_scroll()
     }
 
-    pub fn fetched_shows(&mut self, shows: Vec<Thumbnail<Show>>) -> Task<Message> {
+    pub fn fetched_shows(&mut self, mut shows: Vec<Thumbnail<Show>>) -> Task<Message> {
+        if let Some(View::Selection(selected)) = &self.view {
+            for media in &mut shows {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+        }
         self.state = State::Shows(shows);
 
         self.update_page_scroll()
     }
 
-    pub fn fetched_movies(&mut self, movies: Vec<Thumbnail<Movie>>) -> Task<Message> {
+    pub fn fetched_movies(&mut self, mut movies: Vec<Thumbnail<Movie>>) -> Task<Message> {
+        if let Some(View::Selection(selected)) = &self.view {
+            for media in &mut movies {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+        }
         self.state = State::Movies(movies);
         self.update_page_scroll()
     }
@@ -3867,8 +4072,14 @@ impl Home {
     pub fn fetched_show(
         &mut self,
         show: Thumbnail<Show>,
-        seasons: Vec<Thumbnail<Season>>,
+        mut seasons: Vec<Thumbnail<Season>>,
     ) -> Task<Message> {
+        if let Some(View::Selection(selected)) = &self.view {
+            for media in &mut seasons {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+        }
+
         let memberships = Message::FetchMemberships(show.media.id.into());
 
         self.state = State::Show {
@@ -3894,8 +4105,13 @@ impl Home {
     pub fn fetched_season(
         &mut self,
         season: Thumbnail<Season>,
-        episodes: Vec<Thumbnail<Episode>>,
+        mut episodes: Vec<Thumbnail<Episode>>,
     ) -> Task<Message> {
+        if let Some(View::Selection(selected)) = &self.view {
+            for media in &mut episodes {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+        }
         let memberships = Message::FetchMemberships(season.media.id.into());
 
         self.state = State::Season {
