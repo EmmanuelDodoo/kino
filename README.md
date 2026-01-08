@@ -33,7 +33,7 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 
 - [x] Automatic Collection populating
 
-- [x] Selection modes for building playlists on the fly
+- [x] Selection mode for building playlists on the fly
 
 - [ ] Mini player mode
 
