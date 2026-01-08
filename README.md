@@ -33,6 +33,8 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 
 - [x] Automatic Collection populating
 
+- [x] Selection modes for building playlists on the fly
+
 - [ ] Mini player mode
 
 - [ ] Comments/notes on media
@@ -44,8 +46,6 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 - [ ] Support for multiple metadata scrappers
 
 - [ ] One-off video playback (without adding to library)
-
-- [ ] Selection modes for building playlists on the fly
 
 - [ ] Subtitle syncing
 
