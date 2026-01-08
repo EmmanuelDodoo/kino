@@ -1,7 +1,8 @@
 use super::{
     CollectionAddMessage, CollectionAddState, CollectionConfig, ConfigMessage, HomeMessage,
     LogicMessage, Rating, RatingMessage, RenameMessage, SearchMessage, SearchState,
-    SimpleCollection, SynopsisMessage, TMDBMessage, TriggerMessage, shared::Icon, view_unicode,
+    SelectionMessage, SimpleCollection, SynopsisMessage, TMDBMessage, TriggerMessage, shared::Icon,
+    view_unicode,
 };
 use crate::models::collection::{
     CollectionView, ItemId,
@@ -17,8 +18,8 @@ use iced::{
     alignment::{Horizontal, Vertical},
     mouse,
     widget::{
-        self, button, center, checkbox, column, container, grid, mouse_area, pick_list, row, rule,
-        scrollable, space, text, text_editor, text_input, tooltip as tp,
+        self, bottom_right, button, center, checkbox, column, container, grid, mouse_area,
+        pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
     },
 };
 
@@ -1449,4 +1450,61 @@ pub fn draw_delete_trigger<'a>(
         .style(styles::container::bw)
         .padding(padding);
     content.into()
+}
+
+pub fn draw_selection<'a>(items: usize) -> Element<'a, HomeMessage> {
+    let dimensions = 76;
+
+    let play = button(icons::icon(PLAY).size(40).center())
+        .on_press(SelectionMessage::Play)
+        .width(56)
+        .height(56)
+        .style(|theme, status| {
+            let default = styles::button::weak_primary(theme, status);
+            let text = styles::button::text_primary(theme, status);
+            let border = default.border.rounded(100.0);
+
+            button::Style {
+                border,
+                text_color: text.text_color,
+                ..default
+            }
+        });
+    let count = sized_medium(items.to_string(), P);
+
+    let cancel = button(icons::icon(CANCEL).size(H6))
+        .padding(0)
+        .style(styles::button::text_danger)
+        .on_press(SelectionMessage::Cancel);
+
+    let extra = column!(cancel, space::vertical(), count);
+
+    let content: Element<'_, SelectionMessage> = container(
+        row!(play, extra)
+            .width(dimensions)
+            .height(dimensions)
+            .spacing(4.0)
+            .align_y(Vertical::Center),
+    )
+    .align_y(Vertical::Center)
+    .align_x(Horizontal::Center)
+    .padding([12, 16])
+    .style(|theme| {
+        let default = styles::container::transparent(theme);
+        let border = default.border.rounded(5.0);
+        let background = default
+            .background
+            .map(|background| background.scale_alpha(0.25));
+
+        container::Style {
+            border,
+            background,
+            ..default
+        }
+    })
+    .into();
+
+    bottom_right(content.map(HomeMessage::Selection))
+        .padding([40, 20])
+        .into()
 }

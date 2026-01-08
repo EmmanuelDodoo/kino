@@ -29,3 +29,13 @@ where
     ]
     .into()
 }
+
+pub fn transparent<'a, Message>(
+    base: impl Into<Element<'a, Message>>,
+    modal: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message>
+where
+    Message: 'a + Clone,
+{
+    stack![base.into(), mouse_area(modal)].into()
+}
