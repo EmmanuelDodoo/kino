@@ -1,7 +1,8 @@
 use chrono::Local;
 use iced::{
-    Element, Subscription, Task, Theme,
+    Element, Subscription, Task, Theme, event,
     keyboard::{self, Key, Modifiers},
+    mouse,
     time::{self, Instant},
     window,
 };
@@ -106,6 +107,7 @@ pub enum Message {
         modifiers: Modifiers,
     },
     Back,
+    Forward,
     Random,
     SettingsOpen,
     SaveSettings,
@@ -494,6 +496,13 @@ impl App {
                     self.home.refresh(now)
                 }
             },
+            Message::Forward => {
+                if !matches!(self.screen, Screen::Home) {
+                    Task::none()
+                } else {
+                    self.home.forward(now)
+                }
+            }
             Message::Fetch {
                 id,
                 filters: filter,
@@ -1343,6 +1352,22 @@ impl App {
             _ => Message::None,
         });
 
+        let mouse = event::listen_with(|event, status, _todo| {
+            if !matches!(status, event::Status::Ignored) {
+                return None;
+            }
+
+            let event::Event::Mouse(mouse::Event::ButtonPressed(button)) = event else {
+                return None;
+            };
+
+            match button {
+                mouse::Button::Forward => Some(Message::Forward),
+                mouse::Button::Back => Some(Message::Back),
+                _ => None,
+            }
+        });
+
         let exit = window::close_requests().map(Message::ExitRequested);
 
         let home = self.home.subscription();
@@ -1350,7 +1375,7 @@ impl App {
         let refresh =
             time::every(self.config.refresh_interval()).map(|at| Message::Refresh(at, false));
 
-        Subscription::batch([animating, keys, exit, player, refresh, home])
+        Subscription::batch([animating, keys, mouse, exit, player, refresh, home])
     }
 
     fn settings(&mut self) -> Task<Message> {
