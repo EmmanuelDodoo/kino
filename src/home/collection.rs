@@ -157,9 +157,7 @@ impl CollectionPage {
             Layout::Compact => self.compact(movies, shows, seasons, episodes),
         };
 
-        let content = column!(self.top(collection), content)
-            .spacing(10)
-            .padding(Padding::new(10.0).right(0).bottom(0));
+        let content = column!(self.top(collection), content).spacing(10);
 
         content.into()
     }
@@ -330,7 +328,9 @@ impl CollectionPage {
         };
         let collection = self.id;
 
-        let content = Column::new().spacing(40);
+        let content = Column::new()
+            .spacing(40)
+            .padding(Padding::new(10.0).bottom(0));
 
         let content = if movies.peek().is_none() {
             content
@@ -437,7 +437,8 @@ impl CollectionPage {
         };
 
         let content = scrollable(content)
-            .spacing(20.0)
+            .auto_scroll(true)
+            .spacing(0.5)
             .id(self.scroll.id.clone())
             .on_scroll(move |viewport| CollectionMessage {
                 id: collection,
@@ -460,7 +461,9 @@ impl CollectionPage {
         };
         let collection = self.id;
 
-        let content = Column::new().spacing(40);
+        let content = Column::new()
+            .spacing(40)
+            .padding(Padding::new(10.0).bottom(0));
 
         let content = if movies.peek().is_none() {
             content
@@ -555,7 +558,8 @@ impl CollectionPage {
         };
 
         let content = scrollable(content)
-            .spacing(20.0)
+            .auto_scroll(true)
+            .spacing(0.5)
             .id(self.scroll.id.clone())
             .on_scroll(move |viewport| CollectionMessage {
                 id: collection,
@@ -582,7 +586,7 @@ impl CollectionPage {
 
         let content = Column::new()
             .spacing(40.0)
-            .padding(Padding::new(10.0).bottom(0));
+            .padding(Padding::ZERO.left(10).right(16));
 
         let content = if movies.peek().is_none() {
             content
@@ -604,8 +608,6 @@ impl CollectionPage {
                     .spacing(16)
                     .fluid(CARD_WIDTH)
                     .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
-
-                let movies = container(movies).padding(Padding::ZERO.right(6));
 
                 column!(label, movies).spacing(10.0)
             };
@@ -632,8 +634,6 @@ impl CollectionPage {
                     .spacing(16)
                     .fluid(CARD_WIDTH)
                     .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
-
-                let shows = container(shows).padding(Padding::ZERO.right(6));
 
                 column!(label, shows).spacing(10.0)
             };
@@ -662,8 +662,6 @@ impl CollectionPage {
                     .fluid(CARD_WIDTH)
                     .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-                let seasons = container(seasons).padding(Padding::ZERO.right(6));
-
                 column!(label, seasons).spacing(10.0)
             };
 
@@ -691,8 +689,6 @@ impl CollectionPage {
                     .fluid(CARD_WIDTH)
                     .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-                let episodes = container(episodes).padding(Padding::ZERO.right(6));
-
                 column!(label, episodes).spacing(10.0)
             };
 
@@ -700,6 +696,7 @@ impl CollectionPage {
         };
 
         let content = scrollable(content)
+            .auto_scroll(true)
             .id(self.scroll.id.clone())
             .height(Length::Fill)
             .on_scroll(move |viewport| CollectionMessage {

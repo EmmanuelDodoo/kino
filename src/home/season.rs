@@ -200,18 +200,19 @@ impl SeasonPage {
             )
         });
 
-        let content = column(content).spacing(16);
+        let content = column(content)
+            .spacing(16)
+            .padding(Padding::ZERO.horizontal(10));
 
-        let content = container(
-            scrollable(content)
-                .spacing(20.0)
-                .id(self.scroll.id.clone())
-                .on_scroll(move |viewpport| SeasonPageMessage {
-                    id: season,
+        let content = scrollable(content)
+            .auto_scroll(true)
+            .spacing(0.5)
+            .id(self.scroll.id.clone())
+            .on_scroll(move |viewpport| SeasonPageMessage {
+                id: season,
 
-                    message: Message::Scroll(viewpport),
-                }),
-        );
+                message: Message::Scroll(viewpport),
+            });
 
         content.into()
     }
@@ -239,18 +240,19 @@ impl SeasonPage {
             )
         });
 
-        let content = column(content).spacing(16);
+        let content = column(content)
+            .spacing(16)
+            .padding(Padding::ZERO.horizontal(10));
 
-        let content = container(
-            scrollable(content)
-                .spacing(20.0)
-                .id(self.scroll.id.clone())
-                .on_scroll(move |viewpport| SeasonPageMessage {
-                    id: season,
+        let content = scrollable(content)
+            .auto_scroll(true)
+            .spacing(0.5)
+            .id(self.scroll.id.clone())
+            .on_scroll(move |viewpport| SeasonPageMessage {
+                id: season,
 
-                    message: Message::Scroll(viewpport),
-                }),
-        );
+                message: Message::Scroll(viewpport),
+            });
 
         content.into()
     }
@@ -289,10 +291,11 @@ impl SeasonPage {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(content).padding(Padding::ZERO.right(16));
+        let content = container(content).padding(Padding::ZERO.left(10).right(16));
 
         let content = container(
             scrollable(content)
+                .auto_scroll(true)
                 .height(Length::Fill)
                 .id(self.scroll.id.clone())
                 .on_scroll(move |viewpport| SeasonPageMessage {
@@ -515,9 +518,7 @@ impl SeasonPage {
             }
         };
 
-        let content = column!(self.top(season), content)
-            .spacing(20.0)
-            .padding(Padding::new(10.0).right(0).bottom(0));
+        let content = column!(self.top(season), content).spacing(20.0);
 
         content.into()
     }

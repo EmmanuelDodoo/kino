@@ -207,17 +207,18 @@ impl ShowPage {
             )
         });
 
-        let content = column(content).spacing(16);
+        let content = column(content)
+            .spacing(16)
+            .padding(Padding::ZERO.horizontal(10));
 
-        let content = container(
-            scrollable(content)
-                .spacing(20.0)
-                .id(self.scroll.id.clone())
-                .on_scroll(move |viewport| ShowPageMessage {
-                    id: show,
-                    message: Message::Scroll(viewport),
-                }),
-        );
+        let content = scrollable(content)
+            .auto_scroll(true)
+            .spacing(0.5)
+            .id(self.scroll.id.clone())
+            .on_scroll(move |viewport| ShowPageMessage {
+                id: show,
+                message: Message::Scroll(viewport),
+            });
 
         content.into()
     }
@@ -245,17 +246,18 @@ impl ShowPage {
             )
         });
 
-        let content = column(content).spacing(16);
+        let content = column(content)
+            .spacing(16)
+            .padding(Padding::ZERO.horizontal(10));
 
-        let content = container(
-            scrollable(content)
-                .spacing(20.0)
-                .id(self.scroll.id.clone())
-                .on_scroll(move |viewport| ShowPageMessage {
-                    id: show,
-                    message: Message::Scroll(viewport),
-                }),
-        );
+        let content = scrollable(content)
+            .auto_scroll(true)
+            .spacing(0.5)
+            .id(self.scroll.id.clone())
+            .on_scroll(move |viewport| ShowPageMessage {
+                id: show,
+                message: Message::Scroll(viewport),
+            });
 
         content.into()
     }
@@ -294,10 +296,11 @@ impl ShowPage {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(content).padding(Padding::ZERO.right(16));
+        let content = container(content).padding(Padding::ZERO.left(10).right(16));
 
         let content = container(
             scrollable(content)
+                .auto_scroll(true)
                 .height(Length::Fill)
                 .id(self.scroll.id.clone())
                 .on_scroll(move |viewport| ShowPageMessage {
@@ -535,9 +538,7 @@ impl ShowPage {
             }
         };
 
-        let content = column!(self.top(show), content)
-            .spacing(20.0)
-            .padding(Padding::new(10.0).right(0).bottom(0));
+        let content = column!(self.top(show), content).spacing(20.0);
 
         content.into()
     }

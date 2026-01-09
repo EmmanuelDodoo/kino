@@ -3023,13 +3023,19 @@ impl Home {
                     .spacing(40.0)
                     .padding(iced::Padding::new(10.0).right(16)),
             )
+            .auto_scroll(true)
             .id(self.scroll.id.clone())
             .on_scroll(HomeMessage::Scroll)
         } else {
-            scrollable(column!(movies, shows).spacing(40.0).padding(10))
-                .spacing(10.0)
-                .id(self.scroll.id.clone())
-                .on_scroll(HomeMessage::Scroll)
+            scrollable(
+                column!(movies, shows)
+                    .spacing(40.0)
+                    .padding(Padding::new(10.0).bottom(0)),
+            )
+            .auto_scroll(true)
+            .spacing(0.5)
+            .id(self.scroll.id.clone())
+            .on_scroll(HomeMessage::Scroll)
         };
 
         content.into()

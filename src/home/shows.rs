@@ -88,15 +88,15 @@ impl TvShows {
             )
         });
 
-        let content = column(content).spacing(16);
+        let content = column(content)
+            .spacing(16)
+            .padding(Padding::new(10.0).bottom(0));
 
-        let content = container(
-            scrollable(content)
-                .spacing(20.0)
-                .id(self.scroll.id.clone())
-                .on_scroll(TvShowsMessage::Scroll),
-        )
-        .padding(Padding::new(10.0).right(0).bottom(0));
+        let content = scrollable(content)
+            .auto_scroll(true)
+            .spacing(0.5)
+            .id(self.scroll.id.clone())
+            .on_scroll(TvShowsMessage::Scroll);
 
         content.into()
     }
@@ -113,15 +113,15 @@ impl TvShows {
             )
         });
 
-        let content = column(content).spacing(16);
+        let content = column(content)
+            .spacing(16)
+            .padding(Padding::new(10.0).bottom(0));
 
-        let content = container(
-            scrollable(content)
-                .spacing(20.0)
-                .id(self.scroll.id.clone())
-                .on_scroll(TvShowsMessage::Scroll),
-        )
-        .padding(Padding::new(10.0).right(0).bottom(0));
+        let content = scrollable(content)
+            .auto_scroll(true)
+            .spacing(0.5)
+            .id(self.scroll.id.clone())
+            .on_scroll(TvShowsMessage::Scroll);
 
         content.into()
     }
@@ -148,6 +148,7 @@ impl TvShows {
 
         let content =
             scrollable(container(content).padding(Padding::new(10.0).right(16).bottom(0)))
+                .auto_scroll(true)
                 .height(Length::Fill)
                 .id(self.scroll.id.clone())
                 .on_scroll(TvShowsMessage::Scroll);
