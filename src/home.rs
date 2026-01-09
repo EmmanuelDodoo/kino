@@ -1238,7 +1238,7 @@ impl Home {
                 }
             }
             HomeMessage::Selection(ssg) => {
-                let Some(View::Selection(selected)) = self.view.as_mut() else {
+                let Some(View::Selection(mut selected)) = self.view.take() else {
                     return Task::none();
                 };
 
@@ -1290,7 +1290,9 @@ impl Home {
                             _ => {}
                         }
 
-                        Task::none()
+                        self.view = Some(View::Selection(selected));
+
+                        self.update_page_scroll()
                     }
                     SelectionMessage::Cancel => {
                         match &mut self.state {
@@ -3901,12 +3903,28 @@ impl Home {
     }
 
     fn close_view(&mut self, selected: bool) -> Task<Message> {
-        if selected || !matches!(self.view, Some(View::Selection(_))) {
-            self.command = false;
-            self.view.take();
-        }
+        let scroll = self.update_page_scroll();
 
-        self.update_page_scroll()
+        match self.view.take() {
+            Some(View::Selection(items)) if selected => {
+                self.view = Some(View::Selection(items));
+                self.command = false;
+
+                let clear = HomeMessage::Selection(SelectionMessage::Cancel);
+
+                Task::batch([scroll, Message::Home(clear).tasked()])
+            }
+            Some(View::Selection(items)) => {
+                self.command = true;
+                self.view = Some(View::Selection(items));
+
+                scroll
+            }
+            _ => {
+                self.command = false;
+                scroll
+            }
+        }
     }
 
     pub fn goto(&mut self, kind: PageKind, now: Instant) -> Task<Message> {
