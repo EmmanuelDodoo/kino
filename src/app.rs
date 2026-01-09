@@ -24,7 +24,7 @@ use crate::scan;
 use crate::settings::{Settings, SettingsMessage};
 use crate::toast;
 use crate::utils::{
-    Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort,
+    Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort, SortKind,
     filter::FilterMode, filter::SearchFilter,
 };
 
@@ -1383,12 +1383,20 @@ impl App {
 
     fn play_season(&self, season: SeasonId) -> Result<(Playlist, Vec<String>), Error> {
         let recent = self.db.get_season(season, EpisodeId::from_recents)?;
+
+        let sort = {
+            let mut sort = Sort::release();
+            sort.push(SortKind::Name);
+
+            sort
+        };
+
         let items = self.db.get_season_episodes(
             season,
             None,
             None,
             Filter::none(),
-            Sort::release(),
+            sort,
             PlayItem::from_episode,
         )?;
 
@@ -1426,14 +1434,17 @@ impl App {
 
     fn play_show(&self, show: ShowId) -> Result<(Playlist, Vec<String>), Error> {
         let recent = self.db.get_show(show, SeasonId::from_recents)?;
-        let seasons = self.db.get_show_seasons(
-            show,
-            None,
-            None,
-            Filter::none(),
-            Sort::release(),
-            SeasonId::from_row,
-        )?;
+
+        let sort = {
+            let mut sort = Sort::release();
+            sort.push(SortKind::Name);
+
+            sort
+        };
+
+        let seasons =
+            self.db
+                .get_show_seasons(show, None, None, Filter::none(), sort, SeasonId::from_row)?;
 
         let mut errors = vec![];
         let mut playlist = Playlist::empty();

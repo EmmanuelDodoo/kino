@@ -107,7 +107,7 @@ impl Sort {
 
     pub fn push(&mut self, kind: SortKind) {
         self.sorts[kind as usize] = Some((self.count, true));
-        self.count += 1;
+        self.count = (self.count + 1).min((SORTS.saturating_sub(1)) as u8);
     }
 
     pub fn remove(&mut self, kind: SortKind) {
@@ -340,7 +340,7 @@ pub mod comments {
 
         pub fn push(&mut self, kind: Kind) {
             self.sorts[kind as usize] = Some(self.count);
-            self.count += 1;
+            self.count = (self.count + 1).min((KINDS.saturating_sub(1)) as u8);
         }
 
         pub fn remove(&mut self, kind: Kind) {
