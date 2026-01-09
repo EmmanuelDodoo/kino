@@ -1195,6 +1195,7 @@ enum Icons {
     Icon14 = 14,
     Icon15 = 15,
     Icon16 = 16,
+    Icon17 = 17,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1203,6 +1204,14 @@ pub struct Icon {
 }
 
 impl Icon {
+    pub fn to_u32(self) -> u32 {
+        self.id as u32
+    }
+
+    pub fn playlist() -> u32 {
+        Icons::Icon17 as u32
+    }
+
     pub fn new(icon: Option<u32>) -> Self {
         match icon {
             Some(1) => Self { id: Icons::Icon1 },
@@ -1221,6 +1230,7 @@ impl Icon {
             Some(14) => Self { id: Icons::Icon14 },
             Some(15) => Self { id: Icons::Icon15 },
             Some(16) => Self { id: Icons::Icon16 },
+            Some(17) => Self { id: Icons::Icon17 },
             _ => Self { id: Icons::Default },
         }
     }
@@ -1244,6 +1254,7 @@ impl Icon {
             Icons::Icon14 => SOUP,
             Icons::Icon15 => SPARKLES,
             Icons::Icon16 => HAMBURGER,
+            Icons::Icon17 => PLAYLIST,
         }
     }
 
@@ -1266,14 +1277,11 @@ impl Icon {
             Icons::Icon14 => "Comfort",
             Icons::Icon15 => "Magical",
             Icons::Icon16 => "Casual",
+            Icons::Icon17 => "Playlist",
         }
     }
 
-    pub fn to_u32(self) -> u32 {
-        self.id as u32
-    }
-
-    pub fn all() -> [Self; 17] {
+    pub fn all() -> [Self; 18] {
         [
             Self { id: Icons::Default },
             Self { id: Icons::Icon1 },
@@ -1292,6 +1300,7 @@ impl Icon {
             Self { id: Icons::Icon14 },
             Self { id: Icons::Icon15 },
             Self { id: Icons::Icon16 },
+            Self { id: Icons::Icon17 },
         ]
     }
 }

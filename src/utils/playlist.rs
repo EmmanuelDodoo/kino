@@ -106,6 +106,7 @@ impl PlayItem {
 pub struct Playlist {
     pub shuffle: bool,
     pub repeat: bool,
+    pub origins: Vec<ItemId>,
     current: usize,
     items: Vec<PlayItem>,
 }
@@ -117,15 +118,17 @@ impl Playlist {
             shuffle: false,
             current: 0,
             items: vec![],
+            origins: vec![],
         }
     }
 
-    pub fn new(items: impl Iterator<Item = PlayItem>) -> Self {
+    pub fn new(items: impl Iterator<Item = PlayItem>, origin: ItemId) -> Self {
         Self {
             repeat: false,
             shuffle: false,
             current: 0,
             items: items.collect(),
+            origins: vec![origin],
         }
     }
 
@@ -134,6 +137,7 @@ impl Playlist {
             repeat: false,
             shuffle: false,
             current: 0,
+            origins: vec![item.id.into()],
             items: vec![item],
         }
     }
@@ -148,11 +152,14 @@ impl Playlist {
 
         self.items.append(&mut other.items);
 
+        self.origins.append(&mut other.origins);
+
         Self {
             shuffle: self.shuffle && other.shuffle,
             repeat: self.repeat && other.repeat,
             current,
             items: self.items,
+            origins: self.origins,
         }
     }
 

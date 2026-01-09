@@ -13,8 +13,8 @@ use crate::error::Error;
 use crate::fetch;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
-    self, Collection, CollectionId, Directory, DirectoryId, Episode, EpisodeId, ItemId, Media,
-    Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, collection,
+    self, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode, EpisodeId,
+    ItemId, Media, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, collection,
     collection::{
         Items,
         triggers::{DeleteTrigger, InsertTrigger},
@@ -130,6 +130,7 @@ pub enum Message {
         items: Items,
     },
     RemoveCollection(CollectionId),
+    PlaylistSave(Playlist),
     None,
 }
 
@@ -1300,6 +1301,29 @@ impl App {
                     Err(error) => Message::error(error).tasked(),
                 }
             }
+            Message::PlaylistSave(playlist) => {
+                let now = Local::now();
+                let name = format!("Saved Playlist#{}", now.format("%Y/%m/%d"));
+                let icon = shared::Icon::playlist();
+
+                let (new, query) =
+                    Collection::new(name, None, CollectionView::Shown, Some(icon), None);
+
+                match query.execute(&self.db) {
+                    Ok(suc) => {
+                        tracing::debug!("{suc:?}");
+                    }
+                    Err(error) => return Message::error(error.error).tasked(),
+                };
+
+                match self.db.insert_collection_items(new.id, playlist.origins) {
+                    Ok(rows) => {
+                        tracing::debug!("Inserted {rows} playlist collection items");
+                        Message::success("Saved Playlist").tasked()
+                    }
+                    Err(error) => return Message::error(error).tasked(),
+                }
+            }
         }
     }
 
@@ -1406,7 +1430,11 @@ impl App {
         }
     }
 
-    fn play_season(&self, season: SeasonId) -> Result<(Playlist, Vec<String>), Error> {
+    fn play_season(
+        &self,
+        season: SeasonId,
+        origin: Option<ItemId>,
+    ) -> Result<(Playlist, Vec<String>), Error> {
         let recent = self.db.get_season(season, EpisodeId::from_recents)?;
 
         let sort = {
@@ -1446,7 +1474,7 @@ impl App {
             .partition(Result::is_ok);
 
         let valid = valid.into_iter().map(Result::unwrap);
-        let mut playlist = Playlist::new(valid);
+        let mut playlist = Playlist::new(valid, origin.unwrap_or(season.into()));
         playlist.position(pos);
 
         let invalid = invalid
@@ -1475,7 +1503,8 @@ impl App {
         let mut playlist = Playlist::empty();
 
         for season in seasons {
-            let (season_playlist, mut season_errors) = self.play_season(season)?;
+            let (season_playlist, mut season_errors) =
+                self.play_season(season, Some(show.into()))?;
             errors.append(&mut season_errors);
             playlist = playlist.merge(season_playlist, recent == Some(season));
         }
@@ -1509,7 +1538,7 @@ impl App {
                     )))
                 }
             }
-            ItemId::Season(id) => self.play_season(id),
+            ItemId::Season(id) => self.play_season(id, None),
             ItemId::Show(id) => self.play_show(id),
         }
     }

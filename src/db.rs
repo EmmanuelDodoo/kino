@@ -745,6 +745,44 @@ impl Database {
         statement.execute(&[(":id", &ToSqlOutput::from(collection))])
     }
 
+    pub fn insert_collection_items(
+        &mut self,
+        collection: CollectionId,
+        items: Vec<ItemId>,
+    ) -> rusqlite::Result<usize> {
+        if items.is_empty() {
+            return Ok(0);
+        }
+
+        let trans = self.transaction()?;
+
+        let mut vars = "(?, ?, ?),".repeat(items.len());
+        vars.pop();
+
+        let sql = format!(
+            "INSERT OR IGNORE INTO collection_item (collection_id, media_type, media_id) VALUES {vars}"
+        );
+
+        let mut params = vec![];
+
+        for item in items {
+            params.push(ToSqlOutput::from(collection));
+            params.push(ToSqlOutput::from(item.name_str()));
+            params.push(ToSqlOutput::from(item));
+        }
+
+        let params = params
+            .iter()
+            .map(|param| param as &dyn ToSql)
+            .collect::<Vec<_>>();
+
+        let rows = trans.execute(&sql, params.as_slice())?;
+
+        trans.commit()?;
+
+        Ok(rows)
+    }
+
     pub fn toggle_membership(
         &mut self,
         item: ItemId,

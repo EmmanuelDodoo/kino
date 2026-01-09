@@ -20,6 +20,7 @@ pub const FORWARD: char = '\u{e80e}';
 
 pub const LOOP: char = '\u{e80f}';
 pub const UNLOOP: char = '\u{e80f}';
+pub const SAVE: char = '\u{e866}';
 
 pub const UPS: char = '\u{e85f}';
 pub const DOWNS: char = '\u{e860}';

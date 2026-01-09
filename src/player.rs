@@ -95,6 +95,7 @@ pub enum PlaylistMessge {
     ToggleShuffle(bool),
     ToggleRepeat(bool),
     ToggleAutoNext(bool),
+    Save,
     PlayItem(usize),
 }
 
@@ -574,6 +575,13 @@ impl Manager {
                     };
 
                     load_video.map(Message::Player)
+                }
+                PlaylistMessge::Save => {
+                    if self.playlist.is_empty() {
+                        return Task::none();
+                    } else {
+                        Message::PlaylistSave(self.playlist.clone()).tasked()
+                    }
                 }
             },
             ManagerMessage::ClosePanel => self.close_panel(),
@@ -2073,6 +2081,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
     let items = container(column(items).spacing(8)).padding(padding);
 
     let actions = {
+        let size = H6;
         let position = tp::Position::Top;
         let color = |theme: &Theme, active: bool| {
             let color = theme.extended_palette().primary.base.color;
@@ -2085,7 +2094,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         let repeat = tooltip(
             button(
                 icons::icon(icons::LOOP)
-                    .size(H6)
+                    .size(size)
                     .style(move |theme| color(theme, playlist.repeat)),
             )
             .padding(0)
@@ -2100,7 +2109,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         let shuffle = tooltip(
             button(
                 icons::icon(icons::SHUFFLE)
-                    .size(H6)
+                    .size(size)
                     .style(move |theme| color(theme, playlist.shuffle)),
             )
             .padding(0)
@@ -2120,14 +2129,25 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
             position,
         );
 
+        let save = tooltip(
+            button(icons::icon(icons::SAVE).size(size))
+                .padding(0)
+                .style(styles::button::text)
+                .on_press(ManagerMessage::Playlist(PlaylistMessge::Save)),
+            "Save playlist",
+            position,
+        );
+
+        let center = row!(repeat, shuffle)
+            .spacing(20.0)
+            .align_y(Vertical::Center);
+
         let content = row!(
-            space::horizontal(),
-            repeat,
-            space::horizontal(),
-            shuffle,
-            space::horizontal(),
             auto_next,
-            space::horizontal()
+            space::horizontal(),
+            center,
+            space::horizontal(),
+            save,
         )
         .align_y(Vertical::Center)
         .spacing(8)

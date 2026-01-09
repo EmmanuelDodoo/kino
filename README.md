@@ -35,13 +35,13 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 
 - [x] Selection mode for building playlists on the fly
 
+- [x] Playlist saving
+
 - [ ] Mini player mode
 
 - [ ] Comments/notes on media
 
 - [ ] Wishlist support
-
-- [ ] Playlist saving and reuse
 
 - [ ] Support for multiple metadata scrappers
 
