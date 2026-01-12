@@ -53,6 +53,7 @@ struct TMDBMovie {
     release_date: Option<String>,
     vote_average: f64,
     title: String,
+    runtime: u32,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -85,6 +86,7 @@ struct TMDBEpisode {
     still_path: Option<String>,
     vote_average: f64,
     episode_number: u32,
+    runtime: u32,
 }
 
 async fn get_config(auth: &str) -> reqwest::Result<ImageConfig> {
@@ -467,7 +469,7 @@ mod movies {
     ) -> rusqlite::Result<usize> {
         tracing::debug!("Inserting {} movie data", movies.len());
         let trans = db.transaction()?;
-        let sql = "UPDATE movie SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, user_tmdb_id=NULL, tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
+        let sql = "UPDATE movie SET backdrop=:backdrop, poster=:poster, tmdb_id=:tmdb_id, user_tmdb_id=NULL, tags=:tags, duration=:duration, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (movie, data) in movies {
@@ -480,6 +482,7 @@ mod movies {
                 release_date,
                 vote_average,
                 title,
+                runtime,
             } = data;
 
             let tags = genres
@@ -496,6 +499,7 @@ mod movies {
                 &ToSqlOutput::Owned(rusqlite::types::Value::Null)
             };
 
+            let duration = runtime * 60;
             let overview = overview.unwrap_or("<empty synopsis>".to_owned());
             let release_date = release_date.unwrap_or("1970-01-01".to_owned());
             let poster_path = poster_path
@@ -519,6 +523,7 @@ mod movies {
                     (":poster", &poster_path),
                     (":backdrop", &backdrop_path),
                     (":rating", rating),
+                    (":duration", &ToSqlOutput::from(duration)),
                 ],
             )?
         }
@@ -1154,7 +1159,7 @@ mod episodes {
     ) -> rusqlite::Result<usize> {
         tracing::debug!("Inserting {} episode data", episodes.len());
         let trans = db.transaction()?;
-        let sql = "UPDATE episode SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
+        let sql = "UPDATE episode SET tmdb_id=:tmdb_id, poster=:poster, synopsis=:overview, duration=:duration, release=:release, name=:name, rating=:rating WHERE id=:id";
         let mut rows = 0;
 
         for (episode, data) in episodes {
@@ -1166,6 +1171,7 @@ mod episodes {
                 still_path,
                 vote_average,
                 episode_number,
+                runtime,
             } = data;
 
             let name = format!("{:02} {}", episode_number, name);
@@ -1177,6 +1183,8 @@ mod episodes {
             };
             let overview = overview.unwrap_or("<empty synopsis>".to_owned());
             let air_date = air_date.unwrap_or("1970-01-01".to_owned());
+
+            let duration = runtime * 60;
 
             let still_path = still_path
                 .map(ToSqlOutput::from)
@@ -1192,6 +1200,7 @@ mod episodes {
                     (":name", &ToSqlOutput::from(name)),
                     (":poster", &still_path),
                     (":rating", rating),
+                    (":duration", &ToSqlOutput::from(duration)),
                 ],
             )?
         }

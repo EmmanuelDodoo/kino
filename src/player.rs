@@ -146,7 +146,6 @@ pub struct Player {
     is_dragging: bool,
     thumbnails: Vec<image::Handle>,
     item: PlayItem,
-    duration: f64,
     watch_time: Duration,
     last_frame: Option<Instant>,
     subtitles: Option<String>,
@@ -292,7 +291,7 @@ impl Manager {
                 let path = player.item.path.clone();
 
                 let interval = self.settings.thumbnail_interval;
-                let duration = player.duration;
+                let duration = player.video.duration().as_secs_f64();
                 let (width, height) = player.video.size();
 
                 let load_thumbnails = Task::perform(
@@ -389,7 +388,7 @@ impl Manager {
                         .unwrap_or_default();
                     player.last_frame = Some(Instant::now());
 
-                    if (player.position) / (player.duration) >= 0.9
+                    if (player.position) / (player.video.duration().as_secs_f64()) >= 0.9
                         && self.playlist.has_next()
                         && !self.playlist.shuffle
                         && matches!(&self.next, AutoState::Idle)
@@ -1836,11 +1835,12 @@ impl Manager {
             return None;
         };
 
-        let progress = player.position / player.duration;
+        let duration = player.video.duration().as_secs_f64();
+        let progress = player.position / duration;
         let watch_time = player.watch_time.as_secs_f64();
 
         let watch_count = if progress >= self.settings.completion_point
-            && (watch_time / player.duration >= self.settings.completion_watch_time)
+            && (watch_time / duration >= self.settings.completion_watch_time)
         {
             player.item.watch_count + 1
         } else {
@@ -1851,7 +1851,7 @@ impl Manager {
         let progress = progress.clamp(0.0, 1.0);
         player.item.progress = progress as f32;
         player.item.watch_count = watch_count;
-        player.item.duration = player.duration as u64;
+        player.item.duration = duration as u64;
 
         self.playlist.update_current(&player.item);
 
@@ -1939,7 +1939,6 @@ fn load_video<Message: 'static + MaybeSend>(
                 thumbnails: vec![],
                 position,
                 is_dragging: false,
-                duration,
                 watch_time: Duration::ZERO,
                 last_frame: None,
                 subtitles: None,
