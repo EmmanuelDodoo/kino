@@ -307,6 +307,7 @@ impl Dir {
             _ => {
                 let operation = if self.original_media != self.dir.media_type
                     || matches!(self.operation, Operation::Insert)
+                    || (self.toggled.is_some() && matches!(self.operation, Operation::Delete))
                 {
                     Some(self.operation)
                 } else {
