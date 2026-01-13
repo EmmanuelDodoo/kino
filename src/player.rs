@@ -303,7 +303,11 @@ impl Manager {
                     tokio::task::spawn_blocking(move || {
                         use rand::Rng;
 
-                        let num = duration as u32 / interval;
+                        let num = if duration > (interval as f64) {
+                            duration as u32 / interval
+                        } else {
+                            10
+                        };
                         let path = url::Url::from_file_path(path.canonicalize().unwrap()).unwrap();
                         let generator = utils::ThumbnailGenerator::new(path, width, height, 8);
 
