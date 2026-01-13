@@ -26,6 +26,9 @@ static CLIENT: LazyLock<Client> = LazyLock::new(|| {
         .expect("Cannot build request client")
 });
 
+pub const POSTER_SNIPPET: &str = "_poster.jpg";
+pub const BACKDROP_SNIPPET: &str = "_backdrop.jpg";
+
 #[derive(Deserialize, Debug, Clone)]
 struct ImageConfig {
     base_url: String,
@@ -541,8 +544,7 @@ mod movies {
 
         tracing::debug!("Inserting {} movie images", images.len());
         let trans = db.transaction()?;
-        let sql =
-            "UPDATE movie SET  poster=:poster, backdrop=:backdrop, fetched=:fetched WHERE id=:id";
+        let sql = "UPDATE movie SET  poster=:poster, backdrop=:backdrop, fetched=:fetched, generate_poster=:generate_poster WHERE id=:id";
         let mut rows = 0;
 
         for (id, poster, backdrop) in images {
@@ -562,6 +564,7 @@ mod movies {
                     (":poster", &poster),
                     (":backdrop", &backdrop),
                     (":fetched", &ToSqlOutput::from(true)),
+                    (":generate_poster", &ToSqlOutput::from(false)),
                 ],
             )?;
         }
@@ -623,7 +626,7 @@ mod movies {
             for movie in pending {
                 let poster = match &movie.poster {
                     Some(poster) => {
-                        let poster_path = images_path.join(format!("{}_poster.jpg", movie.id));
+                        let poster_path = images_path.join(format!("{}{POSTER_SNIPPET}", movie.id));
                         let poster = download(auth, image_config, poster, true, &poster_path).await;
 
                         if poster {
@@ -637,7 +640,8 @@ mod movies {
 
                 let backdrop = match &movie.backdrop {
                     Some(backdrop) => {
-                        let backdrop_path = images_path.join(format!("{}_backdrop.jpg", movie.id));
+                        let backdrop_path =
+                            images_path.join(format!("{}{BACKDROP_SNIPPET}", movie.id));
                         let backdrop =
                             download(auth, image_config, backdrop, false, &backdrop_path).await;
 
@@ -884,7 +888,7 @@ mod shows {
             for show in pending {
                 let poster = match &show.poster {
                     Some(poster) => {
-                        let poster_path = images_path.join(format!("{}_poster.jpg", show.id));
+                        let poster_path = images_path.join(format!("{}{POSTER_SNIPPET}", show.id));
                         let poster = download(auth, image_config, poster, true, &poster_path).await;
 
                         if poster {
@@ -898,7 +902,8 @@ mod shows {
 
                 let backdrop = match &show.backdrop {
                     Some(backdrop) => {
-                        let backdrop_path = images_path.join(format!("{}_backdrop.jpg", show.id));
+                        let backdrop_path =
+                            images_path.join(format!("{}{BACKDROP_SNIPPET}", show.id));
                         let backdrop =
                             download(auth, image_config, backdrop, false, &backdrop_path).await;
 
@@ -1077,7 +1082,8 @@ mod seasons {
             for season in seasons {
                 let poster = match &season.poster {
                     Some(poster) => {
-                        let poster_path = images_path.join(format!("{}_poster.jpg", season.id));
+                        let poster_path =
+                            images_path.join(format!("{}{POSTER_SNIPPET}", season.id));
                         let poster = download(auth, image_config, poster, true, &poster_path).await;
 
                         if poster {
@@ -1216,7 +1222,7 @@ mod episodes {
     ) -> rusqlite::Result<usize> {
         tracing::debug!("Inserting {} episode images", images.len());
         let trans = db.transaction()?;
-        let sql = "UPDATE episode SET poster=:poster, fetched=:fetched WHERE id=:id";
+        let sql = "UPDATE episode SET poster=:poster, fetched=:fetched, generate_poster=:generate_poster WHERE id=:id";
         let mut rows = 0;
 
         for (id, poster) in images {
@@ -1230,6 +1236,7 @@ mod episodes {
                     (":id", &ToSqlOutput::from(id)),
                     (":fetched", &ToSqlOutput::from(true)),
                     (":poster", &poster),
+                    (":generate_poster", &ToSqlOutput::from(false)),
                 ],
             )?;
         }
@@ -1274,7 +1281,8 @@ mod episodes {
             for episode in episodes {
                 let poster = match &episode.poster {
                     Some(poster) => {
-                        let poster_path = images_path.join(format!("{}_poster.jpg", episode.id));
+                        let poster_path =
+                            images_path.join(format!("{}{POSTER_SNIPPET}", episode.id));
                         let poster = download(auth, image_config, poster, true, &poster_path).await;
 
                         if poster {

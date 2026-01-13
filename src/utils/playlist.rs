@@ -18,6 +18,24 @@ impl From<PlayId> for ItemId {
     }
 }
 
+impl std::fmt::Display for PlayId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Movie(id) => id.fmt(f),
+            Self::Episode(id) => id.fmt(f),
+        }
+    }
+}
+
+impl From<PlayId> for rusqlite::types::ToSqlOutput<'_> {
+    fn from(value: PlayId) -> Self {
+        match value {
+            PlayId::Movie(id) => id.into(),
+            PlayId::Episode(id) => id.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PlayItem {
     pub id: PlayId,
@@ -27,6 +45,7 @@ pub struct PlayItem {
     pub duration: u64,
     pub watch_count: u32,
     pub subtitle_uri: Option<PathBuf>,
+    pub generate_poster: bool,
 }
 
 impl PlayItem {
@@ -84,6 +103,8 @@ impl PlayItem {
         let watch_count = row.get::<_, u32>("watch_count")?;
         let subtitle = row.get::<_, Option<String>>("subtitle_uri")?;
         let subtitle_uri = subtitle.map(PathBuf::from);
+        let generate_poster = row.get::<_, bool>("generate_poster")?;
+        let fetched = row.get::<_, bool>("fetched")?;
 
         Ok(Self {
             id,
@@ -93,6 +114,7 @@ impl PlayItem {
             duration,
             watch_count,
             subtitle_uri,
+            generate_poster: generate_poster && !fetched,
         })
     }
 

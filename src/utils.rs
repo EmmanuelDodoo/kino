@@ -326,11 +326,7 @@ impl ThumbnailGenerator {
         }
     }
 
-    pub fn generate(&self, position: gst::ClockTime) -> image::Handle {
-        let width = self.width;
-        let height = self.height;
-        let downscale = self.downscale;
-
+    fn sample(&self, position: gst::ClockTime) -> gstreamer::Sample {
         self.pipeline
             .set_state(gst::State::Paused)
             .map_err(GStreamerError::StateChangeError)
@@ -349,6 +345,16 @@ impl ThumbnailGenerator {
 
         let sample = self.sink.pull_preroll().unwrap();
 
+        sample
+    }
+
+    fn frame<'a>(
+        &self,
+        sample: &'a gstreamer::Sample,
+    ) -> (
+        gstreamer::BufferMap<'a, gstreamer::buffer::Readable>,
+        Option<u32>,
+    ) {
         let stride = sample.buffer().and_then(|buffer| {
             buffer
                 .meta::<gstreamer_video::VideoMeta>()
@@ -367,10 +373,45 @@ impl ThumbnailGenerator {
             }
         }
 
+        (frame, stride)
+    }
+
+    pub fn generate(&self, position: gst::ClockTime) -> image::Handle {
+        let width = self.width;
+        let height = self.height;
+        let downscale = self.downscale;
+
+        let sample = self.sample(position);
+
+        let (frame, stride) = self.frame(&sample);
+
         image::Handle::from_rgba(
             width as u32 / downscale,
             height as u32 / downscale,
             yuv_to_rgba(frame.as_slice(), width as _, height as _, downscale, stride),
+        )
+    }
+
+    pub fn generate_with_poster(&self, position: gst::ClockTime) -> (image::Handle, image::Handle) {
+        let width = self.width;
+        let height = self.height;
+        let downscale = self.downscale;
+
+        let sample = self.sample(position);
+
+        let (frame, stride) = self.frame(&sample);
+
+        (
+            image::Handle::from_rgba(
+                width as u32 / downscale,
+                height as u32 / downscale,
+                yuv_to_rgba(frame.as_slice(), width as _, height as _, downscale, stride),
+            ),
+            image::Handle::from_rgba(
+                width as u32,
+                height as u32,
+                yuv_to_rgba(frame.as_slice(), width as _, height as _, 1, stride),
+            ),
         )
     }
 }

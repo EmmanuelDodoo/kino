@@ -131,6 +131,10 @@ pub enum Message {
     },
     RemoveCollection(CollectionId),
     PlaylistSave(Playlist),
+    GeneratedPoster {
+        id: PlayId,
+        handle: iced::widget::image::Handle,
+    },
     None,
 }
 
@@ -1323,6 +1327,101 @@ impl App {
                     }
                     Err(error) => return Message::error(error).tasked(),
                 }
+            }
+            Message::GeneratedPoster { id, handle } => {
+                tracing::debug!("Saving generated thumbnail on {id}");
+
+                let db = self.config.db_path();
+
+                let path = self
+                    .config
+                    .images_path()
+                    .join(format!("{id}{}", fetch::POSTER_SNIPPET));
+
+                let path_clone = path.clone();
+
+                Task::perform(
+                    async move {
+                        use image::{ImageBuffer, Rgba, codecs::jpeg::JpegEncoder};
+
+                        let (width, height, bytes) = match handle {
+                            iced::widget::image::Handle::Rgba {
+                                width,
+                                height,
+                                pixels,
+                                ..
+                            } => (width, height, pixels),
+                            _ => unreachable!("Thumbnail generation always uses rgba bytes"),
+                        };
+
+                        let img: ImageBuffer<Rgba<u8>, _> =
+                            match ImageBuffer::from_raw(width, height, bytes) {
+                                Some(img) => img,
+                                None => {
+                                    tracing::error!(
+                                        "Error saving generated poster image buffer on {id}"
+                                    );
+                                    return None;
+                                }
+                            };
+
+                        let mut file = match std::fs::File::create(path) {
+                            Ok(file) => file,
+                            Err(error) => {
+                                tracing::error!("Error saving generated poster on {id}.\n{error}");
+                                return None;
+                            }
+                        };
+
+                        let mut encoder = JpegEncoder::new(&mut file);
+
+                        match encoder.encode_image(&img) {
+                            Ok(res) => Some(res),
+                            Err(error) => {
+                                tracing::error!("Error saving generated poster on {id}.\n{error}");
+                                return None;
+                            }
+                    }
+                    },
+                    move |res| {
+                        use rusqlite::types::ToSqlOutput;
+                        if let None = res {
+                            return;
+                        }
+
+                        let path = path_clone.display().to_string();
+                        let db = match db::Database::open(db) {
+                            Ok(db) => db,
+                            Err(error) => {
+                                tracing::error!("fetcher Db Error \n{error}");
+                                return;
+                            }
+                        };
+
+
+                        let table = match id {
+                            PlayId::Movie(_) => "movie",
+                            PlayId::Episode(_) => "episode"
+                        };
+
+                        let sql = format!("UPDATE {table} SET poster=:poster, generate_poster=:generate_poster WHERE id=:id");
+
+                        match db.execute(&sql, &[
+                            (":id", &ToSqlOutput::from(id)),
+                            (":generate_poster", &ToSqlOutput::from(false)),
+                            (":poster", &ToSqlOutput::from(path))
+                        ]) {
+                            Ok(_) => {
+                                tracing::debug!("Generated poster {id} saved.")
+                            }
+                            Err(error) => {
+                                tracing::error!("Error saving generated poster on {id}.\n{error}");
+                            }
+                        }
+
+                    },
+                    )
+                        .discard()
             }
         }
     }

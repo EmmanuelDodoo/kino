@@ -277,7 +277,7 @@ impl Episode {
 
     #[must_use]
     pub fn refetch<'a>(id: EpisodeId) -> Query<'a> {
-        let sql = "UPDATE episode SET tmdb_id=NULL, fetched=FALSE WHERE id=:id";
+        let sql = "UPDATE episode SET tmdb_id=NULL, fetched=FALSE, generate_poster=TRUE WHERE id=:id";
         let params = [(":id", ToSqlOutput::from(id))];
 
         Query {

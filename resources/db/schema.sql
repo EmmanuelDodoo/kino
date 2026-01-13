@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -80,6 +80,7 @@ CREATE TABLE episode (
 	synopsis             TEXT  DEFAULT '<empy synopsis>'   ,
 	rating               FLOAT(2, 1)     ,
 	poster               TEXT     ,
+	generate_poster	     BOOLEAN DEFAULT TRUE,
 	season_id            TEXT NOT NULL    ,
 	release              TEXT NOT NULL    ,
 	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
@@ -112,25 +113,26 @@ CREATE TABLE episode_comment (
 CREATE INDEX idx_comment_episode_id ON episode_comment ( episode_id );
 
 CREATE TABLE movie (
-	id		            TEXT NOT NULL PRIMARY KEY,
+	id		     TEXT NOT NULL PRIMARY KEY,
 	tmdb_id              INTEGER,
 	user_tmdb_id         INTEGER,
-	name		        TEXT NOT NULL,
-	original_name	    TEXT NOT NULL,
+	name		     TEXT NOT NULL,
+	original_name	     TEXT NOT NULL,
 	directory            TEXT NOT NULL,
-	path                TEXT NOT NULL,
-	poster		        TEXT,
-	backdrop	        TEXT,
-	tags		        TEXT,
-	synopsis	        TEXT DEFAULT '<empty synopsis>',
-	release		        TEXT NOT NULL,
-	created_at	        DATETIME DEFAULT CURRENT_TIMESTAMP,
-	watch_count	        INTEGER NOT NULL DEFAULT 0,
-	progress	        FLOAT(2,1) NOT NULL DEFAULT 0.0,
-	rating		        FLOAT(2,1),
-	last_watched	    DATETIME,
-	duration	        INTEGER NOT NULL DEFAULT 0,
-	comment_count	    INTEGER NOT NULL DEFAULT 0,
+	path                 TEXT NOT NULL,
+	poster		     TEXT,
+	generate_poster	     BOOLEAN DEFAULT TRUE,
+	backdrop	     TEXT,
+	tags		     TEXT,
+	synopsis	     TEXT DEFAULT '<empty synopsis>',
+	release		     TEXT NOT NULL,
+	created_at	     DATETIME DEFAULT CURRENT_TIMESTAMP,
+	watch_count	     INTEGER NOT NULL DEFAULT 0,
+	progress	     FLOAT(2,1) NOT NULL DEFAULT 0.0,
+	rating		     FLOAT(2,1),
+	last_watched	     DATETIME,
+	duration	     INTEGER NOT NULL DEFAULT 0,
+	comment_count	     INTEGER NOT NULL DEFAULT 0,
 	fetched		     BOOLEAN DEFAULT FALSE,
 	subtitle_uri	     TEXT,
 	removed		     BOOLEAN DEFAULT FALSE,
@@ -217,7 +219,7 @@ season.path AS season_path,
 season.season_number,
 tv_show.path AS show_path,
 directory.path AS directory_path,
-CASE WHEN NOT episode.fetched THEN NULL ELSE episode.poster END AS poster,
+CASE WHEN (NOT episode.fetched) AND episode.generate_poster THEN NULL ELSE episode.poster END AS poster,
 episode.*
 FROM episode 
 INNER JOIN season ON episode.season_id = season.id
@@ -226,7 +228,7 @@ INNER JOIN directory ON tv_show.directory = directory.id;
 
 CREATE VIEW get_collection_posters AS SELECT collection_id, poster 
 FROM (
-	SELECT CASE WHEN NOT movie.fetched THEN NULL ELSE movie.poster END AS poster, item.collection_id
+	SELECT CASE WHEN (NOT movie.fetched) AND movie.generate_poster THEN NULL ELSE movie.poster END AS poster, item.collection_id
 	FROM collection_item item
 	JOIN movie ON movie.id = item.media_id
 	WHERE item.media_type = 'movie' AND poster IS NOT NULL
@@ -248,7 +250,7 @@ FROM (
 
 	UNION ALL
 
-	SELECT CASE WHEN NOT episode.fetched THEN NULL ELSE episode.poster END AS poster, item.collection_id
+	SELECT CASE WHEN (NOT episode.fetched) AND episode.generate_poster THEN NULL ELSE episode.poster END AS poster, item.collection_id
 	FROM collection_item item
 	JOIN episode ON episode.id = item.media_id
 	WHERE item.media_type = 'episode' AND episode.poster IS NOT NULL
@@ -554,6 +556,9 @@ progress = COALESCE((
 last_watched = (
 	SELECT MAX(episode.last_watched) FROM episode WHERE episode.season_id = NEW.season_id
 ),
+	duration = COALESCE((
+			SELECT SUM(episode.duration) FROM episode WHERE episode.season_id = NEW.season_id
+	),0),
 recent_episode = (
 	SELECT episode.id FROM episode WHERE episode.season_id = NEW.season_id AND episode.last_watched = (SELECT MAX(last_watched) FROM episode WHERE season_id = NEW.season_id)
 ),

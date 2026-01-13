@@ -189,7 +189,11 @@ enum State {
 #[derive(Debug, Clone)]
 pub enum ManagerMessage {
     Video(bool, Arc<Player>),
-    Thumbnail((PlayId, Vec<image::Handle>)),
+    Thumbnail {
+        id: PlayId,
+        thumbnails: Vec<image::Handle>,
+        poster: Option<image::Handle>,
+    },
     Resize((window::Id, Size)),
     SeekRelease,
     Seek(f64),
@@ -289,6 +293,7 @@ impl Manager {
 
                 let id = player.item.id;
                 let path = player.item.path.clone();
+                let generate_poster = player.item.generate_poster;
 
                 let interval = self.settings.thumbnail_interval;
                 let duration = player.video.duration().as_secs_f64();
@@ -296,22 +301,48 @@ impl Manager {
 
                 let load_thumbnails = Task::perform(
                     tokio::task::spawn_blocking(move || {
+                        use rand::{Rng, seq::IteratorRandom};
+
                         let num = duration as u32 / interval;
                         let path = url::Url::from_file_path(path.canonicalize().unwrap()).unwrap();
                         let generator = utils::ThumbnailGenerator::new(path, width, height, 8);
-                        let imgs = (1..=num)
-                            .map(|i| {
-                                generator.generate(gstreamer::ClockTime::from_seconds_f64(
-                                    duration * (i as f64 / num as f64),
-                                ))
-                            })
-                            .collect();
+
+                        let range = 1..=num;
+                        let mut rng = rand::thread_rng();
+                        let rng = rng.gen_range(range.clone());
+
+                        let mut poster = None;
+                        let mut imgs = vec![];
+
+                        for idx in range {
+                            let position = gstreamer::ClockTime::from_seconds_f64(
+                                duration * (idx as f64 / num as f64),
+                            );
+
+                            if generate_poster && idx == rng {
+                                let (img, pst) = generator.generate_with_poster(position);
+                                imgs.push(img);
+                                poster = Some(pst);
+                            } else {
+                                imgs.push(generator.generate(position))
+                            }
+                        }
 
                         drop(generator);
 
-                        (id, imgs)
+                        (id, imgs, poster)
                     }),
-                    move |res| ManagerMessage::Thumbnail(res.unwrap()),
+                    move |res| match res {
+                        Ok((id, thumbnails, poster)) => ManagerMessage::Thumbnail {
+                            id,
+                            thumbnails,
+                            poster,
+                        },
+                        Err(error) => {
+                            tracing::error!("Thumbnail generation error.\n{error}");
+                            ManagerMessage::None
+                        }
+                    },
                 );
 
                 let last_watched = if !is_next || matches!(&self.state, State::Idle) {
@@ -335,7 +366,11 @@ impl Manager {
 
                 Task::batch([load_thumbnails.map(Message::Player), last_watched])
             }
-            ManagerMessage::Thumbnail((id, generated)) => {
+            ManagerMessage::Thumbnail {
+                id,
+                thumbnails: generated,
+                poster,
+            } => {
                 let current = self
                     .player()
                     .map(|player| player.item.id == id)
@@ -355,7 +390,11 @@ impl Manager {
                     player.thumbnails = generated;
                 }
 
-                Task::none()
+                let Some(handle) = poster else {
+                    return Task::none();
+                };
+
+                Task::done(Message::GeneratedPoster { id, handle })
             }
             ManagerMessage::Resize((id, size)) => {
                 if Some(id) == self.window {

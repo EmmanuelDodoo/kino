@@ -253,7 +253,7 @@ impl Movie {
 
     #[must_use]
     pub fn refetch<'a>(id: MovieId) -> Query<'a> {
-        let sql = "UPDATE movie SET tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE WHERE id=:id";
+        let sql = "UPDATE movie SET tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE, generate_poster=TRUE WHERE id=:id";
         let params = [(":id", ToSqlOutput::from(id))];
 
         Query {

@@ -32,6 +32,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 2,
         sql: include_str!("../resources/db/migrations/2.sql"),
     },
+    Migration {
+        version: 3,
+        sql: include_str!("../resources/db/migrations/3.sql"),
+    },
 ];
 
 pub struct Database {
@@ -53,7 +57,7 @@ impl std::ops::DerefMut for Database {
 }
 
 impl Database {
-    const MOVIE_QUERY: &str = "SELECT directory.id as directory_id,  directory.path as directory_path, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.poster END AS poster, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.backdrop END AS backdrop, movie.*  FROM movie INNER JOIN directory ON movie.directory=directory.id";
+    const MOVIE_QUERY: &str = "SELECT directory.id as directory_id,  directory.path as directory_path, CASE WHEN (NOT movie.fetched) AND movie.generate_poster THEN NULL ELSE movie.poster END AS poster, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.backdrop END AS backdrop, movie.*  FROM movie INNER JOIN directory ON movie.directory=directory.id";
 
     const SHOW_QUERY: &str = "SELECT directory.id as directory_id, directory.path as directory_path, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.poster END AS poster, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.backdrop END AS backdrop, tv_show.* FROM tv_show INNER JOIN directory ON tv_show.directory=directory.id";
 
