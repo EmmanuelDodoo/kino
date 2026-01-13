@@ -398,17 +398,21 @@ pub fn float<'a, Message: 'a>(
 ) -> Element<'a, Message> {
     use iced::{Color, Shadow};
 
-    let color = color.unwrap_or(Color::BLACK);
+    let interpolation = float.interpolate(0.0, 1.0, now);
+
+    let blur_radius = interpolation * 20.0;
+    let scale = 1.0 + (0.1 * interpolation);
+    let color = color.unwrap_or(Color::BLACK).scale_alpha(interpolation);
 
     widget::float(content)
-        .scale(float.interpolate(1.0, 1.1, now))
+        .scale(scale)
         .translate(move |bounds, viewport| {
-            bounds.zoom(1.1).offset(&viewport.shrink(5)) * float.interpolate(0.0, 1.0, now)
+            bounds.zoom(1.1).offset(&viewport.shrink(5)) * interpolation
         })
         .style(move |_theme| widget::float::Style {
             shadow: Shadow {
-                color: color.scale_alpha(float.interpolate(0.0, 1.0, now)),
-                blur_radius: float.interpolate(0.0, 20.0, now),
+                color,
+                blur_radius,
                 ..Shadow::default()
             },
             shadow_border_radius: IMAGE_RADIUS.into(),
