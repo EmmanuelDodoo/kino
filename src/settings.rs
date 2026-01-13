@@ -214,6 +214,7 @@ pub enum SeekingMessage {
 
 #[derive(Debug, Clone)]
 pub enum SubtitleMessage {
+    Dummy(String),
     Subtitles(bool),
     ToggleSubtitles,
     SubSizeIncr,
@@ -334,6 +335,8 @@ pub struct Settings {
 
     directories: Vec<Dir>,
     directories_shown: bool,
+
+    subtitle_dummy: String,
 }
 
 impl Settings {
@@ -356,6 +359,7 @@ impl Settings {
             text_color,
             background_color,
             directories_shown: false,
+            subtitle_dummy: "An example subtitle".to_owned(),
         }
     }
 
@@ -881,6 +885,11 @@ impl Settings {
 
                     Task::none()
                 }
+                SubtitleMessage::Dummy(dummy) => {
+                    self.subtitle_dummy = dummy;
+
+                    Task::none()
+                }
             },
             SettingsMessage::FolderSelected(folder) => {
                 let Some(folder) = folder else {
@@ -1268,6 +1277,7 @@ impl Settings {
         let subtitles = draw_subtitles(
             *show_subtitles,
             *subtitles,
+            &self.subtitle_dummy,
             &self.text_color,
             &self.background_color,
         )
@@ -1850,12 +1860,13 @@ fn binding_tooltip<'a>(
 fn draw_subtitles<'a>(
     show_subtitles: bool,
     subtitles: SubtitleDescription,
+    subtitle_dummy: &'a str,
     text_color: &'a str,
     background_color: &'a str,
 ) -> Element<'a, SubtitleMessage> {
     let color_width = 150.0;
 
-    let dummy = utils::draw_subtitles("An example subtitle", subtitles);
+    let dummy = utils::draw_subtitles(subtitle_dummy, subtitles);
 
     let subtitles_toggle = {
         let label = label_maker("Show subtitles ");
@@ -1919,8 +1930,24 @@ fn draw_subtitles<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
+    let dummy_input = {
+        let label = label_maker("Subtitle Example ");
+
+        let input = text_input("", subtitle_dummy)
+            // .width(color_width)
+            .size(TEXT_SIZE)
+            .font(regular_font())
+            .align_x(Horizontal::Right)
+            .padding(INPUT_PADDING)
+            .on_input(SubtitleMessage::Dummy);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
     let content = column!(
         subtitles_toggle,
+        horizontal_rule(),
+        dummy_input,
         horizontal_rule(),
         sub_size,
         horizontal_rule(),
