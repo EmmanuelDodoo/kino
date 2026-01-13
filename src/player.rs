@@ -1,5 +1,5 @@
 use iced::{
-    Element, Length, Size, Subscription, Task, Theme,
+    Element, Length, Padding, Size, Subscription, Task, Theme,
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
     animation::Animation,
@@ -903,16 +903,20 @@ impl Manager {
                     (*position as u64 % 3600) / 60,
                     (*position as u64 % 3600) % 60,
                 );
-                let spent = container(medium(spent)).style(styles::container::text);
+                let spent = container(medium(spent))
+                    .style(styles::container::text)
+                    .width(60.0);
 
                 let remaining = duration.as_secs().saturating_sub(*position as u64);
-                let total = format!(
+                let remaining = format!(
                     "{:02}:{:02}:{:02}",
                     remaining / 3600,
                     (remaining % 3600) / 60,
                     (remaining % 3600) % 60,
                 );
-                let total = container(medium(total)).style(styles::container::text);
+                let remaining = container(medium(remaining))
+                    .style(styles::container::text)
+                    .width(60.0);
 
                 let slider = widgets::slider::VideoSlider::new(
                     0.0..=duration.as_secs_f64(),
@@ -925,7 +929,7 @@ impl Manager {
                 .step(0.1)
                 .on_release(ManagerMessage::SeekRelease);
 
-                row!(spent, slider, total)
+                row!(spent, slider, remaining)
                     .spacing(20.0)
                     .align_y(Vertical::Center)
                     .width(Length::Fill)
@@ -1239,7 +1243,7 @@ impl Manager {
             column!(self.top(), space::vertical(), self.media_controls(now))
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .padding([3, 6])
+                .padding(Padding::new(3.0).left(8).right(16))
         )
         .height(Length::Fill)
         .width(Length::Fill);
