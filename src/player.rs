@@ -313,7 +313,12 @@ impl Manager {
 
                         let range = 1..=num;
                         let mut rng = rand::thread_rng();
-                        let rng = rng.gen_range(range.clone());
+                        let rng = {
+                            let left = num / 4;
+                            let right = (num * 3) / 4;
+
+                            rng.gen_range(left..=right)
+                        };
 
                         let mut poster = None;
                         let mut imgs = vec![];
