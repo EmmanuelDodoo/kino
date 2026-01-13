@@ -490,7 +490,7 @@ impl App {
                         self.config.video = player.settings;
                     }
 
-                    self.home.refresh(now)
+                    Message::Refresh(now, true).tasked()
                 }
                 Screen::Settings => {
                     self.settings.take();
@@ -498,7 +498,7 @@ impl App {
 
                     self.screen = Screen::Home;
 
-                    self.home.refresh(now)
+                    Message::Refresh(now, true).tasked()
                 }
             },
             Message::Forward => {
@@ -514,59 +514,18 @@ impl App {
                 sort,
                 limit,
                 offset,
-            } => match id {
-                FetchId::CollectionsSimple => {
-                    let collections = match self
-                        .db
-                        .get_collections(collection::Sort::View, SimpleCollection::from_row)
-                    {
-                        Ok(collections) => {
-                            tracing::debug!("Fetched {} Simple Collections", collections.len());
-                            collections
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
+            } => {
+                self.last_refresh = now;
 
-                    match self.player.as_mut() {
-                        Some(player) => player.fetched_collections(collections),
-                        None => self.home.fetch_collections_simple(collections),
-                    }
-                }
-                FetchId::Shows => {
-                    let thumbnails = match self.db.get_shows(limit, offset, filter, sort, show_map)
-                    {
-                        Ok(shows) => {
-                            tracing::debug!("Fetched {} Shows", shows.len());
-                            shows
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    let mut shows = Vec::with_capacity(thumbnails.len());
-                    let mut samples = Vec::with_capacity(thumbnails.len());
-
-                    for (show, sample) in thumbnails {
-                        shows.push(show);
-                        samples.push(sample.map(Message::ShowAllocation));
-                    }
-
-                    let home_tasks = self.home.fetched_shows(shows);
-                    let samples = Task::batch(samples);
-
-                    Task::batch([home_tasks, samples])
-                }
-                FetchId::Movies => {
-                    let thumbnails =
-                        match self.db.get_movies(limit, offset, filter, sort, movie_map) {
-                            Ok(movies) => {
-                                tracing::debug!("Fetched {} Movies", movies.len());
-                                movies
+                match id {
+                    FetchId::CollectionsSimple => {
+                        let collections = match self
+                            .db
+                            .get_collections(collection::Sort::View, SimpleCollection::from_row)
+                        {
+                            Ok(collections) => {
+                                tracing::debug!("Fetched {} Simple Collections", collections.len());
+                                collections
                             }
                             Err(error) => {
                                 let msg = Message::error(error);
@@ -574,25 +533,112 @@ impl App {
                             }
                         };
 
-                    let mut movies = Vec::with_capacity(thumbnails.len());
-                    let mut samples = Vec::with_capacity(thumbnails.len());
-
-                    for (movie, sample) in thumbnails {
-                        movies.push(movie);
-                        samples.push(sample.map(Message::MovieAllocation));
+                        match self.player.as_mut() {
+                            Some(player) => player.fetched_collections(collections),
+                            None => self.home.fetch_collections_simple(collections),
+                        }
                     }
+                    FetchId::Shows => {
+                        let thumbnails =
+                            match self.db.get_shows(limit, offset, filter, sort, show_map) {
+                                Ok(shows) => {
+                                    tracing::debug!("Fetched {} Shows", shows.len());
+                                    shows
+                                }
+                                Err(error) => {
+                                    let msg = Message::error(error);
+                                    return Task::done(msg);
+                                }
+                            };
 
-                    let home_tasks = self.home.fetched_movies(movies);
-                    let samples = Task::batch(samples);
+                        let mut shows = Vec::with_capacity(thumbnails.len());
+                        let mut samples = Vec::with_capacity(thumbnails.len());
 
-                    Task::batch([home_tasks, samples])
-                }
-                FetchId::Recents => {
-                    let thumbnails_movies =
-                        match self.db.get_movies(limit, offset, filter, sort, movie_map) {
-                            Ok(movies) => {
-                                tracing::debug!("Fetched {} Recent Movies", movies.len());
-                                movies
+                        for (show, sample) in thumbnails {
+                            shows.push(show);
+                            samples.push(sample.map(Message::ShowAllocation));
+                        }
+
+                        let home_tasks = self.home.fetched_shows(shows);
+                        let samples = Task::batch(samples);
+
+                        Task::batch([home_tasks, samples])
+                    }
+                    FetchId::Movies => {
+                        let thumbnails =
+                            match self.db.get_movies(limit, offset, filter, sort, movie_map) {
+                                Ok(movies) => {
+                                    tracing::debug!("Fetched {} Movies", movies.len());
+                                    movies
+                                }
+                                Err(error) => {
+                                    let msg = Message::error(error);
+                                    return Task::done(msg);
+                                }
+                            };
+
+                        let mut movies = Vec::with_capacity(thumbnails.len());
+                        let mut samples = Vec::with_capacity(thumbnails.len());
+
+                        for (movie, sample) in thumbnails {
+                            movies.push(movie);
+                            samples.push(sample.map(Message::MovieAllocation));
+                        }
+
+                        let home_tasks = self.home.fetched_movies(movies);
+                        let samples = Task::batch(samples);
+
+                        Task::batch([home_tasks, samples])
+                    }
+                    FetchId::Recents => {
+                        let thumbnails_movies =
+                            match self.db.get_movies(limit, offset, filter, sort, movie_map) {
+                                Ok(movies) => {
+                                    tracing::debug!("Fetched {} Recent Movies", movies.len());
+                                    movies
+                                }
+                                Err(error) => {
+                                    let msg = Message::error(error);
+                                    return Task::done(msg);
+                                }
+                            };
+
+                        let thumbnails_shows =
+                            match self.db.get_shows(limit, offset, filter, sort, show_map) {
+                                Ok(shows) => {
+                                    tracing::debug!("Fetched {} Recent Shows", shows.len());
+                                    shows
+                                }
+                                Err(error) => {
+                                    let msg = Message::error(error);
+                                    return Task::done(msg);
+                                }
+                            };
+                        let mut shows = Vec::with_capacity(thumbnails_shows.len());
+                        let mut movies = Vec::with_capacity(thumbnails_movies.len());
+                        let mut samples =
+                            Vec::with_capacity(thumbnails_shows.len() + thumbnails_movies.len());
+
+                        for (show, sample) in thumbnails_shows {
+                            shows.push(show);
+                            samples.push(sample.map(Message::ShowAllocation));
+                        }
+
+                        for (movie, sample) in thumbnails_movies {
+                            movies.push(movie);
+                            samples.push(sample.map(Message::MovieAllocation));
+                        }
+
+                        let samples = Task::batch(samples);
+                        let home_tasks = self.home.fetched_recents(movies, shows);
+
+                        Task::batch([home_tasks, samples])
+                    }
+                    FetchId::Show(id) => {
+                        let (show, show_sample) = match self.db.get_show(id, show_map) {
+                            Ok(show) => {
+                                tracing::debug!("Fetched Show {}", show.0.media.name());
+                                show
                             }
                             Err(error) => {
                                 let msg = Message::error(error);
@@ -600,215 +646,176 @@ impl App {
                             }
                         };
 
-                    let thumbnails_shows =
-                        match self.db.get_shows(limit, offset, filter, sort, show_map) {
-                            Ok(shows) => {
-                                tracing::debug!("Fetched {} Recent Shows", shows.len());
-                                shows
+                        let thumbnail_seasons = match self
+                            .db
+                            .get_show_seasons(id, limit, offset, filter, sort, season_map)
+                        {
+                            Ok(seasons) => {
+                                tracing::debug!("Fetched {} show Seasons", seasons.len());
+                                seasons
                             }
                             Err(error) => {
                                 let msg = Message::error(error);
                                 return Task::done(msg);
                             }
                         };
-                    let mut shows = Vec::with_capacity(thumbnails_shows.len());
-                    let mut movies = Vec::with_capacity(thumbnails_movies.len());
-                    let mut samples =
-                        Vec::with_capacity(thumbnails_shows.len() + thumbnails_movies.len());
 
-                    for (show, sample) in thumbnails_shows {
-                        shows.push(show);
-                        samples.push(sample.map(Message::ShowAllocation));
+                        let mut seasons = Vec::with_capacity(thumbnail_seasons.len());
+                        let mut samples = Vec::with_capacity(1 + thumbnail_seasons.len());
+                        samples.push(show_sample.map(Message::ShowAllocation));
+
+                        for (season, sample) in thumbnail_seasons {
+                            seasons.push(season);
+                            samples.push(sample.map(Message::SeasonAllocation));
+                        }
+
+                        let home_task = self.home.fetched_show(show, seasons);
+                        let samples = Task::batch(samples);
+
+                        Task::batch([home_task, samples])
                     }
-
-                    for (movie, sample) in thumbnails_movies {
-                        movies.push(movie);
-                        samples.push(sample.map(Message::MovieAllocation));
-                    }
-
-                    let samples = Task::batch(samples);
-                    let home_tasks = self.home.fetched_recents(movies, shows);
-
-                    Task::batch([home_tasks, samples])
-                }
-                FetchId::Show(id) => {
-                    let (show, show_sample) = match self.db.get_show(id, show_map) {
-                        Ok(show) => {
-                            tracing::debug!("Fetched Show {}", show.0.media.name());
-                            show
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    let thumbnail_seasons = match self
-                        .db
-                        .get_show_seasons(id, limit, offset, filter, sort, season_map)
-                    {
-                        Ok(seasons) => {
-                            tracing::debug!("Fetched {} show Seasons", seasons.len());
-                            seasons
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    let mut seasons = Vec::with_capacity(thumbnail_seasons.len());
-                    let mut samples = Vec::with_capacity(1 + thumbnail_seasons.len());
-                    samples.push(show_sample.map(Message::ShowAllocation));
-
-                    for (season, sample) in thumbnail_seasons {
-                        seasons.push(season);
-                        samples.push(sample.map(Message::SeasonAllocation));
-                    }
-
-                    let home_task = self.home.fetched_show(show, seasons);
-                    let samples = Task::batch(samples);
-
-                    Task::batch([home_task, samples])
-                }
-                FetchId::Season(id) => {
-                    let (season, season_sample) = match self.db.get_season(id, season_map) {
-                        Ok(season) => {
-                            tracing::debug!("Fetched season {}", season.0.media.name());
-                            season
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    let thumbnail_episodes = match self.db.get_season_episodes(
-                        id,
-                        limit,
-                        offset,
-                        filter,
-                        sort,
-                        episode_map,
-                    ) {
-                        Ok(episodes) => {
-                            tracing::debug!("Fetched {} season episodes", episodes.len());
-                            episodes
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    let mut episodes = Vec::with_capacity(thumbnail_episodes.len());
-                    let mut samples = Vec::with_capacity(1 + thumbnail_episodes.len());
-                    samples.push(season_sample.map(Message::SeasonAllocation));
-
-                    for (episode, sample) in thumbnail_episodes {
-                        episodes.push(episode);
-                        samples.push(sample.map(Message::EpisodeAllocation))
-                    }
-
-                    let samples = Task::batch(samples);
-                    let home_task = self.home.fetched_season(season, episodes);
-
-                    Task::batch([home_task, samples])
-                }
-                FetchId::Episode(id) => {
-                    let (episode, sample) = match self.db.get_episode(id, episode_map) {
-                        Ok(episode) => {
-                            tracing::debug!("Fetched Episode {}", episode.0.media.name());
-                            episode
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    Task::batch([
-                        self.home.fetched_episode(episode),
-                        sample.map(Message::EpisodeAllocation),
-                    ])
-                }
-                FetchId::Movie(id) => {
-                    let (movie, sample) = match self.db.get_movie(id, movie_map) {
-                        Ok(movie) => {
-                            tracing::debug!("Fetched Movie {}", movie.0.media.name());
-                            movie
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    Task::batch([
-                        self.home.fetched_movie(movie),
-                        sample.map(Message::MovieAllocation),
-                    ])
-                }
-                FetchId::Collections => {
-                    //todo: collection sorts
-                    let collections = match self
-                        .db
-                        .get_collections(collection::Sort::default(), Collection::from_row)
-                    {
-                        Ok(collections) => {
-                            tracing::debug!("Fetched {} Collections", collections.len());
-                            collections
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    self.home.fetched_collections(collections)
-                }
-                FetchId::Collection(id) => {
-                    let collection = match self.db.get_collection(id, Collection::from_row) {
-                        Ok(collection) => {
-                            tracing::debug!("Fetched Collection {}", collection.name);
-                            collection
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error);
-                            return Task::done(msg);
-                        }
-                    };
-
-                    let itriggers =
-                        match self.db.get_collection_inserts(id, InsertTrigger::from_row) {
-                            Ok(triggers) => {
-                                tracing::debug!(
-                                    "Fetched {} collection insert triggers",
-                                    triggers.len()
-                                );
-                                triggers
+                    FetchId::Season(id) => {
+                        let (season, season_sample) = match self.db.get_season(id, season_map) {
+                            Ok(season) => {
+                                tracing::debug!("Fetched season {}", season.0.media.name());
+                                season
                             }
                             Err(error) => {
-                                return Message::error(error).tasked();
+                                let msg = Message::error(error);
+                                return Task::done(msg);
                             }
                         };
 
-                    let dtriggers =
-                        match self.db.get_collection_deletes(id, DeleteTrigger::from_row) {
-                            Ok(triggers) => {
-                                tracing::debug!(
-                                    "Fetched {} collection delete triggers",
-                                    triggers.len()
-                                );
-                                triggers
+                        let thumbnail_episodes = match self.db.get_season_episodes(
+                            id,
+                            limit,
+                            offset,
+                            filter,
+                            sort,
+                            episode_map,
+                        ) {
+                            Ok(episodes) => {
+                                tracing::debug!("Fetched {} season episodes", episodes.len());
+                                episodes
                             }
                             Err(error) => {
-                                return Message::error(error).tasked();
+                                let msg = Message::error(error);
+                                return Task::done(msg);
                             }
                         };
 
-                    let (thumbnail_movies, thumbnail_shows, thumbnail_seasons, thumbnail_episodes) =
-                        match self.db.get_collection_members(
+                        let mut episodes = Vec::with_capacity(thumbnail_episodes.len());
+                        let mut samples = Vec::with_capacity(1 + thumbnail_episodes.len());
+                        samples.push(season_sample.map(Message::SeasonAllocation));
+
+                        for (episode, sample) in thumbnail_episodes {
+                            episodes.push(episode);
+                            samples.push(sample.map(Message::EpisodeAllocation))
+                        }
+
+                        let samples = Task::batch(samples);
+                        let home_task = self.home.fetched_season(season, episodes);
+
+                        Task::batch([home_task, samples])
+                    }
+                    FetchId::Episode(id) => {
+                        let (episode, sample) = match self.db.get_episode(id, episode_map) {
+                            Ok(episode) => {
+                                tracing::debug!("Fetched Episode {}", episode.0.media.name());
+                                episode
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error);
+                                return Task::done(msg);
+                            }
+                        };
+
+                        Task::batch([
+                            self.home.fetched_episode(episode),
+                            sample.map(Message::EpisodeAllocation),
+                        ])
+                    }
+                    FetchId::Movie(id) => {
+                        let (movie, sample) = match self.db.get_movie(id, movie_map) {
+                            Ok(movie) => {
+                                tracing::debug!("Fetched Movie {}", movie.0.media.name());
+                                movie
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error);
+                                return Task::done(msg);
+                            }
+                        };
+
+                        Task::batch([
+                            self.home.fetched_movie(movie),
+                            sample.map(Message::MovieAllocation),
+                        ])
+                    }
+                    FetchId::Collections => {
+                        //todo: collection sorts
+                        let collections = match self
+                            .db
+                            .get_collections(collection::Sort::default(), Collection::from_row)
+                        {
+                            Ok(collections) => {
+                                tracing::debug!("Fetched {} Collections", collections.len());
+                                collections
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error);
+                                return Task::done(msg);
+                            }
+                        };
+
+                        self.home.fetched_collections(collections)
+                    }
+                    FetchId::Collection(id) => {
+                        let collection = match self.db.get_collection(id, Collection::from_row) {
+                            Ok(collection) => {
+                                tracing::debug!("Fetched Collection {}", collection.name);
+                                collection
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error);
+                                return Task::done(msg);
+                            }
+                        };
+
+                        let itriggers =
+                            match self.db.get_collection_inserts(id, InsertTrigger::from_row) {
+                                Ok(triggers) => {
+                                    tracing::debug!(
+                                        "Fetched {} collection insert triggers",
+                                        triggers.len()
+                                    );
+                                    triggers
+                                }
+                                Err(error) => {
+                                    return Message::error(error).tasked();
+                                }
+                            };
+
+                        let dtriggers =
+                            match self.db.get_collection_deletes(id, DeleteTrigger::from_row) {
+                                Ok(triggers) => {
+                                    tracing::debug!(
+                                        "Fetched {} collection delete triggers",
+                                        triggers.len()
+                                    );
+                                    triggers
+                                }
+                                Err(error) => {
+                                    return Message::error(error).tasked();
+                                }
+                            };
+
+                        let (
+                            thumbnail_movies,
+                            thumbnail_shows,
+                            thumbnail_seasons,
+                            thumbnail_episodes,
+                        ) = match self.db.get_collection_members(
                             id,
                             limit,
                             offset,
@@ -829,45 +836,46 @@ impl App {
                             }
                         };
 
-                    let mut movies = Vec::with_capacity(thumbnail_movies.len());
-                    let mut shows = Vec::with_capacity(thumbnail_shows.len());
-                    let mut seasons = Vec::with_capacity(thumbnail_seasons.len());
-                    let mut episodes = Vec::with_capacity(thumbnail_episodes.len());
-                    let mut samples = Vec::with_capacity(
-                        thumbnail_movies.len()
-                            + thumbnail_shows.len()
-                            + thumbnail_seasons.len()
-                            + thumbnail_episodes.len(),
-                    );
+                        let mut movies = Vec::with_capacity(thumbnail_movies.len());
+                        let mut shows = Vec::with_capacity(thumbnail_shows.len());
+                        let mut seasons = Vec::with_capacity(thumbnail_seasons.len());
+                        let mut episodes = Vec::with_capacity(thumbnail_episodes.len());
+                        let mut samples = Vec::with_capacity(
+                            thumbnail_movies.len()
+                                + thumbnail_shows.len()
+                                + thumbnail_seasons.len()
+                                + thumbnail_episodes.len(),
+                        );
 
-                    for (movie, sample) in thumbnail_movies {
-                        movies.push(movie);
-                        samples.push(sample.map(Message::MovieAllocation));
+                        for (movie, sample) in thumbnail_movies {
+                            movies.push(movie);
+                            samples.push(sample.map(Message::MovieAllocation));
+                        }
+
+                        for (show, sample) in thumbnail_shows {
+                            shows.push(show);
+                            samples.push(sample.map(Message::ShowAllocation));
+                        }
+
+                        for (season, sample) in thumbnail_seasons {
+                            seasons.push(season);
+                            samples.push(sample.map(Message::SeasonAllocation));
+                        }
+
+                        for (episode, sample) in thumbnail_episodes {
+                            episodes.push(episode);
+                            samples.push(sample.map(Message::EpisodeAllocation));
+                        }
+
+                        let home_task = self.home.fetched_collection(
+                            collection, itriggers, dtriggers, movies, shows, seasons, episodes,
+                        );
+                        let samples = Task::batch(samples);
+
+                        Task::batch([home_task, samples])
                     }
-
-                    for (show, sample) in thumbnail_shows {
-                        shows.push(show);
-                        samples.push(sample.map(Message::ShowAllocation));
-                    }
-
-                    for (season, sample) in thumbnail_seasons {
-                        seasons.push(season);
-                        samples.push(sample.map(Message::SeasonAllocation));
-                    }
-
-                    for (episode, sample) in thumbnail_episodes {
-                        episodes.push(episode);
-                        samples.push(sample.map(Message::EpisodeAllocation));
-                    }
-
-                    let home_task = self.home.fetched_collection(
-                        collection, itriggers, dtriggers, movies, shows, seasons, episodes,
-                    );
-                    let samples = Task::batch(samples);
-
-                    Task::batch([home_task, samples])
                 }
-            },
+            }
             Message::FetchDirectories => {
                 let Some(settings) = self.settings.as_mut() else {
                     return Task::none();
@@ -1291,7 +1299,7 @@ impl App {
 
                 let fails = Task::done(Message::PushToasts(fails));
 
-                Task::batch([succ, fails, self.home.refresh(now)])
+                Task::batch([succ, fails, Message::Refresh(now, true).tasked()])
             }
             Message::RemoveCollection(id) => match self.db.remove_collection(id) {
                 Ok(rows) if rows > 0 => Message::success("Collection Deleted").tasked(),
