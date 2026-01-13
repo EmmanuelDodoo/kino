@@ -507,7 +507,7 @@ impl<T: Media> Thumbnail<T> {
                 .border_radius(IMAGE_RADIUS)
                 .height(height)
                 .width(width)
-                .content_fit(ContentFit::Contain)
+                .content_fit(ContentFit::Cover)
                 .into(),
             None => container(empty())
                 .height(height)
