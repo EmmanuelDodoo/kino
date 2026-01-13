@@ -3,10 +3,9 @@ use iced::{
     alignment::{Horizontal, Vertical},
     animation::Animation,
     border::Border,
-    mouse,
     time::{Duration, Instant},
     widget::{
-        self, button, center, checkbox, column, container, grid, mouse_area,
+        self, button, center, column, container, grid,
         operation::{self, scroll_to},
         pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
     },
@@ -43,13 +42,12 @@ use crate::{
 use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
-    self, HomeAction, Layout, Scroll, Sort, SortKind, cancel_btn, empty, filter::*, icons,
-    icons::*, loading_animation, loading_svg, modal_container, picklist_handle, save_btn, styles,
-    tooltip, typo::*,
+    self, HomeAction, Layout, Scroll, Sort, SortKind, empty, filter::*, icons, icons::*,
+    loading_animation, loading_svg, picklist_handle, styles, tooltip, typo::*,
 };
 use crate::widgets::{
     menu::{Position, menu},
-    modal, toggler,
+    modal,
 };
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};
@@ -1354,7 +1352,7 @@ impl Home {
                         self.close_view(true)
                     }
                     SelectionMessage::Play => {
-                        let play = selected.iter().copied().collect();
+                        let play = selected.to_vec();
                         let play = Message::PlayItems(play).tasked();
 
                         Task::batch([play, self.close_view(true)])
@@ -4170,6 +4168,7 @@ impl Home {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn fetched_collection(
         &mut self,
         collection: Collection,

@@ -140,7 +140,7 @@ where
             let full = self
                 .content
                 .as_widget_mut()
-                .layout(&mut tree.children[1], renderer, &limits)
+                .layout(&mut tree.children[1], renderer, limits)
                 .size();
 
             let max_height = full.height * factor;

@@ -10,7 +10,6 @@ use super::season::{SeasonPage, SeasonPageMessage};
 use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
 use crate::models::{CollectionId, EpisodeId, ItemId, MovieId, SeasonId, ShowId};
-use crate::utils::{Filter, Layout, Sort};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum PageKind {
@@ -74,7 +73,7 @@ impl Page {
         PageKind::Movies
     }
 
-    pub fn is_home(&self)-> bool {
+    pub fn is_home(&self) -> bool {
         matches!(self, Self::Home)
     }
 

@@ -12,8 +12,8 @@ use iced::{
     Border, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
     widget::{
-        button, center_x, checkbox, column, container, mouse_area, operation, pick_list, rich_text,
-        row, rule, scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
+        button, center_x, checkbox, column, container, operation, pick_list, rich_text, row, rule,
+        scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
 

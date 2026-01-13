@@ -29,10 +29,6 @@ pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
     iced::widget::Space::new().width(0).height(0).into()
 }
 
-pub fn load_fonts() -> iced::Task<Result<(), iced::font::Error>> {
-    iced::Task::batch([])
-}
-
 pub fn loading_svg(
     animation: &Animation<bool>,
     now: iced::time::Instant,
@@ -343,9 +339,9 @@ impl ThumbnailGenerator {
             .map_err(GStreamerError::BoolError)
             .unwrap();
 
-        let sample = self.sink.pull_preroll().unwrap();
+        
 
-        sample
+        self.sink.pull_preroll().unwrap()
     }
 
     fn frame<'a>(

@@ -2,19 +2,16 @@ use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{
     CollectionId, Episode, EpisodeId, ItemId, Media, Season, SeasonId, SimpleCollection,
 };
-use crate::utils::filter::*;
 use crate::utils::icons::*;
-use crate::utils::tooltip;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, Sort, empty, styles};
+use crate::utils::{Layout, Scroll, empty, styles};
 use iced::widget::Space;
 use iced::{
     Element, Length, Padding, Task,
     alignment::{Horizontal, Vertical},
     time::Instant,
     widget::{
-        self, button, column, container, grid, operation, row, rule, scrollable, space, stack,
-        text, tooltip as tp,
+        self, button, column, container, grid, operation, row, rule, scrollable, space, stack, text,
     },
 };
 

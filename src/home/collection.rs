@@ -5,10 +5,9 @@ use crate::models::{
     CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
     collection::Items,
 };
-use crate::utils::filter::*;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, Sort, empty, styles};
+use crate::utils::{Layout, Scroll, empty, styles};
 use crate::widgets::menu;
 use iced::{Border, Padding};
 use iced::{

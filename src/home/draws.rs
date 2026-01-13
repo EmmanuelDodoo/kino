@@ -656,8 +656,8 @@ pub fn draw_insert_trigger<'a>(
     open: bool,
     trigger: &'a InsertTrigger,
     roe: &bool,
-    last: &'a String,
-    release: &'a String,
+    last: &'a str,
+    release: &'a str,
     text_size: f32,
     input_padding: [f32; 2],
 ) -> Element<'a, TriggerMessage> {
@@ -1061,8 +1061,8 @@ pub fn draw_delete_trigger<'a>(
     open: bool,
     trigger: &'a DeleteTrigger,
     roe: &bool,
-    last: &'a String,
-    release: &'a String,
+    last: &'a str,
+    release: &'a str,
     text_size: f32,
     input_padding: [f32; 2],
 ) -> Element<'a, TriggerMessage> {

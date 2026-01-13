@@ -1,8 +1,7 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{ItemId, Show, ShowId};
-use crate::utils::filter::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, Sort};
+use crate::utils::{Layout, Scroll};
 use iced::{
     Element, Length, Padding, Task,
     time::Instant,

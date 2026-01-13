@@ -1333,7 +1333,7 @@ impl App {
                         tracing::debug!("Inserted {rows} playlist collection items");
                         Message::success("Saved Playlist").tasked()
                     }
-                    Err(error) => return Message::error(error).tasked(),
+                    Err(error) => Message::error(error).tasked(),
                 }
             }
             Message::GeneratedPoster { id, handle } => {
@@ -1387,13 +1387,13 @@ impl App {
                             Ok(res) => Some(res),
                             Err(error) => {
                                 tracing::error!("Error saving generated poster on {id}.\n{error}");
-                                return None;
+                                None
                             }
                     }
                     },
                     move |res| {
                         use rusqlite::types::ToSqlOutput;
-                        if let None = res {
+                        if res.is_none() {
                             return;
                         }
 

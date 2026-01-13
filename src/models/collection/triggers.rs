@@ -29,7 +29,7 @@ impl Media {
         }
     }
 
-    pub fn to_table(&self) -> &str {
+    pub fn table(&self) -> &str {
         match self {
             Media::Shows => "tv_show",
             Media::Movies => "movie",
@@ -241,9 +241,7 @@ impl Logic {
             last_watched.as_ref().map(|(comparison, date)| {
                 format!(
                     "{prefix}.last_watched {comparison} '{}'",
-                    date.with_timezone(&chrono::Utc)
-                        .format("%F %T%.f%:z")
-                        .to_string()
+                    date.with_timezone(&chrono::Utc).format("%F %T%.f%:z")
                 )
             }),
             duration
@@ -256,10 +254,7 @@ impl Logic {
                 .as_ref()
                 .map(|(comparison, count)| format!("{prefix}.watch_count {comparison} {count}")),
             release.as_ref().map(|(comparison, date)| {
-                format!(
-                    "{prefix}.release {comparison} '{}'",
-                    date.format("%F").to_string()
-                )
+                format!("{prefix}.release {comparison} '{}'", date.format("%F"))
             }),
             rating
                 .as_ref()
@@ -309,7 +304,7 @@ impl Logic {
 
         let last_watched = last_watched
             .as_ref()
-            .map(|(comp, date)| (comp.not(), date.clone()));
+            .map(|(comp, date)| (comp.not(), *date));
 
         let duration = duration.map(|(comp, date)| (comp.not(), date));
 
@@ -368,9 +363,7 @@ impl std::fmt::Display for Logic {
             last_watched.as_ref().map(|(comparison, date)| {
                 format!(
                     "last_watched-{comparison}-{}",
-                    date.with_timezone(&chrono::Utc)
-                        .format("%F %T%.f%:z")
-                        .to_string()
+                    date.with_timezone(&chrono::Utc).format("%F %T%.f%:z")
                 )
             }),
             duration
@@ -383,7 +376,7 @@ impl std::fmt::Display for Logic {
                 .as_ref()
                 .map(|(comparison, count)| format!("watch_count-{comparison}-{count}")),
             release.as_ref().map(|(comparison, release)| {
-                format!("release-{comparison}-{}", release.format("%F").to_string())
+                format!("release-{comparison}-{}", release.format("%F"))
             }),
             rating
                 .as_ref()
@@ -731,7 +724,6 @@ impl InsertTrigger {
         }
     }
 
-    #[must_use]
     pub fn remove(self, db: &Database) -> Result<()> {
         let sql = format!(
             "
@@ -752,7 +744,7 @@ impl InsertTrigger {
             .map(|query| format!("WHERE {query}"))
             .unwrap_or_default();
 
-        let table = self.media.to_table();
+        let table = self.media.table();
 
         format!(
             "INSERT INTO collection_item (collection_id, media_type, media_id) SELECT '{}', '{}', {prefix}.id FROM {table} {logic} ON CONFLICT(collection_id, media_type, media_id) DO UPDATE SET created_at=CURRENT_TIMESTAMP",
@@ -766,7 +758,7 @@ impl InsertTrigger {
         }
 
         let query = self.query("NEW");
-        let table = self.media.to_table();
+        let table = self.media.table();
 
         let insert = format!(
             "DROP TRIGGER IF EXISTS '{}_insert';
@@ -799,7 +791,7 @@ impl InsertTrigger {
         }
         let trans = db.transaction()?;
 
-        let table = self.media.to_table();
+        let table = self.media.table();
 
         let sql = self.query(table);
 
@@ -827,7 +819,7 @@ impl InsertTrigger {
         }
     }
 
-    pub fn new<'a>(
+    pub fn new(
         collection: CollectionId,
         name: impl Into<String>,
         logic: Logic,
@@ -950,7 +942,6 @@ impl DeleteTrigger {
         }
     }
 
-    #[must_use]
     pub fn remove(self, db: &Database) -> Result<()> {
         let sql = format!(
             "
@@ -983,7 +974,7 @@ impl DeleteTrigger {
     }
 
     fn query(&self) -> String {
-        let table = self.media.to_table();
+        let table = self.media.table();
 
         let logic = self
             .logic
@@ -1008,7 +999,7 @@ impl DeleteTrigger {
         if !self.logic.is_some() {
             return Ok(());
         }
-        let table = self.media.to_table();
+        let table = self.media.table();
 
         let query = self.query();
 
@@ -1038,7 +1029,7 @@ impl DeleteTrigger {
         trans.commit()
     }
 
-    pub fn new<'a>(
+    pub fn new(
         collection: CollectionId,
         name: impl Into<String>,
         logic: Logic,

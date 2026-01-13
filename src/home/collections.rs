@@ -1,7 +1,6 @@
 use super::{HomeMessage, PageKind, shared::*};
 use crate::models::CollectionId;
-use crate::utils::filter::*;
-use crate::utils::{Layout, Scroll, Sort};
+use crate::utils::Scroll;
 use iced::{
     Element, Padding, Task,
     widget::{self, container, grid, operation, scrollable},

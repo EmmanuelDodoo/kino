@@ -301,7 +301,7 @@ impl Manager {
 
                 let load_thumbnails = Task::perform(
                     tokio::task::spawn_blocking(move || {
-                        use rand::{Rng, seq::IteratorRandom};
+                        use rand::Rng;
 
                         let num = duration as u32 / interval;
                         let path = url::Url::from_file_path(path.canonicalize().unwrap()).unwrap();
@@ -616,7 +616,7 @@ impl Manager {
                 }
                 PlaylistMessge::Save => {
                     if self.playlist.is_empty() {
-                        return Task::none();
+                        Task::none()
                     } else {
                         Message::PlaylistSave(self.playlist.clone()).tasked()
                     }

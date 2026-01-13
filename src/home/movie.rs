@@ -2,16 +2,12 @@ use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::models::{CollectionId, ItemId, Media, Movie, MovieId, SimpleCollection};
 use crate::utils::icons::*;
 use crate::utils::styles;
-use crate::utils::tooltip;
 use crate::utils::typo::*;
 use iced::widget::Space;
 use iced::{
     Color, Element, Length, Shadow,
     alignment::{Horizontal, Vertical},
-    widget::{
-        bottom_center, button, center_x, column, container, row, scrollable, stack, text,
-        tooltip as tp,
-    },
+    widget::{bottom_center, button, center_x, column, container, row, scrollable, stack, text},
 };
 
 #[derive(Debug, Clone)]

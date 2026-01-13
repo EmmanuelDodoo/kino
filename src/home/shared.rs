@@ -2,21 +2,17 @@ use crate::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleC
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{DEFAULT_POSTER, empty, tooltip};
-use crate::utils::{Filter, Sort, collage, sample_complement, styles};
+use crate::utils::{collage, sample_complement, styles};
 use crate::variants;
-use iced::Task;
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
-    font,
-    font::{Family, Font, Style, Weight},
     mouse,
     time::Instant,
     widget::{
-        self, button, center, column, container,
-        image::{Allocation, Error as ImgError, Handle, allocate},
-        markdown, mouse_area, row, rule, scrollable, space, stack, text, tooltip as tp,
+        self, button, center, column, container, image::Handle, markdown, mouse_area, row, rule,
+        scrollable, space, stack, text, tooltip as tp,
     },
 };
 
