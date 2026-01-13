@@ -224,7 +224,8 @@ impl EpisodePage {
             }
         };
 
-        let play = if episode.media.progress() > 0.0 || episode.media.progress() == 1.0 {
+        let progress = episode.media.progress();
+        let play = if progress > 0.0 && progress != 1.0 {
             "Resume"
         } else {
             "Play"

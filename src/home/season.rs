@@ -334,7 +334,8 @@ impl SeasonPage {
 
             let synopsis = tab_synopsis(season.media.synopsis());
 
-            let play = if season.media.progress() > 0.0 || season.media.progress() == 1.0 {
+            let progress = season.media.progress();
+            let play = if progress > 0.0 && progress != 1.0 {
                 "Resume"
             } else {
                 "Play"

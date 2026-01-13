@@ -354,7 +354,8 @@ impl ShowPage {
 
             let synopsis = tab_synopsis(show.media.synopsis());
 
-            let play = if show.media.progress() > 0.0 || show.media.progress() == 1.0 {
+            let progress = show.media.progress();
+            let play = if progress > 0.0 && progress != 1.0 {
                 "Resume"
             } else {
                 "Play"
