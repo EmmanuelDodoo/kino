@@ -1,6 +1,6 @@
 use crate::models::{
-    CollectionId, Directory, DirectoryId, EComment, ECommentId, EpisodeId, MComment, MCommentId,
-    MovieId, SearchItem, SeasonId, ShowId,
+    CollectionId, Comment, CommentId, Directory, DirectoryId, EpisodeId, MovieId, PlayId,
+    SearchItem, SeasonId, ShowId,
     collection::{self, ItemId, Items},
 };
 
@@ -35,6 +35,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 3,
         sql: include_str!("../resources/db/migrations/3.sql"),
+    },
+    Migration {
+        version: 4,
+        sql: include_str!("../resources/db/migrations/4.sql"),
     },
 ];
 
@@ -321,61 +325,32 @@ impl Database {
         statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)
     }
 
-    pub fn get_ecomments<T>(
+    pub fn get_video_comments<T>(
         &self,
+        media: PlayId,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: filter::comments::Filter,
         sort: sort::comments::Sort,
-        map: fn(EComment) -> T,
+        map: fn(Comment) -> T,
     ) -> rusqlite::Result<Vec<T>> {
         let limit = limit.unwrap_or(-1);
         let offset = offset.unwrap_or(-1);
 
         let filter = filter
-            .query(None)
-            .map(|query| format!("WHERE {query}"))
-            .unwrap_or_default();
-        let sort = sort
-            .query(None)
-            .map(|query| format!("ORDER BY {query}"))
-            .unwrap_or_default();
-
-        let sql =
-            format!("SELECT * FROM episode_comment {filter} {sort} LIMIT :limit OFFSET :offset");
-
-        let mut statement = self.prepare_cached(&sql)?;
-
-        statement
-            .query_map(&[(":limit", &limit), (":offset", &offset)], |row| {
-                EComment::from_row(row).map(map)
-            })?
-            .collect()
-    }
-
-    pub fn get_episode_comments<T>(
-        &self,
-        episode: EpisodeId,
-        limit: Option<i32>,
-        offset: Option<i32>,
-        filter: filter::comments::Filter,
-        sort: sort::comments::Sort,
-        map: fn(EComment) -> T,
-    ) -> rusqlite::Result<Vec<T>> {
-        let limit = limit.unwrap_or(-1);
-        let offset = offset.unwrap_or(-1);
-
-        let filter = filter
-            .query(Some("episode_comment"))
+            .query(Some("comment"))
             .map(|query| format!("AND ( {query} )"))
             .unwrap_or_default();
+
         let sort = sort
-            .query(Some("episode_comment"))
+            .query(Some("comment"))
             .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
+        let kind = media.name_str();
+
         let sql = format!(
-            "SELECT * FROM episode_comment WHERE episode_comment.episode_id=:episode {filter} {sort} LIMIT :limit OFFSET :offset"
+            "SELECT * FROM comment WHERE comment.media_type='{kind}' AND comment.media_id=:media AND NOT comment.removed {filter} {sort} LIMIT :limit OFFSET :offset"
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -383,111 +358,26 @@ impl Database {
         statement
             .query_map(
                 &[
-                    (":episode", &ToSqlOutput::from(episode)),
+                    (":media", &ToSqlOutput::from(media)),
                     (":limit", &ToSqlOutput::from(limit)),
                     (":offset", &ToSqlOutput::from(offset)),
                 ],
-                |row| EComment::from_row(row).map(map),
+                |row| Comment::from_row(row).map(map),
             )?
             .collect()
     }
 
-    pub fn get_episode_comment<T>(
+    pub fn get_video_comment<T>(
         &self,
-        id: ECommentId,
-        map: fn(EComment) -> T,
+        id: CommentId,
+        map: fn(Comment) -> T,
     ) -> rusqlite::Result<T> {
-        let sql = "SELECT * FROM episode_comment WHERE episode_comment.id=:id ";
+        let sql = "SELECT * FROM comment WHERE comment.id=:id ";
 
         let mut statement = self.prepare_cached(sql)?;
 
         statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
-            EComment::from_row(row).map(map)
-        })
-    }
-
-    pub fn get_mcomments<T>(
-        &self,
-        limit: Option<i32>,
-        offset: Option<i32>,
-        filter: filter::comments::Filter,
-        sort: sort::comments::Sort,
-        map: fn(MComment) -> T,
-    ) -> rusqlite::Result<Vec<T>> {
-        let limit = limit.unwrap_or(-1);
-        let offset = offset.unwrap_or(-1);
-
-        let filter = filter
-            .query(None)
-            .map(|query| format!("WHERE {query}"))
-            .unwrap_or_default();
-        let sort = sort
-            .query(None)
-            .map(|query| format!("ORDER BY {query}"))
-            .unwrap_or_default();
-
-        let sql =
-            format!("SELECT * FROM movie_comment {filter} {sort} LIMIT :limit OFFSET :offset");
-
-        let mut statement = self.prepare_cached(&sql)?;
-
-        statement
-            .query_map(&[(":limit", &limit), (":offset", &offset)], |row| {
-                MComment::from_row(row).map(map)
-            })?
-            .collect()
-    }
-
-    pub fn get_movie_comments<T>(
-        &self,
-        movie: MovieId,
-        limit: Option<i32>,
-        offset: Option<i32>,
-        filter: filter::comments::Filter,
-        sort: sort::comments::Sort,
-        map: fn(MComment) -> T,
-    ) -> rusqlite::Result<Vec<T>> {
-        let limit = limit.unwrap_or(-1);
-        let offset = offset.unwrap_or(-1);
-
-        let filter = filter
-            .query(Some("movie_comment"))
-            .map(|query| format!("AND ( {query} )"))
-            .unwrap_or_default();
-        let sort = sort
-            .query(Some("movie_comment"))
-            .map(|query| format!("ORDER BY {query}"))
-            .unwrap_or_default();
-
-        let sql = format!(
-            "SELECT * FROM movie_comment WHERE movie_comment.movie_id=:movie {filter} {sort} LIMIT :limit OFFSET :offset"
-        );
-
-        let mut statement = self.prepare_cached(&sql)?;
-
-        statement
-            .query_map(
-                &[
-                    (":movie", &ToSqlOutput::from(movie)),
-                    (":limit", &ToSqlOutput::from(limit)),
-                    (":offset", &ToSqlOutput::from(offset)),
-                ],
-                |row| MComment::from_row(row).map(map),
-            )?
-            .collect()
-    }
-
-    pub fn get_movie_comment<T>(
-        &self,
-        id: MCommentId,
-        map: fn(MComment) -> T,
-    ) -> rusqlite::Result<T> {
-        let sql = "SELECT * FROM movie_comment WHERE movie_comment.id=:id ";
-
-        let mut statement = self.prepare_cached(sql)?;
-
-        statement.query_row(&[(":id", &ToSqlOutput::from(id))], |row| {
-            MComment::from_row(row).map(map)
+            Comment::from_row(row).map(map)
         })
     }
 
@@ -1435,8 +1325,7 @@ pub enum Table {
     Show,
     Season,
     Episode,
-    EComment,
-    MComment,
+    Comment,
     Collection,
     CollectionItem,
     WatchList,

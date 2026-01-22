@@ -12,8 +12,6 @@ use crate::variants;
 
 pub mod config;
 pub use config::*;
-pub mod playlist;
-pub use playlist::*;
 pub mod filter;
 pub mod icons;
 pub mod typo;
@@ -257,6 +255,16 @@ pub fn u32_to_rgba(color: u32) -> iced::Color {
     iced::color!(r as u8, g as u8, b as u8, a)
 }
 
+/// Duration as a String in format `00:00:00`
+pub fn duration_string(duration: u64) -> String {
+    format!(
+        "{:02}:{:02}:{:02}",
+        duration / 3600,
+        (duration % 3600) / 60,
+        (duration % 3600) % 60,
+    )
+}
+
 /// Far faster at generating multiple thumbnails than
 /// [`iced_video_player::Video::thumbnails`].
 ///
@@ -338,8 +346,6 @@ impl ThumbnailGenerator {
             .seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT, position)
             .map_err(GStreamerError::BoolError)
             .unwrap();
-
-        
 
         self.sink.pull_preroll().unwrap()
     }
@@ -602,6 +608,7 @@ variants! {
         SpeedReset,
         VideoConfig,
         VideoComment,
+        VideoCommentNew,
         SubtitlesToggle,
         #[serde(rename = "CollectionAdd")]
         Add,
@@ -637,6 +644,7 @@ impl PlayerAction {
             Self::CloseView => "Closes the current modal",
             Self::Back => "Exits the video player",
             Self::PlaylistToggle => "Toggles the playlist view",
+            Self::VideoCommentNew => "Starts a new comment on the current playback",
         }
     }
 }
@@ -669,6 +677,7 @@ impl std::fmt::Display for PlayerAction {
                 Self::CloseView => "Close View",
                 Self::Back => "Back",
                 Self::PlaylistToggle => "Playlist Toggle",
+                Self::VideoCommentNew => "Video Comment New",
             }
         )
     }

@@ -405,7 +405,7 @@ pub mod comments {
 
     pub type Timestamp = Duration;
 
-    #[derive(Debug, Clone, Copy, PartialEq)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq)]
     pub struct Filter {
         pub added: Option<Added>,
         pub timestamp: Option<Timestamp>,

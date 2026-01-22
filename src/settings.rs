@@ -210,6 +210,11 @@ pub enum SeekingMessage {
     SeekShift(String),
     IncrSeekShift,
     DecrSeekShift,
+    NullsFirstToggle,
+    NullsFirst(bool),
+    Span(String),
+    IncrSpan,
+    DecrSpan,
 }
 
 #[derive(Debug, Clone)]
@@ -809,6 +814,40 @@ impl Settings {
                         (self.config.video.seek_shift_change_amt - 1.0).max(0.0);
                     Task::none()
                 }
+                SeekingMessage::Span(span) => {
+                    let span = span.trim();
+                    if span.is_empty() {
+                        self.config.video.comment_span = 0;
+                        return Task::none();
+                    }
+
+                    let Ok(span) = span.parse::<u64>() else {
+                        let msg = Message::error(format!("Invalid input: {span}"));
+                        return Task::done(msg);
+                    };
+
+                    self.config.video.comment_span = span;
+
+                    Task::none()
+                }
+                SeekingMessage::IncrSpan => {
+                    self.config.video.comment_span += 1;
+                    Task::none()
+                }
+                SeekingMessage::DecrSpan => {
+                    self.config.video.comment_span =
+                        self.config.video.comment_span.saturating_sub(1);
+                    Task::none()
+                }
+                SeekingMessage::NullsFirstToggle => {
+                    self.config.video.comments_nulls_first =
+                        !self.config.video.comments_nulls_first;
+                    Task::none()
+                }
+                SeekingMessage::NullsFirst(value) => {
+                    self.config.video.comments_nulls_first = value;
+                    Task::none()
+                }
             },
             SettingsMessage::VideoFilters(vsg) => match vsg {
                 VideoFilterMessage::Gamma(value) => {
@@ -1251,6 +1290,8 @@ impl Settings {
             // plus I'm lazy
             muted: _mute,
             filters,
+            comment_span,
+            comments_nulls_first,
         } = &self.config.video;
 
         let playback = draw_playback(
@@ -1269,6 +1310,8 @@ impl Settings {
             *thumbnail_interval,
             *seek_change_amt,
             *seek_shift_change_amt,
+            *comment_span,
+            *comments_nulls_first,
         )
         .map(SettingsMessage::Seeking);
 
@@ -2585,6 +2628,8 @@ fn draw_seeking<'a>(
     thumbnail_interval: u32,
     seek_change_amt: f64,
     seek_shift_change_amt: f64,
+    comment_span: u64,
+    nulls_first: bool,
 ) -> Element<'a, SeekingMessage> {
     let thumbnail = {
         let label = label_maker("Thumbnail Interval(seconds) ");
@@ -2657,12 +2702,55 @@ fn draw_seeking<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
+    let cspan = {
+        let label = label_maker("Comment span(seconds) ");
+        let icon = help("Show comments within ± seconds of the current playback position");
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let amt = format!("{comment_span}");
+        let input = text_input("", &amt)
+            .font(regular_font())
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .align_x(Horizontal::Right)
+            .padding(INPUT_PADDING)
+            .on_input(SeekingMessage::Span);
+
+        let actions = input_actions(SeekingMessage::IncrSpan, SeekingMessage::DecrSpan);
+
+        let input = row!(input, actions)
+            .spacing(ACTIONS_SPACING)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let nulls_first = {
+        let label = label_maker("None first");
+        let icon = help("Whether comments with no timestamps are placed at the beginning or end");
+        let label = button(label)
+            .padding(0)
+            .on_press(SeekingMessage::NullsFirstToggle)
+            .style(styles::button::text);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        let toggle = toggler(nulls_first).on_toggle(SeekingMessage::NullsFirst);
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
     let content = column!(
         thumbnail,
         horizontal_rule(),
         seek_amt,
         horizontal_rule(),
         seek_amt_shift,
+        horizontal_rule(),
+        cspan,
+        horizontal_rule(),
+        nulls_first,
     )
     .spacing(SECTION_SPACING);
 

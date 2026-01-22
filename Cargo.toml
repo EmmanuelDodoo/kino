@@ -19,6 +19,7 @@ html-escape = "0.2"
 humantime = "2.3"
 iced = { git = "https://github.com/iced-rs/iced", rev = "74ac7fc", features = [
   "advanced",
+  "highlighter",
   "hot",
   "image",
   "markdown",
@@ -33,7 +34,6 @@ keepawake = "0.6.0"
 open = "5.3.3"
 rand = "0.8"
 reqwest = { version = "0.12", features = ["json"] }
-# regex = "1.12"
 rfd = "0.16"
 rusqlite = { version = "0.37", features = ["bundled", "chrono", "uuid"] }
 serde = { version = "1.0", features = ["derive"] }

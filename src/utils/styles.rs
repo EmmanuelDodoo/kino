@@ -190,6 +190,24 @@ pub mod button {
         }
     }
 
+    pub fn bw2(theme: &Theme, status: Status) -> Style {
+        let palette = theme.extended_palette();
+        let base = styled(palette.background.weaker);
+
+        match status {
+            Status::Active => base,
+            Status::Pressed => Style {
+                background: Some(Background::Color(palette.background.weak.color)),
+                ..base
+            },
+            Status::Hovered => Style {
+                background: Some(Background::Color(palette.background.neutral.color)),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
     pub fn danger(theme: &Theme, status: Status) -> Style {
         let palette = theme.extended_palette();
         let base = styled(palette.danger.base);
