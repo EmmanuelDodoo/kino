@@ -1,40 +1,7 @@
-use crate::models::{EpisodeId, ItemId, MovieId};
+use crate::models::{ItemId, PlayId};
 
 use rand::{seq::IteratorRandom, thread_rng};
 use std::path::PathBuf;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PlayId {
-    Movie(MovieId),
-    Episode(EpisodeId),
-}
-
-impl From<PlayId> for ItemId {
-    fn from(value: PlayId) -> Self {
-        match value {
-            PlayId::Movie(id) => ItemId::Movie(id),
-            PlayId::Episode(id) => ItemId::Episode(id),
-        }
-    }
-}
-
-impl std::fmt::Display for PlayId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Movie(id) => id.fmt(f),
-            Self::Episode(id) => id.fmt(f),
-        }
-    }
-}
-
-impl From<PlayId> for rusqlite::types::ToSqlOutput<'_> {
-    fn from(value: PlayId) -> Self {
-        match value {
-            PlayId::Movie(id) => id.into(),
-            PlayId::Episode(id) => id.into(),
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct PlayItem {
@@ -50,8 +17,7 @@ pub struct PlayItem {
 
 impl PlayItem {
     pub fn from_episode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
-        let id = EpisodeId::from_row(row)?;
-        let id = PlayId::Episode(id);
+        let id = PlayId::from_episode(row)?;
 
         let full_path: PathBuf = {
             let path = row.get::<_, String>("path")?;
@@ -79,8 +45,7 @@ impl PlayItem {
     }
 
     pub fn from_movie(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
-        let id = MovieId::from_row(row)?;
-        let id = PlayId::Movie(id);
+        let id = PlayId::from_movie(row)?;
         let name = row.get::<_, String>("name")?;
 
         let full_path: PathBuf = {

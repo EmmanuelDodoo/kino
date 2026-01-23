@@ -2,11 +2,11 @@ use iced::{
     Element, Length, Padding, Size, Subscription, Task, Theme,
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
-    animation::Animation,
+    animation::{Animation, Easing},
     time::Instant,
     widget::{
-        button, center, checkbox, column, container, image, mouse_area, pick_list, row, rule,
-        scrollable, slider, space, stack, text, text_input, tooltip as tp,
+        self, button, center, checkbox, column, container, image, mouse_area, operation, pick_list,
+        row, rule, scrollable, slider, space, stack, text, text_editor, text_input, tooltip as tp,
     },
     window,
 };
@@ -15,14 +15,19 @@ use iced_video_player::{
 };
 use std::sync::Arc;
 use std::time::Duration;
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::PathBuf,
+};
 
-use crate::app::Message;
+pub mod comment;
+pub mod playlist;
+use crate::app::{FetchId, Message};
 use crate::home::shared::Icon;
-use crate::models::{CollectionId, SimpleCollection};
+use crate::models::{self, CollectionId, CommentId, PlayId, SimpleCollection};
 use crate::utils::{
-    self, PlayId, PlayItem, PlayerAction, Playlist, VideoSettings, cancel_btn, convert_color_str,
-    draw_subtitles, empty,
+    self, PlayerAction, VideoSettings, cancel_btn, convert_color_str, draw_subtitles,
+    duration_string, empty,
     icons::{self, CANCEL, sized_button},
     loading_animation, loading_svg, modal_container, picklist_handle, save_btn, styles, tooltip,
     trim_path,
@@ -30,6 +35,8 @@ use crate::utils::{
 };
 use crate::variants;
 use crate::widgets::{self, modal, toggler};
+pub use comment::*;
+pub use playlist::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Subtitle {
@@ -84,9 +91,10 @@ enum Modal {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Panel {
     Playlist,
+    Comments(Option<(widget::Id, text_editor::Content)>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -103,6 +111,81 @@ pub enum PlaylistMessge {
 pub enum CollectionAddMessage {
     Toggle(bool, CollectionId),
     Save,
+}
+
+#[derive(Debug, Clone)]
+pub enum CommentMessage {
+    New,
+    NewSubmit,
+    NewCancel,
+    NewAction(text_editor::Action),
+    Link(String),
+    Action {
+        id: CommentId,
+        timestamp: Option<u64>,
+        action: text_editor::Action,
+    },
+    ImageDownloaded {
+        id: CommentId,
+        timestamp: Option<u64>,
+        url: String,
+        image: Result<image::Handle, String>,
+    },
+    ImageShown {
+        id: CommentId,
+        timestamp: Option<u64>,
+        url: String,
+    },
+    Edit {
+        id: CommentId,
+        timestamp: Option<u64>,
+    },
+    Save {
+        id: CommentId,
+        timestamp: Option<u64>,
+    },
+    Cancel {
+        id: CommentId,
+        timestamp: Option<u64>,
+    },
+    Delete {
+        id: CommentId,
+        timestamp: Option<u64>,
+    },
+}
+
+impl comment::CommentMessage for CommentMessage {
+    fn link(url: String) -> Self {
+        CommentMessage::Link(url)
+    }
+
+    fn save(id: CommentId, timestamp: Option<u64>) -> Self {
+        Self::Save { id, timestamp }
+    }
+
+    fn edit(id: CommentId, timestamp: Option<u64>) -> Self {
+        Self::Edit { id, timestamp }
+    }
+
+    fn cancel(id: CommentId, timestamp: Option<u64>) -> Self {
+        Self::Cancel { id, timestamp }
+    }
+
+    fn delete(id: CommentId, timestamp: Option<u64>) -> Self {
+        Self::Delete { id, timestamp }
+    }
+
+    fn image_shown(id: CommentId, timestamp: Option<u64>, url: String) -> Self {
+        Self::ImageShown { id, timestamp, url }
+    }
+
+    fn edit_action(id: CommentId, timestamp: Option<u64>, action: text_editor::Action) -> Self {
+        Self::Action {
+            id,
+            timestamp,
+            action,
+        }
+    }
 }
 
 variants! {
@@ -137,6 +220,7 @@ pub enum ConfigMessage {
     SubSizeDecr,
     SubColor(String),
     SubBackground(String),
+    Span(String),
 }
 
 #[derive(Debug)]
@@ -174,7 +258,10 @@ impl Player {
 enum AutoState {
     Loading,
     Idle,
-    Ready(Box<Player>),
+    Ready {
+        player: Box<Player>,
+        comments: BTreeMap<u64, Vec<Comment>>,
+    },
 }
 
 enum State {
@@ -182,6 +269,7 @@ enum State {
     Idle,
     Ready {
         player: Box<Player>,
+        comments: BTreeMap<u64, Vec<Comment>>,
         awake: Option<keepawake::KeepAwake>,
     },
 }
@@ -222,6 +310,7 @@ pub enum ManagerMessage {
     Subs(Option<String>),
     Config(ConfigMessage),
     Error(String),
+    CommentMessage(CommentMessage),
     None,
 }
 
@@ -290,6 +379,8 @@ impl Manager {
             ManagerMessage::Error(error) => Message::error(error).tasked(),
             ManagerMessage::Video(is_next, player) => {
                 let mut player = Arc::try_unwrap(player).unwrap();
+
+                let comments = Message::FetchComments(player.item.id).tasked();
 
                 let id = player.item.id;
                 let path = player.item.path.clone();
@@ -363,17 +454,21 @@ impl Manager {
                     self.state = State::Ready {
                         awake: Some(awake),
                         player: Box::new(player),
+                        comments: BTreeMap::default(),
                     };
 
                     task
                 } else {
                     apply_settings(self.settings, &mut player);
                     player.video.set_paused(true);
-                    self.next = AutoState::Ready(Box::new(player));
+                    self.next = AutoState::Ready {
+                        player: Box::new(player),
+                        comments: BTreeMap::default(),
+                    };
                     Task::none()
                 };
 
-                Task::batch([load_thumbnails.map(Message::Player), last_watched])
+                Task::batch([load_thumbnails.map(Message::Player), last_watched, comments])
             }
             ManagerMessage::Thumbnail {
                 id,
@@ -393,7 +488,10 @@ impl Manager {
                     {
                         *thumbnails = generated;
                     }
-                } else if let AutoState::Ready(player) = &mut self.next
+                } else if let AutoState::Ready {
+                    player,
+                    comments: _comments,
+                } = &mut self.next
                     && player.item.id == id
                 {
                     player.thumbnails = generated;
@@ -422,7 +520,7 @@ impl Manager {
                         awake.take();
                     }
 
-                    self.stats().map(Task::done).unwrap_or_default()
+                    self.stats()
                 }
             }
             ManagerMessage::NewFrame => {
@@ -518,11 +616,7 @@ impl Manager {
                     .map(|player| player.video.eos())
                     .unwrap_or_default();
 
-                let stats = if eos {
-                    Task::none()
-                } else {
-                    self.stats().map(Task::done).unwrap_or_default()
-                };
+                let stats = if eos { Task::none() } else { self.stats() };
 
                 self.fullscreen_exit()
                     .chain(Task::batch([Task::done(Message::Back), stats]))
@@ -581,7 +675,12 @@ impl Manager {
 
                         new.extend(remove);
 
-                        if let State::Ready { player, awake } = &mut self.state {
+                        if let State::Ready {
+                            player,
+                            awake,
+                            comments: _comments,
+                        } = &mut self.state
+                        {
                             if awake.is_none() {
                                 *awake = Some(keep_awake().unwrap());
                             }
@@ -829,6 +928,244 @@ impl Manager {
 
                         Task::none()
                     }
+                    ConfigMessage::Span(span) => {
+                        let span = span.trim();
+                        if span.is_empty() {
+                            self.settings.comment_span = 0;
+                            return Task::none();
+                        }
+
+                        let Ok(span) = span.parse::<u64>() else {
+                            let msg = Message::error(format!("Invalid input: {span}"));
+                            return Task::done(msg);
+                        };
+
+                        self.settings.comment_span = span;
+
+                        Task::none()
+                    }
+                }
+            }
+            ManagerMessage::CommentMessage(csg) => {
+                let State::Ready {
+                    player,
+                    comments,
+                    awake: _awake,
+                } = &mut self.state
+                else {
+                    return Task::none();
+                };
+
+                let Some(Panel::Comments(new)) = self.panel.as_mut() else {
+                    return Task::none();
+                };
+                let nulls_first = self.settings.comments_nulls_first;
+                let default = if nulls_first {
+                    0
+                } else {
+                    player.video.duration().as_secs()
+                };
+
+                match csg {
+                    CommentMessage::New => {
+                        let id = widget::Id::unique();
+
+                        *new = Some((id.clone(), text_editor::Content::default()));
+                        operation::focus(id)
+                    }
+                    CommentMessage::NewCancel => {
+                        new.take();
+
+                        self.play_toggle()
+                    }
+                    CommentMessage::NewSubmit => {
+                        let Some((editor, comment)) = new.take() else {
+                            return Task::none();
+                        };
+
+                        let comment = Comment::new(
+                            comment.text(),
+                            player.item.id,
+                            player.position as _,
+                            editor,
+                        );
+
+                        let batch = comments
+                            .entry(comment.inner.timestamp.unwrap_or(default))
+                            .or_default();
+                        batch.push(comment);
+
+                        self.play_toggle()
+                    }
+                    CommentMessage::NewAction(action) => {
+                        if let Some((_, content)) = new {
+                            content.perform(action);
+                        }
+
+                        self.pause()
+                    }
+                    CommentMessage::Link(url) => {
+                        match url::Url::parse(&url) {
+                            Ok(url) if url.scheme() == "video" => {
+                                let url = match url.path().strip_prefix("/") {
+                                    Some(url) => url,
+                                    None => url.path(),
+                                };
+
+                                let position = match url.parse::<u64>() {
+                                    Ok(position) => position,
+                                    Err(error) => {
+                                        let msg = Message::error(error);
+                                        return msg.tasked();
+                                    }
+                                };
+
+                                player.position = position as f64;
+                                if let Err(msg) = player.seek_release(false) {
+                                    return Task::done(Message::error(msg));
+                                }
+                            }
+                            Ok(url) => {
+                                if let Err(error) = open::that(url.as_str()) {
+                                    return Message::error(error).tasked();
+                                }
+                            }
+                            Err(error) => {
+                                return Message::error(error).tasked();
+                            }
+                        }
+
+                        Task::none()
+                    }
+                    CommentMessage::Edit { id, timestamp } => {
+                        match comments.get_mut(&timestamp.unwrap_or_default()).and_then(
+                            |comments| comments.iter_mut().find(|comment| comment.inner.id == id),
+                        ) {
+                            Some(comment) => comment.edit(),
+                            None => Task::none(),
+                        }
+                    }
+                    CommentMessage::Save { id, timestamp } => {
+                        let Some(batch) = comments.get_mut(&timestamp.unwrap_or(default)) else {
+                            return Task::none();
+                        };
+
+                        let Some((idx, _)) = batch
+                            .iter()
+                            .enumerate()
+                            .find(|(_, comment)| comment.inner.id == id)
+                        else {
+                            return Task::none();
+                        };
+
+                        let mut saved = batch.remove(idx);
+                        let timestamp = saved.save(player.position as u64).unwrap_or(default);
+
+                        let batch = comments.entry(timestamp).or_default();
+                        batch.push(saved);
+
+                        self.play_toggle()
+                    }
+                    CommentMessage::Action {
+                        id,
+                        timestamp,
+                        action,
+                    } => {
+                        if let Some(comment) = comments
+                            .get_mut(&timestamp.unwrap_or(default))
+                            .and_then(|comments| {
+                                comments.iter_mut().find(|comment| comment.inner.id == id)
+                            })
+                        {
+                            comment.perform_action(action);
+                        }
+
+                        self.pause()
+                    }
+                    CommentMessage::Cancel { id, timestamp } => {
+                        if let Some(comment) = comments
+                            .get_mut(&timestamp.unwrap_or(default))
+                            .and_then(|comments| {
+                                comments.iter_mut().find(|comment| comment.inner.id == id)
+                            })
+                        {
+                            comment.cancel();
+                        }
+
+                        self.play_toggle()
+                    }
+                    CommentMessage::Delete { id, timestamp } => {
+                        if let Some(comment) = comments
+                            .get_mut(&timestamp.unwrap_or(default))
+                            .and_then(|comments| {
+                                comments.iter_mut().find(|comment| comment.inner.id == id)
+                            })
+                        {
+                            comment.inner.removed = true;
+                        };
+
+                        Task::none()
+                    }
+                    CommentMessage::ImageShown { id, timestamp, url } => {
+                        let Some(comment) = comments
+                            .get_mut(&timestamp.unwrap_or(default))
+                            .and_then(|comments| {
+                                comments.iter_mut().find(|comment| comment.inner.id == id)
+                            })
+                        else {
+                            return Task::none();
+                        };
+
+                        if comment.images.contains_key(&url) {
+                            return Task::none();
+                        }
+
+                        let _ = comment.images.insert(url.clone(), comment::Image::Loading);
+
+                        Task::perform(comment::download_image(url.clone()), move |res| {
+                            Message::Player(ManagerMessage::CommentMessage(
+                                CommentMessage::ImageDownloaded {
+                                    id,
+                                    timestamp,
+                                    url,
+                                    image: res,
+                                },
+                            ))
+                        })
+                    }
+                    CommentMessage::ImageDownloaded {
+                        id,
+                        timestamp,
+                        url,
+                        image,
+                    } => {
+                        let Some(images) = comments
+                            .get_mut(&timestamp.unwrap_or(default))
+                            .and_then(|comments| {
+                                comments
+                                    .iter_mut()
+                                    .find(|comment| comment.inner.id == id)
+                                    .map(|comment| &mut comment.images)
+                            })
+                        else {
+                            return Task::none();
+                        };
+
+                        let _ = images.insert(
+                            url,
+                            image
+                                .map(|handle| comment::Image::Ready {
+                                    handle,
+                                    fade_in: Animation::new(false)
+                                        .duration(Duration::from_millis(750))
+                                        .easing(Easing::EaseInOut)
+                                        .go(true, now),
+                                })
+                                .unwrap_or_else(comment::Image::Errored),
+                        );
+
+                        Task::none()
+                    }
                 }
             }
         }
@@ -906,23 +1243,13 @@ impl Manager {
                 ..
             }) => {
                 let duration = video.duration();
-                let spent = format!(
-                    "{:02}:{:02}:{:02}",
-                    *position as u64 / 3600,
-                    (*position as u64 % 3600) / 60,
-                    (*position as u64 % 3600) % 60,
-                );
+                let spent = duration_string(*position as u64);
                 let spent = container(medium(spent))
                     .style(styles::container::text)
                     .width(60.0);
 
                 let remaining = duration.as_secs().saturating_sub(*position as u64);
-                let remaining = format!(
-                    "{:02}:{:02}:{:02}",
-                    remaining / 3600,
-                    (remaining % 3600) / 60,
-                    (remaining % 3600) % 60,
-                );
+                let remaining = duration_string(remaining);
                 let remaining = container(medium(remaining))
                     .style(styles::container::text)
                     .width(60.0);
@@ -1141,14 +1468,13 @@ impl Manager {
                     "Add to collection",
                     tp
                 ),
-                // todo
-                // tooltip(
-                //     sized_button(icons::COMMENT, icon_size)
-                //         .style(styles::button::text_slate)
-                //         .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
-                //     "Comment",
-                //     tp
-                // ),
+                tooltip(
+                    sized_button(icons::COMMENT, icon_size)
+                        .style(styles::button::text_slate)
+                        .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
+                    "Comments",
+                    tp
+                ),
                 tooltip(
                     sized_button(icons::PLAYLIST, icon_size)
                         .style(styles::button::text_slate)
@@ -1246,7 +1572,7 @@ impl Manager {
         content.into()
     }
 
-    pub fn view(&self, now: Instant) -> Element<'_, ManagerMessage> {
+    pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, ManagerMessage> {
         let content = stack!(
             self.video_elem(now),
             column!(self.top(), space::vertical(), self.media_controls(now))
@@ -1258,20 +1584,40 @@ impl Manager {
         .width(Length::Fill);
 
         let content = container(content)
-            .width(Length::Fill)
+            .width(Length::FillPortion(7))
             .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(iced::Background::Color(iced::Color::BLACK)),
                 ..Default::default()
             });
 
-        let content: Element<'_, ManagerMessage> = match self.panel {
+        let content: Element<'_, ManagerMessage> = match &self.panel {
             Some(Panel::Playlist) => row!(
                 content,
                 draw_playlist(&self.playlist, self.settings.auto_next)
             )
             .height(Length::Fill)
             .into(),
+            Some(Panel::Comments(new)) => match &self.state {
+                State::Ready {
+                    player,
+                    comments,
+                    awake: _awake,
+                } => row!(
+                    content,
+                    draw_comments(
+                        new,
+                        comments,
+                        player.position as u64,
+                        self.settings.comment_span,
+                        theme,
+                        now,
+                    )
+                )
+                .height(Length::Fill)
+                .into(),
+                _ => content.into(),
+            },
             None => content.into(),
         };
 
@@ -1323,11 +1669,13 @@ impl Manager {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        let State::Loading(animation) = &self.state else {
-            return false;
-        };
-
-        animation.is_animating(now)
+        match &self.state {
+            State::Ready { comments, .. } => comments
+                .iter()
+                .any(|(_, comments)| comments.iter().any(|comment| comment.is_animating(now))),
+            State::Loading(animation) => animation.is_animating(now),
+            State::Idle => false,
+        }
     }
 
     fn player(&self) -> Option<&Player> {
@@ -1345,7 +1693,12 @@ impl Manager {
     }
 
     fn play_toggle(&mut self) -> Task<Message> {
-        let State::Ready { player, awake } = &mut self.state else {
+        let State::Ready {
+            player,
+            awake,
+            comments: _comments,
+        } = &mut self.state
+        else {
             return Task::none();
         };
 
@@ -1376,7 +1729,34 @@ impl Manager {
         Task::none()
     }
 
+    fn pause(&mut self) -> Task<Message> {
+        let State::Ready {
+            player,
+            awake,
+            comments: _comments,
+        } = &mut self.state
+        else {
+            return Task::none();
+        };
+
+        *awake = None;
+
+        let Player { video, .. } = player.as_mut();
+
+        if video.paused() || video.eos() {
+            return Task::none();
+        }
+
+        video.set_paused(true);
+
+        Task::none()
+    }
+
     fn fullscreen_toggle(&mut self) -> Task<Message> {
+        if self.modal.is_some() {
+            return Task::none();
+        }
+
         self.show_controls = self.is_fullscreen;
         self.is_fullscreen = !self.is_fullscreen;
         let fullscreen = self.is_fullscreen;
@@ -1520,7 +1900,7 @@ impl Manager {
             return Task::none();
         }
 
-        let stats = self.stats().map(Task::done).unwrap_or_default();
+        let stats = self.stats();
 
         let Some(next) = self.playlist.next() else {
             return Task::none();
@@ -1544,8 +1924,8 @@ impl Manager {
             }
             ready => {
                 let player = std::mem::replace(ready, AutoState::Idle);
-                let mut player = match player {
-                    AutoState::Ready(player) => player,
+                let (mut player, comments) = match player {
+                    AutoState::Ready { player, comments } => (player, comments),
                     _ => unreachable!(),
                 };
 
@@ -1559,6 +1939,7 @@ impl Manager {
                 self.state = State::Ready {
                     player,
                     awake: Some(awake),
+                    comments,
                 };
 
                 Task::batch([Task::done(last_watched), stats])
@@ -1571,7 +1952,7 @@ impl Manager {
             return Task::none();
         }
 
-        let stats = self.stats().map(Task::done).unwrap_or_default();
+        let stats = self.stats();
 
         let Some(previous) = self.playlist.previous() else {
             return Task::none();
@@ -1618,7 +1999,12 @@ impl Manager {
     }
 
     fn save_config(&mut self, config: Modal) -> Task<Message> {
-        let State::Ready { player, awake } = &mut self.state else {
+        let State::Ready {
+            player,
+            awake,
+            comments: _comment,
+        } = &mut self.state
+        else {
             return Task::none();
         };
 
@@ -1775,7 +2161,13 @@ impl Manager {
     pub fn close_view(&mut self) -> Task<Message> {
         let previous = match self.modal.take() {
             Some(view) => self.save_config(view),
-            None => Task::none(),
+            None => {
+                if self.panel.is_some() {
+                    self.close_panel()
+                } else {
+                    Task::none()
+                }
+            }
         };
 
         let controls = Task::done(Message::Player(ManagerMessage::CursorExit));
@@ -1789,7 +2181,12 @@ impl Manager {
     }
 
     fn collection_add(&mut self) -> Task<Message> {
-        let State::Ready { player, awake } = &mut self.state else {
+        let State::Ready {
+            player,
+            awake,
+            comments: _comments,
+        } = &mut self.state
+        else {
             return Task::none();
         };
 
@@ -1813,19 +2210,23 @@ impl Manager {
     }
 
     fn video_config(&mut self) -> Task<Message> {
-        let (selected_text, selected_audio, subtitle_uri) =
-            if let State::Ready { player, awake } = &mut self.state {
-                awake.take();
-                player.video.set_paused(true);
+        let (selected_text, selected_audio, subtitle_uri) = if let State::Ready {
+            player,
+            awake,
+            comments: _comments,
+        } = &mut self.state
+        {
+            awake.take();
+            player.video.set_paused(true);
 
-                (
-                    player.current_text.clone(),
-                    player.current_audio.clone(),
-                    player.item.subtitle_uri.clone(),
-                )
-            } else {
-                (None, None, None)
-            };
+            (
+                player.current_text.clone(),
+                player.current_audio.clone(),
+                player.item.subtitle_uri.clone(),
+            )
+        } else {
+            (None, None, None)
+        };
 
         self.modal = Some(Modal::Config {
             tab: ConfigTab::General,
@@ -1840,23 +2241,22 @@ impl Manager {
     }
 
     fn video_comment(&mut self) -> Task<Message> {
-        todo!()
+        if matches!(self.panel, Some(Panel::Comments(_))) {
+            self.close_panel()
+        } else {
+            self.panel = Some(Panel::Comments(None));
+            Task::none()
+        }
     }
 
     pub fn action(&mut self, action: PlayerAction, now: Instant) -> Task<Message> {
-        if let PlayerAction::Exit = action
-            && self.modal.is_some()
-        {
-            return self.close_view();
-        }
-
         match action {
             PlayerAction::PlayToggle => self.play_toggle(),
             PlayerAction::PlayNext => self.play_next(now),
             PlayerAction::PlayPrevious => self.play_previous(now),
             PlayerAction::FullscreenToggle => self.fullscreen_toggle(),
             PlayerAction::Exit => {
-                if self.modal.is_some() {
+                if self.modal.is_some() || self.panel.is_some() {
                     self.close_view()
                 } else {
                     self.fullscreen_exit()
@@ -1879,13 +2279,23 @@ impl Manager {
             PlayerAction::CloseView => self.close_view(),
             PlayerAction::Back => Task::done(Message::Back),
             PlayerAction::PlaylistToggle => self.toggle_playlist(),
+            PlayerAction::VideoCommentNew => self.new_comment(),
         }
     }
 
-    pub fn stats(&mut self) -> Option<Message> {
-        let State::Ready { player, .. } = &mut self.state else {
-            return None;
+    pub fn stats(&mut self) -> Task<Message> {
+        let State::Ready {
+            player, comments, ..
+        } = &mut self.state
+        else {
+            return Task::none();
         };
+
+        let comments = comments
+            .values()
+            .flat_map(|comments| comments.iter().map(|comment| comment.inner.clone()))
+            .collect();
+        let comments = Message::SaveComments(comments).tasked();
 
         let duration = player.video.duration().as_secs_f64();
         let progress = player.position / duration;
@@ -1907,7 +2317,10 @@ impl Manager {
 
         self.playlist.update_current(&player.item);
 
-        Some(Message::VideoStats(player.item.clone()))
+        Task::batch([
+            Task::done(Message::VideoStats(player.item.clone())),
+            comments,
+        ])
     }
 
     pub fn toggle_playlist(&mut self) -> Task<Message> {
@@ -1917,6 +2330,61 @@ impl Manager {
             self.panel = Some(Panel::Playlist);
             Task::none()
         }
+    }
+
+    pub fn fetched_comments(&mut self, id: PlayId, comments: Vec<Comment>) -> Task<Message> {
+        let nulls_start = self.settings.comments_nulls_first;
+
+        let update = |player: &mut Player, curr: &mut BTreeMap<u64, Vec<Comment>>| {
+            let default = if nulls_start {
+                0
+            } else {
+                player.video.duration().as_secs()
+            };
+
+            let comments = comments
+                .into_iter()
+                .map(|comment| (comment.inner.timestamp.unwrap_or(default), comment));
+
+            for (timestamp, comment) in comments {
+                let entry = curr.entry(timestamp).or_default();
+
+                entry.push(comment)
+            }
+        };
+
+        match &mut self.state {
+            State::Ready {
+                player,
+                comments: curr,
+                awake: _awake,
+            } if player.item.id == id => {
+                update(player, curr);
+
+                Task::none()
+            }
+            _ => match &mut self.next {
+                AutoState::Ready {
+                    player,
+                    comments: curr,
+                } if player.item.id == id => {
+                    update(player, curr);
+
+                    Task::none()
+                }
+                _ => Task::none(),
+            },
+        }
+    }
+
+    fn new_comment(&mut self) -> Task<Message> {
+        let editor = widget::Id::unique();
+        self.panel = Some(Panel::Comments(Some((
+            editor.clone(),
+            text_editor::Content::default(),
+        ))));
+
+        operation::focus(editor)
     }
 }
 
@@ -2020,6 +2488,8 @@ fn apply_settings(settings: VideoSettings, player: &mut Player) {
         completion_point: _completion,
         completion_watch_time: _completion_watch,
         subtitles: _subtitles,
+        comment_span: _comment_span,
+        comments_nulls_first: _nulls_first,
         filters:
             utils::VideoFilters {
                 contrast,
@@ -2059,13 +2529,12 @@ fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
 }
 
 fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, ManagerMessage> {
-    let width = 375.0;
     let rule_height = 1.0;
     let padding = [6, 12];
 
     let title = {
         let content = row!(
-            h6("Playlist"),
+            sized_bold("Playlist", P),
             space::horizontal(),
             button(icons::icon(CANCEL).size(H6))
                 .on_press(ManagerMessage::ClosePanel)
@@ -2104,7 +2573,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         }
         .size(size);
 
-        let name = container(name.height(height).style(color)).max_width(width * 0.80);
+        let name = container(name.height(height).style(color)).width(Length::FillPortion(10));
 
         let duration = format!("{hrs:02}:{mins:02}:{secs:02}");
 
@@ -2212,7 +2681,116 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
 
     let content = column!(title, content, space::vertical(), actions).spacing(12);
 
-    let content = container(content).width(width).padding([3, 0]);
+    let content = panel_container(content).padding([3, 0]);
+
+    content.into()
+}
+
+fn draw_comments<'a>(
+    new: &'a Option<(widget::Id, text_editor::Content)>,
+    comments: &'a BTreeMap<u64, Vec<Comment>>,
+    position: u64,
+    span: u64,
+    theme: &Theme,
+    now: Instant,
+) -> Element<'a, ManagerMessage> {
+    let rule_height = 1.0;
+    let padding = [6, 12];
+
+    let title = {
+        let content = row!(
+            sized_bold("Comments", P),
+            space::horizontal(),
+            button(icons::icon(CANCEL).size(H6))
+                .on_press(ManagerMessage::ClosePanel)
+                .style(styles::button::text)
+                .padding(0),
+        )
+        .padding(padding)
+        .align_y(Vertical::Center);
+
+        column!(content, rule::horizontal(rule_height))
+    };
+
+    let new: Element<'_, CommentMessage> = match new {
+        Some((editor, comment)) => {
+            let editor = text_editor(comment)
+                .id(editor.clone())
+                .on_action(CommentMessage::NewAction)
+                .wrapping(text::Wrapping::WordOrGlyph)
+                .key_binding(move |press| {
+                    use iced::keyboard::{Key, key::Named};
+                    use text_editor::Binding;
+                    match press.key {
+                        Key::Named(Named::Enter) if press.modifiers.command() => {
+                            Some(Binding::Custom(CommentMessage::NewSubmit))
+                        }
+                        _ => Binding::from_key_press(press),
+                    }
+                })
+                .padding(6)
+                .highlight("markdown", iced::highlighter::Theme::Base16Ocean);
+            let cancel = cancel_btn().on_press(CommentMessage::NewCancel);
+            let save = save_btn().on_press(CommentMessage::NewSubmit);
+
+            let btns = row!(save, cancel).spacing(40).align_y(Vertical::Center);
+
+            let content = column!(editor, btns)
+                .align_x(Horizontal::Center)
+                .spacing(10);
+
+            let content = container(content).padding(4).style(move |theme| {
+                let default = styles::container::bw(theme);
+                let border = default.border.rounded(8);
+
+                container::Style { border, ..default }
+            });
+
+            content.into()
+        }
+        None => button(medium("New"))
+            .padding([5, 5])
+            .on_press(CommentMessage::New)
+            .into(),
+    };
+
+    let new: Element<'_, CommentMessage> = column!(rule::horizontal(rule_height), new)
+        .spacing(6.0)
+        .align_x(Horizontal::Center)
+        .padding(padding)
+        .into();
+
+    let content: Element<'_, CommentMessage> = {
+        let timestamp = { position.saturating_sub(span)..=position.saturating_add(span) };
+
+        let comments = comments
+            .range(timestamp)
+            .flat_map(|(_, comments)| comments.iter().filter(|comment| !comment.inner.removed));
+
+        column(comments.map(|comment| {
+            container(comment.view(now, theme))
+                .max_height(325)
+                .width(Length::Fill)
+                .into()
+        }))
+        .spacing(16)
+        .into()
+    };
+
+    let content: Element<'_, CommentMessage> =
+        scrollable(content).height(Length::Fill).spacing(10).into();
+
+    let content = column!(
+        title,
+        content.map(ManagerMessage::CommentMessage),
+        new.map(ManagerMessage::CommentMessage)
+    )
+    .spacing(20)
+    .align_x(Horizontal::Center);
+
+    let content = panel_container(content)
+        .padding([3, 6])
+        .align_x(Horizontal::Center);
 
     content.into()
 }
@@ -2409,7 +2987,22 @@ fn draw_config<'a>(
                     .spacing(spacing)
             };
 
-            column!(volume_amt, speed_amt, seek_amt, seek_amt_shift)
+            let cspan = {
+                let label = label_maker("Comment span(seconds) ");
+
+                let amt = config.comment_span.to_string();
+                let input = text_input("", &amt)
+                    .font(regular_font())
+                    .width(input_width)
+                    .size(size)
+                    .align_x(Horizontal::Right)
+                    .padding(padding)
+                    .on_input(ConfigMessage::Span);
+
+                row!(label, space::horizontal(), input).align_y(Vertical::Center)
+            };
+
+            column!(volume_amt, speed_amt, seek_amt, seek_amt_shift, cspan)
                 .spacing(16)
                 .into()
         }
@@ -2711,6 +3304,14 @@ fn draw_config<'a>(
 
 fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
     sized_medium(label, H7)
+}
+
+fn panel_container<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+) -> container::Container<'a, Message> {
+    container(content)
+        .style(styles::container::bw3)
+        .width(Length::FillPortion(2))
 }
 
 fn keep_awake() -> Result<keepawake::KeepAwake, keepawake::Error> {

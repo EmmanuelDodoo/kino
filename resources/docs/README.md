@@ -21,6 +21,7 @@ This document covers advanced usage, tips, configuration and customization optio
 - In the video player, double clicking enters full-screen mode, right clicking opens the video config dialog
 - Ctrl + Clicking on a media item starts building a playlist
 - Navigating to other pages while building a playlist maintains the selected media
+- Timestamps can be added to video comments with the formats @now, @m:ss, @h:mm:ss (eg @12:04). 
 
 ### Searching
 

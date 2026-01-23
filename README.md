@@ -37,9 +37,9 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 
 - [x] Playlist saving
 
-- [ ] Mini player mode
+- [x] Comments on videos
 
-- [ ] Comments/notes on media
+- [ ] Mini player mode
 
 - [ ] Wishlist support
 

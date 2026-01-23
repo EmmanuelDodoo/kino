@@ -14,19 +14,24 @@ use crate::fetch;
 use crate::home::{Home, HomeMessage, shared};
 use crate::models::{
     self, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode, EpisodeId,
-    ItemId, Media, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, collection,
+    ItemId, Media, Movie, MovieId, PlayId, Season, SeasonId, Show, ShowId, SimpleCollection,
+    collection,
     collection::{
         Items,
         triggers::{DeleteTrigger, InsertTrigger},
     },
 };
-use crate::player::{Manager as Player, ManagerMessage as PlayerMessage};
+use crate::player::{
+    Comment, Manager as Player, ManagerMessage as PlayerMessage, PlayItem, Playlist,
+};
 use crate::scan;
 use crate::settings::{Settings, SettingsMessage};
 use crate::toast;
 use crate::utils::{
-    Action, Config, Filter, KeyPress, Layout, PlayId, PlayItem, Playlist, Screen, Sort, SortKind,
-    filter::FilterMode, filter::SearchFilter,
+    Action, Config, Filter, KeyPress, Layout, Screen, Sort, SortKind,
+    filter::FilterMode,
+    filter::{self, SearchFilter},
+    sort,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -95,6 +100,8 @@ pub enum Message {
         offset: Option<i32>,
     },
     FetchDirectories,
+    FetchComments(PlayId),
+    SaveComments(Vec<models::Comment>),
     Refresh(Instant, bool),
     LastWatched(PlayId),
     VideoStats(PlayItem),
@@ -304,7 +311,7 @@ impl App {
                 let stats = match self.player.take() {
                     Some(mut player) => {
                         tracing::debug!("Exiting player");
-                        let stats = player.stats().map(Task::done).unwrap_or_default();
+                        let stats = player.stats();
 
                         self.config.video = player.settings;
 
@@ -896,6 +903,53 @@ impl App {
 
                 Task::none()
             }
+            Message::FetchComments(id) => {
+                if matches!(self.screen, Screen::Settings) {
+                    return Task::none();
+                }
+
+                let comments = match self.db.get_video_comments(
+                    id,
+                    None,
+                    None,
+                    filter::comments::Filter::default(),
+                    sort::comments::Sort::default(),
+                    |comment| Comment::load(comment, None),
+                ) {
+                    Ok(comments) => {
+                        tracing::debug!("Fetched {} comments for {id}", comments.len());
+                        comments
+                    }
+                    Err(error) => {
+                        let msg = Message::error(error);
+                        return Task::done(msg);
+                    }
+                };
+
+                match self.screen {
+                    Screen::Player => match self.player.as_mut() {
+                        Some(player) => player.fetched_comments(id, comments),
+                        None => Task::none(),
+                    },
+                    Screen::Settings => unreachable!(),
+                    _ => todo!(),
+                }
+            }
+            Message::SaveComments(comments) => {
+                for comment in comments {
+                    let query = comment.insert();
+                    match query.execute(&self.db) {
+                        Ok(succ) => {
+                            tracing::debug!("{succ:?}");
+                        }
+                        Err(fail) => {
+                            tracing::error!("{fail:?}");
+                        }
+                    }
+                }
+
+                Task::none()
+            }
             Message::LoadSearch(search, filter) => {
                 let items = match self.db.search(
                     search.clone(),
@@ -1441,7 +1495,7 @@ impl App {
             Screen::Player => {
                 let player = self.player.as_ref().unwrap();
 
-                player.view(self.now).map(Message::Player)
+                player.view(&theme, self.now).map(Message::Player)
             }
             Screen::Settings => {
                 let settings = self.settings.as_ref().unwrap();

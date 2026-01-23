@@ -39,6 +39,7 @@ This document describes the available application actions in Kino. Actions are p
 |    SpeedReset    | Reset playback rate                                       |
 |   VideoConfig    | Opens the video configuration menu                        |
 |   VideoComment   | Opens the video comment dialog                            |
+|   VideoCommentNew   | Starts a new comment on the current playback           |
 | SubtitlesToggle  | Toggles video subtitles                                   |
 |       Add        | Opens the add to collection dialog                        |
 |    CloseView     | Closes the current modal                                  |

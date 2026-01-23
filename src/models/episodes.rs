@@ -43,15 +43,6 @@ impl From<EpisodeId> for ToSqlOutput<'_> {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ECommentId(Uuid);
-
-impl From<ECommentId> for ToSqlOutput<'_> {
-    fn from(value: ECommentId) -> Self {
-        ToSqlOutput::from(value.0.to_string())
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Episode {
     pub id: EpisodeId,
@@ -277,7 +268,8 @@ impl Episode {
 
     #[must_use]
     pub fn refetch<'a>(id: EpisodeId) -> Query<'a> {
-        let sql = "UPDATE episode SET tmdb_id=NULL, fetched=FALSE, generate_poster=TRUE WHERE id=:id";
+        let sql =
+            "UPDATE episode SET tmdb_id=NULL, fetched=FALSE, generate_poster=TRUE WHERE id=:id";
         let params = [(":id", ToSqlOutput::from(id))];
 
         Query {
@@ -400,166 +392,5 @@ impl Media for Episode {
 
     fn watch_count(&self) -> u32 {
         self.watch_count
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct EComment {
-    pub id: ECommentId,
-    pub added: DateTime<Local>,
-    pub content: String,
-    pub episode: EpisodeId,
-    pub timestamp: Option<u64>,
-}
-
-impl EComment {
-    pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
-        let id = row.get::<_, String>("id")?;
-        let id = ECommentId(Uuid::try_parse(&id).unwrap());
-
-        let episode = row.get::<_, String>("episode_id")?;
-        let episode = EpisodeId(Uuid::try_parse(&episode).unwrap());
-
-        let added = row.get::<_, DateTime<Local>>("created_at")?;
-
-        let content = row.get::<_, String>("content")?;
-
-        let timestamp = row.get::<_, Option<u64>>("episode_timestamp")?;
-
-        Ok(Self {
-            id,
-            added,
-            content,
-            episode,
-            timestamp,
-        })
-    }
-
-    fn insert_params<'a>(&self) -> Vec<(&'a str, ToSqlOutput<'a>)> {
-        let Self {
-            id,
-            added,
-            content,
-            episode,
-            timestamp,
-        } = self;
-
-        let id = ToSqlOutput::from(*id);
-        let added = datetime_to_sql(added);
-        let content = ToSqlOutput::from(content.clone());
-
-        let episode = ToSqlOutput::from(*episode);
-        let timestamp = timestamp
-            .map(|time| {
-                ToSqlOutput::from(
-                    i64::try_from(time).expect("timestamp cannot be expressed as i64"),
-                )
-            })
-            .unwrap_or(ToSqlOutput::Owned(Value::Null));
-
-        vec![
-            (":id", id),
-            (":added", added),
-            (":content", content),
-            (":episode", episode),
-            (":timestamp", timestamp),
-        ]
-    }
-
-    #[must_use]
-    pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO episode_comment (id, created_at, content, episode_id, episode_timestamp) VALUES (:id, :added, :content, :episode, :timestamp)";
-
-        let params = self.insert_params();
-
-        Query {
-            id: self.id.0,
-            table: Table::EComment,
-            sql,
-            params,
-            op: Operation::Insert,
-        }
-    }
-
-    #[must_use]
-    pub fn delete<'a>(self) -> Query<'a> {
-        let sql = "DELETE FROM episode_comment WHERE id=:id";
-        let id = ToSqlOutput::from(self.id);
-        let params = [(":id", id)];
-
-        Query {
-            id: self.id.0,
-            table: Table::EComment,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Delete,
-        }
-    }
-
-    #[must_use]
-    pub fn set_content<'a>(&mut self, content: String) -> Query<'a> {
-        self.content = content.clone();
-
-        let sql = "UPDATE episode_comment SET content=:content WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":content", ToSqlOutput::from(content)),
-        ];
-
-        Query {
-            id: self.id.0,
-            table: Table::EComment,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    #[must_use]
-    pub fn set_timestamp<'a>(&mut self, timestamp: Option<u64>) -> Query<'a> {
-        self.timestamp = timestamp;
-
-        let sql = "UPDATE episode_comment SET episode_timestamp=:timestamp WHERE id=:id";
-
-        let timestamp = timestamp
-            .map(|time| {
-                ToSqlOutput::from(
-                    i64::try_from(time).expect("Timestamp cannot be expressed as i64"),
-                )
-            })
-            .unwrap_or(ToSqlOutput::Owned(Value::Null));
-
-        let params = [
-            (":id", ToSqlOutput::from(self.id)),
-            (":timestamp", timestamp),
-        ];
-
-        Query {
-            id: self.id.0,
-            table: Table::EComment,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    pub fn new<'a>(
-        episode: EpisodeId,
-        content: String,
-        timestamp: Option<u64>,
-    ) -> (Self, Query<'a>) {
-        let added = Local::now();
-
-        let new = Self {
-            id: ECommentId(Uuid::now_v7()),
-            added,
-            content,
-            timestamp,
-            episode,
-        };
-
-        let query = new.insert();
-
-        (new, query)
     }
 }

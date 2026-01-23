@@ -98,6 +98,10 @@ pub struct VideoSettings {
     pub subtitles: SubtitleDescription,
 
     pub filters: VideoFilters,
+
+    pub comment_span: u64,
+
+    pub comments_nulls_first: bool,
 }
 
 impl VideoSettings {
@@ -124,6 +128,8 @@ impl VideoSettings {
                 saturation: 1.0,
                 gamma: 1.0,
             },
+            comment_span: 90,
+            comments_nulls_first: true,
         }
     }
 }
@@ -1641,6 +1647,10 @@ mod keys {
             (
                 key(Key::Named(Named::Subtitle), None),
                 PlayerAction::SubtitlesToggle,
+            ),
+            (
+                key(Key::Character("b".into()), Some(KeyModifier::Shift)),
+                PlayerAction::VideoCommentNew,
             ),
             (
                 key(Key::Character("b".into()), None),

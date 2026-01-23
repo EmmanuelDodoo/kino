@@ -4,19 +4,21 @@ use iced::{
     Shadow, Size, Subscription, Task, Theme, Vector,
     advanced::{self, Widget, layout, mouse, overlay, widget::tree},
     alignment::{Horizontal, Vertical},
-    animation::{Animation, Easing},
+    animation::{self, Animation, Easing},
     application::BootFn,
     border::{self, Border, Radius},
     color, font, keyboard, padding,
-    time::{Duration, Instant},
+    time::{Duration, Instant, every, milliseconds},
     widget::{
         self, Space, bottom, bottom_center, button, center, center_x, center_y, column, container,
-        float, grid, image, markdown, mouse_area, operation, pick_list, rich_text, row, scrollable,
-        slider, space, span, stack, text, text_input, tooltip as tp,
+        float, grid, markdown, mouse_area, operation, pick_list, rich_text, row, scrollable,
+        sensor, slider, space, span, stack, text, text_editor, text_input, tooltip as tp,
+        vertical_slider,
     },
     window,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
@@ -34,7 +36,8 @@ pub mod utils;
 mod widgets;
 
 use app::App;
-use models::{Directory, ItemId, Media, MediaType, Movie, SearchItem, Show, collection};
+use models::{Directory, ItemId, Media, MediaType, Movie, PlayId, SearchItem, Show, collection};
+use std::sync::LazyLock;
 use utils::config::Config;
 use utils::filter;
 use utils::filter::*;
@@ -44,8 +47,10 @@ use utils::sort;
 use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Layout, Sort, SortKind, empty, styles, tooltip};
+use utils::{Layout, Sort, SortKind, cancel_btn, empty, save_btn, styles, tooltip};
 use widgets::*;
+
+const DUMMY: &str = "@0:08 something _long_ __here__ @7:26 and **after**. testing 31:43 and also @me but what about @ 5:13. how about an @2:06:30 \n\n![dragonfly](https://plus.unsplash.com/premium_photo-1710760668546-f241a1899c29?q=80&w=1057&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D)";
 
 // fn _test_main() {
 // fn main() {
@@ -156,12 +161,10 @@ impl BootFn<App, app::Message> for BootMode {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Open(bool),
     None,
 }
 
 struct Playground {
-    open: bool,
     now: Instant,
 }
 
@@ -169,7 +172,7 @@ impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let now = Instant::now();
 
-        let new = Self { open: false, now };
+        let new = Self { now };
 
         (new, Task::none())
     }
@@ -178,34 +181,14 @@ impl Playground {
         self.now = now;
 
         match message {
-            Message::Open(open) => {
-                self.open = open;
-                Task::none()
-            }
             Message::None => Task::none(),
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let root = container("Root").style(styles::container::pb);
-        let root = tooltip(root, "Testing", tp::Position::Bottom);
-        let content = container("Container").style(styles::container::sb);
-        let content = tooltip(content, "Content", tp::Position::Top);
+        let content = medium("Playground....");
 
-        let content = expandable(root, content)
-            .expanded(self.open)
-            .spacing(10.0)
-            .on_expand(Message::Open);
-
-        let extra = container("Extra").style(styles::container::ps);
-
-        let content = column!(content, extra).spacing(16.0);
-
-        let content = container(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_y(Vertical::Center);
-        // let content = center(content);
+        let content = center(content);
 
         content.into()
     }
@@ -215,6 +198,6 @@ impl Playground {
     }
 
     fn theme(&self) -> Option<Theme> {
-        Some(Theme::Nord)
+        Some(Theme::Dracula)
     }
 }

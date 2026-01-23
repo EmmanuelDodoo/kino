@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -100,18 +100,6 @@ CREATE TABLE episode (
 
 CREATE INDEX idx_episode_season_id ON episode ( season_id );
 
-CREATE TABLE episode_comment ( 
-	id                   TEXT NOT NULL  PRIMARY KEY  ,
-	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
-	content              TEXT  NOT NULL   ,
-	episode_id           TEXT NOT NULL    ,
-	episode_timestamp    INT     ,
-	removed		     BOOLEAN DEFAULT FALSE,
-	FOREIGN KEY ( episode_id ) REFERENCES episode( id ) ON DELETE CASCADE 
-);
-
-CREATE INDEX idx_comment_episode_id ON episode_comment ( episode_id );
-
 CREATE TABLE movie (
 	id		     TEXT NOT NULL PRIMARY KEY,
 	tmdb_id              INTEGER,
@@ -144,17 +132,16 @@ CREATE TABLE movie (
 
 CREATE INDEX idx_movie_directory ON movie ( directory );
 
-CREATE TABLE movie_comment ( 
+CREATE TABLE comment ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
 	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
 	content              TEXT  NOT NULL   ,
-	movie_id             TEXT NOT NULL    ,
-	movie_timestamp      INT     ,
+	media_id             TEXT NOT NULL    ,
+	media_type	     TEXT NOT NULL,
+	timestamp      	     INT     ,
 	removed		     BOOLEAN DEFAULT FALSE,
-	FOREIGN KEY ( movie_id ) REFERENCES movie( id ) ON DELETE CASCADE 
+	CHECK (media_type IN ('movie', 'episode'))
 );
-
-CREATE INDEX idx_comment_movie_id ON movie_comment ( movie_id );
 
 CREATE TABLE collection (
 	id              TEXT NOT NULL PRIMARY KEY,
@@ -456,33 +443,39 @@ BEGIN
 	DELETE FROM collection_item WHERE media_type = 'episode' AND media_id = OLD.id;
 END;
 
-CREATE TRIGGER mcomment_delete_tr AFTER DELETE ON movie_comment
+CREATE TRIGGER comment_delete_tr AFTER DELETE ON comment
 BEGIN
 	UPDATE movie SET comment_count = (
-		SELECT COUNT(*) FROM movie_comment WHERE movie_comment.movie_id = OLD.movie_id
-	) WHERE id = OLD.movie_id;
+		SELECT COUNT(*) FROM comment WHERE comment.media_type = 'movie' AND comment.media_id = OLD.media_id 
+	) WHERE id = OLD.media_id;
+
+	UPDATE episode SET comment_count = (
+		SELECT COUNT(*) FROM comment WHERE comment.media_type = 'episode' AND comment.media_id = OLD.media_id 
+	) WHERE id = OLD.media_id;
+
 END;
 
-CREATE TRIGGER mcomment_insert_tr AFTER DELETE ON movie_comment
+CREATE TRIGGER comment_insert_tr AFTER INSERT ON comment
 BEGIN
 	UPDATE movie SET comment_count = (
-		SELECT COUNT(*) FROM movie_comment WHERE movie_comment.movie_id = OLD.movie_id
-	) WHERE id = OLD.movie_id;
+		SELECT COUNT(*) FROM comment WHERE comment.media_type = 'movie' AND comment.media_id = NEW.media_id 
+	) WHERE id = NEW.media_id;
+
+	UPDATE episode SET comment_count = (
+		SELECT COUNT(*) FROM comment WHERE comment.media_type = 'episode' AND comment.media_id = NEW.media_id 
+	) WHERE id = NEW.media_id;
 END;
 
-CREATE TRIGGER ecomment_delete_tr AFTER DELETE ON episode_comment
+CREATE TRIGGER episode_comment_delete_tr AFTER DELETE ON episode
 BEGIN
-	UPDATE episode SET comment_count = (
-		SELECT COUNT(*) FROM episode_comment WHERE episode_comment.episode_id = OLD.episode_id
-	) WHERE id = OLD.episode_id;
+	DELETE FROM comment WHERE media_type = 'episode' AND media_id = OLD.id;
 END;
 
-CREATE TRIGGER ecomment_insert_tr AFTER INSERT ON episode_comment
+CREATE TRIGGER movie_comment_delete_tr AFTER DELETE ON movie
 BEGIN
-	UPDATE episode SET comment_count = (
-		SELECT COUNT(*) FROM episode_comment WHERE episode_comment.episode_id = NEW.episode_id
-	) WHERE id = NEW.episode_id;
+	DELETE FROM comment WHERE media_type = 'movie' AND media_id = OLD.id;
 END;
+
 
 CREATE TRIGGER episode_delete_tr AFTER DELETE ON episode
 BEGIN
