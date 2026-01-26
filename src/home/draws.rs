@@ -469,12 +469,14 @@ pub fn draw_synopsis<'a>(
         .on_action(|action| HomeMessage::Synopsis(SynopsisMessage::Action(action)))
         .key_binding(|press| {
             use iced::keyboard::{Key, key::Named};
-            use text_editor::Binding;
+            use text_editor::{Binding, Status};
+
+            let is_focused = matches!(press.status, Status::Focused { .. });
 
             match press.key {
-                Key::Named(Named::Enter) if press.modifiers.shift() => Some(Binding::Custom(
-                    HomeMessage::Synopsis(SynopsisMessage::Submit),
-                )),
+                Key::Named(Named::Enter) if press.modifiers.command() && is_focused => Some(
+                    Binding::Custom(HomeMessage::Synopsis(SynopsisMessage::Submit)),
+                ),
                 _ => Binding::from_key_press(press),
             }
         })

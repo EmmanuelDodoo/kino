@@ -166,7 +166,7 @@ impl Page {
             Self::Movie { page, .. } => page.show_tools(),
             Self::Season { page, .. } => page.show_tools(),
             Self::Show { page, .. } => page.show_tools(),
-            Self::Home => true,
+            Self::Home => false,
             _ => todo!(),
         }
     }

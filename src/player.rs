@@ -408,7 +408,7 @@ impl Manager {
                             let left = num / 4;
                             let right = (num * 3) / 4;
 
-                            rng.gen_range(left..=right)
+                            rng.gen_range(left..=right).max(*range.start())
                         };
 
                         let mut poster = None;
@@ -1368,10 +1368,10 @@ impl Manager {
                     .height(size)
                     .into(),
                 State::Ready { player, .. } => {
-                    let (icon, message) = if player.video.paused() {
-                        (icons::PLAY, ManagerMessage::TogglePlay)
-                    } else if player.video.eos() {
+                    let (icon, message) = if player.video.eos() {
                         (icons::REPLAY, ManagerMessage::TogglePlay)
+                    } else if player.video.paused() {
+                        (icons::PLAY, ManagerMessage::TogglePlay)
                     } else {
                         (icons::PAUSE, ManagerMessage::TogglePlay)
                     };
@@ -1584,7 +1584,7 @@ impl Manager {
         .width(Length::Fill);
 
         let content = container(content)
-            .width(Length::FillPortion(7))
+            .width(Length::FillPortion(9))
             .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(iced::Background::Color(iced::Color::BLACK)),
@@ -2694,9 +2694,14 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         column!(rule::horizontal(rule_height), content)
     };
 
-    let content = scrollable(items).spacing(6);
+    let content = scrollable(items)
+        .height(Length::Fill)
+        .spacing(6)
+        .auto_scroll(true);
 
-    let content = column!(title, content, space::vertical(), actions).spacing(12);
+    let content = column!(title, content, actions)
+        .height(Length::Fill)
+        .spacing(0);
 
     let content = panel_container(content).padding([3, 0]);
 

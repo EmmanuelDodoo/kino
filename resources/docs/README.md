@@ -12,7 +12,7 @@ This document covers advanced usage, tips, configuration and customization optio
 - Loaded subtitles are saved and reused automatically
 - Click a video title in a playlist to jump to it
 - Hovering over status toasts prevents them from disappearing
-- <kbd>Shift</kbd> + <kbd>Enter</kbd> submits changes in the media overview
+- <kbd>Ctrl</kbd> + <kbd>Enter</kbd> submits changes in the media overview
 - Year-based filtering currently supports release year only
 - Each sort category can be set independently to ascending or descending
 - Multiple sorts can be applied; their order is shown by the number indicator

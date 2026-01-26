@@ -1977,7 +1977,7 @@ fn draw_subtitles<'a>(
         let label = label_maker("Subtitle Example ");
 
         let input = text_input("", subtitle_dummy)
-            // .width(color_width)
+            .width(256)
             .size(TEXT_SIZE)
             .font(regular_font())
             .align_x(Horizontal::Right)
@@ -2273,7 +2273,7 @@ fn draw_media<'a>(
             })
             .align_x(Horizontal::Center)
             .align_y(Vertical::Center);
-            table([kind, path, last, scan, add], directories)
+            table([kind, scan, path, last, add], directories)
         };
 
         expandable(top, dirs)
