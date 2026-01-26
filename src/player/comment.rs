@@ -241,9 +241,20 @@ impl Comment {
                 content.into()
             }
             Mode::View(markdown) => {
+                let settings = {
+                    let base = markdown::Settings::with_text_size(size, theme);
+                    markdown::Settings {
+                        style: markdown::Style {
+                            font: typo::regular_font(),
+                            ..base.style
+                        },
+                        ..base
+                    }
+                };
+
                 let content = markdown::view_with(
                     markdown.items(),
-                    markdown::Settings::with_text_size(size, theme),
+                    settings,
                     &CommentViewer {
                         id,
                         timestamp,
@@ -286,7 +297,11 @@ impl Comment {
                             _ => border,
                         };
 
-                        button::Style { border, ..base }
+                        button::Style {
+                            border,
+                            background: None,
+                            ..base
+                        }
                     });
 
                 content.into()

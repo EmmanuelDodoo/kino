@@ -976,7 +976,7 @@ impl Manager {
                     CommentMessage::NewCancel => {
                         new.take();
 
-                        self.play_toggle()
+                        self.play()
                     }
                     CommentMessage::NewSubmit => {
                         let Some((editor, comment)) = new.take() else {
@@ -995,7 +995,7 @@ impl Manager {
                             .or_default();
                         batch.push(comment);
 
-                        self.play_toggle()
+                        self.play()
                     }
                     CommentMessage::NewAction(action) => {
                         if let Some((_, content)) = new {
@@ -1064,7 +1064,7 @@ impl Manager {
                         let batch = comments.entry(timestamp).or_default();
                         batch.push(saved);
 
-                        self.play_toggle()
+                        self.play()
                     }
                     CommentMessage::Action {
                         id,
@@ -1092,7 +1092,7 @@ impl Manager {
                             comment.cancel();
                         }
 
-                        self.play_toggle()
+                        self.play()
                     }
                     CommentMessage::Delete { id, timestamp } => {
                         if let Some(comment) = comments
@@ -1695,6 +1695,23 @@ impl Manager {
     fn play_toggle(&mut self) -> Task<Message> {
         let State::Ready {
             player,
+            awake: _awake,
+            comments: _comments,
+        } = &mut self.state
+        else {
+            return Task::none();
+        };
+
+        let Player { video, .. } = player.as_mut();
+
+        let is_paused = video.paused();
+
+        if is_paused { self.play() } else { self.pause() }
+    }
+
+    fn play(&mut self) -> Task<Message> {
+        let State::Ready {
+            player,
             awake,
             comments: _comments,
         } = &mut self.state
@@ -1711,7 +1728,7 @@ impl Manager {
         if is_paused {
             *awake = Some(keep_awake().unwrap());
         } else {
-            *awake = None;
+            return Task::none();
         }
 
         if video.eos() && is_paused {
