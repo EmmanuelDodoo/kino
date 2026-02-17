@@ -189,6 +189,14 @@ impl Logic {
             || comment.is_some()
     }
 
+    fn sanitize(pattern: &str) -> String {
+        pattern
+            .replace("\\", "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+            .replace("'", "\\\"")
+    }
+
     fn query(&self, prefix: &str) -> Option<String> {
         if !self.is_some() {
             return Some(" TRUE ".to_owned());
@@ -210,24 +218,28 @@ impl Logic {
 
         let params = [
             name.as_ref().map(|(not, pattern)| {
+                let pattern = Self::sanitize(pattern);
                 format!(
                     "{prefix}.name {}LIKE '%{pattern}%'",
                     if *not { "NOT " } else { "" }
                 )
             }),
             synopsis.as_ref().map(|(not, pattern)| {
+                let pattern = Self::sanitize(pattern);
                 format!(
                     "{prefix}.synopsis {}LIKE '%{pattern}%'",
                     if *not { "NOT " } else { "" }
                 )
             }),
             tags.as_ref().map(|(not, pattern)| {
+                let pattern = Self::sanitize(pattern);
                 format!(
                     "{prefix}.tags {}LIKE '%{pattern}%'",
                     if *not { "NOT " } else { "" }
                 )
             }),
             dir.as_ref().map(|(not, pattern)| {
+                let pattern = Self::sanitize(pattern);
                 format!(
                     "EXISTS (
                         SELECT 1
