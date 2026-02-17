@@ -397,13 +397,13 @@ pub fn float<'a, Message: 'a>(
     let interpolation = float.interpolate(0.0, 1.0, now);
 
     let blur_radius = interpolation * 20.0;
-    let scale = 1.0 + (0.1 * interpolation);
+    let scale = 1.0 + (0.05 * interpolation);
     let color = color.unwrap_or(Color::BLACK).scale_alpha(interpolation);
 
     widget::float(content)
         .scale(scale)
         .translate(move |bounds, viewport| {
-            bounds.zoom(1.1).offset(&viewport.shrink(5)) * interpolation
+            bounds.zoom(1.05).offset(&viewport.shrink(5)) * interpolation
         })
         .style(move |_theme| widget::float::Style {
             shadow: Shadow {
@@ -462,7 +462,7 @@ impl<T: Media> Thumbnail<T> {
                 .duration(iced::time::Duration::from_millis(100))
                 .easing(Easing::EaseOut),
             float: Animation::new(false)
-                .duration(iced::time::Duration::from_millis(250))
+                .duration(iced::time::Duration::from_millis(150))
                 .easing(Easing::EaseInOut),
             poster,
             sample_text: None,
