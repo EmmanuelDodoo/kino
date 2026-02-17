@@ -346,8 +346,11 @@ pub struct Settings {
 
 impl Settings {
     pub fn boot(config: Config) -> (Self, Task<Message>) {
-        let new = Self::new(config);
-        let tasks = Task::done(Message::FetchDirectories);
+        let mut new = Self::new(config);
+        let scroll = new.update_scroll();
+        let dirs = Task::done(Message::FetchDirectories);
+
+        let tasks = Task::batch([scroll, dirs]);
 
         (new, tasks)
     }

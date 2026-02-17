@@ -292,7 +292,7 @@ impl App {
                     || refresh.duration_since(self.last_refresh) >= self.config.refresh_interval()
                 {
                     self.last_refresh = refresh;
-                    self.home.refresh(now)
+                    self.home.refresh(now).chain(self.home.update_page_scroll())
                 } else {
                     Task::none()
                 }
