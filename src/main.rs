@@ -33,7 +33,6 @@ mod player;
 mod scan;
 mod settings;
 pub mod utils;
-mod widgets;
 
 use app::App;
 use models::{Directory, ItemId, Media, MediaType, Movie, PlayId, SearchItem, Show, collection};
@@ -48,7 +47,6 @@ use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
 use utils::{Layout, Sort, SortKind, cancel_btn, empty, save_btn, styles, tooltip};
-use widgets::*;
 
 const DUMMY: &str = "@0:08 something _long_ __here__ @7:26 and **after**. testing 31:43 and also @me but what about @ 5:13. how about an @2:06:30 \n\n![dragonfly](https://plus.unsplash.com/premium_photo-1710760668546-f241a1899c29?q=80&w=1057&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D)";
 

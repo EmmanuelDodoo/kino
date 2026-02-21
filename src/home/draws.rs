@@ -10,9 +10,9 @@ use crate::models::collection::{
 };
 use crate::utils::{
     cancel_btn, empty, icons, icons::*, modal_container, picklist_handle, save_btn, styles,
-    tooltip, typo::*,
+    toggler, tooltip, typo::*,
 };
-use crate::widgets::{expandable, toggler};
+
 use iced::{
     Element, Length, Padding, Theme,
     alignment::{Horizontal, Vertical},
@@ -22,6 +22,7 @@ use iced::{
         pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
     },
 };
+use widgets::expandable;
 
 pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let width = 550;

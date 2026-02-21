@@ -22,6 +22,10 @@ pub mod image_ops;
 pub mod styles;
 pub use image_ops::*;
 
+pub fn toggler<'a, Message>(is_checked: bool) -> widgets::toggler::Toggler<'a, Message> {
+    widgets::toggler::Toggler::new(is_checked).size(typo::H6)
+}
+
 /// Returns an empty [`iced::Element`].
 pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
     iced::widget::Space::new().width(0).height(0).into()
@@ -776,4 +780,48 @@ macro_rules! variants {
                         pub const NAMES: &[&str] = &[$(stringify!($variant)),+];
 		}
 	};
+}
+
+pub mod modal {
+    use iced::widget::{center, container, mouse_area, opaque, stack};
+    use iced::{Color, Element};
+
+    pub fn modal<'a, Message>(
+        base: impl Into<Element<'a, Message>>,
+        modal: impl Into<Element<'a, Message>>,
+        on_blur: Message,
+    ) -> Element<'a, Message>
+    where
+        Message: 'a + Clone,
+    {
+        stack![
+            base.into(),
+            opaque(
+                mouse_area(center(opaque(modal)).style(|_theme| {
+                    container::Style {
+                        background: Some(
+                            Color {
+                                a: 0.5,
+                                ..Color::BLACK
+                            }
+                            .into(),
+                        ),
+                        ..container::Style::default()
+                    }
+                }))
+                .on_press(on_blur)
+            )
+        ]
+        .into()
+    }
+
+    pub fn transparent<'a, Message>(
+        base: impl Into<Element<'a, Message>>,
+        modal: impl Into<Element<'a, Message>>,
+    ) -> Element<'a, Message>
+    where
+        Message: 'a + Clone,
+    {
+        stack![base.into(), mouse_area(modal)].into()
+    }
 }

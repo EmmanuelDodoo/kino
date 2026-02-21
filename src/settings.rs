@@ -4,10 +4,10 @@ use crate::models::{Directory, DirectoryId, MediaType, humanize_datetime};
 use crate::utils::{
     self, AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
     SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
-    convert_color_str, empty, icons, icons::sized_button, modal_container, picklist_handle,
-    save_btn, styles, tooltip, trim_path, typo::*,
+    convert_color_str, empty, icons, icons::sized_button, modal::modal, modal_container,
+    picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo::*,
 };
-use crate::widgets::{expandable, modal, toggler};
+
 use iced::{
     Border, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
@@ -16,6 +16,7 @@ use iced::{
         scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
+use widgets::expandable;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

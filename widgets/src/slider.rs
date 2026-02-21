@@ -1,4 +1,6 @@
 //! Customised version of the [`iced::widget::Slider`] for video playback.
+//! Source: https://github.com/jazzfool/jangal/blob/main/src/ui/screen/player/seekbar.rs
+//!
 use iced::{
     Border, Element, Event, Length, Pixels, Point, Rectangle, Size,
     advanced::{

@@ -29,12 +29,12 @@ use crate::utils::{
     self, PlayerAction, VideoSettings, cancel_btn, convert_color_str, draw_subtitles,
     duration_string, empty,
     icons::{self, CANCEL, sized_button},
-    loading_animation, loading_svg, modal_container, picklist_handle, save_btn, styles, tooltip,
-    trim_path,
+    loading_animation, loading_svg,
+    modal::modal,
+    modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path,
     typo::{self, *},
 };
 use crate::variants;
-use crate::widgets::{self, modal, toggler};
 pub use comment::*;
 pub use playlist::*;
 

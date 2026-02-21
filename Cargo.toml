@@ -1,22 +1,18 @@
 [package]
 name = "kino"
+version.workspace = true
+edition.workspace = true
+
+[workspace]
+members = ["widgets"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
-[dependencies]
-alphanumeric-sort = "1.5"
-bytes = "1"
+[workspace.dependencies]
 chrono = { version = "0.4", features = ["now", "std"] }
-directories = "6"
-fancy-regex = "0.16"
-glib = "0.20"  # gobject traits and error type
-gstreamer = "0.23"
-gstreamer-app = "0.23"  # appsink
-gstreamer-base = "0.23"  # basesrc
-gstreamer-pbutils = "0.23"
-gstreamer-video = "0.23"
-html-escape = "0.2"
-humantime = "2.3"
 iced = { git = "https://github.com/iced-rs/iced", rev = "74ac7fc", features = [
   "advanced",
   "highlighter",
@@ -27,6 +23,27 @@ iced = { git = "https://github.com/iced-rs/iced", rev = "74ac7fc", features = [
   "tokio",
   "wgpu"
 ] }
+widgets = { path = "widgets/", version = "0.1.0" }
+
+[workspace.lints]
+clippy.print_stderr = "deny"
+clippy.print_stdout = "deny"
+
+[dependencies]
+alphanumeric-sort = "1.5"
+bytes = "1"
+chrono.workspace = true
+directories = "6"
+fancy-regex = "0.16"
+glib = "0.20"  # gobject traits and error type
+gstreamer = "0.23"
+gstreamer-app = "0.23"  # appsink
+gstreamer-base = "0.23"  # basesrc
+gstreamer-pbutils = "0.23"
+gstreamer-video = "0.23"
+html-escape = "0.2"
+humantime = "2.3"
+iced.workspace = true
 iced_video_player = { git = "https://github.com/EmmanuelDodoo/iced_video_player" }
 # iced_video_player = { path = "../ivp_fork" }
 image = "0.25"
@@ -45,7 +62,4 @@ tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2"
 uuid = { version = "1.18", features = ["std", "v7"] }
-
-[lints.clippy]
-print_stderr = "deny"
-print_stdout = "deny"
+widgets.workspace = true

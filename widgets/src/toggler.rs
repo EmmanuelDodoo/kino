@@ -20,7 +20,7 @@ where
     Theme: Catalog,
     Renderer: text::Renderer,
 {
-    Toggler::new(is_checked).size(crate::utils::typo::H6)
+    Toggler::new(is_checked)
 }
 
 pub struct Toggler<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>

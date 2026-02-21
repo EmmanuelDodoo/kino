@@ -1,7 +1,5 @@
 // Code derived from Iced Github repo
-
-use crate::utils::icons;
-use crate::utils::typo::*;
+//
 use std::fmt::Display;
 
 use iced::{
@@ -72,15 +70,24 @@ impl Toast {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Settings {
+    pub text_size: f32,
+    pub close_icon: char,
+    pub close_size: f32,
+    pub close_font: iced::Font,
+}
+
 pub fn manager<'a, Message>(
     content: impl Into<Element<'a, Message>>,
     toasts: &'a [Toast],
     on_close: impl Fn(usize) -> Message + 'a,
+    settings: Settings,
 ) -> Manager<'a, Message>
 where
     Message: 'a + Clone,
 {
-    Manager::new(content, toasts, on_close)
+    Manager::new(content, toasts, on_close, settings)
 }
 
 pub struct Manager<'a, Message>
@@ -101,6 +108,7 @@ where
         content: impl Into<Element<'a, Message>>,
         toasts: &'a [Toast],
         on_close: impl Fn(usize) -> Message + 'a,
+        settings: Settings,
     ) -> Self {
         let toasts = toasts
             .iter()
@@ -115,11 +123,15 @@ where
                     })
                     .width(5.0)
                     .height(Length::Fill);
-                let content = text(toast.message.as_str()).size(H7);
+                let content = text(toast.message.as_str()).size(settings.text_size);
 
-                let close = button(icons::icon(icons::CANCEL).size(P))
-                    .on_press((on_close)(index))
-                    .style(iced::widget::button::text);
+                let close = button(
+                    text(settings.close_icon)
+                        .font(settings.close_font)
+                        .size(settings.close_size),
+                )
+                .on_press((on_close)(index))
+                .style(iced::widget::button::text);
 
                 container(
                     row!(side, content, space::horizontal(), close)

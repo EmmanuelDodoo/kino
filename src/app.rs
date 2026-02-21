@@ -26,13 +26,13 @@ use crate::player::{
 };
 use crate::scan;
 use crate::settings::{Settings, SettingsMessage};
-use crate::toast;
 use crate::utils::{
     Action, Config, Filter, KeyPress, Layout, Screen, Sort, SortKind,
     filter::FilterMode,
     filter::{self, SearchFilter},
-    sort,
+    icons, sort, typo,
 };
+use widgets::toast;
 
 #[derive(Debug, Clone, Copy)]
 pub enum FetchId {
@@ -1503,7 +1503,18 @@ impl App {
             }
         };
 
-        toast::manager(content, &self.toasts, Message::CloseToast).into()
+        toast::manager(
+            content,
+            &self.toasts,
+            Message::CloseToast,
+            toast::Settings {
+                text_size: typo::H7,
+                close_icon: icons::CANCEL,
+                close_size: typo::P,
+                close_font: icons::FONT,
+            },
+        )
+        .into()
     }
 
     pub fn theme(&self) -> Option<Theme> {

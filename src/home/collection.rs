@@ -8,7 +8,6 @@ use crate::models::{
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, empty, styles};
-use crate::widgets::menu;
 use iced::{Border, Padding};
 use iced::{
     Element, Length, Task,
@@ -21,6 +20,7 @@ use iced::{
     },
 };
 use std::iter::Peekable;
+use widgets::menu;
 
 #[derive(Debug, Clone)]
 pub enum Message {

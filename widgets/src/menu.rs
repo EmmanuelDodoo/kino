@@ -249,6 +249,7 @@ struct State {
     // overlay_in_bounds: bool,
 }
 
+#[allow(dead_code)]
 struct Overlay<'a, 'b, Message, Theme, Renderer> {
     tree: &'a mut tree::Tree,
     content: &'a mut Element<'b, Message, Theme, Renderer>,

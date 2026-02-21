@@ -42,13 +42,16 @@ use crate::{
 use crate::app::{FetchId, Message};
 use crate::models::Media;
 use crate::utils::{
-    self, HomeAction, Layout, Scroll, Sort, SortKind, empty, filter::*, icons, icons::*,
-    loading_animation, loading_svg, picklist_handle, styles, tooltip, typo::*,
+    self, HomeAction, Layout, Scroll, Sort, SortKind, empty,
+    filter::*,
+    icons,
+    icons::*,
+    loading_animation, loading_svg,
+    modal::{self, modal},
+    picklist_handle, styles, tooltip,
+    typo::*,
 };
-use crate::widgets::{
-    menu::{Position, menu},
-    modal,
-};
+
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};
 use episode::{EpisodePage, EpisodePageMessage};
@@ -59,6 +62,7 @@ use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
 use shared::{CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, SearchView, Thumbnail};
 use shows::{TvShows, TvShowsMessage};
+use widgets::menu::{Position, menu};
 
 const SIDE_ICON_SPACING: f32 = 8.0;
 
