@@ -24,10 +24,10 @@ pub fn marquee<'a, Theme: Catalog, Renderer: text::Renderer>(
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 /// Determines how the text is scrolled within a [`Marquee`].
 pub enum Behavior {
-    #[default]
     /// The text bounces back and forth between edges
     Alternate,
     /// The enters from one side
+    #[default]
     Slide,
     /// The text continuously enters from one side and exits the other.
     Scroll,
