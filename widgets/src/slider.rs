@@ -4,7 +4,7 @@
 use iced::{
     Border, Element, Event, Length, Pixels, Point, Rectangle, Size,
     advanced::{
-        self, Clipboard, Shell, image,
+        self, Shell, image,
         layout::{self, Layout},
         mouse, renderer, text,
         widget::{
@@ -209,7 +209,6 @@ where
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -604,7 +603,6 @@ where
             rotation: iced::Radians(0.0),
             opacity: 1.0,
             border_radius: Radius::from(5),
-            snap: false,
         };
 
         renderer.draw_image(image, layout.bounds(), layout.bounds());
@@ -667,6 +665,8 @@ where
                 align_y: iced::Alignment::Center.into(),
                 shaping: text::Shaping::Basic,
                 wrapping: text::Wrapping::None,
+                ellipsis: text::Ellipsis::None,
+                hint_factor: renderer.scale_factor(),
             },
             layout.bounds().center() + iced::Vector::new(0.0, 1.5),
             iced::Color::from_rgb8(210, 210, 210),

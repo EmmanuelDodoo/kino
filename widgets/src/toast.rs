@@ -5,7 +5,7 @@ use std::fmt::Display;
 use iced::{
     Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
-        Clipboard, Layout, Shell, layout, overlay, renderer,
+        Layout, Shell, layout, overlay, renderer,
         widget::{self, Operation, Tree},
     },
     alignment::{Alignment, Vertical},
@@ -255,7 +255,6 @@ impl<'a, Message> Widget<Message, Theme, Renderer> for Manager<'a, Message> {
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
@@ -265,7 +264,6 @@ impl<'a, Message> Widget<Message, Theme, Renderer> for Manager<'a, Message> {
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         )
@@ -390,7 +388,6 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) {
         if let Event::Window(window::Event::RedrawRequested(now)) = &event {
@@ -432,7 +429,6 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
                 layout,
                 cursor,
                 renderer,
-                clipboard,
                 &mut local_shell,
                 &viewport,
             );

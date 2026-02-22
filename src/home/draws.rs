@@ -730,14 +730,13 @@ pub fn draw_insert_trigger<'a>(
             triggers::Media::ROOTS
         };
 
-        let pick = pick_list(options, Some(trigger.media), move |media| {
-            TriggerMessage::MediaInsert(id, media)
-        })
-        .width(88.0)
-        .padding([2, 5])
-        .handle(picklist_handle(text_size))
-        .font(regular_font())
-        .text_size(text_size);
+        let pick = pick_list(Some(trigger.media), options, ToString::to_string)
+            .width(88.0)
+            .on_select(move |media| TriggerMessage::MediaInsert(id, media))
+            .padding([2, 5])
+            .handle(picklist_handle(text_size))
+            .font(regular_font())
+            .text_size(text_size);
 
         row!(label, space::horizontal(), pick).align_y(Vertical::Center)
     };
@@ -873,8 +872,9 @@ pub fn draw_insert_trigger<'a>(
                 .map(|(comp, _)| *comp)
                 .unwrap_or_default();
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::LastComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::LastComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -896,8 +896,9 @@ pub fn draw_insert_trigger<'a>(
                 .map(|(comp, duration)| (*comp, *duration))
                 .unwrap_or((Comparison::default(), 0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::DurationComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::DurationComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -920,8 +921,9 @@ pub fn draw_insert_trigger<'a>(
                 .map(|(comp, progress)| (*comp, *progress))
                 .unwrap_or((Comparison::default(), 0.0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::ProgressComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::ProgressComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -944,8 +946,9 @@ pub fn draw_insert_trigger<'a>(
                 .map(|(comp, count)| (*comp, *count))
                 .unwrap_or((Comparison::default(), 0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::WatchComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::WatchComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -968,8 +971,9 @@ pub fn draw_insert_trigger<'a>(
                 .map(|(comp, _)| *comp)
                 .unwrap_or_default();
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::ReleaseComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::ReleaseComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -991,8 +995,9 @@ pub fn draw_insert_trigger<'a>(
                 .map(|(comp, rating)| (*comp, *rating))
                 .unwrap_or((Comparison::default(), 0.0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::RatingComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::RatingComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -1015,8 +1020,9 @@ pub fn draw_insert_trigger<'a>(
                 .map(|(comp, count)| (*comp, *count))
                 .unwrap_or((Comparison::default(), 0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::CommentComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::CommentComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -1134,14 +1140,13 @@ pub fn draw_delete_trigger<'a>(
             triggers::Media::ROOTS
         };
 
-        let pick = pick_list(options, Some(trigger.media), move |media| {
-            TriggerMessage::MediaDelete(id, media)
-        })
-        .width(88.0)
-        .padding([2, 5])
-        .handle(picklist_handle(text_size))
-        .font(regular_font())
-        .text_size(text_size);
+        let pick = pick_list(Some(trigger.media), options, ToString::to_string)
+            .width(88.0)
+            .on_select(move |media| TriggerMessage::MediaDelete(id, media))
+            .padding([2, 5])
+            .handle(picklist_handle(text_size))
+            .font(regular_font())
+            .text_size(text_size);
 
         row!(label, space::horizontal(), pick).align_y(Vertical::Center)
     };
@@ -1269,8 +1274,9 @@ pub fn draw_delete_trigger<'a>(
                 .map(|(comp, _)| *comp)
                 .unwrap_or_default();
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::LastComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::LastComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -1292,7 +1298,8 @@ pub fn draw_delete_trigger<'a>(
                 .map(|(comp, duration)| (*comp, *duration))
                 .unwrap_or((Comparison::default(), 0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::DurationComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
+                .on_select(LogicMessage::DurationComp)
                 .padding(pick_padding)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1316,8 +1323,9 @@ pub fn draw_delete_trigger<'a>(
                 .map(|(comp, progress)| (*comp, *progress))
                 .unwrap_or((Comparison::default(), 0.0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::ProgressComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::ProgressComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -1340,8 +1348,9 @@ pub fn draw_delete_trigger<'a>(
                 .map(|(comp, count)| (*comp, *count))
                 .unwrap_or((Comparison::default(), 0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::WatchComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::WatchComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -1364,8 +1373,9 @@ pub fn draw_delete_trigger<'a>(
                 .map(|(comp, _)| *comp)
                 .unwrap_or_default();
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::ReleaseComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::ReleaseComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -1387,8 +1397,9 @@ pub fn draw_delete_trigger<'a>(
                 .map(|(comp, rating)| (*comp, *rating))
                 .unwrap_or((Comparison::default(), 0.0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::RatingComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::RatingComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);
@@ -1411,8 +1422,9 @@ pub fn draw_delete_trigger<'a>(
                 .map(|(comp, count)| (*comp, *count))
                 .unwrap_or((Comparison::default(), 0));
 
-            let comp = pick_list(Comparison::VARIANTS, Some(comp), LogicMessage::CommentComp)
+            let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .on_select(LogicMessage::CommentComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
                 .text_size(text_size);

@@ -3169,8 +3169,9 @@ fn draw_config<'a>(
                 let pick: Element<'_, ConfigMessage> = if embedded.is_empty() {
                     label_maker("None").size(size).into()
                 } else {
-                    pick_list(embedded, selected_text.clone(), ConfigMessage::CurrentText)
+                    pick_list(selected_text.clone(), embedded, ToString::to_string)
                         .handle(handle)
+                        .on_select(ConfigMessage::CurrentText)
                         .padding(padding)
                         .text_size(size)
                         .into()
@@ -3273,8 +3274,9 @@ fn draw_config<'a>(
                 let pick: Element<'_, ConfigMessage> = if audio.is_empty() {
                     label_maker("None").size(size).into()
                 } else {
-                    pick_list(audio, selected_audio.clone(), ConfigMessage::CurrentAudio)
+                    pick_list(selected_audio.clone(), audio, ToString::to_string)
                         .handle(handle)
+                        .on_select(ConfigMessage::CurrentAudio)
                         .padding(padding)
                         .text_size(size)
                         .into()

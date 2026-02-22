@@ -3,7 +3,7 @@
 use iced::{
     Background, Border, Color, Element, Event, Length, Pixels, Rectangle, Size, Theme,
     advanced::{
-        Clipboard, Layout, Shell, Widget, layout, renderer, text,
+        Layout, Shell, Widget, layout, renderer, text,
         widget::{self, Tree, tree},
     },
     alignment,
@@ -38,6 +38,7 @@ where
     text_alignment: text::Alignment,
     text_shaping: text::Shaping,
     text_wrapping: text::Wrapping,
+    ellipsis: text::Ellipsis,
     spacing: f32,
     font: Option<Renderer::Font>,
     easing: Easing,
@@ -74,6 +75,7 @@ where
             text_alignment: text::Alignment::Default,
             text_shaping: text::Shaping::default(),
             text_wrapping: text::Wrapping::default(),
+            ellipsis: text::Ellipsis::default(),
             spacing: Self::DEFAULT_SIZE / 2.0,
             font: None,
             class: Theme::default(),
@@ -158,6 +160,12 @@ where
     /// Sets the [`text::Wrapping`] strategy of the [`Toggler`].
     pub fn text_wrapping(mut self, wrapping: text::Wrapping) -> Self {
         self.text_wrapping = wrapping;
+        self
+    }
+
+    /// Sets the [`text::Ellipsis`] strategy of the [`Toggler`].
+    pub fn text_ellipsis(mut self, ellipsis: text::Ellipsis) -> Self {
+        self.ellipsis = ellipsis;
         self
     }
 
@@ -254,6 +262,7 @@ where
                             align_y: alignment::Vertical::Top,
                             shaping: self.text_shaping,
                             wrapping: self.text_wrapping,
+                            ellipsis: self.ellipsis,
                         },
                     )
                 } else {
@@ -270,7 +279,6 @@ where
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {

@@ -227,7 +227,6 @@ where
         layout: layout::Layout<'_>,
         cursor: advanced::mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn advanced::Clipboard,
         shell: &mut advanced::Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
@@ -242,7 +241,6 @@ where
             root,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -260,7 +258,6 @@ where
                 content,
                 cursor,
                 renderer,
-                clipboard,
                 shell,
                 viewport,
             );

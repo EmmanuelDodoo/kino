@@ -1673,14 +1673,13 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
         let handle = picklist_handle(size);
         let label = sized_bold("Media type: ", size).width(100.0);
 
-        let lst = pick_list(MediaType::ALL, Some(*kind), |kind| {
-            SettingsMessage::FolderSelection(FolderSelectionMessage::Kind(kind))
-        })
-        .style(picklist_style)
-        .font(regular_font())
-        .padding([2, 5])
-        .handle(handle)
-        .text_size(size);
+        let lst = pick_list(Some(*kind), MediaType::ALL, ToString::to_string)
+            .style(picklist_style)
+            .font(regular_font())
+            .on_select(|kind| SettingsMessage::FolderSelection(FolderSelectionMessage::Kind(kind)))
+            .padding([2, 5])
+            .handle(handle)
+            .text_size(size);
 
         row!(label, lst).align_y(Vertical::Center).spacing(12)
     };
@@ -1775,39 +1774,40 @@ fn draw_capture_key<'a>(
 
         let (lst, set): (Element<'_, SettingsMessage>, bool) = match action {
             KeyAction::General(selected) => (
-                pick_list(HomeAction::VARIANTS, *selected, |action| {
-                    SettingsMessage::KeyAction(KeyAction::General(Some(action)))
-                })
-                .style(picklist_style)
-                .font(regular_font())
-                .handle(picklist_handle(size))
-                .padding(padding)
-                .text_size(size)
-                .into(),
+                pick_list(*selected, HomeAction::VARIANTS, ToString::to_string)
+                    .style(picklist_style)
+                    .font(regular_font())
+                    .on_select(|action| {
+                        SettingsMessage::KeyAction(KeyAction::General(Some(action)))
+                    })
+                    .handle(picklist_handle(size))
+                    .padding(padding)
+                    .text_size(size)
+                    .into(),
                 selected.is_some(),
             ),
             KeyAction::Video(selected) => (
-                pick_list(PlayerAction::VARIANTS, *selected, |action| {
-                    SettingsMessage::KeyAction(KeyAction::Video(Some(action)))
-                })
-                .style(picklist_style)
-                .font(regular_font())
-                .handle(picklist_handle(size))
-                .padding(padding)
-                .text_size(size)
-                .into(),
+                pick_list(*selected, PlayerAction::VARIANTS, ToString::to_string)
+                    .style(picklist_style)
+                    .on_select(|action| SettingsMessage::KeyAction(KeyAction::Video(Some(action))))
+                    .font(regular_font())
+                    .handle(picklist_handle(size))
+                    .padding(padding)
+                    .text_size(size)
+                    .into(),
                 selected.is_some(),
             ),
             KeyAction::Settings(selected) => (
-                pick_list(SettingsAction::VARIANTS, *selected, |action| {
-                    SettingsMessage::KeyAction(KeyAction::Settings(Some(action)))
-                })
-                .style(picklist_style)
-                .font(regular_font())
-                .handle(picklist_handle(size))
-                .padding(padding)
-                .text_size(size)
-                .into(),
+                pick_list(*selected, SettingsAction::VARIANTS, ToString::to_string)
+                    .style(picklist_style)
+                    .font(regular_font())
+                    .on_select(|action| {
+                        SettingsMessage::KeyAction(KeyAction::Settings(Some(action)))
+                    })
+                    .handle(picklist_handle(size))
+                    .padding(padding)
+                    .text_size(size)
+                    .into(),
                 selected.is_some(),
             ),
         };
@@ -2122,8 +2122,9 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
         let handle = picklist_handle(TEXT_SIZE);
         let label = label_maker("Content layout ");
 
-        let layouts = pick_list(Layout::VARIANTS, Some(*layout), AppearanceMessage::Layout)
+        let layouts = pick_list(Some(*layout), Layout::VARIANTS, ToString::to_string)
             .font(regular_font())
+            .on_select(AppearanceMessage::Layout)
             .handle(handle.clone())
             .padding(LIST_PADDING)
             .text_size(TEXT_SIZE)
@@ -2137,8 +2138,9 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
 
         let label = label_maker("Theme ");
 
-        let theme = pick_list(AppTheme::VARIANTS, Some(*theme), AppearanceMessage::Theme)
+        let theme = pick_list(Some(*theme), AppTheme::VARIANTS, ToString::to_string)
             .font(regular_font())
+            .on_select(AppearanceMessage::Theme)
             .handle(handle.clone())
             .padding(LIST_PADDING)
             .text_size(TEXT_SIZE)
@@ -2886,6 +2888,7 @@ fn picklist_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style 
 
     match status {
         Status::Active => active,
+        Status::Disabled => pick_list::default(theme, status),
         Status::Hovered | Status::Opened { .. } => Style {
             border: Border {
                 color: palette.primary.strong.color,

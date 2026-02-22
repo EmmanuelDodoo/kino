@@ -3078,11 +3078,12 @@ impl Home {
         let progress = {
             let text = sized_medium("Progress", H8);
             let progress = pick_list(
-                ProgressKind::ALL,
                 Some(self.filters.progress.kind),
-                |selected| HomeMessage::Filter(FilterMessage::ProgressKind(selected)),
+                ProgressKind::ALL,
+                ToString::to_string,
             )
             .padding(padding)
+            .on_select(|selected| HomeMessage::Filter(FilterMessage::ProgressKind(selected)))
             .width(60.0)
             .handle(picklist_handle(size))
             .font(picklist_font)
@@ -3101,12 +3102,13 @@ impl Home {
         let rating = {
             let text = sized_medium("Rating", H8);
             let rating = pick_list(
-                RatingKind::ALL,
                 Some(self.filters.rating.kind),
-                |selected| HomeMessage::Filter(FilterMessage::RatingKind(selected)),
+                RatingKind::ALL,
+                ToString::to_string,
             )
             .padding(padding)
             .font(picklist_font)
+            .on_select(|selected| HomeMessage::Filter(FilterMessage::RatingKind(selected)))
             .width(52.0)
             .handle(picklist_handle(size))
             .text_size(size);

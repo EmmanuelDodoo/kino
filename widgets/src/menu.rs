@@ -161,7 +161,6 @@ where
         layout: layout::Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn advanced::Clipboard,
         shell: &mut advanced::Shell<'_, Message>,
         viewport: &iced::Rectangle,
     ) {
@@ -171,7 +170,6 @@ where
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -316,7 +314,6 @@ where
         layout: layout::Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn advanced::Clipboard,
         shell: &mut advanced::Shell<'_, Message>,
     ) {
         self.content.as_widget_mut().update(
@@ -325,7 +322,6 @@ where
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             &self.viewport,
         );

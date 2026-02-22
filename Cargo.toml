@@ -13,7 +13,7 @@ license = "MIT"
 
 [workspace.dependencies]
 chrono = { version = "0.4", features = ["now", "std"] }
-iced = { git = "https://github.com/iced-rs/iced", rev = "74ac7fc", features = [
+iced = { git = "https://github.com/iced-rs/iced", rev = "c3fa551", features = [
   "advanced",
   "highlighter",
   "hot",
