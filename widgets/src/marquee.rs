@@ -68,7 +68,8 @@ where
         }
     }
 
-    /// Sets the duration for scrolling in seconds
+    /// Sets the duration for scrolling in seconds. The true duration is made 
+    /// proportional to the length of text
     pub fn duration(mut self, duration: f32) -> Self {
         self.duration = duration;
         self

@@ -19,6 +19,7 @@ use iced::{
 use iced::advanced::Widget;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// The status for a [`Toast`].
 pub enum Status {
     #[default]
     Info,
@@ -40,6 +41,7 @@ impl Display for Status {
 }
 
 #[derive(Debug, Clone, Default)]
+/// A message toast
 pub struct Toast {
     pub message: String,
     pub status: Status,
@@ -71,6 +73,7 @@ impl Toast {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// The settings for a [`Manager`]
 pub struct Settings {
     pub text_size: f32,
     pub close_icon: char,
@@ -90,6 +93,7 @@ where
     Manager::new(content, toasts, on_close, settings)
 }
 
+/// A widget for displaying toasts on top of content
 pub struct Manager<'a, Message>
 where
     Message: 'a,
@@ -104,6 +108,7 @@ impl<'a, Message> Manager<'a, Message>
 where
     Message: 'a + Clone,
 {
+    /// Creates a new [`Manager`].
     pub fn new(
         content: impl Into<Element<'a, Message>>,
         toasts: &'a [Toast],
@@ -165,6 +170,7 @@ where
         }
     }
 
+    /// Sets the timeout for toasts
     pub fn timeout(mut self, seconds: u64) -> Self {
         self.timeout = seconds;
         self

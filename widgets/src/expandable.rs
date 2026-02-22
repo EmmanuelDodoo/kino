@@ -19,6 +19,7 @@ pub fn expandable<'a, Message>(
     Expandable::new(root, content)
 }
 
+/// An expanding widget with animation
 pub struct Expandable<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer> {
     root: Element<'a, Message, Theme, Renderer>,
     content: Element<'a, Message, Theme, Renderer>,
@@ -32,6 +33,8 @@ pub struct Expandable<'a, Message, Theme = iced::Theme, Renderer = iced::Rendere
 }
 
 impl<'a, Message, Theme, Renderer> Expandable<'a, Message, Theme, Renderer> {
+
+    /// Create a new [`Expandable`] widget with the given root and content.
     pub fn new(
         root: impl Into<Element<'a, Message, Theme, Renderer>>,
         content: impl Into<Element<'a, Message, Theme, Renderer>>,
@@ -49,36 +52,43 @@ impl<'a, Message, Theme, Renderer> Expandable<'a, Message, Theme, Renderer> {
         }
     }
 
+    /// Sets whether the widget is expanded
     pub fn expanded(mut self, expanded: bool) -> Self {
         self.expanded = expanded;
         self
     }
 
+    /// Sets the spacing between the root and content.
     pub fn spacing(mut self, spacing: impl Into<Pixels>) -> Self {
         self.spacing = spacing.into().0;
         self
     }
 
+    /// Sets the duration for the animation
     pub fn duration(mut self, duration: Duration) -> Self {
         self.duration = duration;
         self
     }
 
+    /// Sets the [`Easing`] for the animation
     pub fn easing(mut self, easing: Easing) -> Self {
         self.easing = easing;
         self
     }
 
+    /// Sets the width of the widget
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = width.into();
         self
     }
 
+    /// Sets the height of the widget
     pub fn height(mut self, height: impl Into<Length>) -> Self {
         self.height = height.into();
         self
     }
 
+    /// Sets the message that will be produced by the [`Expandable`]
     pub fn on_expand(mut self, on_expand: impl Fn(bool) -> Message + 'a) -> Self {
         self.on_expand = Some(Box::new(on_expand));
         self

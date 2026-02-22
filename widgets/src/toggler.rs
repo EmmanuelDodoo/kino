@@ -23,6 +23,7 @@ where
     Toggler::new(is_checked)
 }
 
+/// A modified version of an [`iced::widget::Toggler`] with animation support
 pub struct Toggler<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
 where
     Theme: Catalog,

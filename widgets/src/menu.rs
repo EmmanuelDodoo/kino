@@ -14,6 +14,7 @@ pub fn menu<'a, Message>(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// The position of a [`Menu`]
 pub enum Position {
     Top,
     Right,
@@ -21,6 +22,7 @@ pub enum Position {
     Left,
 }
 
+/// A widget with an overlay menu
 pub struct Menu<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer> {
     base: Element<'a, Message, Theme, Renderer>,
     overlay: Element<'a, Message, Theme, Renderer>,
@@ -30,6 +32,7 @@ pub struct Menu<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer> {
 }
 
 impl<'a, Message, Theme, Renderer> Menu<'a, Message, Theme, Renderer> {
+    /// Creates a new [`Menu`] with the given base and overlay
     pub fn new(
         base: impl Into<Element<'a, Message, Theme, Renderer>>,
         overlay: impl Into<Element<'a, Message, Theme, Renderer>>,
@@ -43,10 +46,12 @@ impl<'a, Message, Theme, Renderer> Menu<'a, Message, Theme, Renderer> {
         }
     }
 
+    /// Sets the position for the overlayed menu
     pub fn position(self, position: Position) -> Self {
         Self { position, ..self }
     }
 
+    /// Sets message produced by the widget
     pub fn on_toggle(self, on_toggle: impl Fn(bool) -> Message + 'a) -> Self {
         Self {
             on_toggle: Some(Box::new(on_toggle)),
@@ -54,6 +59,7 @@ impl<'a, Message, Theme, Renderer> Menu<'a, Message, Theme, Renderer> {
         }
     }
 
+    /// Sets whether the menu is closed when a click is outside it
     pub fn auto_close(self, auto_close: bool) -> Self {
         Self { auto_close, ..self }
     }

@@ -47,12 +47,7 @@ use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
 use utils::{Layout, Sort, SortKind, cancel_btn, empty, save_btn, styles, tooltip};
-
-const DUMMY: &str = "@0:08 something _long_ __here__ @7:26 and **after**. testing 31:43 and also @me but what about @ 5:13. how about an @2:06:30 \n\n![dragonfly](https://plus.unsplash.com/premium_photo-1710760668546-f241a1899c29?q=80&w=1057&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D)";
-
-// fn _test_main() {
-// fn main() {
-// }
+use widgets::menu;
 
 // fn test_main() -> iced::Result {
 #[rustfmt::skip]
@@ -86,21 +81,21 @@ fn main() -> iced::Result {
         _ => BootMode::Prod,
     };
 
-    iced::application::timed(
-        mode,
-        App::update,
-        App::subscription,
-        App::view
-    )
-        .theme(App::theme)
-
     // iced::application::timed(
-    //     Playground::boot,
-    //     Playground::update,
-    //     Playground::subscription,
-    //     Playground::view,
+    //     mode,
+    //     App::update,
+    //     App::subscription,
+    //     App::view
     // )
-    //     .theme(Playground::theme)
+    //     .theme(App::theme)
+
+    iced::application::timed(
+        Playground::boot,
+        Playground::update,
+        Playground::subscription,
+        Playground::view,
+    )
+        .theme(Playground::theme)
 
         .settings(iced::Settings {
             default_font: regular_font(),
@@ -112,7 +107,7 @@ fn main() -> iced::Result {
         .window(window::Settings {
             icon: Some(icon),
             size: Size::new(1280.0, 800.0),
-            exit_on_close_request: false,
+            // exit_on_close_request: false,
             ..Default::default()
         })
         .run()
@@ -159,18 +154,20 @@ impl BootFn<App, app::Message> for BootMode {
 
 #[derive(Debug, Clone)]
 enum Message {
+    Toggle(bool),
     None,
 }
 
 struct Playground {
     now: Instant,
+    open: bool,
 }
 
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let now = Instant::now();
 
-        let new = Self { now };
+        let new = Self { now, open: false };
 
         (new, Task::none())
     }
@@ -179,12 +176,25 @@ impl Playground {
         self.now = now;
 
         match message {
+            Message::Toggle(open) => {
+                self.open = open;
+                Task::none()
+            }
             Message::None => Task::none(),
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let content = medium("Playground....");
+        let root = sized_medium("Menu", H6);
+
+        let content = column!(text("One"), text("Two"), text("Three")).spacing(16);
+
+        let content = container(content).style(container::dark).padding(5);
+
+        let content = menu(root, content)
+            .auto_close(false)
+            .position(menu::Position::Bottom)
+            .on_toggle(Message::Toggle);
 
         let content = center(content);
 
