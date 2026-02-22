@@ -15,6 +15,7 @@ use iced::{
         scrollable, space, stack, text, tooltip as tp,
     },
 };
+use widgets::marquee;
 
 pub const CARD_HEIGHT: f32 = 450.0;
 pub const CARD_WIDTH: f32 = CARD_HEIGHT * 2.0 / 3.0;
@@ -567,7 +568,10 @@ impl<T: Media> Thumbnail<T> {
         on_play: impl Fn(T::Id) -> Message + 'a,
         unique: impl Fn(&T) -> Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let title = sized_medium(self.media.name(), H6).height(24.0);
+        let title = marquee(self.media.name())
+            .size(H6)
+            .font(medium_font())
+            .height(24.0);
 
         let ratings = ratings(&self.media, true);
 
@@ -701,9 +705,8 @@ impl<T: Media> Thumbnail<T> {
         };
 
         let details = {
-            let title = container(medium(self.media.name()))
-                .max_height(20.0)
-                .clip(true);
+            let title = marquee(self.media.name()).size(P).font(medium_font());
+            let title = container(title).max_height(20.0).clip(true);
             let ratings = ratings(&self.media, true);
             let release = {
                 let release = sized_medium(self.media.release_year(), H8);
@@ -830,7 +833,10 @@ impl<T: Media> Thumbnail<T> {
             .padding(0)
             .on_press((on_play)(self.media.id()));
 
-        let name = medium(self.media.name()).width(Length::Fill);
+        let name = marquee(self.media.name())
+            .size(P)
+            .font(medium_font())
+            .width(Length::Fill);
 
         let name = container(name)
             .clip(true)
@@ -956,7 +962,7 @@ impl CollectionThumbnail {
         let padding = [3, 6];
 
         let name = {
-            let title = medium(&self.collection.name);
+            let title = marquee(&self.collection.name).size(P).font(medium_font());
 
             container(title)
                 .padding(padding)
@@ -1066,17 +1072,15 @@ impl SearchView {
         };
 
         let name = {
-            container(
-                mono_bold(&self.item.name)
-                    .size(H6)
-                    .style(|theme: &Theme| {
-                        let color = theme.extended_palette().background.strong.text;
-                        text::Style { color: Some(color) }
-                    })
-                    .width(Length::Fill),
-            )
-            .clip(true)
-            .max_height(24.0)
+            let name = marquee(&self.item.name)
+                .size(H6)
+                .font(mono_bold_font())
+                .style(|theme: &Theme| {
+                    let color = theme.extended_palette().background.strong.text;
+                    text::Style { color: Some(color) }
+                })
+                .width(Length::Fill);
+            container(name).clip(true).max_height(24.0)
         };
 
         let snippet = {

@@ -19,6 +19,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     path::PathBuf,
 };
+use widgets::marquee;
 
 pub mod comment;
 pub mod playlist;
@@ -1177,11 +1178,15 @@ impl Manager {
 
     fn top(&self) -> Element<'_, ManagerMessage> {
         let title: Element<'_, ManagerMessage> = match &self.state {
-            State::Ready { player, .. } => container(sized_medium(&player.item.name, H4))
-                .style(styles::container::text)
-                .height(36)
-                .clip(true)
-                .into(),
+            State::Ready { player, .. } => {
+                let title = marquee(&player.item.name).size(H4).font(medium_font());
+
+                container(title)
+                    .style(styles::container::text)
+                    .height(36)
+                    .clip(true)
+                    .into()
+            }
             State::Loading(_) | State::Idle => empty(),
         };
 
@@ -2584,9 +2589,9 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         };
 
         let name = if current {
-            medium(&item.name)
+            marquee(&item.name).font(medium_font())
         } else {
-            regular(&item.name)
+            marquee(&item.name)
         }
         .size(size);
 

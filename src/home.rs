@@ -62,6 +62,7 @@ use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
 use shared::{CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, SearchView, Thumbnail};
 use shows::{TvShows, TvShowsMessage};
+use widgets::marquee;
 use widgets::menu::{Position, menu};
 
 const SIDE_ICON_SPACING: f32 = 8.0;
@@ -4388,9 +4389,9 @@ fn icon_button<'a>(
     let size = H6;
     let icon = icons::icon(left_icon).size(size);
     let text = if current {
-        h6(value)
+        marquee(value).size(H6).font(bold_font())
     } else {
-        sized_medium(value, H6)
+        marquee(value).size(H6).font(medium_font())
     };
 
     let content = row!(icon, text)
