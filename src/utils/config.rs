@@ -5,6 +5,364 @@ use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};
 pub use subtitles::{SubtitleDescription, SubtitleFont};
 
+fn kino_dark() -> iced::Theme {
+    use iced::theme::palette::{
+        Background, Danger, Extended, Pair, Palette, Primary, Secondary, Success, Warning,
+    };
+    use iced::{Color, Theme, color};
+
+    let extended = {
+        Extended {
+            background: Background {
+                base: Pair {
+                    color: Color {
+                        r: 0.05882353,
+                        g: 0.05882353,
+                        b: 0.05882353,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+                weakest: Pair {
+                    color: Color {
+                        r: 0.08470876,
+                        g: 0.08470876,
+                        b: 0.08470876,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+                weaker: Pair {
+                    color: Color {
+                        r: 0.12076076,
+                        g: 0.12076076,
+                        b: 0.12076076,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+                weak: Pair {
+                    color: Color {
+                        r: 0.1488277,
+                        g: 0.14882767,
+                        b: 0.14882767,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+                neutral: Pair {
+                    color: Color {
+                        r: 0.17282817,
+                        g: 0.17282817,
+                        b: 0.17282814,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+                strong: Pair {
+                    color: Color {
+                        r: 0.19734588,
+                        g: 0.19734591,
+                        b: 0.19734591,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+                stronger: Pair {
+                    color: Color {
+                        r: 0.22235003,
+                        g: 0.22235006,
+                        b: 0.22235003,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+                strongest: Pair {
+                    color: Color {
+                        r: 0.24781388,
+                        g: 0.24781388,
+                        b: 0.24781385,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+            },
+            primary: Primary {
+                base: Pair {
+                    color: Color {
+                        r: 0.92156863,
+                        g: 0.4,
+                        b: 0.18039216,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.22528955,
+                        g: 0.075591706,
+                        b: 0.017649297,
+                        a: 1.0,
+                    },
+                },
+                weak: Pair {
+                    color: Color {
+                        r: 0.8666667,
+                        g: 0.45882353,
+                        b: 0.28627452,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.2095319,
+                        g: 0.0924749,
+                        b: 0.042950816,
+                        a: 1.0,
+                    },
+                },
+                strong: Pair {
+                    color: Color {
+                        r: 0.81960785,
+                        g: 0.3254902,
+                        b: 0.11372549,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.19602531,
+                        g: 0.05420629,
+                        b: 0.007937071,
+                        a: 1.0,
+                    },
+                },
+            },
+            secondary: Secondary {
+                base: Pair {
+                    color: Color {
+                        r: 0.3529412,
+                        g: 0.47058824,
+                        b: 0.5882353,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.9800033,
+                        g: 0.9819328,
+                        b: 0.9845664,
+                        a: 1.0,
+                    },
+                },
+                weak: Pair {
+                    color: Color {
+                        r: 0.5686275,
+                        g: 0.6666667,
+                        b: 0.7647059,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.123990275,
+                        g: 0.15212896,
+                        b: 0.18026766,
+                        a: 1.0,
+                    },
+                },
+                strong: Pair {
+                    color: Color {
+                        r: 0.23529412,
+                        g: 0.3529412,
+                        b: 0.47058824,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.92156863,
+                        g: 0.92156863,
+                        b: 0.92156863,
+                        a: 1.0,
+                    },
+                },
+            },
+            success: Success {
+                base: Pair {
+                    color: Color {
+                        r: 0.21568628,
+                        g: 0.64705884,
+                        b: 0.37254903,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.02468002,
+                        g: 0.14650124,
+                        b: 0.067712866,
+                        a: 1.0,
+                    },
+                },
+                weak: Pair {
+                    color: Color {
+                        r: 0.4117647,
+                        g: 0.74509805,
+                        b: 0.5686275,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.07896835,
+                        g: 0.17463994,
+                        b: 0.123990275,
+                        a: 1.0,
+                    },
+                },
+                strong: Pair {
+                    color: Color {
+                        r: 0.13725491,
+                        g: 0.5294118,
+                        b: 0.29411766,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.010857565,
+                        g: 0.1127348,
+                        b: 0.045201913,
+                        a: 1.0,
+                    },
+                },
+            },
+            warning: Warning {
+                base: Pair {
+                    color: Color {
+                        r: 0.84313726,
+                        g: 0.6666667,
+                        b: 0.21568628,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.20277861,
+                        g: 0.15212896,
+                        b: 0.02468002,
+                        a: 1.0,
+                    },
+                },
+                weak: Pair {
+                    color: Color {
+                        r: 0.92156863,
+                        g: 0.8039216,
+                        b: 0.49019608,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.22528955,
+                        g: 0.19152313,
+                        b: 0.1014793,
+                        a: 1.0,
+                    },
+                },
+                strong: Pair {
+                    color: Color {
+                        r: 0.74509805,
+                        g: 0.5686275,
+                        b: 0.13725491,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.17463994,
+                        g: 0.123990275,
+                        b: 0.010857565,
+                        a: 1.0,
+                    },
+                },
+            },
+            danger: Danger {
+                base: Pair {
+                    color: Color {
+                        r: 0.78431374,
+                        g: 0.25490198,
+                        b: 0.25490198,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.9906576,
+                        g: 0.9788876,
+                        b: 0.9788876,
+                        a: 1.0,
+                    },
+                },
+                weak: Pair {
+                    color: Color {
+                        r: 0.9019608,
+                        g: 0.5294118,
+                        b: 0.5294118,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.21966183,
+                        g: 0.1127348,
+                        b: 0.1127348,
+                        a: 1.0,
+                    },
+                },
+                strong: Pair {
+                    color: Color {
+                        r: 0.6666667,
+                        g: 0.1764706,
+                        b: 0.1764706,
+                        a: 1.0,
+                    },
+                    text: Color {
+                        r: 0.99999994,
+                        g: 0.99999994,
+                        b: 0.99999994,
+                        a: 1.0,
+                    },
+                },
+            },
+            is_dark: true,
+        }
+    };
+
+    let palette = Palette {
+        background: color!(15, 15, 15),
+        text: color!(235, 235, 235),
+        primary: color!(235, 102, 46),
+        success: color!(55, 165, 95),
+        danger: color!(170, 45, 45),
+        warning: color!(215, 170, 55),
+    };
+
+    Theme::custom_with_fn("Kino Dark", palette, move |_| extended)
+}
+
 variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
     pub enum AppTheme {
@@ -19,6 +377,7 @@ variants! {
         TokyoNight,
         TokyoNightLight,
         #[default]
+        KinoDark,
         Moonfly,
     }
 }
@@ -39,6 +398,7 @@ impl From<AppTheme> for iced::Theme {
             AppTheme::TokyoNight => Theme::TokyoNight,
             AppTheme::TokyoNightLight => Theme::TokyoNightLight,
             AppTheme::Moonfly => Theme::Moonfly,
+            AppTheme::KinoDark => kino_dark(),
         }
     }
 }
@@ -60,6 +420,7 @@ impl std::fmt::Display for AppTheme {
                 Self::TokyoNight => "Tokyo Night",
                 Self::TokyoNightLight => "Tokyo Night Light",
                 Self::Moonfly => "Moonfly",
+                Self::KinoDark => "Kino Dark",
             }
         )
     }
