@@ -62,7 +62,7 @@ where
             delay: Duration::from_millis(1000),
             format: Format::default(),
             rtl: false,
-            easing: Easing::EaseInOut,
+            easing: Easing::Linear,
             class: Theme::default(),
             behavior: Behavior::default(),
         }
