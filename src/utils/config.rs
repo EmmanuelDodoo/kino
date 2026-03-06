@@ -1733,3 +1733,22 @@ mod subtitles {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_de() -> Result<(), toml::de::Error> {
+        let config = include_str!("../../resources/docs/config.toml");
+
+        toml::from_str::<Config>(config).map(|_| {})
+    }
+
+    #[test]
+    fn config_se() -> Result<(), toml::ser::Error> {
+        let config = Config::dev();
+
+        toml::to_string_pretty(&config).map(|_| {})
+    }
+}
