@@ -26,25 +26,24 @@ pub mod shared;
 mod shows;
 
 use draws::*;
-
-use crate::{
-    app::{MediaUpdate, MediaUpdateKind},
-    models::{
-        Collection, CollectionId, CollectionView, Episode, EpisodeId, Movie, MovieId, Season,
-        SeasonId, Show, ShowId, SimpleCollection,
-        collection::{
-            ItemId, Items,
-            triggers::{self, Comparison, DeleteId, DeleteTrigger, InsertId, InsertTrigger, Logic},
-        },
+use registry::models::{
+    Collection, CollectionId, CollectionView, Episode, EpisodeId, Media, Movie, MovieId, Season,
+    SeasonId, Show, ShowId, SimpleCollection,
+    collection::{
+        ItemId, Items,
+        triggers::{self, Comparison, DeleteId, DeleteTrigger, InsertId, InsertTrigger, Logic},
     },
 };
+use registry::{
+    filter::{self, Filter, FilterMode, SearchFilter},
+    sort::{Sort, SortKind},
+};
+
+use crate::app::{MediaUpdate, MediaUpdateKind};
 
 use crate::app::{FetchId, Message};
-use crate::models::Media;
 use crate::utils::{
-    self, HomeAction, Layout, Scroll, Sort, SortKind, empty,
-    filter::*,
-    icons,
+    self, HomeAction, Layout, Scroll, empty, icons,
     icons::*,
     loading_animation, loading_svg,
     modal::{self, modal},
@@ -71,9 +70,9 @@ const SIDE_ICON_SPACING: f32 = 8.0;
 pub enum FilterMessage {
     Mode,
     Clear,
-    ProgressKind(ProgressKind),
+    ProgressKind(filter::ProgressKind),
     ProgressComp,
-    RatingKind(RatingKind),
+    RatingKind(filter::RatingKind),
     RatingComp,
     CommentsNum(String),
     CommentsComp,
@@ -2459,9 +2458,9 @@ impl Home {
                                 comments.number = number;
                             }
                             None => {
-                                self.filters.comments = Some(Comments {
+                                self.filters.comments = Some(filter::Comments {
                                     number,
-                                    comp: Comp::default(),
+                                    comp: filter::Comp::default(),
                                 })
                             }
                         }
@@ -2499,9 +2498,9 @@ impl Home {
                                 duration.secs = hours + secs;
                             }
                             None => {
-                                self.filters.duration = Some(utils::filter::Duration {
+                                self.filters.duration = Some(filter::Duration {
                                     secs,
-                                    comp: Comp::default(),
+                                    comp: filter::Comp::default(),
                                 });
                             }
                         }
@@ -2533,9 +2532,9 @@ impl Home {
                                 duration.secs = secs + minutes;
                             }
                             None => {
-                                self.filters.duration = Some(utils::filter::Duration {
+                                self.filters.duration = Some(filter::Duration {
                                     secs,
-                                    comp: Comp::default(),
+                                    comp: filter::Comp::default(),
                                 });
                             }
                         }
@@ -2561,9 +2560,9 @@ impl Home {
                         match self.filters.release.as_mut() {
                             Some(release) => release.year = year,
                             None => {
-                                self.filters.release = Some(Release {
+                                self.filters.release = Some(filter::Release {
                                     year,
-                                    comp: Comp::default(),
+                                    comp: filter::Comp::default(),
                                 })
                             }
                         }
@@ -3080,7 +3079,7 @@ impl Home {
             let text = sized_medium("Progress", H8);
             let progress = pick_list(
                 Some(self.filters.progress.kind),
-                ProgressKind::ALL,
+                filter::ProgressKind::ALL,
                 ToString::to_string,
             )
             .padding(padding)
@@ -3091,7 +3090,7 @@ impl Home {
             .text_size(size);
 
             let comp = comp(
-                self.filters.progress.comp.icon(),
+                comp_icon(self.filters.progress.comp),
                 FilterMessage::ProgressComp,
             );
 
@@ -3104,7 +3103,7 @@ impl Home {
             let text = sized_medium("Rating", H8);
             let rating = pick_list(
                 Some(self.filters.rating.kind),
-                RatingKind::ALL,
+                filter::RatingKind::ALL,
                 ToString::to_string,
             )
             .padding(padding)
@@ -3114,7 +3113,10 @@ impl Home {
             .handle(picklist_handle(size))
             .text_size(size);
 
-            let comp = comp(self.filters.rating.comp.icon(), FilterMessage::RatingComp);
+            let comp = comp(
+                comp_icon(self.filters.rating.comp),
+                FilterMessage::RatingComp,
+            );
 
             row!(text, comp, rating)
                 .spacing(spacing)
@@ -3126,8 +3128,8 @@ impl Home {
             let icon = self
                 .filters
                 .comments
-                .map(|comments| comments.comp.icon())
-                .unwrap_or(Comp::default().icon());
+                .map(|comments| comp_icon(comments.comp))
+                .unwrap_or(comp_icon(filter::Comp::default()));
             let comp = comp(icon, FilterMessage::CommentsComp);
 
             let content = self
@@ -3152,8 +3154,8 @@ impl Home {
             let icon = self
                 .filters
                 .release
-                .map(|release| release.comp.icon())
-                .unwrap_or(Comp::default().icon());
+                .map(|release| comp_icon(release.comp))
+                .unwrap_or(comp_icon(filter::Comp::default()));
             let comp = comp(icon, FilterMessage::ReleaseComp);
 
             let content = self
@@ -3180,8 +3182,8 @@ impl Home {
             let icon = self
                 .filters
                 .duration
-                .map(|duration| duration.comp.icon())
-                .unwrap_or(Comp::default().icon());
+                .map(|duration| comp_icon(duration.comp))
+                .unwrap_or(comp_icon(filter::Comp::default()));
             let comp = comp(icon, FilterMessage::DurationComp);
 
             let hours = self
@@ -4482,4 +4484,14 @@ fn sort_collections(collections: &mut [SimpleCollection]) {
             y.name.to_lowercase(),
         ))
     });
+}
+
+fn comp_icon(comp: filter::Comp) -> char {
+    use filter::Comp;
+
+    match comp {
+        Comp::Equal => EQUALS,
+        Comp::Greater => CHEV_LEFT,
+        Comp::Less => CHEV_RIGHT,
+    }
 }

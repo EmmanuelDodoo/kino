@@ -9,6 +9,7 @@ pub mod episodes;
 pub mod movies;
 pub mod seasons;
 pub mod shows;
+pub mod video;
 
 pub use collection::ItemId;
 pub use collection::{Collection, CollectionId, CollectionView, SimpleCollection};
@@ -17,6 +18,7 @@ pub use episodes::*;
 pub use movies::*;
 pub use seasons::*;
 pub use shows::*;
+pub use video::*;
 
 use crate::db::{Operation, Query, Table};
 
@@ -453,64 +455,4 @@ pub fn datetime_to_sql<'a>(datetime: &DateTime<Local>) -> ToSqlOutput<'a> {
         .to_string();
 
     ToSqlOutput::from(str_date)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PlayId {
-    Movie(MovieId),
-    Episode(EpisodeId),
-}
-
-impl PlayId {
-    pub fn from_episode(row: &Row<'_>) -> rusqlite::Result<Self> {
-        EpisodeId::from_row(row).map(Self::Episode)
-    }
-
-    pub fn from_movie(row: &Row<'_>) -> rusqlite::Result<Self> {
-        MovieId::from_row(row).map(Self::Movie)
-    }
-
-    pub fn from_comment(row: &Row<'_>) -> rusqlite::Result<Self> {
-        let kind = row.get::<_, String>("media_type")?;
-
-        match kind.as_str() {
-            "movie" => MovieId::from_collection(row).map(Self::Movie),
-            "episode" => EpisodeId::from_collection(row).map(Self::Episode),
-            _ => unreachable!("stored invalid comment media"),
-        }
-    }
-
-    pub fn name_str(&self) -> &'static str {
-        match self {
-            Self::Movie(_) => "movie",
-            Self::Episode(_) => "episode",
-        }
-    }
-}
-
-impl From<PlayId> for ItemId {
-    fn from(value: PlayId) -> Self {
-        match value {
-            PlayId::Movie(id) => ItemId::Movie(id),
-            PlayId::Episode(id) => ItemId::Episode(id),
-        }
-    }
-}
-
-impl std::fmt::Display for PlayId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Movie(id) => id.fmt(f),
-            Self::Episode(id) => id.fmt(f),
-        }
-    }
-}
-
-impl From<PlayId> for rusqlite::types::ToSqlOutput<'_> {
-    fn from(value: PlayId) -> Self {
-        match value {
-            PlayId::Movie(id) => id.into(),
-            PlayId::Episode(id) => id.into(),
-        }
-    }
 }

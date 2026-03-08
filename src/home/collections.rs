@@ -1,10 +1,10 @@
 use super::{HomeMessage, PageKind, shared::*};
-use crate::models::CollectionId;
 use crate::utils::Scroll;
 use iced::{
     Element, Padding, Task,
     widget::{self, container, grid, operation, scrollable},
 };
+use registry::models::CollectionId;
 
 #[derive(Debug, Clone, Copy)]
 pub enum CollectionsMessage {

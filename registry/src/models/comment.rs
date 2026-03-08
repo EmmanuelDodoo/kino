@@ -1,6 +1,6 @@
-use super::{EpisodeId, MovieId, PlayId, datetime_to_sql};
+use super::{VideoId, datetime_to_sql};
 use crate::db::{Operation, Query, Table};
-use chrono::{DateTime, Local, NaiveDate};
+use chrono::{DateTime, Local};
 use rusqlite::types::{ToSqlOutput, Value};
 use rusqlite::{Result, Row};
 use uuid::Uuid;
@@ -32,7 +32,7 @@ pub struct Comment {
     pub id: CommentId,
     pub content: String,
     added: DateTime<Local>,
-    pub kind: PlayId,
+    pub kind: VideoId,
     pub timestamp: Option<u64>,
     pub removed: bool,
 }
@@ -41,7 +41,7 @@ impl Comment {
     pub fn from_row(row: &Row<'_>) -> Result<Self> {
         let id = CommentId::from_row(row)?;
         let content = row.get::<_, String>("content")?;
-        let kind = PlayId::from_comment(row)?;
+        let kind = VideoId::from_comment(row)?;
 
         let timestamp = row.get::<_, Option<u64>>("timestamp")?;
 
@@ -163,7 +163,7 @@ impl Comment {
         }
     }
 
-    pub fn new<'a>(content: String, timestamp: Option<u64>, kind: PlayId) -> (Self, Query<'a>) {
+    pub fn new<'a>(content: String, timestamp: Option<u64>, kind: VideoId) -> (Self, Query<'a>) {
         let added = Local::now();
         let id = CommentId(Uuid::now_v7());
 

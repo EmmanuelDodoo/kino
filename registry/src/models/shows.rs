@@ -180,19 +180,19 @@ impl Show {
         ]
     }
 
-    fn update_params<'a>(&self) -> Vec<(&'a str, ToSqlOutput<'a>)> {
-        let id = ToSqlOutput::from(self.id);
-        let name = ToSqlOutput::from(self.name.clone());
-        let poster = ToSqlOutput::Owned(Value::from(self.poster.clone()));
-        let backdrop = ToSqlOutput::Owned(Value::from(self.backdrop.clone()));
-
-        vec![
-            (":id", id),
-            (":name", name),
-            (":poster", poster),
-            (":backdrop", backdrop),
-        ]
-    }
+    // fn update_params<'a>(&self) -> Vec<(&'a str, ToSqlOutput<'a>)> {
+    //     let id = ToSqlOutput::from(self.id);
+    //     let name = ToSqlOutput::from(self.name.clone());
+    //     let poster = ToSqlOutput::Owned(Value::from(self.poster.clone()));
+    //     let backdrop = ToSqlOutput::Owned(Value::from(self.backdrop.clone()));
+    //
+    //     vec![
+    //         (":id", id),
+    //         (":name", name),
+    //         (":poster", poster),
+    //         (":backdrop", backdrop),
+    //     ]
+    // }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
@@ -224,19 +224,19 @@ impl Show {
         }
     }
 
-    #[must_use]
-    fn update<'a>(&self) -> Query<'a> {
-        let sql = "UPDATE tv_show SET name=:name, poster=:poster, backdrop=:backdrop WHERE id=:id";
-        let params = self.update_params();
-
-        Query {
-            id: self.id.0,
-            table: Table::Show,
-            sql,
-            params,
-            op: Operation::Update,
-        }
-    }
+    // #[must_use]
+    // fn update<'a>(&self) -> Query<'a> {
+    //     let sql = "UPDATE tv_show SET name=:name, poster=:poster, backdrop=:backdrop WHERE id=:id";
+    //     let params = self.update_params();
+    //
+    //     Query {
+    //         id: self.id.0,
+    //         table: Table::Show,
+    //         sql,
+    //         params,
+    //         op: Operation::Update,
+    //     }
+    // }
 
     #[must_use]
     pub fn set_name<'a>(id: ShowId, name: String) -> Query<'a> {

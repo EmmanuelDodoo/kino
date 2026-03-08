@@ -7,19 +7,15 @@ use iced::animation::{Animation, Easing};
 use iced::widget::image;
 use std::path::{Path, PathBuf};
 
-use crate::error::{Error, GStreamerError};
-use crate::variants;
+use devtools::error::{Error, GStreamerError};
+use devtools::variants;
 
 pub mod config;
 pub use config::*;
-pub mod filter;
 pub mod icons;
-pub mod typo;
-pub use filter::Filter;
-pub mod sort;
-pub use sort::{Sort, SortKind};
 pub mod image_ops;
 pub mod styles;
+pub mod typo;
 pub use image_ops::*;
 
 pub fn toggler<'a, Message>(is_checked: bool) -> widgets::toggler::Toggler<'a, Message> {
@@ -754,32 +750,6 @@ impl From<SettingsAction> for Action {
     fn from(value: SettingsAction) -> Self {
         Self::Settings(value)
     }
-}
-
-#[macro_export]
-macro_rules! variants {
-	(
-		$(#[$meta:meta])*
-		$vis:vis enum $name:ident {
-			$(
-				$(#[$field_meta:meta])*
-				$variant:ident,
-			)+
-		}
-	) => {
-		$(#[$meta])*
-		$vis enum $name {
-			$(
-				$(#[$field_meta])*
-				$variant,
-			)+
-		}
-
-		impl $name {
-			pub const VARIANTS: &[Self] = &[$(Self::$variant,)+];
-                        pub const NAMES: &[&str] = &[$(stringify!($variant)),+];
-		}
-	};
 }
 
 pub mod modal {

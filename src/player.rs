@@ -25,19 +25,19 @@ pub mod comment;
 pub mod playlist;
 use crate::app::{FetchId, Message};
 use crate::home::shared::Icon;
-use crate::models::{self, CollectionId, CommentId, PlayId, SimpleCollection};
 use crate::utils::{
     self, PlayerAction, VideoSettings, cancel_btn, convert_color_str, draw_subtitles,
     duration_string, empty,
     icons::{self, CANCEL, sized_button},
     loading_animation, loading_svg,
     modal::modal,
-    modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path,
-    typo::{self, *},
+    modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo,
 };
-use crate::variants;
 pub use comment::*;
+use devtools::variants;
 pub use playlist::*;
+use registry::models::{self, CollectionId, CommentId, SimpleCollection, VideoId};
+use typo::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Subtitle {
@@ -77,7 +77,7 @@ impl From<TextTag> for Subtitle {
 #[derive(Debug)]
 enum Modal {
     CollectionAdd {
-        item: PlayId,
+        item: VideoId,
         collections: Vec<SimpleCollection>,
         selected: HashSet<CollectionId>,
         initial: HashSet<CollectionId>,
@@ -230,7 +230,7 @@ pub struct Player {
     position: f64,
     is_dragging: bool,
     thumbnails: Vec<image::Handle>,
-    item: PlayItem,
+    item: models::Video,
     watch_time: Duration,
     last_frame: Option<Instant>,
     subtitles: Option<String>,
@@ -279,7 +279,7 @@ enum State {
 pub enum ManagerMessage {
     Video(bool, Arc<Player>),
     Thumbnail {
-        id: PlayId,
+        id: VideoId,
         thumbnails: Vec<image::Handle>,
         poster: Option<image::Handle>,
     },
@@ -2354,7 +2354,7 @@ impl Manager {
         }
     }
 
-    pub fn fetched_comments(&mut self, id: PlayId, comments: Vec<Comment>) -> Task<Message> {
+    pub fn fetched_comments(&mut self, id: VideoId, comments: Vec<Comment>) -> Task<Message> {
         let nulls_start = self.settings.comments_nulls_first;
 
         let update = |player: &mut Player, curr: &mut BTreeMap<u64, Vec<Comment>>| {
@@ -2411,7 +2411,7 @@ impl Manager {
 }
 
 fn load_video<Message: 'static + MaybeSend>(
-    item: PlayItem,
+    item: models::Video,
     f: impl FnOnce(Arc<Player>) -> Message + 'static + MaybeSend,
 ) -> Task<Message> {
     Task::perform(

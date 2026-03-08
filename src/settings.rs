@@ -1,12 +1,12 @@
 use crate::app::Message;
 use crate::db::Operation;
-use crate::models::{Directory, DirectoryId, MediaType, humanize_datetime};
 use crate::utils::{
     self, AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
     SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
     convert_color_str, empty, icons, icons::sized_button, modal::modal, modal_container,
     picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo::*,
 };
+use registry::models::{Directory, DirectoryId, MediaType, humanize_datetime};
 
 use iced::{
     Border, Element, Length, Task, Theme,

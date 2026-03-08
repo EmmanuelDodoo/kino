@@ -1,6 +1,6 @@
 use crate::models::{
-    CollectionId, Comment, CommentId, Directory, DirectoryId, EpisodeId, MovieId, PlayId,
-    SearchItem, SeasonId, ShowId,
+    CollectionId, Comment, CommentId, Directory, DirectoryId, EpisodeId, MovieId, SearchItem,
+    SeasonId, ShowId, VideoId,
     collection::{self, ItemId, Items},
 };
 
@@ -26,19 +26,19 @@ const MIGRATIONS: &[Migration] = &[
     },
     Migration {
         version: 1,
-        sql: include_str!("../resources/db/migrations/1.sql"),
+        sql: include_str!("../../resources/db/migrations/1.sql"),
     },
     Migration {
         version: 2,
-        sql: include_str!("../resources/db/migrations/2.sql"),
+        sql: include_str!("../../resources/db/migrations/2.sql"),
     },
     Migration {
         version: 3,
-        sql: include_str!("../resources/db/migrations/3.sql"),
+        sql: include_str!("../../resources/db/migrations/3.sql"),
     },
     Migration {
         version: 4,
-        sql: include_str!("../resources/db/migrations/4.sql"),
+        sql: include_str!("../../resources/db/migrations/4.sql"),
     },
 ];
 
@@ -327,7 +327,7 @@ impl Database {
 
     pub fn get_video_comments<T>(
         &self,
-        media: PlayId,
+        media: VideoId,
         limit: Option<i32>,
         offset: Option<i32>,
         filter: filter::comments::Filter,
@@ -1255,13 +1255,13 @@ impl Database {
     pub fn open_with_dummies(
         path: impl AsRef<Path>,
         dummies: impl AsRef<Path>,
-    ) -> crate::error::Result<Database> {
+    ) -> devtools::error::Result<Database> {
         let exists = path.as_ref().try_exists()?;
         let conn = Database::open(path)?;
 
         if !exists {
             tracing::debug!("writing DB schema");
-            let schema = include_str!("../resources/db/schema.sql");
+            let schema = include_str!("../../resources/db/schema.sql");
             conn.execute_batch(schema)?;
 
             tracing::debug!("writing DB dummies");
@@ -1273,13 +1273,13 @@ impl Database {
         }
     }
 
-    pub fn open_with_schema(db: impl AsRef<Path>) -> crate::error::Result<Database> {
+    pub fn open_with_schema(db: impl AsRef<Path>) -> devtools::error::Result<Database> {
         let exists = db.as_ref().try_exists()?;
         let conn = Database::open(db)?;
 
         if !exists {
             tracing::debug!("writing DB schema");
-            let schema = include_str!("../resources/db/schema.sql");
+            let schema = include_str!("../../resources/db/schema.sql");
             conn.execute_batch(schema)?;
             Ok(conn)
         } else {

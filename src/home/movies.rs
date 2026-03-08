@@ -1,5 +1,4 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
-use crate::models::{ItemId, Media, Movie, MovieId};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll};
@@ -9,6 +8,7 @@ use iced::{
     time::Instant,
     widget::{self, column, container, grid, operation, row, scrollable, text},
 };
+use registry::models::{ItemId, Media, Movie, MovieId};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MoviesMessage {

@@ -1,5 +1,4 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
-use crate::models::{CollectionId, Episode, EpisodeId, ItemId, Media, SimpleCollection};
 use crate::utils::icons::*;
 use crate::utils::styles;
 use crate::utils::typo::*;
@@ -9,6 +8,7 @@ use iced::{
     alignment::{Horizontal, Vertical},
     widget::{bottom_center, button, center_x, column, container, row, scrollable, stack, text},
 };
+use registry::models::{CollectionId, Episode, EpisodeId, ItemId, Media, SimpleCollection};
 
 #[derive(Debug, Clone)]
 pub enum Message {

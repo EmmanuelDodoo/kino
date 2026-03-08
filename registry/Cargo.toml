@@ -1,0 +1,18 @@
+[package]
+name = "registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+alphanumeric-sort.workspace = true
+chrono.workspace = true
+devtools.workspace = true
+fancy-regex.workspace = true
+gstreamer.workspace = true
+gstreamer-pbutils = "0.23"
+rand.workspace = true
+rusqlite.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid = { version = "1.18", features = ["std", "v7"] }

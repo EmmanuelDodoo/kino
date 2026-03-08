@@ -8,30 +8,28 @@ use iced::{
 };
 use tokio::sync::mpsc;
 
-use crate::db::{self, Query};
-use crate::error::Error;
 use crate::fetch;
 use crate::home::{Home, HomeMessage, shared};
-use crate::models::{
+use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
+use crate::settings::{Settings, SettingsMessage};
+use crate::utils::{Action, Config, KeyPress, Layout, Screen, icons, typo};
+use devtools::Error;
+use registry::db::{self, Query};
+use registry::{
+    filter::{self, FilterMode, SearchFilter},
+    sort::{self, Sort, SortKind},
+};
+
+use registry::models::{
     self, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode, EpisodeId,
-    ItemId, Media, Movie, MovieId, PlayId, Season, SeasonId, Show, ShowId, SimpleCollection,
-    collection,
+    ItemId, Media, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Video,
+    VideoId, collection,
     collection::{
         Items,
         triggers::{DeleteTrigger, InsertTrigger},
     },
 };
-use crate::player::{
-    Comment, Manager as Player, ManagerMessage as PlayerMessage, PlayItem, Playlist,
-};
-use crate::scan;
-use crate::settings::{Settings, SettingsMessage};
-use crate::utils::{
-    Action, Config, Filter, KeyPress, Layout, Screen, Sort, SortKind,
-    filter::FilterMode,
-    filter::{self, SearchFilter},
-    icons, sort, typo,
-};
+use registry::scan;
 use widgets::toast;
 
 #[derive(Debug, Clone, Copy)]
@@ -94,17 +92,17 @@ pub enum Message {
     Animate,
     Fetch {
         id: FetchId,
-        filters: Filter,
+        filters: filter::Filter,
         sort: Sort,
         limit: Option<i32>,
         offset: Option<i32>,
     },
     FetchDirectories,
-    FetchComments(PlayId),
+    FetchComments(VideoId),
     SaveComments(Vec<models::Comment>),
     Refresh(Instant, bool),
-    LastWatched(PlayId),
-    VideoStats(PlayItem),
+    LastWatched(VideoId),
+    VideoStats(Video),
     KeyPress {
         key: Key,
         modifiers: Modifiers,
@@ -139,7 +137,7 @@ pub enum Message {
     RemoveCollection(CollectionId),
     PlaylistSave(Playlist),
     GeneratedPoster {
-        id: PlayId,
+        id: VideoId,
         handle: iced::widget::image::Handle,
     },
     None,
@@ -149,7 +147,7 @@ impl Message {
     pub fn fetch_simple_collections() -> Self {
         Message::Fetch {
             id: FetchId::CollectionsSimple,
-            filters: Filter::none(),
+            filters: filter::Filter::none(),
             sort: Sort::new(),
             limit: None,
             offset: None,
@@ -239,7 +237,7 @@ impl App {
 
         let (home, home_tasks) = Home::boot(
             config.layout(),
-            Filter::new(FilterMode::default()),
+            filter::Filter::new(FilterMode::default()),
             Sort::name(),
             config.general.recents_limit,
         );
@@ -1028,14 +1026,14 @@ impl App {
                 let now = models::datetime_to_sql(&now);
 
                 match id {
-                    PlayId::Movie(id) => match self.db.last_watched_movie(id, now) {
+                    VideoId::Movie(id) => match self.db.last_watched_movie(id, now) {
                         Ok(_) => {
                             tracing::debug!("Updated {id:?} last watched");
                             Task::none()
                         }
                         Err(error) => Task::done(Message::error(error)),
                     },
-                    PlayId::Episode(id) => match self.db.last_watched_episode(id, now) {
+                    VideoId::Episode(id) => match self.db.last_watched_episode(id, now) {
                         Ok(_) => {
                             tracing::debug!("Updated {id:?} last watched");
                             Task::none()
@@ -1045,7 +1043,7 @@ impl App {
                 }
             }
             Message::VideoStats(item) => match item.id {
-                PlayId::Movie(id) => {
+                VideoId::Movie(id) => {
                     match self.db.update_movie_stats(
                         id,
                         item.watch_count,
@@ -1060,7 +1058,7 @@ impl App {
                         Err(error) => Task::done(Message::error(error)),
                     }
                 }
-                PlayId::Episode(id) => {
+                VideoId::Episode(id) => {
                     match self.db.update_episode_stats(
                         id,
                         item.watch_count,
@@ -1462,8 +1460,8 @@ impl App {
 
 
                         let table = match id {
-                            PlayId::Movie(_) => "movie",
-                            PlayId::Episode(_) => "episode"
+                            VideoId::Movie(_) => "movie",
+                            VideoId::Episode(_) => "episode"
                         };
 
                         let sql = format!("UPDATE {table} SET poster=:poster, generate_poster=:generate_poster WHERE id=:id");
@@ -1620,16 +1618,16 @@ impl App {
             season,
             None,
             None,
-            Filter::none(),
+            filter::Filter::none(),
             sort,
-            PlayItem::from_episode,
+            Video::from_episode,
         )?;
 
         let pos = recent
             .and_then(|recent| {
                 items
                     .iter()
-                    .position(|item| item.id == PlayId::Episode(recent))
+                    .position(|item| item.id == VideoId::Episode(recent))
             })
             .unwrap_or_default();
 
@@ -1667,9 +1665,14 @@ impl App {
             sort
         };
 
-        let seasons =
-            self.db
-                .get_show_seasons(show, None, None, Filter::none(), sort, SeasonId::from_row)?;
+        let seasons = self.db.get_show_seasons(
+            show,
+            None,
+            None,
+            filter::Filter::none(),
+            sort,
+            SeasonId::from_row,
+        )?;
 
         let mut errors = vec![];
         let mut playlist = Playlist::empty();
@@ -1687,7 +1690,7 @@ impl App {
     fn play_item(&mut self, item: ItemId) -> Result<(Playlist, Vec<String>), Error> {
         match item {
             ItemId::Movie(id) => {
-                let item = self.db.get_movie(id, PlayItem::from_movie)?;
+                let item = self.db.get_movie(id, Video::from_movie)?;
                 if item.path.try_exists()? {
                     tracing::debug!("Movie {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
@@ -1699,7 +1702,7 @@ impl App {
                 }
             }
             ItemId::Episode(id) => {
-                let item = self.db.get_episode(id, PlayItem::from_episode)?;
+                let item = self.db.get_episode(id, Video::from_episode)?;
                 if item.path.try_exists()? {
                     tracing::debug!("Episode {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))

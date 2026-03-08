@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [workspace]
-members = ["widgets"]
+members = ["devtools/", "registry/", "widgets/"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,7 +12,12 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
+alphanumeric-sort = "1.5"
 chrono = { version = "0.4", features = ["now", "std"] }
+devtools = { path = "devtools/", version = "0.1.0" }
+fancy-regex = "0.16"
+glib = "0.20"  # gobject traits and error type
+gstreamer = "0.23"
 iced = { git = "https://github.com/iced-rs/iced", rev = "c3fa551", features = [
   "advanced",
   "highlighter",
@@ -23,6 +28,11 @@ iced = { git = "https://github.com/iced-rs/iced", rev = "c3fa551", features = [
   "tokio",
   "wgpu"
 ] }
+rand = "0.8"
+registry = { path = "registry/", version = "0.1.0" }
+rusqlite = { version = "0.37", features = ["bundled", "chrono", "uuid"] }
+tracing = "0.1"
+url = "2"
 widgets = { path = "widgets/", version = "0.1.0" }
 
 [workspace.lints]
@@ -30,16 +40,16 @@ clippy.print_stderr = "deny"
 clippy.print_stdout = "deny"
 
 [dependencies]
-alphanumeric-sort = "1.5"
+alphanumeric-sort.workspace = true
 bytes = "1"
 chrono.workspace = true
+devtools.workspace = true
 directories = "6"
-fancy-regex = "0.16"
-glib = "0.20"  # gobject traits and error type
-gstreamer = "0.23"
+fancy-regex.workspace = true
+glib.workspace = true
+gstreamer.workspace = true
 gstreamer-app = "0.23"  # appsink
 gstreamer-base = "0.23"  # basesrc
-gstreamer-pbutils = "0.23"
 gstreamer-video = "0.23"
 html-escape = "0.2"
 humantime = "2.3"
@@ -49,17 +59,17 @@ iced_video_player = { git = "https://github.com/EmmanuelDodoo/iced_video_player"
 image = "0.25"
 keepawake = "0.6.0"
 open = "5.3.3"
-rand = "0.8"
+rand.workspace = true
+registry.workspace = true
 reqwest = { version = "0.12", features = ["json"] }
 rfd = "0.16"
-rusqlite = { version = "0.37", features = ["bundled", "chrono", "uuid"] }
+rusqlite.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 smol_str = { version = "0.2", features = ["serde"] }
 tokio = { version = "1.47", features = ["fs"] }
 toml = { version = "0.9" }
-tracing = "0.1"
+tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-url = "2"
-uuid = { version = "1.18", features = ["std", "v7"] }
+url.workspace = true
 widgets.workspace = true

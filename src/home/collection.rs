@@ -1,10 +1,6 @@
 use super::{
     CollectionThumbnail, HomeMessage, PageKind, ViewMessage, movies, shared::*, shows, view_unicode,
 };
-use crate::models::{
-    CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
-    collection::Items,
-};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, empty, styles};
@@ -18,6 +14,10 @@ use iced::{
         operation::{self},
         row, rule, scrollable, text,
     },
+};
+use registry::models::{
+    CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
+    collection::Items,
 };
 use std::iter::Peekable;
 use widgets::menu;

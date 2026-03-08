@@ -1,5 +1,5 @@
 use super::{Action, HomeAction, Layout, PlayerAction, Screen, SettingsAction};
-use crate::variants;
+use devtools::variants;
 pub use keys::{KeyModifier, KeyPress, KeyStore};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};

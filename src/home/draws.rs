@@ -4,13 +4,13 @@ use super::{
     SelectionMessage, SimpleCollection, SynopsisMessage, TMDBMessage, TriggerMessage, shared::Icon,
     view_unicode,
 };
-use crate::models::collection::{
-    CollectionView, ItemId,
-    triggers::{self, Comparison, DeleteTrigger, InsertTrigger},
-};
 use crate::utils::{
     cancel_btn, empty, icons, icons::*, modal_container, picklist_handle, save_btn, styles,
     toggler, tooltip, typo::*,
+};
+use registry::models::collection::{
+    CollectionView, ItemId,
+    triggers::{self, Comparison, DeleteTrigger, InsertTrigger},
 };
 
 use iced::{

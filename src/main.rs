@@ -24,29 +24,28 @@ use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 
 mod app;
-mod db;
-mod error;
 mod fetch;
 mod home;
-mod models;
 mod player;
-mod scan;
 mod settings;
 pub mod utils;
 
 use app::App;
-use models::{Directory, ItemId, Media, MediaType, Movie, PlayId, SearchItem, Show, collection};
+use registry::db;
+use registry::filter;
+use registry::filter::*;
+use registry::models::{
+    Directory, ItemId, Media, MediaType, Movie, SearchItem, Show, VideoId, collection,
+};
+use registry::sort;
+use registry::sort::*;
 use std::sync::LazyLock;
 use utils::config::Config;
-use utils::filter;
-use utils::filter::*;
 use utils::icons;
 use utils::icons::*;
-use utils::sort;
-use utils::sort::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Layout, Sort, SortKind, cancel_btn, empty, save_btn, styles, tooltip};
+use utils::{Layout, cancel_btn, empty, save_btn, styles, tooltip};
 use widgets::menu;
 
 // fn test_main() -> iced::Result {

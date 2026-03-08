@@ -1,5 +1,4 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
-use crate::models::{ItemId, Show, ShowId};
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll};
 use iced::{
@@ -7,6 +6,7 @@ use iced::{
     time::Instant,
     widget::{self, column, container, grid, operation, scrollable, text},
 };
+use registry::models::{ItemId, Show, ShowId};
 
 #[derive(Debug, Clone, Copy)]
 pub enum TvShowsMessage {

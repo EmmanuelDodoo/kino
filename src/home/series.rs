@@ -1,7 +1,4 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
-use crate::models::{
-    CollectionId, ItemId, Media, Season, SeasonId, Show, ShowId, SimpleCollection,
-};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, styles};
@@ -13,6 +10,9 @@ use iced::{
     widget::{
         self, button, column, container, grid, operation, row, rule, scrollable, space, stack, text,
     },
+};
+use registry::models::{
+    CollectionId, ItemId, Media, Season, SeasonId, Show, ShowId, SimpleCollection,
 };
 
 #[derive(Debug, Clone)]

@@ -1,93 +1,5 @@
-use crate::models::{ItemId, PlayId};
-
 use rand::{seq::IteratorRandom, thread_rng};
-use std::path::PathBuf;
-
-#[derive(Debug, Clone)]
-pub struct PlayItem {
-    pub id: PlayId,
-    pub name: String,
-    pub path: PathBuf,
-    pub progress: f32,
-    pub duration: u64,
-    pub watch_count: u32,
-    pub subtitle_uri: Option<PathBuf>,
-    pub generate_poster: bool,
-}
-
-impl PlayItem {
-    pub fn from_episode(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
-        let id = PlayId::from_episode(row)?;
-
-        let full_path: PathBuf = {
-            let path = row.get::<_, String>("path")?;
-            let directory = row.get::<_, String>("directory_path")?;
-            let show = row.get::<_, String>("show_path")?;
-            let season = row.get::<_, String>("season_path")?;
-            [&directory, &show, &season, &path].iter().collect()
-        };
-
-        let name = {
-            let fetched = row.get::<_, bool>("fetched")?;
-            let show = row.get::<_, String>("show_name")?;
-            let season = row.get::<_, u16>("season_number")?;
-
-            if fetched {
-                let name = row.get::<_, String>("name")?;
-                format!("{show} - S{season:02}E{name}")
-            } else {
-                let number = row.get::<_, u16>("episode_number")?;
-                format!("{show} - S{season:02}E{number:02}")
-            }
-        };
-
-        Self::new(row, id, full_path, name)
-    }
-
-    pub fn from_movie(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
-        let id = PlayId::from_movie(row)?;
-        let name = row.get::<_, String>("name")?;
-
-        let full_path: PathBuf = {
-            let path = row.get::<_, String>("path")?;
-            let directory = row.get::<_, String>("directory_path")?;
-            [&directory, &path].iter().collect()
-        };
-
-        Self::new(row, id, full_path, name)
-    }
-
-    fn new(
-        row: &rusqlite::Row<'_>,
-        id: PlayId,
-        path: PathBuf,
-        name: String,
-    ) -> rusqlite::Result<Self> {
-        let progress = row.get::<_, f32>("progress")?;
-        let duration = row.get::<_, u64>("duration")?;
-        let watch_count = row.get::<_, u32>("watch_count")?;
-        let subtitle = row.get::<_, Option<String>>("subtitle_uri")?;
-        let subtitle_uri = subtitle.map(PathBuf::from);
-        let generate_poster = row.get::<_, bool>("generate_poster")?;
-        let fetched = row.get::<_, bool>("fetched")?;
-
-        Ok(Self {
-            id,
-            name,
-            path,
-            progress,
-            duration,
-            watch_count,
-            subtitle_uri,
-            generate_poster: generate_poster && !fetched,
-        })
-    }
-
-    pub fn progress(&mut self, progress: f32) {
-        assert!((0.0..1.0).contains(&progress), "Progress out of bounds");
-        self.progress = progress;
-    }
-}
+use registry::models::{ItemId, Video};
 
 #[derive(Debug, Clone)]
 pub struct Playlist {
@@ -95,7 +7,7 @@ pub struct Playlist {
     pub repeat: bool,
     pub origins: Vec<ItemId>,
     current: usize,
-    items: Vec<PlayItem>,
+    items: Vec<Video>,
 }
 
 impl Playlist {
@@ -109,7 +21,7 @@ impl Playlist {
         }
     }
 
-    pub fn new(items: impl Iterator<Item = PlayItem>, origin: ItemId) -> Self {
+    pub fn new(items: impl Iterator<Item = Video>, origin: ItemId) -> Self {
         Self {
             repeat: false,
             shuffle: false,
@@ -119,7 +31,7 @@ impl Playlist {
         }
     }
 
-    pub fn single(item: PlayItem) -> Self {
+    pub fn single(item: Video) -> Self {
         Self {
             repeat: false,
             shuffle: false,
@@ -163,7 +75,7 @@ impl Playlist {
         true
     }
 
-    pub fn update_current(&mut self, update: &PlayItem) {
+    pub fn update_current(&mut self, update: &Video) {
         if let Some(old) = self.current_mut()
             && old.id == update.id
         {
@@ -181,7 +93,7 @@ impl Playlist {
         self.shuffle = shuffle;
     }
 
-    pub fn items(&self) -> impl Iterator<Item = (usize, &PlayItem, bool)> {
+    pub fn items(&self) -> impl Iterator<Item = (usize, &Video, bool)> {
         self.items
             .iter()
             .enumerate()
@@ -189,7 +101,7 @@ impl Playlist {
     }
 
     #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> Option<&PlayItem> {
+    pub fn next(&mut self) -> Option<&Video> {
         if self.shuffle && !self.is_empty() {
             let mut rng = thread_rng();
             let new = (0..self.items.len())
@@ -209,7 +121,7 @@ impl Playlist {
         self.current()
     }
 
-    pub fn next_peek(&self) -> Option<&PlayItem> {
+    pub fn next_peek(&self) -> Option<&Video> {
         if self.repeat && self.current == self.len().saturating_sub(1) {
             return self.items.first();
         }
@@ -217,15 +129,15 @@ impl Playlist {
         self.items.get(self.current + 1)
     }
 
-    pub fn current(&self) -> Option<&PlayItem> {
+    pub fn current(&self) -> Option<&Video> {
         self.items.get(self.current)
     }
 
-    fn current_mut(&mut self) -> Option<&mut PlayItem> {
+    fn current_mut(&mut self) -> Option<&mut Video> {
         self.items.get_mut(self.current)
     }
 
-    pub fn previous(&mut self) -> Option<&PlayItem> {
+    pub fn previous(&mut self) -> Option<&Video> {
         if self.shuffle && !self.is_empty() {
             let mut rng = thread_rng();
             let new = (0..self.items.len())
@@ -241,7 +153,7 @@ impl Playlist {
         self.current()
     }
 
-    pub fn previous_peek(&self) -> Option<&PlayItem> {
+    pub fn previous_peek(&self) -> Option<&Video> {
         if self.current == 0 {
             return None;
         };

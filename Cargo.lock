@@ -989,6 +989,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "devtools"
+version = "0.1.0"
+dependencies = [
+ "glib",
+ "gstreamer",
+ "rusqlite",
+]
+
+[[package]]
 name = "directories"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2727,13 +2736,13 @@ dependencies = [
  "alphanumeric-sort",
  "bytes",
  "chrono",
+ "devtools",
  "directories",
  "fancy-regex",
  "glib",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-base",
- "gstreamer-pbutils",
  "gstreamer-video",
  "html-escape",
  "humantime",
@@ -2743,6 +2752,7 @@ dependencies = [
  "keepawake",
  "open",
  "rand 0.8.5",
+ "registry",
  "reqwest",
  "rfd",
  "rusqlite",
@@ -2754,7 +2764,6 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "url",
- "uuid",
  "widgets",
 ]
 
@@ -4316,6 +4325,23 @@ name = "regex-syntax"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a96887878f22d7bad8a3b6dc5b7440e0ada9a245242924394987b21cf2210a4c"
+
+[[package]]
+name = "registry"
+version = "0.1.0"
+dependencies = [
+ "alphanumeric-sort",
+ "chrono",
+ "devtools",
+ "fancy-regex",
+ "gstreamer",
+ "gstreamer-pbutils",
+ "rand 0.8.5",
+ "rusqlite",
+ "tracing",
+ "url",
+ "uuid",
+]
 
 [[package]]
 name = "renderdoc-sys"

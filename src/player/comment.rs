@@ -1,5 +1,4 @@
 use crate::db::Query;
-use crate::models::{self, CommentId, PlayId};
 use crate::utils::{cancel_btn, icons, save_btn, styles, typo};
 use fancy_regex::{Captures, Regex};
 use iced::{
@@ -12,6 +11,7 @@ use iced::{
         operation, rich_text, row, scrollable, sensor, text, text_editor,
     },
 };
+use registry::models::{self, CommentId, VideoId};
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
@@ -100,7 +100,7 @@ impl Comment {
         (raw, markdown)
     }
 
-    pub fn new(raw: String, kind: PlayId, now: u64, editor: widget::Id) -> Self {
+    pub fn new(raw: String, kind: VideoId, now: u64, editor: widget::Id) -> Self {
         let mut timestamp = None;
         let video = kind.to_string();
 

@@ -9,7 +9,7 @@ use super::movies::{Movies, MoviesMessage};
 use super::season::{SeasonPage, SeasonPageMessage};
 use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
-use crate::models::{CollectionId, EpisodeId, ItemId, MovieId, SeasonId, ShowId};
+use registry::models::{CollectionId, EpisodeId, ItemId, MovieId, SeasonId, ShowId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum PageKind {

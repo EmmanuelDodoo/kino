@@ -1,9 +1,8 @@
-use crate::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{DEFAULT_POSTER, empty, tooltip};
 use crate::utils::{collage, sample_complement, styles};
-use crate::variants;
+use devtools::variants;
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
@@ -15,6 +14,7 @@ use iced::{
         scrollable, space, stack, text, tooltip as tp,
     },
 };
+use registry::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
 use widgets::marquee;
 
 pub const CARD_HEIGHT: f32 = 450.0;

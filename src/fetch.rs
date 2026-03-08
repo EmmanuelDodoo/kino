@@ -1,5 +1,5 @@
 use crate::db::Database;
-use crate::models::{EpisodeId, MovieId, SeasonId, ShowId};
+use registry::models::{EpisodeId, MovieId, SeasonId, ShowId};
 use reqwest::{
     Client, ClientBuilder,
     header::{ACCEPT, HeaderMap},

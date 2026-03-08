@@ -62,15 +62,6 @@ impl Comp {
     #[allow(dead_code)]
     pub const ALL: [Self; 3] = [Self::Less, Self::Equal, Self::Greater];
 
-    pub fn icon(&self) -> char {
-        use super::icons::{CHEV_LEFT, CHEV_RIGHT, EQUALS};
-        match self {
-            Self::Equal => EQUALS,
-            Self::Greater => CHEV_LEFT,
-            Self::Less => CHEV_RIGHT,
-        }
-    }
-
     pub fn toggle(&mut self) {
         *self = match self {
             Self::Less => Self::Equal,
@@ -353,8 +344,12 @@ impl Filter {
                 comments.comp, comments.number
             )
         });
-        let release =
-            release.map(|release| format!("strftime('%Y', {prefix}release) {} '{}'", release.comp, release.year));
+        let release = release.map(|release| {
+            format!(
+                "strftime('%Y', {prefix}release) {} '{}'",
+                release.comp, release.year
+            )
+        });
         let duration = duration
             .map(|duration| format!("{prefix}duration {} {}", duration.comp, duration.secs));
 
