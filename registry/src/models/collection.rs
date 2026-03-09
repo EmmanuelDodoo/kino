@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::{EpisodeId, MovieId, SeasonId, ShowId, datetime_to_sql};
 use crate::db::{Operation, Query, Table};
 
-use devtools::variants;
+use core::variants;
 
 pub mod triggers;
 

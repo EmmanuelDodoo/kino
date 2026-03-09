@@ -732,6 +732,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "core"
+version = "0.1.0"
+dependencies = [
+ "glib",
+ "gstreamer",
+ "rusqlite",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -989,12 +998,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "devtools"
+name = "devutils"
 version = "0.1.0"
 dependencies = [
+ "core",
+ "fancy-regex",
  "glib",
  "gstreamer",
+ "gstreamer-app",
+ "gstreamer-base",
+ "gstreamer-pbutils",
+ "gstreamer-video",
+ "registry",
+ "reqwest",
  "rusqlite",
+ "serde",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -2736,14 +2757,10 @@ dependencies = [
  "alphanumeric-sort",
  "bytes",
  "chrono",
- "devtools",
+ "core",
+ "devutils",
  "directories",
  "fancy-regex",
- "glib",
- "gstreamer",
- "gstreamer-app",
- "gstreamer-base",
- "gstreamer-video",
  "html-escape",
  "humantime",
  "iced",
@@ -4332,14 +4349,10 @@ version = "0.1.0"
 dependencies = [
  "alphanumeric-sort",
  "chrono",
- "devtools",
- "fancy-regex",
- "gstreamer",
- "gstreamer-pbutils",
+ "core",
  "rand 0.8.5",
  "rusqlite",
  "tracing",
- "url",
  "uuid",
 ]
 

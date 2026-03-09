@@ -24,7 +24,6 @@ use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 
 mod app;
-mod fetch;
 mod home;
 mod player;
 mod settings;

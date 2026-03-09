@@ -1255,7 +1255,7 @@ impl Database {
     pub fn open_with_dummies(
         path: impl AsRef<Path>,
         dummies: impl AsRef<Path>,
-    ) -> devtools::error::Result<Database> {
+    ) -> core::error::Result<Database> {
         let exists = path.as_ref().try_exists()?;
         let conn = Database::open(path)?;
 
@@ -1273,7 +1273,7 @@ impl Database {
         }
     }
 
-    pub fn open_with_schema(db: impl AsRef<Path>) -> devtools::error::Result<Database> {
+    pub fn open_with_schema(db: impl AsRef<Path>) -> core::error::Result<Database> {
         let exists = db.as_ref().try_exists()?;
         let conn = Database::open(db)?;
 

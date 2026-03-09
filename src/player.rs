@@ -34,7 +34,8 @@ use crate::utils::{
     modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo,
 };
 pub use comment::*;
-use devtools::variants;
+use core::variants;
+use devutils::thumbnails::{Image, ThumbnailGenerator};
 pub use playlist::*;
 use registry::models::{self, CollectionId, CommentId, SimpleCollection, VideoId};
 use typo::*;
@@ -395,13 +396,16 @@ impl Manager {
                     tokio::task::spawn_blocking(move || {
                         use rand::Rng;
 
+                        let convert =
+                            |img: Image| image::Handle::from_rgba(img.width, img.height, img.bytes);
+
                         let num = if duration > (interval as f64) {
                             duration as u32 / interval
                         } else {
                             10
                         };
                         let path = url::Url::from_file_path(path.canonicalize().unwrap()).unwrap();
-                        let generator = utils::ThumbnailGenerator::new(path, width, height, 8);
+                        let generator = ThumbnailGenerator::new(path, width, height, 8);
 
                         let range = 1..=num;
                         let mut rng = rand::thread_rng();
@@ -416,16 +420,14 @@ impl Manager {
                         let mut imgs = vec![];
 
                         for idx in range {
-                            let position = gstreamer::ClockTime::from_seconds_f64(
-                                duration * (idx as f64 / num as f64),
-                            );
+                            let position = duration * (idx as f64 / num as f64);
 
                             if generate_poster && idx == rng {
                                 let (img, pst) = generator.generate_with_poster(position);
-                                imgs.push(img);
-                                poster = Some(pst);
+                                imgs.push(convert(img));
+                                poster = Some(convert(pst));
                             } else {
-                                imgs.push(generator.generate(position))
+                                imgs.push(convert(generator.generate(position)))
                             }
                         }
 

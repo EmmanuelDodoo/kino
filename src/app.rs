@@ -8,18 +8,18 @@ use iced::{
 };
 use tokio::sync::mpsc;
 
-use crate::fetch;
 use crate::home::{Home, HomeMessage, shared};
 use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
 use crate::settings::{Settings, SettingsMessage};
 use crate::utils::{Action, Config, KeyPress, Layout, Screen, icons, typo};
-use devtools::Error;
+use core::Error;
 use registry::db::{self, Query};
 use registry::{
     filter::{self, FilterMode, SearchFilter},
     sort::{self, Sort, SortKind},
 };
 
+use devutils::{fetch, scan};
 use registry::models::{
     self, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode, EpisodeId,
     ItemId, Media, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Video,
@@ -29,7 +29,6 @@ use registry::models::{
         triggers::{DeleteTrigger, InsertTrigger},
     },
 };
-use registry::scan;
 use widgets::toast;
 
 #[derive(Debug, Clone, Copy)]

@@ -1,0 +1,22 @@
+[package]
+name = "devutils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+core.workspace = true
+fancy-regex.workspace = true
+glib.workspace = true
+gstreamer.workspace = true
+gstreamer-app = "0.23"  # appsink
+gstreamer-base = "0.23"  # basesrc
+gstreamer-pbutils = "0.23"
+gstreamer-video = "0.23"
+registry.workspace = true
+reqwest.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true

@@ -1,7 +1,7 @@
 use super::{CollectionId, datetime_to_sql};
 use crate::db::{Database, Operation, Query, Table};
 use chrono::{DateTime, Local, NaiveDate};
-use devtools::variants;
+use core::variants;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef};
 use rusqlite::{Result, Row};
 use uuid::Uuid;

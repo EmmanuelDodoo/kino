@@ -1,4 +1,4 @@
-use crate::db::Database;
+use registry::db::Database;
 use registry::models::{EpisodeId, MovieId, SeasonId, ShowId};
 use reqwest::{
     Client, ClientBuilder,

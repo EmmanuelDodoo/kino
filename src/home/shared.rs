@@ -2,7 +2,7 @@ use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{DEFAULT_POSTER, empty, tooltip};
 use crate::utils::{collage, sample_complement, styles};
-use devtools::variants;
+use core::variants;
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
