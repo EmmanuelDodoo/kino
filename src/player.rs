@@ -3160,11 +3160,11 @@ fn draw_config<'a>(
                 .style(styles::button::subtle)
                 .on_press(ConfigMessage::SelectFile);
 
-                let path = subtitle.as_ref().map(|path| trim_path(path, 2));
+                let path = subtitle.as_ref().map(|path| trim_path(path, 3));
                 let path: Element<'_, ConfigMessage> = match path {
                     Some(path) => button(
                         row!(
-                            container(mono(path).size(size))
+                            container(marquee(path).font(mono_font()).size(size))
                                 .max_width(250)
                                 .height(20)
                                 .clip(true),

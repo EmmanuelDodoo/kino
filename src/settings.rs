@@ -16,7 +16,7 @@ use iced::{
         scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
-use widgets::expandable;
+use widgets::{expandable, marquee};
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -1654,7 +1654,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
     let folder = {
         let path = trim_path(path, 3);
 
-        let path = mono(path).size(size / RATIO);
+        let path = marquee(path).font(mono_font()).size(size / RATIO);
 
         let label = sized_bold("Folder: ", size).width(100.0);
 
