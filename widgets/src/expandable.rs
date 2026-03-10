@@ -45,7 +45,7 @@ impl<'a, Message, Theme, Renderer> Expandable<'a, Message, Theme, Renderer> {
             expanded: false,
             spacing: 0.0,
             duration: Duration::from_millis(200),
-            easing: Easing::EaseInOut,
+            easing: Easing::Linear,
             width: Length::Shrink,
             height: Length::Shrink,
             on_expand: None,

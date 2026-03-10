@@ -3022,7 +3022,7 @@ impl Home {
 
         let content = if matches!(self.layout, Layout::Grid) {
             scrollable(
-                column!(movies, shows)
+                column!(movies, space::vertical(), shows)
                     .height(Length::Fill)
                     .spacing(40.0)
                     .padding(iced::Padding::new(10.0).right(16)),
@@ -3032,7 +3032,7 @@ impl Home {
             .on_scroll(HomeMessage::Scroll)
         } else {
             scrollable(
-                column!(movies, shows)
+                column!(movies, space::vertical(), shows)
                     .spacing(40.0)
                     .padding(Padding::new(10.0).bottom(0)),
             )

@@ -12,7 +12,7 @@ use iced::{
     widget::{
         Button, Column, button, column, container, grid,
         operation::{self},
-        row, rule, scrollable, text,
+        row, rule, scrollable, space, text,
     },
 };
 use registry::models::{
@@ -20,7 +20,7 @@ use registry::models::{
     collection::Items,
 };
 use std::iter::Peekable;
-use widgets::menu;
+use widgets::{expandable, menu};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -35,6 +35,10 @@ pub enum Message {
     OpenConfig,
     AddNewItem,
     Triggers,
+    ToggleMovies(bool),
+    ToggleShows(bool),
+    ToggleSeasons(bool),
+    ToggleEpisodes(bool),
     None,
 }
 
@@ -48,6 +52,10 @@ pub struct CollectionMessage {
 pub struct CollectionPage {
     id: CollectionId,
     scroll: Scroll,
+    movies_shown: bool,
+    shows_shown: bool,
+    seasons_shown: bool,
+    episodes_shown: bool,
 }
 
 impl CollectionPage {
@@ -69,6 +77,10 @@ impl CollectionPage {
         Self {
             id: collection,
             scroll: Scroll::new(),
+            movies_shown: true,
+            shows_shown: true,
+            seasons_shown: true,
+            episodes_shown: true,
         }
     }
 
@@ -135,6 +147,26 @@ impl CollectionPage {
                 let msg = HomeMessage::RemoveCollectionItems(self.id, items);
 
                 Some(msg)
+            }
+            Message::ToggleMovies(toggle) => {
+                self.movies_shown = toggle;
+
+                None
+            }
+            Message::ToggleShows(toggle) => {
+                self.shows_shown = toggle;
+
+                None
+            }
+            Message::ToggleSeasons(toggle) => {
+                self.seasons_shown = toggle;
+
+                None
+            }
+            Message::ToggleEpisodes(toggle) => {
+                self.episodes_shown = toggle;
+
+                None
             }
         }
     }
@@ -321,10 +353,6 @@ impl CollectionPage {
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
     ) -> Element<'a, CollectionMessage> {
-        let label = |label: &'a str| -> Element<'a, CollectionMessage> {
-            let label = h6(label);
-            column!(label, rule::horizontal(1.0)).spacing(4.0).into()
-        };
         let collection = self.id;
 
         let content = Column::new()
@@ -335,8 +363,6 @@ impl CollectionPage {
             content
         } else {
             let movies = {
-                let label = label("Movies");
-
                 let movies: Element<'_, CollectionMessage> = {
                     let content = movies.map(|thumbnail| {
                         thumbnail.list(
@@ -352,7 +378,7 @@ impl CollectionPage {
                     column(content).spacing(16.0).into()
                 };
 
-                column!(label, movies).spacing(10.0)
+                self.movie_expandable(movies)
             };
 
             content.push(movies)
@@ -362,8 +388,6 @@ impl CollectionPage {
             content
         } else {
             let shows = {
-                let label = label("Shows");
-
                 let shows: Element<'_, CollectionMessage> = {
                     let content = shows.map(|thumbnail| {
                         thumbnail.list(
@@ -378,7 +402,8 @@ impl CollectionPage {
 
                     column(content).spacing(16.0).into()
                 };
-                column!(label, shows).spacing(10.0)
+
+                self.shows_expandable(shows)
             };
 
             content.push(shows)
@@ -388,8 +413,6 @@ impl CollectionPage {
             content
         } else {
             let seasons = {
-                let label = label("Seasons");
-
                 let seasons: Element<'_, CollectionMessage> = {
                     let content = seasons.map(|thumbnail| {
                         thumbnail.list(
@@ -404,7 +427,8 @@ impl CollectionPage {
 
                     column(content).spacing(16.0).into()
                 };
-                column!(label, seasons).spacing(10.0)
+
+                self.seasons_expandable(seasons)
             };
 
             content.push(seasons)
@@ -414,8 +438,6 @@ impl CollectionPage {
             content
         } else {
             let episodes = {
-                let label = label("Episodes");
-
                 let episodes: Element<'_, CollectionMessage> = {
                     let content = episodes.map(|thumbnail| {
                         thumbnail.list(
@@ -430,7 +452,7 @@ impl CollectionPage {
 
                     column(content).spacing(16.0).into()
                 };
-                column!(label, episodes).spacing(10.0)
+                self.episodes_expandable(episodes)
             };
             content.push(episodes)
         };
@@ -454,10 +476,6 @@ impl CollectionPage {
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
     ) -> Element<'a, CollectionMessage> {
-        let label = |label: &'a str| -> Element<'a, CollectionMessage> {
-            let label = h6(label);
-            column!(label, rule::horizontal(1.0)).spacing(4.0).into()
-        };
         let collection = self.id;
 
         let content = Column::new()
@@ -468,8 +486,6 @@ impl CollectionPage {
             content
         } else {
             let movies = {
-                let label = label("Movies");
-
                 let movies: Element<'_, CollectionMessage> = {
                     let content = movies.map(|thumbnail| {
                         thumbnail.compact(
@@ -482,7 +498,7 @@ impl CollectionPage {
                     column(content).spacing(16.0).into()
                 };
 
-                column!(label, movies).spacing(10.0)
+                self.movie_expandable(movies)
             };
 
             content.push(movies)
@@ -492,8 +508,6 @@ impl CollectionPage {
             content
         } else {
             let shows = {
-                let label = label("Shows");
-
                 let shows: Element<'_, CollectionMessage> = {
                     let content = shows.map(|thumbnail| {
                         thumbnail.compact(
@@ -505,7 +519,7 @@ impl CollectionPage {
 
                     column(content).spacing(16.0).into()
                 };
-                column!(label, shows).spacing(10.0)
+                self.shows_expandable(shows)
             };
 
             content.push(shows)
@@ -515,8 +529,6 @@ impl CollectionPage {
             content
         } else {
             let seasons = {
-                let label = label("Seasons");
-
                 let seasons: Element<'_, CollectionMessage> = {
                     let content = seasons.map(|thumbnail| {
                         thumbnail.compact(
@@ -528,7 +540,7 @@ impl CollectionPage {
 
                     column(content).spacing(16.0).into()
                 };
-                column!(label, seasons).spacing(10.0)
+                self.seasons_expandable(seasons)
             };
 
             content.push(seasons)
@@ -538,8 +550,6 @@ impl CollectionPage {
             content
         } else {
             let episodes = {
-                let label = label("Episodes");
-
                 let episodes: Element<'_, CollectionMessage> = {
                     let content = episodes.map(|thumbnail| {
                         thumbnail.compact(
@@ -551,7 +561,7 @@ impl CollectionPage {
 
                     column(content).spacing(16.0).into()
                 };
-                column!(label, episodes).spacing(10.0)
+                self.episodes_expandable(episodes)
             };
             content.push(episodes)
         };
@@ -576,11 +586,6 @@ impl CollectionPage {
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
     ) -> Element<'a, CollectionMessage> {
-        let label = |label: &'a str| -> Element<'a, CollectionMessage> {
-            let label = h6(label);
-            column!(label, rule::horizontal(1.0)).spacing(4.0).into()
-        };
-
         let collection = self.id;
 
         let content = Column::new()
@@ -591,8 +596,6 @@ impl CollectionPage {
             content
         } else {
             let movies = {
-                let label = label("Movies");
-
                 let movies = movies.map(|thumbnail| {
                     thumbnail.card(
                         now,
@@ -603,12 +606,17 @@ impl CollectionPage {
                     )
                 });
 
-                let movies = grid(movies)
-                    .spacing(16)
-                    .fluid(CARD_WIDTH)
-                    .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+                let movies =
+                    grid(movies)
+                        .spacing(16)
+                        .fluid(CARD_WIDTH)
+                        .height(if self.movies_shown {
+                            grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT)
+                        } else {
+                            grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
+                        });
 
-                column!(label, movies).spacing(10.0)
+                self.movie_expandable(movies)
             };
             content.push(movies)
         };
@@ -617,8 +625,6 @@ impl CollectionPage {
             content
         } else {
             let shows = {
-                let label = label("Shows");
-
                 let shows = shows.map(|show| {
                     show.card(
                         now,
@@ -632,9 +638,13 @@ impl CollectionPage {
                 let shows = grid(shows)
                     .spacing(16)
                     .fluid(CARD_WIDTH)
-                    .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+                    .height(if self.shows_shown {
+                        grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT)
+                    } else {
+                        grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
+                    });
 
-                column!(label, shows).spacing(10.0)
+                self.shows_expandable(shows)
             };
 
             content.push(shows)
@@ -644,8 +654,6 @@ impl CollectionPage {
             content
         } else {
             let seasons = {
-                let label = label("Seasons");
-
                 let seasons = seasons.map(|season| {
                     season.card(
                         now,
@@ -656,12 +664,17 @@ impl CollectionPage {
                     )
                 });
 
-                let seasons = grid(seasons)
-                    .spacing(16)
-                    .fluid(CARD_WIDTH)
-                    .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+                let seasons =
+                    grid(seasons)
+                        .spacing(16)
+                        .fluid(CARD_WIDTH)
+                        .height(if self.seasons_shown {
+                            grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT)
+                        } else {
+                            grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
+                        });
 
-                column!(label, seasons).spacing(10.0)
+                self.seasons_expandable(seasons)
             };
 
             content.push(seasons)
@@ -670,26 +683,28 @@ impl CollectionPage {
         let content = if episodes.peek().is_none() {
             content
         } else {
-            let episodes = {
-                let label = label("Episodes");
+            let episodes =
+                {
+                    let episodes = episodes.map(|episode| {
+                        episode.card(
+                            now,
+                            move |id| add(collection, ItemId::Episode(id)),
+                            move |id| select(collection, ItemId::Episode(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
+                            move |id| play(collection, ItemId::Episode(id)),
+                        )
+                    });
 
-                let episodes = episodes.map(|episode| {
-                    episode.card(
-                        now,
-                        move |id| add(collection, ItemId::Episode(id)),
-                        move |id| select(collection, ItemId::Episode(id)),
-                        move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
-                        move |id| play(collection, ItemId::Episode(id)),
-                    )
-                });
+                    let episodes = grid(episodes).spacing(16).fluid(CARD_WIDTH).height(
+                        if self.seasons_shown {
+                            grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT)
+                        } else {
+                            grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
+                        },
+                    );
 
-                let episodes = grid(episodes)
-                    .spacing(16)
-                    .fluid(CARD_WIDTH)
-                    .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
-
-                column!(label, episodes).spacing(10.0)
-            };
+                    self.episodes_expandable(episodes)
+                };
 
             content.push(episodes)
         };
@@ -712,6 +727,74 @@ impl CollectionPage {
 
     pub fn update_scroll(&mut self) -> Task<()> {
         operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
+    }
+
+    pub fn movie_expandable<'a>(
+        &self,
+        movies: impl Into<Element<'a, CollectionMessage>>,
+    ) -> Element<'a, CollectionMessage> {
+        let id = self.id;
+        let label = section_label("Movies", self.movies_shown);
+
+        expandable(label, movies)
+            .expanded(self.movies_shown)
+            .on_expand(move |toggle| CollectionMessage {
+                id,
+                message: Message::ToggleMovies(toggle),
+            })
+            .spacing(10.0)
+            .into()
+    }
+
+    pub fn shows_expandable<'a>(
+        &self,
+        shows: impl Into<Element<'a, CollectionMessage>>,
+    ) -> Element<'a, CollectionMessage> {
+        let id = self.id;
+        let label = section_label("Shows", self.shows_shown);
+
+        expandable(label, shows)
+            .expanded(self.shows_shown)
+            .on_expand(move |toggle| CollectionMessage {
+                id,
+                message: Message::ToggleShows(toggle),
+            })
+            .spacing(10.0)
+            .into()
+    }
+
+    pub fn seasons_expandable<'a>(
+        &self,
+        seasons: impl Into<Element<'a, CollectionMessage>>,
+    ) -> Element<'a, CollectionMessage> {
+        let id = self.id;
+        let label = section_label("Seasons", self.seasons_shown);
+
+        expandable(label, seasons)
+            .expanded(self.seasons_shown)
+            .on_expand(move |toggle| CollectionMessage {
+                id,
+                message: Message::ToggleSeasons(toggle),
+            })
+            .spacing(10.0)
+            .into()
+    }
+
+    pub fn episodes_expandable<'a>(
+        &self,
+        episodes: impl Into<Element<'a, CollectionMessage>>,
+    ) -> Element<'a, CollectionMessage> {
+        let id = self.id;
+        let label = section_label("Episodes", self.episodes_shown);
+
+        expandable(label, episodes)
+            .expanded(self.episodes_shown)
+            .on_expand(move |toggle| CollectionMessage {
+                id,
+                message: Message::ToggleEpisodes(toggle),
+            })
+            .spacing(10.0)
+            .into()
     }
 }
 
@@ -789,4 +872,17 @@ fn play(id: CollectionId, item: ItemId) -> CollectionMessage {
         id,
         message: Message::PlayItem(item),
     }
+}
+
+fn section_label<'a>(label: &'a str, shown: bool) -> Element<'a, CollectionMessage> {
+    let shown = if shown { CHEV_UP } else { CHEV_DOWN };
+    let icon = icon(shown).size(H6);
+    let label = h6(label);
+
+    let label = row!(label, space::horizontal(), icon).align_y(Vertical::Center);
+
+    column!(label, rule::horizontal(1.0))
+        .spacing(4.0)
+        .width(Length::Fill)
+        .into()
 }
