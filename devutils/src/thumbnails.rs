@@ -1,4 +1,4 @@
-use core::error::{Error, GStreamerError};
+use core::error::{Error, GStreamerError, Result};
 
 use glib::object::Cast;
 use gstreamer::{
@@ -35,25 +35,26 @@ impl Drop for ThumbnailGenerator {
 }
 
 impl ThumbnailGenerator {
-    pub fn new(path: url::Url, width: i32, height: i32, downscale: u32) -> Self {
-        gst::init().map_err(GStreamerError::Glib).unwrap();
+    pub fn new(path: url::Url, width: i32, height: i32, downscale: u32) -> Result<Self> {
+        gst::init().map_err(GStreamerError::Glib)?;
 
         let template = format!(
             "urisourcebin uri=\"{}\" ! decodebin ! videoconvert ! videoscale ! appsink name=sink drop=true caps=video/x-raw,format=NV12,pixel-aspect-ratio=1/1",
             path.as_str()
         );
         let pipeline = gst::parse::launch(template.as_ref())
-            .unwrap()
+            .map_err(GStreamerError::Glib)?
             .downcast::<gst::Pipeline>()
-            .unwrap();
+            .map_err(|_| Error::Raw("Could not downcast thumbnail pipeline".to_owned()))?;
 
         let sink = pipeline.by_name("sink").expect("Missing appsink");
-        let sink = sink.downcast::<gstreamer_app::AppSink>().unwrap();
+        let sink = sink
+            .downcast::<gstreamer_app::AppSink>()
+            .map_err(|_| Error::Raw("Could not downcast thumbnail appsink".to_owned()))?;
 
         pipeline
             .set_state(gst::State::Paused)
-            .map_err(GStreamerError::StateChangeError)
-            .unwrap();
+            .map_err(GStreamerError::StateChangeError)?;
 
         // Wait until preroll (pipeline ready to process)
         let (res, _, _) = pipeline.state(gst::ClockTime::NONE);
@@ -63,25 +64,23 @@ impl ThumbnailGenerator {
 
         let duration = pipeline
             .query_duration::<gst::ClockTime>()
-            .ok_or(Error::ThumbnailEmptyVideo)
-            .unwrap();
+            .ok_or(Error::ThumbnailEmptyVideo)?;
 
-        Self {
-            bus: pipeline.bus().unwrap(),
+        Ok(Self {
+            bus: pipeline.bus().expect("Missing thumbnail pipeline bus"),
             pipeline,
             sink,
             width,
             height,
             downscale,
             duration,
-        }
+        })
     }
 
-    fn sample(&self, position: gst::ClockTime) -> gstreamer::Sample {
+    fn sample(&self, position: gst::ClockTime) -> Result<gstreamer::Sample> {
         self.pipeline
             .set_state(gst::State::Paused)
-            .map_err(GStreamerError::StateChangeError)
-            .unwrap();
+            .map_err(GStreamerError::StateChangeError)?;
 
         // Wait until preroll (pipeline ready to process)
         let (res, _, _) = self.pipeline.state(gst::ClockTime::NONE);
@@ -91,19 +90,21 @@ impl ThumbnailGenerator {
 
         self.pipeline
             .seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT, position)
-            .map_err(GStreamerError::BoolError)
-            .unwrap();
+            .map_err(GStreamerError::BoolError)?;
 
-        self.sink.pull_preroll().unwrap()
+        Ok(self
+            .sink
+            .pull_preroll()
+            .map_err(GStreamerError::BoolError)?)
     }
 
     fn frame<'a>(
         &self,
         sample: &'a gstreamer::Sample,
-    ) -> (
+    ) -> Result<(
         gstreamer::BufferMap<'a, gstreamer::buffer::Readable>,
         Option<u32>,
-    ) {
+    )> {
         let stride = sample.buffer().and_then(|buffer| {
             buffer
                 .meta::<gstreamer_video::VideoMeta>()
@@ -111,10 +112,7 @@ impl ThumbnailGenerator {
         });
 
         let buffer = sample.buffer().expect("Could get sample buffer");
-        let frame = buffer
-            .map_readable()
-            .map_err(GStreamerError::BoolError)
-            .unwrap();
+        let frame = buffer.map_readable().map_err(GStreamerError::BoolError)?;
 
         while let Some(msg) = self.bus.pop() {
             if let gst::MessageView::Error(error) = msg.view() {
@@ -122,37 +120,37 @@ impl ThumbnailGenerator {
             }
         }
 
-        (frame, stride)
+        Ok((frame, stride))
     }
 
-    pub fn generate(&self, seconds: f64) -> Image {
+    pub fn generate(&self, seconds: f64) -> Result<Image> {
         let position = gstreamer::ClockTime::from_seconds_f64(seconds);
         let width = self.width;
         let height = self.height;
         let downscale = self.downscale;
 
-        let sample = self.sample(position);
+        let sample = self.sample(position)?;
 
-        let (frame, stride) = self.frame(&sample);
+        let (frame, stride) = self.frame(&sample)?;
 
-        Image {
+        Ok(Image {
             width: width as u32 / downscale,
             height: height as u32 / downscale,
             bytes: yuv_to_rgba(frame.as_slice(), width as _, height as _, downscale, stride),
-        }
+        })
     }
 
-    pub fn generate_with_poster(&self, seconds: f64) -> (Image, Image) {
+    pub fn generate_with_poster(&self, seconds: f64) -> Result<(Image, Image)> {
         let position = gstreamer::ClockTime::from_seconds_f64(seconds);
         let width = self.width;
         let height = self.height;
         let downscale = self.downscale;
 
-        let sample = self.sample(position);
+        let sample = self.sample(position)?;
 
-        let (frame, stride) = self.frame(&sample);
+        let (frame, stride) = self.frame(&sample)?;
 
-        (
+        Ok((
             Image {
                 width: width as u32 / downscale,
                 height: height as u32 / downscale,
@@ -163,7 +161,7 @@ impl ThumbnailGenerator {
                 height: height as u32,
                 bytes: yuv_to_rgba(frame.as_slice(), width as _, height as _, 1, stride),
             },
-        )
+        ))
     }
 }
 

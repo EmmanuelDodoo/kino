@@ -34,7 +34,7 @@ use crate::utils::{
     modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo,
 };
 pub use comment::*;
-use core::variants;
+use core::{Error, variants};
 use devutils::thumbnails::{Image, ThumbnailGenerator};
 pub use playlist::*;
 use registry::models::{self, CollectionId, CommentId, SimpleCollection, VideoId};
@@ -405,7 +405,7 @@ impl Manager {
                             10
                         };
                         let path = url::Url::from_file_path(path.canonicalize().unwrap()).unwrap();
-                        let generator = ThumbnailGenerator::new(path, width, height, 8);
+                        let generator = ThumbnailGenerator::new(path, width, height, 8)?;
 
                         let range = 1..=num;
                         let mut rng = rand::thread_rng();
@@ -423,24 +423,41 @@ impl Manager {
                             let position = duration * (idx as f64 / num as f64);
 
                             if generate_poster && idx == rng {
-                                let (img, pst) = generator.generate_with_poster(position);
+                                let (img, pst) = match generator.generate_with_poster(position) {
+                                    Ok(items) => items,
+                                    Err(error) => {
+                                        tracing::error!("Thumbnail generation error.\n{error}");
+                                        continue;
+                                    }
+                                };
+
                                 imgs.push(convert(img));
                                 poster = Some(convert(pst));
                             } else {
-                                imgs.push(convert(generator.generate(position)))
+                                match generator.generate(position) {
+                                    Ok(img) => imgs.push(convert(img)),
+                                    Err(error) => {
+                                        tracing::error!("Thumbnail generation error.\n{error}");
+                                        continue;
+                                    }
+                                }
                             }
                         }
 
                         drop(generator);
 
-                        (id, imgs, poster)
+                        Ok::<_, Error>((id, imgs, poster))
                     }),
                     move |res| match res {
-                        Ok((id, thumbnails, poster)) => ManagerMessage::Thumbnail {
+                        Ok(Ok((id, thumbnails, poster))) => ManagerMessage::Thumbnail {
                             id,
                             thumbnails,
                             poster,
                         },
+                        Ok(Err(error)) => {
+                            tracing::error!("Thumbnail generation error.\n{error}");
+                            ManagerMessage::None
+                        }
                         Err(error) => {
                             tracing::error!("Thumbnail generation error.\n{error}");
                             ManagerMessage::None
