@@ -3,6 +3,7 @@ pub mod image_ops;
 pub mod scan;
 pub mod thumbnails;
 
+#[derive(Debug, Clone)]
 pub struct Image {
     pub width: u32,
     pub height: u32,

@@ -4,6 +4,7 @@ use image::{
 };
 
 use super::{Color, Image};
+use std::path::PathBuf;
 
 const DEFAULT_POSTER_PATH: &[u8] = include_bytes!("../../resources/images/default_poster.png");
 
@@ -244,7 +245,7 @@ fn adaptive_sample_color_compl(img: &DynamicImage) -> (Color, Color) {
     if bg_lum < 0.5 {
         (sample, (255, 255, 255, 1.0))
     } else {
-        (sample, (255, 255, 255, 1.0))
+        (sample, (0, 0, 0, 1.0))
     }
 }
 
@@ -314,4 +315,74 @@ fn relative_contrast(a: Color, b: Color) -> f32 {
     let lum_b = relative_luminance(b);
 
     (lum_a.max(lum_b) + 0.05) / (lum_a.min(lum_b) + 0.05)
+}
+
+pub fn save_generated_poster(
+    id: registry::models::VideoId,
+    img: Image,
+    db: PathBuf,
+    path: PathBuf,
+) {
+    tracing::debug!("Saving generated thumbnail on {id}");
+    use image::{ImageBuffer, Rgba, codecs::jpeg::JpegEncoder};
+    use registry::{db, models::VideoId};
+    use rusqlite::types::ToSqlOutput;
+
+    let path = crate::fetch::poster_path(path, id);
+
+    let Some(img): Option<ImageBuffer<Rgba<u8>, _>> =
+        ImageBuffer::from_raw(img.width, img.height, img.bytes)
+    else {
+        tracing::error!("Error saving generated poster image buffer on {id}");
+        return;
+    };
+
+    let mut file = match std::fs::File::create(path.clone()) {
+        Ok(file) => file,
+        Err(error) => {
+            tracing::error!("Error saving generated poster on {id}.\n{error}");
+            return;
+        }
+    };
+
+    let mut encoder = JpegEncoder::new(&mut file);
+
+    if let Err(error) = encoder.encode_image(&img) {
+        tracing::error!("Error saving generated poster on {id}.\n{error}");
+        return;
+    }
+
+    let db = match db::Database::open(db) {
+        Ok(db) => db,
+        Err(error) => {
+            tracing::error!("fetcher Db Error \n{error}");
+            return;
+        }
+    };
+
+    let table = match id {
+        VideoId::Movie(_) => "movie",
+        VideoId::Episode(_) => "episode",
+    };
+
+    let sql =
+        format!("UPDATE {table} SET poster=:poster, generate_poster=:generate_poster WHERE id=:id");
+
+    let path = path.display().to_string();
+
+    match db.execute(
+        &sql,
+        &[
+            (":id", &ToSqlOutput::from(id)),
+            (":generate_poster", &ToSqlOutput::from(false)),
+            (":poster", &ToSqlOutput::from(path)),
+        ],
+    ) {
+        Ok(_) => {
+            tracing::debug!("Generated poster {id} saved.")
+        }
+        Err(error) => {
+            tracing::error!("Error saving generated poster on {id}.\n{error}");
+        }
+    }
 }

@@ -282,7 +282,7 @@ pub enum ManagerMessage {
     Thumbnail {
         id: VideoId,
         thumbnails: Vec<image::Handle>,
-        poster: Option<image::Handle>,
+        poster: Option<devutils::Image>,
     },
     Resize((window::Id, Size)),
     SeekRelease,
@@ -432,7 +432,7 @@ impl Manager {
                                 };
 
                                 imgs.push(convert(img));
-                                poster = Some(convert(pst));
+                                poster = Some(pst);
                             } else {
                                 match generator.generate(position) {
                                     Ok(img) => imgs.push(convert(img)),
@@ -517,11 +517,11 @@ impl Manager {
                     player.thumbnails = generated;
                 }
 
-                let Some(handle) = poster else {
+                let Some(img) = poster else {
                     return Task::none();
                 };
 
-                Task::done(Message::GeneratedPoster { id, handle })
+                Task::done(Message::GeneratedPoster { id, img })
             }
             ManagerMessage::Resize((id, size)) => {
                 if Some(id) == self.window {
