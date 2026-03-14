@@ -1,8 +1,8 @@
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{DEFAULT_POSTER, empty, tooltip};
-use crate::utils::{collage, sample_complement, styles};
+use crate::utils::{empty, styles, tooltip};
 use core::variants;
+use devutils::image_ops::{collage, sample_complement};
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
@@ -16,6 +16,10 @@ use iced::{
 };
 use registry::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
 use widgets::marquee;
+
+use std::sync::LazyLock;
+pub static DEFAULT_POSTER: LazyLock<Option<Handle>> =
+    LazyLock::new(|| devutils::image_ops::default_poster().map(to_handle));
 
 pub const CARD_HEIGHT: f32 = 450.0;
 pub const CARD_WIDTH: f32 = CARD_HEIGHT * 2.0 / 3.0;
@@ -442,7 +446,12 @@ impl<T: Media> Thumbnail<T> {
             .poster()
             .map(|path| {
                 let path = path.to_owned();
-                iced::Task::future(async move { (id, sample_complement(&path)) })
+                iced::Task::future(async move {
+                    (
+                        id,
+                        sample_complement(&path).map(|(a, b)| (to_color(a), to_color(b))),
+                    )
+                })
             })
             .unwrap_or_default();
 
@@ -916,7 +925,7 @@ impl CollectionThumbnail {
             .iter()
             .filter_map(|poster| poster.as_deref());
 
-        let collage = collage(paths, Self::WIDTH, Self::HEIGHT);
+        let collage = collage(paths, Self::WIDTH, Self::HEIGHT).map(to_handle);
 
         Self {
             collage,
@@ -1307,4 +1316,12 @@ impl Icon {
             Self { id: Icons::Icon17 },
         ]
     }
+}
+
+fn to_color(color: devutils::Color) -> iced::Color {
+    iced::Color::from_rgba8(color.0, color.1, color.2, color.3)
+}
+
+fn to_handle(img: devutils::Image) -> Handle {
+    Handle::from_rgba(img.width, img.height, bytes::Bytes::from(img.bytes))
 }

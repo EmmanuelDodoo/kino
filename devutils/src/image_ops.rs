@@ -2,13 +2,10 @@ use image::{
     DynamicImage, GenericImage, ImageBuffer, ImageReader, Rgba,
     imageops::{self, FilterType},
 };
-use std::sync::LazyLock;
 
-use iced::Color;
-use iced::widget::image::Handle;
+use super::{Color, Image};
 
 const DEFAULT_POSTER_PATH: &[u8] = include_bytes!("../../resources/images/default_poster.png");
-pub static DEFAULT_POSTER: LazyLock<Option<Handle>> = LazyLock::new(default_poster);
 
 fn open(path: &str) -> Option<DynamicImage> {
     ImageReader::open(path)
@@ -25,7 +22,7 @@ fn open(path: &str) -> Option<DynamicImage> {
         })
 }
 
-fn default_poster() -> Option<Handle> {
+pub fn default_poster() -> Option<Image> {
     use std::io::Cursor;
 
     let default = Cursor::new(DEFAULT_POSTER_PATH);
@@ -45,18 +42,14 @@ fn default_poster() -> Option<Handle> {
 
     let img = img.to_rgba8();
 
-    Some(Handle::from_rgba(
-        img.width(),
-        img.height(),
-        bytes::Bytes::from(img.into_raw()),
-    ))
+    Some(Image {
+        width: img.width(),
+        height: img.height(),
+        bytes: img.into_raw(),
+    })
 }
 
-pub fn collage<'a>(
-    paths: impl Iterator<Item = &'a str>,
-    width: u32,
-    height: u32,
-) -> Option<Handle> {
+pub fn collage<'a>(paths: impl Iterator<Item = &'a str>, width: u32, height: u32) -> Option<Image> {
     let imgs: Vec<DynamicImage> = paths.filter_map(open).take(4).collect();
 
     if imgs.is_empty() {
@@ -158,11 +151,11 @@ pub fn collage<'a>(
         }
     }
 
-    Some(Handle::from_rgba(
-        canvas.width(),
-        canvas.height(),
-        bytes::Bytes::from(canvas.into_raw()),
-    ))
+    Some(Image {
+        width: canvas.width(),
+        height: canvas.height(),
+        bytes: canvas.into_raw(),
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -232,16 +225,16 @@ fn adaptive_sample_color_compl(img: &DynamicImage) -> (Color, Color) {
     let [r, g, b, _] = pixel.0;
 
     let target = 7.0;
-    let sample = Color::from_rgb8(r, g, b);
+    let sample = (r, g, b, 1.0);
     let mut hsl = rgb_to_hsl(r, g, b);
-    let bg_lum = sample.relative_luminance();
+    let bg_lum = relative_luminance(sample);
     let direction = if bg_lum < 0.5 { 1.0 } else { -1.0 };
 
     for _ in 0..20 {
         let [r, g, b] = hsl_to_rgb(hsl);
-        let rgb = Color::from_rgb8(r, g, b);
+        let rgb = (r, g, b, 1.0);
 
-        if sample.relative_contrast(rgb) >= target {
+        if relative_contrast(sample, rgb) >= target {
             return (sample, rgb);
         }
         hsl.l = (hsl.l + direction * 0.05).clamp(0.0, 1.0);
@@ -249,9 +242,9 @@ fn adaptive_sample_color_compl(img: &DynamicImage) -> (Color, Color) {
 
     // guaranteed fallback
     if bg_lum < 0.5 {
-        (sample, Color::WHITE)
+        (sample, (255, 255, 255, 1.0))
     } else {
-        (sample, Color::BLACK)
+        (sample, (255, 255, 255, 1.0))
     }
 }
 
@@ -261,7 +254,7 @@ pub fn sample_complement(path: &str) -> Option<(Color, Color)> {
     img.as_ref().map(adaptive_sample_color_compl)
 }
 
-// fn adaptive_sample_color_compl(img: &DynamicImage) -> [u8; 3] {
+// fn adaptive_sample_color_compl(img: &DynamicImage) -> Color {
 //     // Downscale to 1×1 for average color
 //     let small = imageops::resize(img, 2, 2, imageops::FilterType::CatmullRom);
 //     let pixel = small.get_pixel(0, 0);
@@ -280,14 +273,45 @@ pub fn sample_complement(path: &str) -> Option<(Color, Color)> {
 //     // overlay.s = overlay.s.clamp(0.5, 0.9);
 //     sample.s = sample.s.min(0.9);
 //
-//     hsl_to_rgb(sample)
+//     let [r, g, b] = hsl_to_rgb(sample);
+//
+//     (r, g, b, 1.0)
 // }
 //
 // pub fn sample_complement(path: &str) -> Option<Color> {
 //     let img = open(path);
 //
-//     img.as_ref().map(|img| {
-//         let color = adaptive_sample_color_compl(img);
-//         Color::from_rgb8(color[0], color[1], color[2])
-//     })
+//     img.as_ref().map(adaptive_sample_color_compl)
 // }
+
+/// Returns the relative luminance of the [`Color`].
+/// <https://www.w3.org/TR/WCAG21/#dfn-relative-luminance>
+fn relative_luminance(color: Color) -> f32 {
+    // As described in:
+    // https://en.wikipedia.org/wiki/SRGB#The_reverse_transformation
+    fn linear_component(u: f32) -> f32 {
+        if u < 0.04045 {
+            u / 12.92
+        } else {
+            ((u + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    let (r, g, b) = (
+        linear_component((color.0 as f32) / 255.0),
+        linear_component((color.1 as f32) / 255.0),
+        linear_component((color.2 as f32) / 255.0),
+    );
+
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/// Returns the [relative contrast ratio] of the [`Color`] against another one.
+///
+/// [relative contrast ratio]: https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio
+fn relative_contrast(a: Color, b: Color) -> f32 {
+    let lum_a = relative_luminance(a);
+    let lum_b = relative_luminance(b);
+
+    (lum_a.max(lum_b) + 0.05) / (lum_a.min(lum_b) + 0.05)
+}
