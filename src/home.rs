@@ -3509,7 +3509,9 @@ impl Home {
                 movies.len() + shows.len() + seasons.len() + episodes.len(),
             ),
         };
-        let title = container(h4(title)).clip(true).center_y(40);
+        let title = container(marquee(title).size(H4).font(bold_font()))
+            .center_x(Length::FillPortion(7))
+            .center_y(40);
 
         let search =
             sized_button(icons::SEARCH, H6).on_press(HomeMessage::OpenView(ViewMessage::Search));

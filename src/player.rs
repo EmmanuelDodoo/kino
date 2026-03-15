@@ -1202,8 +1202,8 @@ impl Manager {
 
                 container(title)
                     .style(styles::container::text)
-                    .height(36)
-                    .clip(true)
+                    .center_x(Length::FillPortion(12))
+                    .center_y(36)
                     .into()
             }
             State::Loading(_) | State::Idle => empty(),
