@@ -137,7 +137,7 @@ pub enum Message {
     PlaylistSave(Playlist),
     GeneratedPoster {
         id: VideoId,
-        handle: iced::widget::image::Handle,
+        img: devutils::Image,
     },
     None,
 }
@@ -217,19 +217,20 @@ impl App {
         let (rating_tx, rating_rx) = mpsc::channel(2);
         let rating = config.general.tmdb_rating;
 
+        let img_proc =
+            Task::future(devutils::image_ops::image_processor(config.db_path())).discard();
+
         let fetcher = if fetch {
-            Task::perform(
-                fetch::fetcher(
-                    config.db_path(),
-                    auth_rx,
-                    auth,
-                    rating_rx,
-                    rating,
-                    config.images_path(),
-                    config.fetching_interval(),
-                ),
-                |_| Message::None,
-            )
+            Task::future(fetch::fetcher(
+                config.db_path(),
+                auth_rx,
+                auth,
+                rating_rx,
+                rating,
+                config.images_path(),
+                config.fetching_interval(),
+            ))
+            .discard()
         } else {
             Task::none()
         };
@@ -243,7 +244,7 @@ impl App {
 
         let new = Self::new(config, db, home, auth_tx, rating_tx);
 
-        let tasks = Task::batch([load_errors, load_id, home_tasks, fetcher]);
+        let tasks = Task::batch([load_errors, load_id, home_tasks, fetcher, img_proc]);
 
         (new, tasks)
     }
@@ -340,7 +341,7 @@ impl App {
                 Task::none()
             }
             Message::CloseToast(idx) => {
-                tracing::debug!("Closdebugast {idx}");
+                tracing::debug!("Closed toast {idx}");
                 self.toasts
                     .remove(idx.min(self.toasts.len().saturating_sub(1)));
 
@@ -1387,100 +1388,17 @@ impl App {
                     Err(error) => Message::error(error).tasked(),
                 }
             }
-            Message::GeneratedPoster { id, handle } => {
+            Message::GeneratedPoster { id, img } => {
                 tracing::debug!("Saving generated thumbnail on {id}");
 
                 let db = self.config.db_path();
 
-                let path = self
-                    .config
-                    .images_path()
-                    .join(format!("{id}{}", fetch::POSTER_SNIPPET));
+                let path = self.config.images_path();
 
-                let path_clone = path.clone();
-
-                Task::perform(
-                    async move {
-                        use image::{ImageBuffer, Rgba, codecs::jpeg::JpegEncoder};
-
-                        let (width, height, bytes) = match handle {
-                            iced::widget::image::Handle::Rgba {
-                                width,
-                                height,
-                                pixels,
-                                ..
-                            } => (width, height, pixels),
-                            _ => unreachable!("Thumbnail generation always uses rgba bytes"),
-                        };
-
-                        let img: ImageBuffer<Rgba<u8>, _> =
-                            match ImageBuffer::from_raw(width, height, bytes) {
-                                Some(img) => img,
-                                None => {
-                                    tracing::error!(
-                                        "Error saving generated poster image buffer on {id}"
-                                    );
-                                    return None;
-                                }
-                            };
-
-                        let mut file = match std::fs::File::create(path) {
-                            Ok(file) => file,
-                            Err(error) => {
-                                tracing::error!("Error saving generated poster on {id}.\n{error}");
-                                return None;
-                            }
-                        };
-
-                        let mut encoder = JpegEncoder::new(&mut file);
-
-                        match encoder.encode_image(&img) {
-                            Ok(res) => Some(res),
-                            Err(error) => {
-                                tracing::error!("Error saving generated poster on {id}.\n{error}");
-                                None
-                            }
-                    }
-                    },
-                    move |res| {
-                        use rusqlite::types::ToSqlOutput;
-                        if res.is_none() {
-                            return;
-                        }
-
-                        let path = path_clone.display().to_string();
-                        let db = match db::Database::open(db) {
-                            Ok(db) => db,
-                            Err(error) => {
-                                tracing::error!("fetcher Db Error \n{error}");
-                                return;
-                            }
-                        };
-
-
-                        let table = match id {
-                            VideoId::Movie(_) => "movie",
-                            VideoId::Episode(_) => "episode"
-                        };
-
-                        let sql = format!("UPDATE {table} SET poster=:poster, generate_poster=:generate_poster WHERE id=:id");
-
-                        match db.execute(&sql, &[
-                            (":id", &ToSqlOutput::from(id)),
-                            (":generate_poster", &ToSqlOutput::from(false)),
-                            (":poster", &ToSqlOutput::from(path))
-                        ]) {
-                            Ok(_) => {
-                                tracing::debug!("Generated poster {id} saved.")
-                            }
-                            Err(error) => {
-                                tracing::error!("Error saving generated poster on {id}.\n{error}");
-                            }
-                        }
-
-                    },
-                    )
-                        .discard()
+                Task::future(async move {
+                    devutils::image_ops::save_generated_poster(id, img, db, path);
+                })
+                .discard()
             }
         }
     }

@@ -7,7 +7,7 @@ use reqwest::{
 use rusqlite::types::Value;
 use serde::Deserialize;
 use std::ops::Deref;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufWriter};
@@ -26,8 +26,9 @@ static CLIENT: LazyLock<Client> = LazyLock::new(|| {
         .expect("Cannot build request client")
 });
 
-pub const POSTER_SNIPPET: &str = "_poster.jpg";
-pub const BACKDROP_SNIPPET: &str = "_backdrop.jpg";
+pub(super) const POSTER_SNIPPET: &str = "_poster.jpg";
+pub(super) const BACKDROP_SNIPPET: &str = "_backdrop.jpg";
+pub(super) const IMAGE_SQL: &str = "INSERT INTO image (path) VALUES (:path) ON CONFLICT (path) DO UPDATE SET main=NULL, accent=NULL, generated=FALSE";
 
 #[derive(Deserialize, Debug, Clone)]
 struct ImageConfig {
@@ -393,6 +394,14 @@ pub async fn fetcher(
     }
 }
 
+pub fn poster_path<P: AsRef<Path>, Id: std::fmt::Display>(path: P, id: Id) -> PathBuf {
+    path.as_ref().join(format!("{}{POSTER_SNIPPET}", id))
+}
+
+pub fn backdrop_path<P: AsRef<Path>, Id: std::fmt::Display>(path: P, id: Id) -> PathBuf {
+    path.as_ref().join(format!("{}{BACKDROP_SNIPPET}", id))
+}
+
 mod movies {
 
     use super::*;
@@ -548,9 +557,17 @@ mod movies {
         let mut rows = 0;
 
         for (id, poster, backdrop) in images {
-            let poster = poster
-                .map(ToSqlOutput::from)
-                .unwrap_or(ToSqlOutput::Owned(Value::Null));
+            let poster = match poster {
+                Some(poster) => {
+                    let poster = ToSqlOutput::from(poster);
+                    if let Err(error) = trans.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                        tracing::error!("Could not insert into image table. Error\n{error}")
+                    };
+
+                    poster
+                }
+                None => ToSqlOutput::Owned(Value::Null),
+            };
 
             let backdrop = match backdrop {
                 Some(path) => ToSqlOutput::from(path),
@@ -626,7 +643,7 @@ mod movies {
             for movie in pending {
                 let poster = match &movie.poster {
                     Some(poster) => {
-                        let poster_path = images_path.join(format!("{}{POSTER_SNIPPET}", movie.id));
+                        let poster_path = poster_path(images_path, movie.id);
                         let poster = download(auth, image_config, poster, true, &poster_path).await;
 
                         if poster {
@@ -640,8 +657,7 @@ mod movies {
 
                 let backdrop = match &movie.backdrop {
                     Some(backdrop) => {
-                        let backdrop_path =
-                            images_path.join(format!("{}{BACKDROP_SNIPPET}", movie.id));
+                        let backdrop_path = backdrop_path(images_path, movie.id);
                         let backdrop =
                             download(auth, image_config, backdrop, false, &backdrop_path).await;
 
@@ -812,9 +828,17 @@ mod shows {
         let mut rows = 0;
 
         for (id, poster, backdrop) in images {
-            let poster = poster
-                .map(ToSqlOutput::from)
-                .unwrap_or(ToSqlOutput::Owned(Value::Null));
+            let poster = match poster {
+                Some(poster) => {
+                    let poster = ToSqlOutput::from(poster);
+                    if let Err(error) = trans.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                        tracing::error!("Could not insert into image table. Error\n{error}")
+                    };
+
+                    poster
+                }
+                None => ToSqlOutput::Owned(Value::Null),
+            };
 
             let backdrop = match backdrop {
                 Some(path) => ToSqlOutput::from(path),
@@ -888,7 +912,7 @@ mod shows {
             for show in pending {
                 let poster = match &show.poster {
                     Some(poster) => {
-                        let poster_path = images_path.join(format!("{}{POSTER_SNIPPET}", show.id));
+                        let poster_path = poster_path(images_path, show.id);
                         let poster = download(auth, image_config, poster, true, &poster_path).await;
 
                         if poster {
@@ -902,8 +926,7 @@ mod shows {
 
                 let backdrop = match &show.backdrop {
                     Some(backdrop) => {
-                        let backdrop_path =
-                            images_path.join(format!("{}{BACKDROP_SNIPPET}", show.id));
+                        let backdrop_path = backdrop_path(images_path, show.id);
                         let backdrop =
                             download(auth, image_config, backdrop, false, &backdrop_path).await;
 
@@ -1032,9 +1055,17 @@ mod seasons {
         let mut rows = 0;
 
         for (id, poster) in images {
-            let poster = poster
-                .map(ToSqlOutput::from)
-                .unwrap_or(ToSqlOutput::Owned(Value::Null));
+            let poster = match poster {
+                Some(poster) => {
+                    let poster = ToSqlOutput::from(poster);
+                    if let Err(error) = trans.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                        tracing::error!("Could not insert into image table. Error\n{error}")
+                    };
+
+                    poster
+                }
+                None => ToSqlOutput::Owned(Value::Null),
+            };
 
             rows += trans.execute(
                 sql,
@@ -1082,8 +1113,7 @@ mod seasons {
             for season in seasons {
                 let poster = match &season.poster {
                     Some(poster) => {
-                        let poster_path =
-                            images_path.join(format!("{}{POSTER_SNIPPET}", season.id));
+                        let poster_path = poster_path(images_path, season.id);
                         let poster = download(auth, image_config, poster, true, &poster_path).await;
 
                         if poster {
@@ -1226,9 +1256,17 @@ mod episodes {
         let mut rows = 0;
 
         for (id, poster) in images {
-            let poster = poster
-                .map(ToSqlOutput::from)
-                .unwrap_or(ToSqlOutput::Owned(Value::Null));
+            let poster = match poster {
+                Some(poster) => {
+                    let poster = ToSqlOutput::from(poster);
+                    if let Err(error) = trans.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                        tracing::error!("Could not insert into image table. Error\n{error}")
+                    };
+
+                    poster
+                }
+                None => ToSqlOutput::Owned(Value::Null),
+            };
 
             rows += trans.execute(
                 sql,
@@ -1281,8 +1319,7 @@ mod episodes {
             for episode in episodes {
                 let poster = match &episode.poster {
                     Some(poster) => {
-                        let poster_path =
-                            images_path.join(format!("{}{POSTER_SNIPPET}", episode.id));
+                        let poster_path = poster_path(images_path, episode.id);
                         let poster = download(auth, image_config, poster, true, &poster_path).await;
 
                         if poster {

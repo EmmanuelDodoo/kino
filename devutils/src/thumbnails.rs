@@ -5,12 +5,7 @@ use gstreamer::{
     self as gst,
     prelude::{ElementExt, ElementExtManual, GstBinExt},
 };
-
-pub struct Image {
-    pub width: u32,
-    pub height: u32,
-    pub bytes: Vec<u8>,
-}
+pub use super::Image;
 
 /// Far faster at generating multiple thumbnails than
 /// [`iced_video_player::Video::thumbnails`].

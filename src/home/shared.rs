@@ -1,8 +1,8 @@
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{DEFAULT_POSTER, empty, tooltip};
-use crate::utils::{collage, sample_complement, styles};
+use crate::utils::{empty, styles, tooltip};
 use core::variants;
+use devutils::image_ops::{collage, sample_complement};
 use iced::{
     ContentFit, Element, Length, Theme,
     alignment::{Horizontal, Vertical},
@@ -16,6 +16,10 @@ use iced::{
 };
 use registry::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
 use widgets::marquee;
+
+use std::sync::LazyLock;
+pub static DEFAULT_POSTER: LazyLock<Option<Handle>> =
+    LazyLock::new(|| devutils::image_ops::default_poster().map(to_handle));
 
 pub const CARD_HEIGHT: f32 = 450.0;
 pub const CARD_WIDTH: f32 = CARD_HEIGHT * 2.0 / 3.0;
@@ -438,17 +442,29 @@ impl<T: Media> Thumbnail<T> {
         <T as Media>::Id: 'static,
     {
         let id = media.id();
-        let sample = media
-            .poster()
-            .map(|path| {
-                let path = path.to_owned();
-                iced::Task::future(async move { (id, sample_complement(&path)) })
-            })
-            .unwrap_or_default();
+        let sample = match media.poster() {
+            Some(poster) if poster.main.is_none() => {
+                let path = poster.path.display().to_string();
+                iced::Task::future(async move {
+                    (
+                        id,
+                        sample_complement(&path).map(|(a, b)| (to_color(a), to_color(b))),
+                    )
+                })
+            }
+            _ => iced::Task::none(),
+        };
+
+        let mut sample_text = None;
+        let mut sample_color = None;
 
         //todo: Sample color is not great for current default poster
         let poster = match media.poster() {
-            Some(poster) => Some(Handle::from_path(poster)),
+            Some(poster) => {
+                sample_color = poster.get_main().map(to_color);
+                sample_text = poster.get_accent().map(to_color);
+                Some(Handle::from_path(poster.path.clone()))
+            }
             None => DEFAULT_POSTER.clone(),
         };
 
@@ -466,8 +482,8 @@ impl<T: Media> Thumbnail<T> {
                 .duration(iced::time::Duration::from_millis(150))
                 .easing(Easing::EaseInOut),
             poster,
-            sample_text: None,
-            sample_color: None,
+            sample_text,
+            sample_color,
             backdrop,
             media,
         };
@@ -916,7 +932,7 @@ impl CollectionThumbnail {
             .iter()
             .filter_map(|poster| poster.as_deref());
 
-        let collage = collage(paths, Self::WIDTH, Self::HEIGHT);
+        let collage = collage(paths, Self::WIDTH, Self::HEIGHT).map(to_handle);
 
         Self {
             collage,
@@ -1307,4 +1323,12 @@ impl Icon {
             Self { id: Icons::Icon17 },
         ]
     }
+}
+
+fn to_color(color: devutils::Color) -> iced::Color {
+    iced::Color::from_rgba8(color.0, color.1, color.2, color.3)
+}
+
+fn to_handle(img: devutils::Image) -> Handle {
+    Handle::from_rgba(img.width, img.height, bytes::Bytes::from(img.bytes))
 }
