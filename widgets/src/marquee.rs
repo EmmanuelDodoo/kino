@@ -212,6 +212,7 @@ where
     diff: f32,
     duration: Duration,
     animation: Option<Animation<f32>>,
+    bounds: Rectangle,
 }
 
 impl<P> State<P>
@@ -224,6 +225,7 @@ where
             diff: 0.0,
             duration: Duration::ZERO,
             animation: None,
+            bounds: Rectangle::new(Point::ORIGIN, Size::ZERO),
         }
     }
 
@@ -282,6 +284,7 @@ where
         limits: &layout::Limits,
     ) -> layout::Node {
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+        let previous_bounds = state.bounds;
 
         let limits = limits.width(self.format.width).height(self.format.height);
         let max_width = limits.max().width;
@@ -311,7 +314,19 @@ where
         state.diff = (max_width - paragraph_size.width).min(0.0);
         state.duration = Duration::from_secs_f32(duration);
 
-        layout::Node::new(limits.resolve(self.format.width, self.format.height, paragraph_size))
+        let node = layout::Node::new(limits.resolve(
+            self.format.width,
+            self.format.height,
+            paragraph_size,
+        ));
+
+        state.bounds = node.bounds();
+
+        if state.bounds != previous_bounds {
+            state.reset();
+        }
+
+        node
     }
 
     fn draw(
