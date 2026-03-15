@@ -4396,7 +4396,7 @@ fn icon_button<'a>(
         marquee(value).size(H6).font(bold_font())
     } else {
         marquee(value).size(H6).font(medium_font())
-    };
+    }.width(Length::Fill);
 
     let content = row!(icon, text)
         .align_y(Vertical::Center)
