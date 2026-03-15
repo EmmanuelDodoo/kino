@@ -68,7 +68,7 @@ where
         }
     }
 
-    /// Sets the duration for scrolling in seconds. The true duration is made 
+    /// Sets the duration for scrolling in seconds. The true duration is made
     /// proportional to the length of text
     pub fn duration(mut self, duration: f32) -> Self {
         self.duration = duration;
@@ -307,7 +307,7 @@ where
 
         let paragraph_size = state.paragraph.min_bounds();
 
-        let duration = self.duration * paragraph_size.width / max_width;
+        let duration = self.duration * paragraph_size.width / max_width.max(f32::EPSILON);
         state.diff = (max_width - paragraph_size.width).min(0.0);
         state.duration = Duration::from_secs_f32(duration);
 
