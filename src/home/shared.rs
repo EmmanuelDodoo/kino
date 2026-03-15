@@ -442,22 +442,29 @@ impl<T: Media> Thumbnail<T> {
         <T as Media>::Id: 'static,
     {
         let id = media.id();
-        let sample = media
-            .poster()
-            .map(|path| {
-                let path = path.to_owned();
+        let sample = match media.poster() {
+            Some(poster) if poster.main.is_none() => {
+                let path = poster.path.display().to_string();
                 iced::Task::future(async move {
                     (
                         id,
                         sample_complement(&path).map(|(a, b)| (to_color(a), to_color(b))),
                     )
                 })
-            })
-            .unwrap_or_default();
+            }
+            _ => iced::Task::none(),
+        };
+
+        let mut sample_text = None;
+        let mut sample_color = None;
 
         //todo: Sample color is not great for current default poster
         let poster = match media.poster() {
-            Some(poster) => Some(Handle::from_path(poster)),
+            Some(poster) => {
+                sample_color = poster.get_main().map(to_color);
+                sample_text = poster.get_accent().map(to_color);
+                Some(Handle::from_path(poster.path.clone()))
+            }
             None => DEFAULT_POSTER.clone(),
         };
 
@@ -475,8 +482,8 @@ impl<T: Media> Thumbnail<T> {
                 .duration(iced::time::Duration::from_millis(150))
                 .easing(Easing::EaseInOut),
             poster,
-            sample_text: None,
-            sample_color: None,
+            sample_text,
+            sample_color,
             backdrop,
             media,
         };

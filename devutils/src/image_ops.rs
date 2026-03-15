@@ -4,7 +4,9 @@ use image::{
 };
 
 use super::{Color, Image};
-use std::path::PathBuf;
+use registry::db;
+use registry::models;
+use std::path::{Path, PathBuf};
 
 const DEFAULT_POSTER_PATH: &[u8] = include_bytes!("../../resources/images/default_poster.png");
 
@@ -368,14 +370,22 @@ pub fn save_generated_poster(
     let sql =
         format!("UPDATE {table} SET poster=:poster, generate_poster=:generate_poster WHERE id=:id");
 
-    let path = path.display().to_string();
+    let path = {
+        let path = ToSqlOutput::from(path.display().to_string());
+
+        if let Err(error) = db.execute(crate::fetch::IMAGE_SQL, &[(":path", &path)]) {
+            tracing::error!("Could not insert into image table. Error\n{error}")
+        };
+
+        path
+    };
 
     match db.execute(
         &sql,
         &[
             (":id", &ToSqlOutput::from(id)),
             (":generate_poster", &ToSqlOutput::from(false)),
-            (":poster", &ToSqlOutput::from(path)),
+            (":poster", &path),
         ],
     ) {
         Ok(_) => {
@@ -385,4 +395,92 @@ pub fn save_generated_poster(
             tracing::error!("Error saving generated poster on {id}.\n{error}");
         }
     }
+}
+
+pub async fn image_processor(db: impl AsRef<Path>) {
+    tracing::debug!("Starting up image processor");
+    use std::time::Duration;
+    use tokio::time;
+
+    let interval = Duration::from_secs(60);
+
+    let mut db = match registry::db::Database::open(db) {
+        Ok(db) => db,
+        Err(error) => {
+            tracing::error!("fetcher Db Error \n{error}");
+            return;
+        }
+    };
+
+    loop {
+        let images = match get_imgs(&db) {
+            Ok(imgs) => imgs,
+            Err(error) => {
+                tracing::error!("Image processor: Error\n{error}");
+                time::sleep(interval).await;
+                continue;
+            }
+        };
+
+        let mut processed = Vec::new();
+
+        for mut img in images {
+            let Some((main, accent)) = sample_complement(&img.path.display().to_string()) else {
+                continue;
+            };
+
+            img.set_main(main.0, main.1, main.2, main.3);
+            img.set_accent(accent.0, accent.1, accent.2, accent.3);
+
+            processed.push(img);
+        }
+
+        if let Err(error) = insert_imgs(&mut db, processed) {
+            tracing::error!("Image processor: Error\n{error}");
+        };
+
+        time::sleep(interval).await;
+    }
+}
+
+fn get_imgs(db: &db::Database) -> rusqlite::Result<Vec<models::image::Image>> {
+    tracing::debug!("Fetching images for processing");
+    let sql = "SELECT * FROM image WHERE NOT generated";
+
+    let mut statement = db.prepare_cached(sql)?;
+
+    statement
+        .query_map([], |row| models::image::Image::from_row(row, ""))?
+        .collect()
+}
+
+fn insert_imgs(db: &mut db::Database, imgs: Vec<models::image::Image>) -> rusqlite::Result<()> {
+    use rusqlite::types::{ToSqlOutput, Value};
+    let trans = db.transaction()?;
+
+    let sql = "UPDATE image SET main=:main, accent=:accent, generated=TRUE WHERE path=:path";
+
+    for img in imgs {
+        let main = img
+            .main
+            .map(ToSqlOutput::from)
+            .unwrap_or(ToSqlOutput::Owned(Value::Null));
+        let accent = img
+            .accent
+            .map(ToSqlOutput::from)
+            .unwrap_or(ToSqlOutput::Owned(Value::Null));
+
+        let path = img.path.display().to_string();
+
+        trans.execute(
+            sql,
+            &[
+                (":main", &main),
+                (":accent", &accent),
+                (":path", &ToSqlOutput::from(path)),
+            ],
+        )?;
+    }
+
+    trans.commit()
 }

@@ -217,19 +217,20 @@ impl App {
         let (rating_tx, rating_rx) = mpsc::channel(2);
         let rating = config.general.tmdb_rating;
 
+        let img_proc =
+            Task::future(devutils::image_ops::image_processor(config.db_path())).discard();
+
         let fetcher = if fetch {
-            Task::perform(
-                fetch::fetcher(
-                    config.db_path(),
-                    auth_rx,
-                    auth,
-                    rating_rx,
-                    rating,
-                    config.images_path(),
-                    config.fetching_interval(),
-                ),
-                |_| Message::None,
-            )
+            Task::future(fetch::fetcher(
+                config.db_path(),
+                auth_rx,
+                auth,
+                rating_rx,
+                rating,
+                config.images_path(),
+                config.fetching_interval(),
+            ))
+            .discard()
         } else {
             Task::none()
         };
@@ -243,7 +244,7 @@ impl App {
 
         let new = Self::new(config, db, home, auth_tx, rating_tx);
 
-        let tasks = Task::batch([load_errors, load_id, home_tasks, fetcher]);
+        let tasks = Task::batch([load_errors, load_id, home_tasks, fetcher, img_proc]);
 
         (new, tasks)
     }
@@ -340,7 +341,7 @@ impl App {
                 Task::none()
             }
             Message::CloseToast(idx) => {
-                tracing::debug!("Closdebugast {idx}");
+                tracing::debug!("Closed toast {idx}");
                 self.toasts
                     .remove(idx.min(self.toasts.len().saturating_sub(1)));
 

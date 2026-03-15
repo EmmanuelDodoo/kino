@@ -3,7 +3,7 @@ use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
-use super::{EpisodeId, Media, ShowId, datetime_to_sql, naivedate_to_sql};
+use super::{EpisodeId, Media, ShowId, datetime_to_sql, image::Image, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -52,7 +52,7 @@ pub struct Season {
     name: String,
     original_name: String,
     path: String,
-    poster: Option<String>,
+    poster: Option<Image>,
     // Join from show
     backdrop: Option<String>,
     synopsis: String,
@@ -78,7 +78,17 @@ impl Season {
 
         let name = row.get::<_, String>("name")?;
         let original_name = row.get::<_, String>("original_name")?;
-        let poster = row.get::<_, Option<String>>("poster")?;
+
+        let poster = {
+            let poster = row.get::<_, Option<String>>("poster")?;
+
+            if poster.is_some() {
+                Some(Image::from_row(row, "poster_")?)
+            } else {
+                None
+            }
+        };
+
         let backdrop = row.get::<_, Option<String>>("backdrop")?;
         let synopsis = row.get::<_, String>("synopsis")?;
 
@@ -158,6 +168,10 @@ impl Season {
 
         let name = ToSqlOutput::from(name.clone());
         let original_name = ToSqlOutput::from(original_name.clone());
+
+        let poster = poster
+            .as_ref()
+            .map(|poster| poster.path.display().to_string());
         let poster = ToSqlOutput::Owned(Value::from(poster.clone()));
 
         let synopsis = ToSqlOutput::from(synopsis.clone());
@@ -380,8 +394,8 @@ impl Media for Season {
         self.rating
     }
 
-    fn poster(&self) -> Option<&str> {
-        self.poster.as_deref()
+    fn poster(&self) -> Option<&Image> {
+        self.poster.as_ref()
     }
 
     fn backdrop(&self) -> Option<&str> {

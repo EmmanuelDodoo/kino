@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub mod collection;
 pub mod comment;
 pub mod episodes;
+pub mod image;
 pub mod movies;
 pub mod seasons;
 pub mod shows;
@@ -19,6 +20,7 @@ pub use movies::*;
 pub use seasons::*;
 pub use shows::*;
 pub use video::*;
+use image::Image;
 
 use crate::db::{Operation, Query, Table};
 
@@ -47,7 +49,7 @@ pub trait Media {
 
     fn synopsis(&self) -> &str;
 
-    fn poster(&self) -> Option<&str>;
+    fn poster(&self) -> Option<&Image>;
 
     fn backdrop(&self) -> Option<&str>;
 

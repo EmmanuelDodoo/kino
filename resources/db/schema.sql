@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 4;
+PRAGMA user_version = 5;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -197,6 +197,14 @@ CREATE TABLE collection_deletes (
 
 CREATE INDEX idx_collection_deletes_id ON collection_deletes ( collection_id );
 
+CREATE TABLE image (
+    path            TEXT NOT NULL PRIMARY KEY,
+    main            TEXT,
+    accent          TEXT,
+    generated       BOOL DEFAULT FALSE,
+	created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE VIEW get_episode_data AS SELECT
 season.show_id,
 tv_show.backdrop,
@@ -206,12 +214,16 @@ season.path AS season_path,
 season.season_number,
 tv_show.path AS show_path,
 directory.path AS directory_path,
+image.main as poster_main,
+image.accent as poster_accent,
+image.path as poster_path,
 CASE WHEN (NOT episode.fetched) AND episode.generate_poster THEN NULL ELSE episode.poster END AS poster,
 episode.*
 FROM episode 
 INNER JOIN season ON episode.season_id = season.id
 INNER JOIN tv_show ON season.show_id = tv_show.id
-INNER JOIN directory ON tv_show.directory = directory.id;
+INNER JOIN directory ON tv_show.directory = directory.id
+LEFT JOIN image ON episode.poster = image.path;
 
 CREATE VIEW get_collection_posters AS SELECT collection_id, poster 
 FROM (

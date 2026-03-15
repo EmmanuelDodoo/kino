@@ -28,6 +28,7 @@ static CLIENT: LazyLock<Client> = LazyLock::new(|| {
 
 pub(super) const POSTER_SNIPPET: &str = "_poster.jpg";
 pub(super) const BACKDROP_SNIPPET: &str = "_backdrop.jpg";
+pub(super) const IMAGE_SQL: &str = "INSERT INTO image (path) VALUES (:path) ON CONFLICT (path) DO UPDATE SET main=NULL, accent=NULL, generated=FALSE";
 
 #[derive(Deserialize, Debug, Clone)]
 struct ImageConfig {
@@ -556,9 +557,17 @@ mod movies {
         let mut rows = 0;
 
         for (id, poster, backdrop) in images {
-            let poster = poster
-                .map(ToSqlOutput::from)
-                .unwrap_or(ToSqlOutput::Owned(Value::Null));
+            let poster = match poster {
+                Some(poster) => {
+                    let poster = ToSqlOutput::from(poster);
+                    if let Err(error) = trans.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                        tracing::error!("Could not insert into image table. Error\n{error}")
+                    };
+
+                    poster
+                }
+                None => ToSqlOutput::Owned(Value::Null),
+            };
 
             let backdrop = match backdrop {
                 Some(path) => ToSqlOutput::from(path),
@@ -819,9 +828,17 @@ mod shows {
         let mut rows = 0;
 
         for (id, poster, backdrop) in images {
-            let poster = poster
-                .map(ToSqlOutput::from)
-                .unwrap_or(ToSqlOutput::Owned(Value::Null));
+            let poster = match poster {
+                Some(poster) => {
+                    let poster = ToSqlOutput::from(poster);
+                    if let Err(error) = trans.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                        tracing::error!("Could not insert into image table. Error\n{error}")
+                    };
+
+                    poster
+                }
+                None => ToSqlOutput::Owned(Value::Null),
+            };
 
             let backdrop = match backdrop {
                 Some(path) => ToSqlOutput::from(path),
@@ -1038,9 +1055,17 @@ mod seasons {
         let mut rows = 0;
 
         for (id, poster) in images {
-            let poster = poster
-                .map(ToSqlOutput::from)
-                .unwrap_or(ToSqlOutput::Owned(Value::Null));
+            let poster = match poster {
+                Some(poster) => {
+                    let poster = ToSqlOutput::from(poster);
+                    if let Err(error) = trans.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                        tracing::error!("Could not insert into image table. Error\n{error}")
+                    };
+
+                    poster
+                }
+                None => ToSqlOutput::Owned(Value::Null),
+            };
 
             rows += trans.execute(
                 sql,
@@ -1231,9 +1256,17 @@ mod episodes {
         let mut rows = 0;
 
         for (id, poster) in images {
-            let poster = poster
-                .map(ToSqlOutput::from)
-                .unwrap_or(ToSqlOutput::Owned(Value::Null));
+            let poster = match poster {
+                Some(poster) => {
+                    let poster = ToSqlOutput::from(poster);
+                    if let Err(error) = trans.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                        tracing::error!("Could not insert into image table. Error\n{error}")
+                    };
+
+                    poster
+                }
+                None => ToSqlOutput::Owned(Value::Null),
+            };
 
             rows += trans.execute(
                 sql,

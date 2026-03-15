@@ -3,7 +3,7 @@ use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
-use super::{DirectoryId, Media, SeasonId, datetime_to_sql, naivedate_to_sql};
+use super::{DirectoryId, Media, SeasonId, datetime_to_sql, image::Image, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -47,7 +47,7 @@ pub struct Show {
     path: String,
     name: String,
     original_name: String,
-    poster: Option<String>,
+    poster: Option<Image>,
     pub(super) backdrop: Option<String>,
     pub tags: Vec<String>,
     synopsis: String,
@@ -73,7 +73,17 @@ impl Show {
 
         let name = row.get::<_, String>("name")?;
         let original_name = row.get::<_, String>("original_name")?;
-        let poster = row.get::<_, Option<String>>("poster")?;
+
+        let poster = {
+            let poster = row.get::<_, Option<String>>("poster")?;
+
+            if poster.is_some() {
+                Some(Image::from_row(row, "poster_")?)
+            } else {
+                None
+            }
+        };
+
         let backdrop = row.get::<_, Option<String>>("backdrop")?;
         let tags = {
             let tags = row.get::<_, Option<String>>("tags")?;
@@ -158,7 +168,12 @@ impl Show {
 
         let name = ToSqlOutput::from(name.clone());
         let original_name = ToSqlOutput::from(original_name.clone());
+
+        let poster = poster
+            .as_ref()
+            .map(|poster| poster.path.display().to_string());
         let poster = ToSqlOutput::Owned(Value::from(poster.clone()));
+
         let backdrop = ToSqlOutput::Owned(Value::from(backdrop.clone()));
         let tags = ToSqlOutput::from(tags.join(","));
         let synopsis = ToSqlOutput::from(synopsis.clone());
@@ -386,8 +401,8 @@ impl Media for Show {
         self.rating
     }
 
-    fn poster(&self) -> Option<&str> {
-        self.poster.as_deref()
+    fn poster(&self) -> Option<&Image> {
+        self.poster.as_ref()
     }
 
     fn backdrop(&self) -> Option<&str> {
