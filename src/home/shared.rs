@@ -558,12 +558,13 @@ impl<T: Media> Thumbnail<T> {
         }
     }
 
-    fn poster_helper<'a, Message: 'a>(&self) -> Element<'a, Message> {
+    fn poster_helper<'a, Message: 'a>(&self, scale: f32) -> Element<'a, Message> {
         match &self.poster {
             Some(handle) => widget::image(handle)
                 .border_radius(IMAGE_RADIUS)
                 .width(Length::Fill)
                 .height(Length::Fill)
+                .scale(scale)
                 .content_fit(ContentFit::Fill)
                 .into(),
 
@@ -615,7 +616,7 @@ impl<T: Media> Thumbnail<T> {
             .height(Length::Fill)
             .padding([5, 10]);
 
-        let img = container(self.poster_helper()).width(LIST_WIDTH * 1.75);
+        let img = container(self.poster_helper(1.0)).width(LIST_WIDTH * 1.75);
         let img = mouse_area(img)
             .interaction(iced::mouse::Interaction::Pointer)
             .on_exit((on_hover)(self.media.id(), false))
@@ -745,28 +746,28 @@ impl<T: Media> Thumbnail<T> {
                 .padding(padding)
         };
 
+        let background_interpolation = self.background.interpolate(0.0, 1.0, now);
         let play = {
             let size = CARD_HEIGHT * 0.135;
 
-            let factor = self.icon.interpolate(0.0, 1.0, now);
+            let icon_interpolation = self.icon.interpolate(0.0, 1.0, now);
             let play = icon(PLAY)
                 .size(size)
                 .align_x(Horizontal::Center)
                 .height(size)
                 .style(move |_| {
-                    let color = iced::Color::WHITE.scale_alpha(factor);
+                    let color = iced::Color::WHITE.scale_alpha(icon_interpolation);
                     text::Style { color: Some(color) }
                 });
 
-            let factor = self.background.interpolate(0.0, 1.0, now);
             let play = center(play)
-                .width(size * factor)
-                .height(size * factor)
+                .width(size * background_interpolation)
+                .height(size * background_interpolation)
                 .style(move |theme| {
                     let default = styles::container::dark(theme);
                     let background = default
                         .background
-                        .map(|background| background.scale_alpha(factor));
+                        .map(|background| background.scale_alpha(background_interpolation));
                     let border = default.border.rounded(IMAGE_RADIUS);
 
                     container::Style {
@@ -789,7 +790,7 @@ impl<T: Media> Thumbnail<T> {
         )
         .on_press((on_play)(self.media.id()));
 
-        let img = self.poster_helper();
+        let img = self.poster_helper(1.0 + (background_interpolation * 0.05));
 
         let content = stack![img, overlay].width(CARD_WIDTH).height(Length::Fill);
 
