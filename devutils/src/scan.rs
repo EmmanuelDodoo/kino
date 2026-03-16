@@ -26,24 +26,40 @@ static EPISODE_REG: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Cannot create episode regex")
 });
 
+/// Ordered by most likely
 #[rustfmt::skip]
-const EXTENSIONS: &[&str] = &[
-    "avi",
-    "flv",
-    "m4v",
+pub const SUB_EXT: &[&str] = &[
+    "srt", 
+    "ass",
+    "ssa",
+    "vtt",
+    "sub",
+    "ttml",
+    "dfxp",
+    "sbv",
+    "lrc",
+];
+
+/// Ordered by most likely
+#[rustfmt::skip]
+pub const VIDEO_EXT: &[&str] = &[
+    "mp4", 
     "mkv",
     "mov",
-    "mp4", 
+    "webm",
+    "m4v",
+    "avi",
+    "wmv",
     "mpeg",
     "mpg",
-    "webm",
-    "wmv",
+    "flv",
 ];
 
 #[derive(Debug)]
 struct Video {
     name: String,
     path: String,
+    sub: Option<String>,
     duration: u64,
 }
 
@@ -162,8 +178,14 @@ pub fn scan_dir_helper<'a>(
 
                 for movie in videos {
                     let name = process_name(&movie.name).unwrap_or(movie.name.clone());
-                    let (_, query) =
-                        Movie::new(dir.id, movie.path.clone(), name, movie.name, movie.duration);
+                    let (_, query) = Movie::new(
+                        dir.id,
+                        movie.path.clone(),
+                        name,
+                        movie.name,
+                        movie.sub,
+                        movie.duration,
+                    );
                     match query.execute(db) {
                         Ok(succ) => {
                             scanned.insert(movie.path);
@@ -325,6 +347,7 @@ pub fn scan_dir_helper<'a>(
                             name,
                             episode.name,
                             episode.path.clone(),
+                            episode.sub,
                             episode.duration,
                             number,
                         );
@@ -584,17 +607,12 @@ fn scan_video_dir(
         let path = item.path();
 
         if is_file {
-            if let Some((path, name, duration)) = scan_file(path, discoverer) {
-                let path = match prefix.as_ref() {
-                    Some(prefix) => format!("{prefix}{MAIN_SEPARATOR_STR}{path}"),
-                    None => path,
-                };
+            if let Some(mut video) = scan_file(path, discoverer) {
+                if let Some(prefix) = prefix.as_ref() {
+                    video.path = format!("{prefix}{MAIN_SEPARATOR_STR}{}", video.path);
+                }
 
-                videos.push(Video {
-                    path,
-                    name,
-                    duration,
-                })
+                videos.push(video)
             };
         } else if depth > 0 {
             let prefix = match &prefix {
@@ -611,12 +629,12 @@ fn scan_video_dir(
 }
 
 /// Returns the (path, name) if valid extension and valid utf8 name
-fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<(String, String, u64)> {
+fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<Video> {
     tracing::debug!("Scanning file path {}", path.display());
     let is_video = path
         .extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| EXTENSIONS.contains(&ext))
+        .map(|ext| VIDEO_EXT.contains(&ext))
         .unwrap_or_default();
 
     if !is_video {
@@ -639,10 +657,27 @@ fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<(String, 
     };
 
     let name = path.file_stem().and_then(|name| name.to_str())?.to_owned();
-
+    let sub = subtitles(&path);
     let path = path.file_name().and_then(|path| path.to_str())?.to_owned();
 
-    Some((path, name, duration))
+    Some(Video {
+        name,
+        path,
+        sub,
+        duration,
+    })
+}
+
+fn subtitles(path: &PathBuf) -> Option<String> {
+    for ext in SUB_EXT {
+        let sub = path.with_extension(ext);
+
+        if let Ok(true) = sub.try_exists() {
+            return Some(sub.display().to_string());
+        }
+    }
+
+    None
 }
 
 fn path_name(path: &Path) -> &str {

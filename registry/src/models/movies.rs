@@ -42,6 +42,7 @@ pub struct Movie {
     pub id: MovieId,
     name: String,
     original_name: String,
+    subtitle_uri: Option<String>,
     pub directory: DirectoryId,
     path: String,
     poster: Option<Image>,
@@ -68,6 +69,7 @@ impl Movie {
 
         let name = row.get::<_, String>("name")?;
         let original_name = row.get::<_, String>("original_name")?;
+        let subtitle_uri = row.get::<_, Option<String>>("subtitle_uri")?;
 
         let poster = {
             let poster = row.get::<_, Option<String>>("poster")?;
@@ -110,6 +112,7 @@ impl Movie {
             directory,
             name,
             original_name,
+            subtitle_uri,
             path,
             poster,
             backdrop,
@@ -131,6 +134,7 @@ impl Movie {
             id,
             name,
             original_name,
+            subtitle_uri,
             directory,
             path,
             poster,
@@ -153,6 +157,11 @@ impl Movie {
 
         let name = ToSqlOutput::from(name.clone());
         let original_name = ToSqlOutput::from(original_name.clone());
+
+        let subtitle_uri = match subtitle_uri.as_ref(){
+            Some(sub) => ToSqlOutput::from(sub.to_owned()),
+            None => ToSqlOutput::Owned(Value::Null)
+        };
 
         let poster = poster
             .as_ref()
@@ -180,6 +189,7 @@ impl Movie {
             (":path", path),
             (":name", name),
             (":original_name", original_name),
+            (":subtitle_uri", subtitle_uri),
             (":poster", poster),
             (":backdrop", backdrop),
             (":tags", tags),
@@ -196,7 +206,7 @@ impl Movie {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO movie (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration) ON CONFLICT(directory, path) DO NOTHING";
+        let sql = "INSERT INTO movie (id, directory, path, name, original_name, subtitle_uri, poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name, :subtitle_uri, :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration) ON CONFLICT(directory, path) DO NOTHING";
 
         let params = self.insert_params();
 
@@ -329,6 +339,7 @@ impl Movie {
         path: String,
         name: String,
         original_name: String,
+        subtitle_uri: Option<String>,
         duration: u64,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
@@ -344,6 +355,7 @@ impl Movie {
             path,
             name,
             original_name,
+            subtitle_uri,
             backdrop,
             poster,
             tags,

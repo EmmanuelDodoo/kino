@@ -869,12 +869,7 @@ impl Manager {
                     }
                     ConfigMessage::SelectFile => Task::perform(
                         rfd::AsyncFileDialog::new()
-                            .add_filter(
-                                "",
-                                &[
-                                    "srt", "ass", "ssa", "vtt", "sub", "sbv", "ttml", "dfxp", "lrc",
-                                ],
-                            )
+                            .add_filter("", devutils::scan::SUB_EXT)
                             .pick_file(),
                         |handle| {
                             ManagerMessage::Config(ConfigMessage::Selected(
