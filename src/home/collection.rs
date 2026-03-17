@@ -185,7 +185,7 @@ impl CollectionPage {
         let content = match layout {
             Layout::List => self.list(now, movies, shows, seasons, episodes),
             Layout::Grid => self.grid(now, movies, shows, seasons, episodes),
-            Layout::Compact => self.compact(movies, shows, seasons, episodes),
+            Layout::Compact => self.compact(now, movies, shows, seasons, episodes),
         };
 
         let content = column!(self.top(collection), content).spacing(10);
@@ -471,6 +471,7 @@ impl CollectionPage {
 
     fn compact<'a>(
         &self,
+        now: Instant,
         mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
@@ -489,6 +490,7 @@ impl CollectionPage {
                 let movies: Element<'_, CollectionMessage> = {
                     let content = movies.map(|thumbnail| {
                         thumbnail.compact(
+                            now,
                             move |id| add(collection, ItemId::Movie(id)),
                             move |id| select(collection, ItemId::Movie(id)),
                             move |id| play(collection, ItemId::Movie(id)),
@@ -511,6 +513,7 @@ impl CollectionPage {
                 let shows: Element<'_, CollectionMessage> = {
                     let content = shows.map(|thumbnail| {
                         thumbnail.compact(
+                            now,
                             move |id| add(collection, ItemId::Show(id)),
                             move |id| select(collection, ItemId::Show(id)),
                             move |id| play(collection, ItemId::Show(id)),
@@ -532,6 +535,7 @@ impl CollectionPage {
                 let seasons: Element<'_, CollectionMessage> = {
                     let content = seasons.map(|thumbnail| {
                         thumbnail.compact(
+                            now,
                             move |id| add(collection, ItemId::Season(id)),
                             move |id| select(collection, ItemId::Season(id)),
                             move |id| play(collection, ItemId::Season(id)),
@@ -553,6 +557,7 @@ impl CollectionPage {
                 let episodes: Element<'_, CollectionMessage> = {
                     let content = episodes.map(|thumbnail| {
                         thumbnail.compact(
+                            now,
                             move |id| add(collection, ItemId::Episode(id)),
                             move |id| select(collection, ItemId::Episode(id)),
                             move |id| play(collection, ItemId::Episode(id)),

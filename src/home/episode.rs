@@ -6,6 +6,7 @@ use iced::widget::Space;
 use iced::{
     Color, Element, Length, Shadow,
     alignment::{Horizontal, Vertical},
+    time::Instant,
     widget::{bottom_center, button, center_x, column, container, row, scrollable, stack, text},
 };
 use registry::models::{CollectionId, Episode, EpisodeId, ItemId, Media, SimpleCollection};
@@ -111,6 +112,7 @@ impl EpisodePage {
 
     fn overlay<'a>(
         &self,
+        now: Instant,
         episode: &'a Thumbnail<Episode>,
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, EpisodePageMessage> {
@@ -119,7 +121,7 @@ impl EpisodePage {
         let img: Element<'_, EpisodePageMessage> = {
             let img_height = 300.0;
             let ratio = 2.0 / 3.0;
-            episode.poster(img_height * ratio, img_height)
+            episode.poster(img_height * ratio, img_height, now)
         };
 
         let header = {
@@ -307,10 +309,11 @@ impl EpisodePage {
 
     pub fn view<'a>(
         &self,
+        now: Instant,
         episode: &'a Thumbnail<Episode>,
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, EpisodePageMessage> {
-        let overlay = bottom_center(self.overlay(episode, memberships));
+        let overlay = bottom_center(self.overlay(now, episode, memberships));
 
         let img = episode.backdrop(Length::Fill, Length::FillPortion(3));
 

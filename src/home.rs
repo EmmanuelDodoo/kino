@@ -59,7 +59,9 @@ use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind};
 use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
-use shared::{CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, SearchView, Thumbnail};
+use shared::{
+    CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, SearchView, Thumbnail, ThumbnailTaskKind,
+};
 use shows::{TvShows, TvShowsMessage};
 use widgets::marquee;
 use widgets::menu::{Position, menu};
@@ -2953,6 +2955,7 @@ impl Home {
                 Layout::Compact => {
                     let content = movies.map(|thumbnail| {
                         thumbnail.compact(
+                            now,
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id| HomeMessage::Play(ItemId::Movie(id)),
@@ -3007,6 +3010,7 @@ impl Home {
                 Layout::Compact => {
                     let content = shows.map(|thumbnail| {
                         thumbnail.compact(
+                            now,
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
                             |id| HomeMessage::Play(ItemId::Show(id)),
@@ -3620,10 +3624,10 @@ impl Home {
                 },
                 Some(Page::Episode { page, .. }),
             ) => page
-                .view(episode, memberships.iter())
+                .view(now, episode, memberships.iter())
                 .map(HomeMessage::EpisodePage),
             (State::Movie { movie, memberships }, Some(Page::Movie { page, .. })) => page
-                .view(movie, memberships.iter())
+                .view(now, movie, memberships.iter())
                 .map(HomeMessage::MoviePage),
             (
                 State::Season {
@@ -3768,7 +3772,8 @@ impl Home {
                 episodes.iter().any(|episode| episode.is_animating(now))
             }
             State::Collections(_) => false,
-            State::Movie { .. } | State::Episode { .. } => false,
+            State::Movie { movie, .. } => movie.is_animating(now),
+            State::Episode { episode, .. } => episode.is_animating(now),
             State::Collection {
                 shows,
                 movies,
@@ -4249,17 +4254,22 @@ impl Home {
         }
     }
 
-    pub fn movie_sample(&mut self, id: MovieId, sample: Option<(Color, Color)>) -> Task<Message> {
+    pub fn movie_task(
+        &mut self,
+        id: MovieId,
+        task: ThumbnailTaskKind,
+        now: Instant,
+    ) -> Task<Message> {
         match &mut self.state {
             State::Movies(movies)
             | State::Recent { movies, .. }
             | State::Collection { movies, .. } => {
                 if let Some(movie) = movies.iter_mut().find(|thumbnail| thumbnail.media.id == id) {
-                    movie.sample(sample);
+                    movie.task(task, now);
                 }
             }
             State::Movie { movie, .. } if movie.media.id == id => {
-                movie.sample(sample);
+                movie.task(task, now);
             }
             _ => {}
         }
@@ -4267,15 +4277,20 @@ impl Home {
         Task::none()
     }
 
-    pub fn show_sample(&mut self, id: ShowId, sample: Option<(Color, Color)>) -> Task<Message> {
+    pub fn show_task(
+        &mut self,
+        id: ShowId,
+        task: ThumbnailTaskKind,
+        now: Instant,
+    ) -> Task<Message> {
         match &mut self.state {
             State::Shows(shows) | State::Recent { shows, .. } | State::Collection { shows, .. } => {
                 if let Some(show) = shows.iter_mut().find(|thumbnail| thumbnail.media.id == id) {
-                    show.sample(sample);
+                    show.task(task, now);
                 }
             }
             State::Show { show, .. } if show.media.id == id => {
-                show.sample(sample);
+                show.task(task, now);
             }
             _ => {}
         }
@@ -4283,18 +4298,23 @@ impl Home {
         Task::none()
     }
 
-    pub fn season_sample(&mut self, id: SeasonId, sample: Option<(Color, Color)>) -> Task<Message> {
+    pub fn season_task(
+        &mut self,
+        id: SeasonId,
+        task: ThumbnailTaskKind,
+        now: Instant,
+    ) -> Task<Message> {
         match &mut self.state {
             State::Show { seasons, .. } | State::Collection { seasons, .. } => {
                 if let Some(season) = seasons
                     .iter_mut()
                     .find(|thumbnail| thumbnail.media.id == id)
                 {
-                    season.sample(sample);
+                    season.task(task, now);
                 }
             }
             State::Season { season, .. } if season.media.id == id => {
-                season.sample(sample);
+                season.task(task, now);
             }
             _ => {}
         }
@@ -4302,10 +4322,11 @@ impl Home {
         Task::none()
     }
 
-    pub fn episode_sample(
+    pub fn episode_task(
         &mut self,
         id: EpisodeId,
-        sample: Option<(Color, Color)>,
+        task: ThumbnailTaskKind,
+        now: Instant,
     ) -> Task<Message> {
         match &mut self.state {
             State::Season { episodes, .. } | State::Collection { episodes, .. } => {
@@ -4313,11 +4334,11 @@ impl Home {
                     .iter_mut()
                     .find(|thumbnail| thumbnail.media.id == id)
                 {
-                    episode.sample(sample);
+                    episode.task(task, now);
                 }
             }
             State::Episode { episode, .. } if episode.media.id == id => {
-                episode.sample(sample);
+                episode.task(task, now);
             }
             _ => {}
         }
@@ -4396,7 +4417,8 @@ fn icon_button<'a>(
         marquee(value).size(H6).font(bold_font())
     } else {
         marquee(value).size(H6).font(medium_font())
-    }.width(Length::Fill);
+    }
+    .width(Length::Fill);
 
     let content = row!(icon, text)
         .align_y(Vertical::Center)

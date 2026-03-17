@@ -4,14 +4,15 @@ use crate::utils::{empty, styles, tooltip};
 use core::variants;
 use devutils::image_ops::{collage, sample_complement};
 use iced::{
-    ContentFit, Element, Length, Theme,
+    Color, ContentFit, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
     mouse,
-    time::Instant,
+    time::{Duration, Instant},
     widget::{
-        self, button, center, column, container, image::Handle, markdown, mouse_area, row, rule,
-        scrollable, space, stack, text, tooltip as tp,
+        self, button, center, column, container, image,
+        image::{Allocation, Handle},
+        markdown, mouse_area, row, rule, scrollable, space, stack, text, tooltip as tp,
     },
 };
 use registry::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
@@ -129,7 +130,7 @@ fn progress_icon<T: Media>(media: &T) -> char {
 
 pub fn progress<'a, T: Media, Message: 'a>(
     media: &T,
-    color: Option<iced::Color>,
+    color: Option<Color>,
     primary: bool,
 ) -> Element<'a, Message> {
     let progress = (media.progress() * 1000.0).round() / 10.0;
@@ -394,7 +395,7 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
 pub fn float<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,
     float: &'a Animation<bool>,
-    color: Option<iced::Color>,
+    color: Option<Color>,
     now: Instant,
 ) -> Element<'a, Message> {
     use iced::{Color, Shadow};
@@ -421,38 +422,72 @@ pub fn float<'a, Message: 'a>(
         .into()
 }
 
-pub type ThumbnailSample<T> = iced::Task<(<T as Media>::Id, Option<(iced::Color, iced::Color)>)>;
+#[derive(Debug, Clone)]
+pub enum ThumbnailTaskKind {
+    Samples { main: Color, accent: Color },
+    Image(Result<Allocation, image::Error>),
+}
+
+#[derive(Debug, Clone)]
+pub struct ThumbnailTask<T: Media> {
+    pub id: T::Id,
+    pub kind: ThumbnailTaskKind,
+}
+
+#[derive(Debug, Clone)]
+enum ThumbnailPoster {
+    Ready {
+        allocation: Allocation,
+        fade_in: Animation<bool>,
+    },
+    Loading,
+    Default,
+}
 
 #[derive(Debug, Clone)]
 pub struct Thumbnail<T: Media> {
     pub selected: bool,
-    poster: Option<Handle>,
+    poster: ThumbnailPoster,
     backdrop: Option<Handle>,
-    sample_text: Option<iced::Color>,
-    sample_color: Option<iced::Color>,
+    sample_text: Option<Color>,
+    sample_color: Option<Color>,
     background: Animation<bool>,
     icon: Animation<bool>,
     float: Animation<bool>,
     pub media: T,
 }
 
-impl<T: Media> Thumbnail<T> {
-    pub fn new(media: T) -> (Self, ThumbnailSample<T>)
-    where
-        <T as Media>::Id: 'static,
-    {
+impl<T: Media + 'static> Thumbnail<T> {
+    pub fn new(media: T) -> (Self, Task<ThumbnailTask<T>>) {
         let id = media.id();
-        let sample = match media.poster() {
-            Some(poster) if poster.main.is_none() => {
+
+        let task = match media.poster() {
+            Some(poster) => {
                 let path = poster.path.display().to_string();
-                iced::Task::future(async move {
-                    (
+
+                let sample = if poster.main.is_none() {
+                    Task::future(async move {
+                        sample_complement(&path).map(|(a, b)| (to_color(a), to_color(b)))
+                    })
+                    .and_then(move |(main, accent)| {
+                        Task::done(ThumbnailTask {
+                            id,
+                            kind: ThumbnailTaskKind::Samples { main, accent },
+                        })
+                    })
+                } else {
+                    Task::none()
+                };
+
+                let images =
+                    image::allocate(poster.path.clone()).map(move |allocation| ThumbnailTask {
                         id,
-                        sample_complement(&path).map(|(a, b)| (to_color(a), to_color(b))),
-                    )
-                })
+                        kind: ThumbnailTaskKind::Image(allocation),
+                    });
+
+                Task::batch([sample, images])
             }
-            _ => iced::Task::none(),
+            None => Task::none(),
         };
 
         let mut sample_text = None;
@@ -463,9 +498,9 @@ impl<T: Media> Thumbnail<T> {
             Some(poster) => {
                 sample_color = poster.get_main().map(to_color);
                 sample_text = poster.get_accent().map(to_color);
-                Some(Handle::from_path(poster.path.clone()))
+                ThumbnailPoster::Loading
             }
-            None => DEFAULT_POSTER.clone(),
+            None => ThumbnailPoster::Default,
         };
 
         let backdrop = media.backdrop().map(Handle::from_path);
@@ -488,13 +523,23 @@ impl<T: Media> Thumbnail<T> {
             media,
         };
 
-        (new, sample)
+        (new, task)
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
+        let poster = match &self.poster {
+            ThumbnailPoster::Ready { fade_in, .. } => fade_in.is_animating(now),
+            _ => false,
+        };
+
         self.background.is_animating(now)
             || self.icon.is_animating(now)
             || self.float.is_animating(now)
+            || poster
+    }
+
+    fn poster_ready(&self) -> bool {
+        matches!(&self.poster, ThumbnailPoster::Ready { .. })
     }
 
     pub fn go_mut(&mut self, new_state: bool, at: Instant) {
@@ -503,10 +548,31 @@ impl<T: Media> Thumbnail<T> {
         self.float.go_mut(new_state, at);
     }
 
-    pub fn sample(&mut self, samples: Option<(iced::Color, iced::Color)>) {
+    pub fn sample(&mut self, samples: Option<(Color, Color)>) {
         if let Some((color, text)) = samples {
             self.sample_color = Some(color);
             self.sample_text = Some(text);
+        }
+    }
+
+    pub fn task(&mut self, task: ThumbnailTaskKind, now: Instant) {
+        match task {
+            ThumbnailTaskKind::Samples { main, accent } => {
+                self.sample_color = Some(main);
+                self.sample_text = Some(accent);
+            }
+            ThumbnailTaskKind::Image(Ok(allocation)) => {
+                self.poster = ThumbnailPoster::Ready {
+                    allocation,
+                    fade_in: Animation::new(false)
+                        .duration(Duration::from_millis(500))
+                        .easing(Easing::EaseInOut)
+                        .go(true, now),
+                };
+            }
+            ThumbnailTaskKind::Image(Err(error)) => {
+                tracing::error!("Thumbnail poster allocation error: \n{error}");
+            }
         }
     }
 
@@ -518,15 +584,21 @@ impl<T: Media> Thumbnail<T> {
         &'a self,
         width: impl Into<Length>,
         height: impl Into<Length>,
+        now: Instant,
     ) -> Element<'a, Message> {
-        match &self.poster {
-            Some(handle) => widget::image(handle)
+        let width = width.into();
+        let height = height.into();
+
+        let view = move |handle: &Handle| {
+            image(handle)
                 .border_radius(IMAGE_RADIUS)
                 .height(height)
                 .width(width)
                 .content_fit(ContentFit::Cover)
-                .into(),
-            None => container(empty())
+        };
+
+        let empty = move || {
+            container(empty())
                 .height(height)
                 .width(width)
                 .style(move |theme| {
@@ -535,7 +607,21 @@ impl<T: Media> Thumbnail<T> {
 
                     container::Style { border, ..default }
                 })
+        };
+
+        match &self.poster {
+            ThumbnailPoster::Ready {
+                allocation,
+                fade_in,
+            } => view(allocation.handle())
+                .opacity(fade_in.interpolate(0.0, 1.0, now))
+                .scale(fade_in.interpolate(1.2, 1.0, now))
                 .into(),
+            ThumbnailPoster::Loading => empty().into(),
+            ThumbnailPoster::Default => match DEFAULT_POSTER.as_ref() {
+                Some(handle) => view(handle).into(),
+                _ => empty().into(),
+            },
         }
     }
 
@@ -545,7 +631,7 @@ impl<T: Media> Thumbnail<T> {
         height: impl Into<Length>,
     ) -> Element<'a, Message> {
         match &self.backdrop {
-            Some(handle) => widget::image(handle)
+            Some(handle) => image(handle)
                 .height(height)
                 .width(width)
                 .content_fit(ContentFit::Cover)
@@ -558,21 +644,38 @@ impl<T: Media> Thumbnail<T> {
         }
     }
 
-    fn poster_helper<'a, Message: 'a>(&self, scale: f32) -> Element<'a, Message> {
-        match &self.poster {
-            Some(handle) => widget::image(handle)
+    fn poster_helper<'a, Message: 'a>(&self, scale: f32, now: Instant) -> Element<'a, Message> {
+        let scale = if self.poster_ready() { scale } else { 1.0 };
+
+        let view = move |handle: &Handle| {
+            image(handle)
                 .border_radius(IMAGE_RADIUS)
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .scale(scale)
                 .content_fit(ContentFit::Fill)
-                .into(),
+        };
 
-            None => container(empty())
+        let empty = || {
+            container(empty())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(styles::container::dark)
+        };
+
+        match &self.poster {
+            ThumbnailPoster::Ready {
+                allocation,
+                fade_in,
+            } => view(allocation.handle())
+                .opacity(fade_in.interpolate(0.0, 1.0, now))
+                .scale(scale * fade_in.interpolate(1.15, 1.0, now))
                 .into(),
+            ThumbnailPoster::Loading => empty().into(),
+            ThumbnailPoster::Default => match DEFAULT_POSTER.as_ref() {
+                Some(handle) => view(handle).into(),
+                _ => empty().into(),
+            },
         }
     }
 
@@ -616,7 +719,7 @@ impl<T: Media> Thumbnail<T> {
             .height(Length::Fill)
             .padding([5, 10]);
 
-        let img = container(self.poster_helper(1.0)).width(LIST_WIDTH * 1.75);
+        let img = container(self.poster_helper(1.0, now)).width(LIST_WIDTH * 1.75);
         let img = mouse_area(img)
             .interaction(iced::mouse::Interaction::Pointer)
             .on_exit((on_hover)(self.media.id(), false))
@@ -632,7 +735,7 @@ impl<T: Media> Thumbnail<T> {
                 .align_x(Horizontal::Center)
                 .height(size)
                 .style(move |_| {
-                    let color = iced::Color::WHITE.scale_alpha(factor);
+                    let color = Color::WHITE.scale_alpha(factor);
                     text::Style { color: Some(color) }
                 });
 
@@ -756,7 +859,7 @@ impl<T: Media> Thumbnail<T> {
                 .align_x(Horizontal::Center)
                 .height(size)
                 .style(move |_| {
-                    let color = iced::Color::WHITE.scale_alpha(icon_interpolation);
+                    let color = Color::WHITE.scale_alpha(icon_interpolation);
                     text::Style { color: Some(color) }
                 });
 
@@ -790,7 +893,7 @@ impl<T: Media> Thumbnail<T> {
         )
         .on_press((on_play)(self.media.id()));
 
-        let img = self.poster_helper(1.0 + (background_interpolation * 0.05));
+        let img = self.poster_helper(1.0 + (background_interpolation * 0.05), now);
 
         let content = stack![img, overlay].width(CARD_WIDTH).height(Length::Fill);
 
@@ -827,6 +930,7 @@ impl<T: Media> Thumbnail<T> {
 
     pub fn compact<'a, Message: 'a + Clone>(
         &'a self,
+        now: Instant,
         on_add: impl Fn(T::Id) -> Message + 'a,
         on_select: impl Fn(T::Id) -> Message + 'a,
         on_play: impl Fn(T::Id) -> Message + 'a,
@@ -834,15 +938,36 @@ impl<T: Media> Thumbnail<T> {
         let width = 56.0;
         let size = H7;
 
-        let img: Element<'a, Message> = match &self.poster {
-            Some(handle) => widget::image(handle)
-                .border_radius(IMAGE_RADIUS)
-                .width(width)
-                .height(width)
-                .content_fit(ContentFit::Cover)
-                .into(),
+        let img: Element<'a, Message> = {
+            let view = move |handle: &Handle| {
+                image(handle)
+                    .border_radius(IMAGE_RADIUS)
+                    .width(width)
+                    .height(width)
+                    .content_fit(ContentFit::Cover)
+            };
 
-            None => container(empty()).style(styles::container::dark).into(),
+            let empty = || {
+                container(empty())
+                    .width(width)
+                    .height(width)
+                    .style(styles::container::dark)
+            };
+
+            match &self.poster {
+                ThumbnailPoster::Ready {
+                    allocation,
+                    fade_in,
+                } => view(allocation.handle())
+                    .opacity(fade_in.interpolate(0.0, 1.0, now))
+                    .scale(fade_in.interpolate(1.2, 1.0, now))
+                    .into(),
+                ThumbnailPoster::Default => match DEFAULT_POSTER.as_ref() {
+                    Some(handle) => view(handle).into(),
+                    None => empty().into(),
+                },
+                ThumbnailPoster::Loading => empty().into(),
+            }
         };
 
         let img = button(img)
@@ -943,7 +1068,7 @@ impl CollectionThumbnail {
 
     pub fn collage<'a, Message: 'a>(&'a self) -> Element<'a, Message> {
         match &self.collage {
-            Some(handle) => widget::image(handle)
+            Some(handle) => image(handle)
                 .border_radius(IMAGE_RADIUS)
                 .height(Self::HEIGHT)
                 .width(Self::WIDTH)
@@ -989,7 +1114,7 @@ impl CollectionThumbnail {
 
         let img: Element<'_, Message> = {
             match &self.collage {
-                Some(handle) => widget::image(handle)
+                Some(handle) => image(handle)
                     .border_radius(IMAGE_RADIUS)
                     .width(Self::CARD_WIDTH)
                     .height(Length::Fill)
@@ -1058,7 +1183,7 @@ impl SearchView {
 
     fn poster<'a, Message: 'a>(&self) -> Element<'a, Message> {
         match &self.poster {
-            Some(handle) => widget::image(handle)
+            Some(handle) => image(handle)
                 .border_radius(IMAGE_RADIUS)
                 .width(56)
                 .height(56)
@@ -1077,7 +1202,7 @@ impl SearchView {
         on_url: impl Fn(String) -> Message + 'a,
         set_play: bool,
     ) -> Element<'a, Message> {
-        fn pair(theme: &Theme) -> iced::Color {
+        fn pair(theme: &Theme) -> Color {
             theme.extended_palette().primary.strong.color
         }
 
@@ -1326,8 +1451,8 @@ impl Icon {
     }
 }
 
-fn to_color(color: devutils::Color) -> iced::Color {
-    iced::Color::from_rgba8(color.0, color.1, color.2, color.3)
+fn to_color(color: devutils::Color) -> Color {
+    Color::from_rgba8(color.0, color.1, color.2, color.3)
 }
 
 fn to_handle(img: devutils::Image) -> Handle {

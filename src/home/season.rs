@@ -216,12 +216,14 @@ impl SeasonPage {
 
     fn compact<'a>(
         &self,
+        now: Instant,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
     ) -> Element<'a, SeasonPageMessage> {
         let season = self.id;
 
         let content = thumbnails.map(|thumbnail| {
             thumbnail.compact(
+                now,
                 move |id| SeasonPageMessage {
                     id: season,
                     message: Message::Add(id),
@@ -305,13 +307,17 @@ impl SeasonPage {
         content.into()
     }
 
-    fn top<'a>(&self, season: &'a Thumbnail<Season>) -> Element<'a, SeasonPageMessage> {
+    fn top<'a>(
+        &self,
+        now: Instant,
+        season: &'a Thumbnail<Season>,
+    ) -> Element<'a, SeasonPageMessage> {
         let id = self.id;
 
         let img_height = CARD_HEIGHT * 0.65;
         let img: Element<'_, SeasonPageMessage> = {
             let ratio = 2.0 / 3.0;
-            season.poster(img_height * ratio, img_height)
+            season.poster(img_height * ratio, img_height, now)
         };
 
         let header = {
@@ -477,7 +483,7 @@ impl SeasonPage {
                 Tab::Items => match layout {
                     Layout::Grid => self.grid(now, thumbnails),
                     Layout::List => self.list(now, thumbnails),
-                    Layout::Compact => self.compact(thumbnails),
+                    Layout::Compact => self.compact(now, thumbnails),
                 },
                 Tab::Data => data_tab(
                     &season.media,
@@ -516,7 +522,7 @@ impl SeasonPage {
             }
         };
 
-        let content = column!(self.top(season), content).spacing(20.0);
+        let content = column!(self.top(now, season), content).spacing(20.0);
 
         content.into()
     }

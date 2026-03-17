@@ -126,10 +126,12 @@ impl Movies {
 
     fn compact<'a>(
         &self,
+        now: Instant,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
     ) -> Element<'a, MoviesMessage> {
         let content = thumbnails.map(|thumbnail| {
             thumbnail.compact(
+                now,
                 MoviesMessage::Add,
                 MoviesMessage::Details,
                 MoviesMessage::Play,
@@ -158,7 +160,7 @@ impl Movies {
         match layout {
             Layout::Grid => self.grid(now, thumbnails),
             Layout::List => self.list(now, thumbnails),
-            Layout::Compact => self.compact(thumbnails),
+            Layout::Compact => self.compact(now, thumbnails),
         }
     }
 

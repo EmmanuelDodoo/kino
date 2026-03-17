@@ -18,6 +18,7 @@ use registry::{
     filter::{self, FilterMode, SearchFilter},
     sort::{self, Sort, SortKind},
 };
+use shared::ThumbnailTask;
 
 use devutils::{fetch, scan};
 use registry::models::{
@@ -119,10 +120,10 @@ pub enum Message {
     CaptureKeys(bool),
     Scan,
     ScanComplete(Vec<DirectoryId>),
-    ShowAllocation((ShowId, Option<(iced::Color, iced::Color)>)),
-    MovieAllocation((MovieId, Option<(iced::Color, iced::Color)>)),
-    SeasonAllocation((SeasonId, Option<(iced::Color, iced::Color)>)),
-    EpisodeAllocation((EpisodeId, Option<(iced::Color, iced::Color)>)),
+    MovieTask(ThumbnailTask<Movie>),
+    ShowTask(ThumbnailTask<Show>),
+    SeasonTask(ThumbnailTask<Season>),
+    EpisodeTask(ThumbnailTask<Episode>),
     Triggers {
         inserts: Vec<(InsertTrigger, bool)>,
         deletes: Vec<(DeleteTrigger, bool)>,
@@ -557,15 +558,15 @@ impl App {
                             };
 
                         let mut shows = Vec::with_capacity(thumbnails.len());
-                        let mut samples = Vec::with_capacity(thumbnails.len());
+                        let mut tasks = Vec::with_capacity(thumbnails.len());
 
-                        for (show, sample) in thumbnails {
+                        for (show, task) in thumbnails {
                             shows.push(show);
-                            samples.push(sample.map(Message::ShowAllocation));
+                            tasks.push(task.map(Message::ShowTask));
                         }
 
                         let home_tasks = self.home.fetched_shows(shows);
-                        let samples = Task::batch(samples);
+                        let samples = Task::batch(tasks);
 
                         Task::batch([home_tasks, samples])
                     }
@@ -583,15 +584,15 @@ impl App {
                             };
 
                         let mut movies = Vec::with_capacity(thumbnails.len());
-                        let mut samples = Vec::with_capacity(thumbnails.len());
+                        let mut tasks = Vec::with_capacity(thumbnails.len());
 
-                        for (movie, sample) in thumbnails {
+                        for (movie, task) in thumbnails {
                             movies.push(movie);
-                            samples.push(sample.map(Message::MovieAllocation));
+                            tasks.push(task.map(Message::MovieTask));
                         }
 
                         let home_tasks = self.home.fetched_movies(movies);
-                        let samples = Task::batch(samples);
+                        let samples = Task::batch(tasks);
 
                         Task::batch([home_tasks, samples])
                     }
@@ -621,26 +622,26 @@ impl App {
                             };
                         let mut shows = Vec::with_capacity(thumbnails_shows.len());
                         let mut movies = Vec::with_capacity(thumbnails_movies.len());
-                        let mut samples =
+                        let mut tasks =
                             Vec::with_capacity(thumbnails_shows.len() + thumbnails_movies.len());
 
-                        for (show, sample) in thumbnails_shows {
+                        for (show, task) in thumbnails_shows {
                             shows.push(show);
-                            samples.push(sample.map(Message::ShowAllocation));
+                            tasks.push(task.map(Message::ShowTask));
                         }
 
-                        for (movie, sample) in thumbnails_movies {
+                        for (movie, task) in thumbnails_movies {
                             movies.push(movie);
-                            samples.push(sample.map(Message::MovieAllocation));
+                            tasks.push(task.map(Message::MovieTask));
                         }
 
-                        let samples = Task::batch(samples);
+                        let samples = Task::batch(tasks);
                         let home_tasks = self.home.fetched_recents(movies, shows);
 
                         Task::batch([home_tasks, samples])
                     }
                     FetchId::Show(id) => {
-                        let (show, show_sample) = match self.db.get_show(id, show_map) {
+                        let (show, show_task) = match self.db.get_show(id, show_map) {
                             Ok(show) => {
                                 tracing::debug!("Fetched Show {}", show.0.media.name());
                                 show
@@ -666,21 +667,22 @@ impl App {
                         };
 
                         let mut seasons = Vec::with_capacity(thumbnail_seasons.len());
-                        let mut samples = Vec::with_capacity(1 + thumbnail_seasons.len());
-                        samples.push(show_sample.map(Message::ShowAllocation));
+                        let mut tasks = Vec::with_capacity(1 + thumbnail_seasons.len());
 
-                        for (season, sample) in thumbnail_seasons {
+                        tasks.push(show_task.map(Message::ShowTask));
+
+                        for (season, task) in thumbnail_seasons {
                             seasons.push(season);
-                            samples.push(sample.map(Message::SeasonAllocation));
+                            tasks.push(task.map(Message::SeasonTask));
                         }
 
                         let home_task = self.home.fetched_show(show, seasons);
-                        let samples = Task::batch(samples);
+                        let samples = Task::batch(tasks);
 
                         Task::batch([home_task, samples])
                     }
                     FetchId::Season(id) => {
-                        let (season, season_sample) = match self.db.get_season(id, season_map) {
+                        let (season, season_task) = match self.db.get_season(id, season_map) {
                             Ok(season) => {
                                 tracing::debug!("Fetched season {}", season.0.media.name());
                                 season
@@ -710,15 +712,15 @@ impl App {
                         };
 
                         let mut episodes = Vec::with_capacity(thumbnail_episodes.len());
-                        let mut samples = Vec::with_capacity(1 + thumbnail_episodes.len());
-                        samples.push(season_sample.map(Message::SeasonAllocation));
+                        let mut tasks = Vec::with_capacity(1 + thumbnail_episodes.len());
+                        tasks.push(season_task.map(Message::SeasonTask));
 
-                        for (episode, sample) in thumbnail_episodes {
+                        for (episode, task) in thumbnail_episodes {
                             episodes.push(episode);
-                            samples.push(sample.map(Message::EpisodeAllocation))
+                            tasks.push(task.map(Message::EpisodeTask))
                         }
 
-                        let samples = Task::batch(samples);
+                        let samples = Task::batch(tasks);
                         let home_task = self.home.fetched_season(season, episodes);
 
                         Task::batch([home_task, samples])
@@ -737,11 +739,11 @@ impl App {
 
                         Task::batch([
                             self.home.fetched_episode(episode),
-                            sample.map(Message::EpisodeAllocation),
+                            sample.map(Message::EpisodeTask),
                         ])
                     }
                     FetchId::Movie(id) => {
-                        let (movie, sample) = match self.db.get_movie(id, movie_map) {
+                        let (movie, task) = match self.db.get_movie(id, movie_map) {
                             Ok(movie) => {
                                 tracing::debug!("Fetched Movie {}", movie.0.media.name());
                                 movie
@@ -752,10 +754,7 @@ impl App {
                             }
                         };
 
-                        Task::batch([
-                            self.home.fetched_movie(movie),
-                            sample.map(Message::MovieAllocation),
-                        ])
+                        Task::batch([self.home.fetched_movie(movie), task.map(Message::MovieTask)])
                     }
                     FetchId::Collections => {
                         //todo: collection sorts
@@ -845,37 +844,37 @@ impl App {
                         let mut shows = Vec::with_capacity(thumbnail_shows.len());
                         let mut seasons = Vec::with_capacity(thumbnail_seasons.len());
                         let mut episodes = Vec::with_capacity(thumbnail_episodes.len());
-                        let mut samples = Vec::with_capacity(
+                        let mut tasks = Vec::with_capacity(
                             thumbnail_movies.len()
                                 + thumbnail_shows.len()
                                 + thumbnail_seasons.len()
                                 + thumbnail_episodes.len(),
                         );
 
-                        for (movie, sample) in thumbnail_movies {
+                        for (movie, task) in thumbnail_movies {
                             movies.push(movie);
-                            samples.push(sample.map(Message::MovieAllocation));
+                            tasks.push(task.map(Message::MovieTask));
                         }
 
-                        for (show, sample) in thumbnail_shows {
+                        for (show, task) in thumbnail_shows {
                             shows.push(show);
-                            samples.push(sample.map(Message::ShowAllocation));
+                            tasks.push(task.map(Message::ShowTask));
                         }
 
-                        for (season, sample) in thumbnail_seasons {
+                        for (season, task) in thumbnail_seasons {
                             seasons.push(season);
-                            samples.push(sample.map(Message::SeasonAllocation));
+                            tasks.push(task.map(Message::SeasonTask));
                         }
 
-                        for (episode, sample) in thumbnail_episodes {
+                        for (episode, task) in thumbnail_episodes {
                             episodes.push(episode);
-                            samples.push(sample.map(Message::EpisodeAllocation));
+                            tasks.push(task.map(Message::EpisodeTask));
                         }
 
                         let home_task = self.home.fetched_collection(
                             collection, itriggers, dtriggers, movies, shows, seasons, episodes,
                         );
-                        let samples = Task::batch(samples);
+                        let samples = Task::batch(tasks);
 
                         Task::batch([home_task, samples])
                     }
@@ -1207,10 +1206,12 @@ impl App {
 
                 self.home.scanning(false, now)
             }
-            Message::MovieAllocation((id, sample)) => self.home.movie_sample(id, sample),
-            Message::ShowAllocation((id, sample)) => self.home.show_sample(id, sample),
-            Message::SeasonAllocation((id, sample)) => self.home.season_sample(id, sample),
-            Message::EpisodeAllocation((id, sample)) => self.home.episode_sample(id, sample),
+            Message::MovieTask(ThumbnailTask { id, kind }) => self.home.movie_task(id, kind, now),
+            Message::ShowTask(ThumbnailTask { id, kind }) => self.home.show_task(id, kind, now),
+            Message::SeasonTask(ThumbnailTask { id, kind }) => self.home.season_task(id, kind, now),
+            Message::EpisodeTask(ThumbnailTask { id, kind }) => {
+                self.home.episode_task(id, kind, now)
+            }
             Message::Triggers {
                 inserts,
                 deletes,
@@ -1692,25 +1693,25 @@ impl App {
 
 fn movie_map(
     row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(shared::Thumbnail<Movie>, shared::ThumbnailSample<Movie>)> {
+) -> rusqlite::Result<(shared::Thumbnail<Movie>, Task<ThumbnailTask<Movie>>)> {
     Movie::from_row(row).map(shared::Thumbnail::new)
 }
 
 fn show_map(
     row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(shared::Thumbnail<Show>, shared::ThumbnailSample<Show>)> {
+) -> rusqlite::Result<(shared::Thumbnail<Show>, Task<ThumbnailTask<Show>>)> {
     Show::from_row(row).map(shared::Thumbnail::new)
 }
 
 fn season_map(
     row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(shared::Thumbnail<Season>, shared::ThumbnailSample<Season>)> {
+) -> rusqlite::Result<(shared::Thumbnail<Season>, Task<ThumbnailTask<Season>>)> {
     Season::from_row(row).map(shared::Thumbnail::new)
 }
 
 fn episode_map(
     row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(shared::Thumbnail<Episode>, shared::ThumbnailSample<Episode>)> {
+) -> rusqlite::Result<(shared::Thumbnail<Episode>, Task<ThumbnailTask<Episode>>)> {
     Episode::from_row(row).map(shared::Thumbnail::new)
 }
 

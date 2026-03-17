@@ -222,12 +222,14 @@ impl ShowPage {
 
     fn compact<'a>(
         &self,
+        now: Instant,
         thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
     ) -> Element<'a, ShowPageMessage> {
         let show = self.id;
 
         let content = thumbnails.map(|thumbnail| {
             thumbnail.compact(
+                now,
                 move |id| ShowPageMessage {
                     id: show,
                     message: Message::Add(id),
@@ -309,13 +311,13 @@ impl ShowPage {
         content.into()
     }
 
-    fn top<'a>(&self, show: &'a Thumbnail<Show>) -> Element<'a, ShowPageMessage> {
+    fn top<'a>(&self, now: Instant, show: &'a Thumbnail<Show>) -> Element<'a, ShowPageMessage> {
         let id = self.id;
 
         let img_height = CARD_HEIGHT * 0.65;
         let img: Element<'_, ShowPageMessage> = {
             let ratio = 2.0 / 3.0;
-            show.poster(img_height * ratio, img_height)
+            show.poster(img_height * ratio, img_height, now)
         };
 
         let header = {
@@ -497,7 +499,7 @@ impl ShowPage {
                 Tab::Items => match layout {
                     Layout::Grid => self.grid(now, thumbnails),
                     Layout::List => self.list(now, thumbnails),
-                    Layout::Compact => self.compact(thumbnails),
+                    Layout::Compact => self.compact(now, thumbnails),
                 },
                 Tab::Data => data_tab(
                     &show.media,
@@ -536,7 +538,7 @@ impl ShowPage {
             }
         };
 
-        let content = column!(self.top(show), content).spacing(20.0);
+        let content = column!(self.top(now, show), content).spacing(20.0);
 
         content.into()
     }

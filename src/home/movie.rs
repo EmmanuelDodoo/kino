@@ -6,6 +6,7 @@ use iced::widget::Space;
 use iced::{
     Color, Element, Length, Shadow,
     alignment::{Horizontal, Vertical},
+    time::Instant,
     widget::{bottom_center, button, center_x, column, container, row, scrollable, stack, text},
 };
 use registry::models::{CollectionId, ItemId, Media, Movie, MovieId, SimpleCollection};
@@ -111,6 +112,7 @@ impl MoviePage {
 
     pub fn overlay<'a>(
         &self,
+        now: Instant,
         movie: &'a Thumbnail<Movie>,
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, MoviePageMessage> {
@@ -119,7 +121,7 @@ impl MoviePage {
         let img: Element<'_, MoviePageMessage> = {
             let img_height = 300.0;
             let ratio = 2.0 / 3.0;
-            movie.poster(img_height * ratio, img_height)
+            movie.poster(img_height * ratio, img_height, now)
         };
 
         let header = {
@@ -319,10 +321,11 @@ impl MoviePage {
 
     pub fn view<'a>(
         &self,
+        now: Instant,
         movie: &'a Thumbnail<Movie>,
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, MoviePageMessage> {
-        let overlay = bottom_center(self.overlay(movie, memberships));
+        let overlay = bottom_center(self.overlay(now, movie, memberships));
 
         let img = movie.backdrop(Length::Fill, Length::FillPortion(3));
 
