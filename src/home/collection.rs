@@ -188,17 +188,21 @@ impl CollectionPage {
             Layout::Compact => self.compact(now, movies, shows, seasons, episodes),
         };
 
-        let content = column!(self.top(collection), content).spacing(10);
+        let content = column!(self.top(collection, now), content).spacing(10);
 
         content.into()
     }
 
-    fn top<'a>(&self, collection: &'a CollectionThumbnail) -> Element<'a, CollectionMessage> {
+    fn top<'a>(
+        &self,
+        collection: &'a CollectionThumbnail,
+        now: Instant,
+    ) -> Element<'a, CollectionMessage> {
         let id = self.id;
 
         let img_height = CollectionThumbnail::HEIGHT;
 
-        let img = collection.collage();
+        let img = collection.collage(now);
 
         let header = {
             let title = container(h4(&collection.collection.name))

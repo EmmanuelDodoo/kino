@@ -435,7 +435,7 @@ pub struct ThumbnailTask<T: Media> {
 }
 
 #[derive(Debug, Clone)]
-enum ThumbnailPoster {
+enum Image {
     Ready {
         allocation: Allocation,
         fade_in: Animation<bool>,
@@ -447,7 +447,7 @@ enum ThumbnailPoster {
 #[derive(Debug, Clone)]
 pub struct Thumbnail<T: Media> {
     pub selected: bool,
-    poster: ThumbnailPoster,
+    poster: Image,
     backdrop: Option<Handle>,
     sample_text: Option<Color>,
     sample_color: Option<Color>,
@@ -498,9 +498,9 @@ impl<T: Media + 'static> Thumbnail<T> {
             Some(poster) => {
                 sample_color = poster.get_main().map(to_color);
                 sample_text = poster.get_accent().map(to_color);
-                ThumbnailPoster::Loading
+                Image::Loading
             }
-            None => ThumbnailPoster::Default,
+            None => Image::Default,
         };
 
         let backdrop = media.backdrop().map(Handle::from_path);
@@ -528,7 +528,7 @@ impl<T: Media + 'static> Thumbnail<T> {
 
     pub fn is_animating(&self, now: Instant) -> bool {
         let poster = match &self.poster {
-            ThumbnailPoster::Ready { fade_in, .. } => fade_in.is_animating(now),
+            Image::Ready { fade_in, .. } => fade_in.is_animating(now),
             _ => false,
         };
 
@@ -539,7 +539,7 @@ impl<T: Media + 'static> Thumbnail<T> {
     }
 
     fn poster_ready(&self) -> bool {
-        matches!(&self.poster, ThumbnailPoster::Ready { .. })
+        matches!(&self.poster, Image::Ready { .. })
     }
 
     pub fn go_mut(&mut self, new_state: bool, at: Instant) {
@@ -562,12 +562,9 @@ impl<T: Media + 'static> Thumbnail<T> {
                 self.sample_text = Some(accent);
             }
             ThumbnailTaskKind::Image(Ok(allocation)) => {
-                self.poster = ThumbnailPoster::Ready {
+                self.poster = Image::Ready {
                     allocation,
-                    fade_in: Animation::new(false)
-                        .duration(Duration::from_millis(500))
-                        .easing(Easing::EaseInOut)
-                        .go(true, now),
+                    fade_in: fade_in(now),
                 };
             }
             ThumbnailTaskKind::Image(Err(error)) => {
@@ -610,15 +607,15 @@ impl<T: Media + 'static> Thumbnail<T> {
         };
 
         match &self.poster {
-            ThumbnailPoster::Ready {
+            Image::Ready {
                 allocation,
                 fade_in,
             } => view(allocation.handle())
                 .opacity(fade_in.interpolate(0.0, 1.0, now))
                 .scale(fade_in.interpolate(1.2, 1.0, now))
                 .into(),
-            ThumbnailPoster::Loading => empty().into(),
-            ThumbnailPoster::Default => match DEFAULT_POSTER.as_ref() {
+            Image::Loading => empty().into(),
+            Image::Default => match DEFAULT_POSTER.as_ref() {
                 Some(handle) => view(handle).into(),
                 _ => empty().into(),
             },
@@ -664,15 +661,15 @@ impl<T: Media + 'static> Thumbnail<T> {
         };
 
         match &self.poster {
-            ThumbnailPoster::Ready {
+            Image::Ready {
                 allocation,
                 fade_in,
             } => view(allocation.handle())
                 .opacity(fade_in.interpolate(0.0, 1.0, now))
                 .scale(scale * fade_in.interpolate(1.15, 1.0, now))
                 .into(),
-            ThumbnailPoster::Loading => empty().into(),
-            ThumbnailPoster::Default => match DEFAULT_POSTER.as_ref() {
+            Image::Loading => empty().into(),
+            Image::Default => match DEFAULT_POSTER.as_ref() {
                 Some(handle) => view(handle).into(),
                 _ => empty().into(),
             },
@@ -955,18 +952,18 @@ impl<T: Media + 'static> Thumbnail<T> {
             };
 
             match &self.poster {
-                ThumbnailPoster::Ready {
+                Image::Ready {
                     allocation,
                     fade_in,
                 } => view(allocation.handle())
                     .opacity(fade_in.interpolate(0.0, 1.0, now))
                     .scale(fade_in.interpolate(1.2, 1.0, now))
                     .into(),
-                ThumbnailPoster::Default => match DEFAULT_POSTER.as_ref() {
+                Image::Default => match DEFAULT_POSTER.as_ref() {
                     Some(handle) => view(handle).into(),
                     None => empty().into(),
                 },
-                ThumbnailPoster::Loading => empty().into(),
+                Image::Loading => empty().into(),
             }
         };
 
@@ -1040,8 +1037,19 @@ impl<T: Media + 'static> Thumbnail<T> {
 }
 
 #[derive(Debug, Clone)]
+pub struct CollectionTask {
+    pub id: CollectionId,
+    pub kind: CollectionTaskKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum CollectionTaskKind {
+    Image(Result<Allocation, image::Error>),
+}
+
+#[derive(Debug, Clone)]
 pub struct CollectionThumbnail {
-    collage: Option<Handle>,
+    collage: Image,
     pub collection: Collection,
 }
 
@@ -1052,29 +1060,53 @@ impl CollectionThumbnail {
     pub const CARD_HEIGHT: f32 = CARD_HEIGHT * 0.85;
     pub const CARD_WIDTH: f32 = Self::CARD_HEIGHT * 0.85;
 
-    pub fn new(collection: Collection) -> Self {
-        let paths = collection
-            .posters
-            .iter()
-            .filter_map(|poster| poster.as_deref());
+    pub fn new(collection: Collection) -> (Self, Task<CollectionTask>) {
+        let id = collection.id;
+        let paths = collection.posters.clone().into_iter().flatten();
 
-        let collage = collage(paths, Self::WIDTH, Self::HEIGHT).map(to_handle);
+        let task = Task::future(async move { collage(paths, Self::WIDTH, Self::HEIGHT) }).and_then(
+            move |collage| {
+                image::allocate(to_handle(collage)).map(move |res| CollectionTask {
+                    id,
+                    kind: CollectionTaskKind::Image(res),
+                })
+            },
+        );
 
-        Self {
-            collage,
-            collection,
+        let collage = Image::Loading;
+        (
+            Self {
+                collage,
+                collection,
+            },
+            task,
+        )
+    }
+
+    pub fn is_animating(&self, now: Instant) -> bool {
+        match &self.collage {
+            Image::Ready { fade_in, .. } => fade_in.is_animating(now),
+            _ => false,
         }
     }
 
-    pub fn collage<'a, Message: 'a>(&'a self) -> Element<'a, Message> {
+    pub fn task(&mut self, task: CollectionTaskKind, now: Instant) {
+        match task {
+            CollectionTaskKind::Image(Ok(allocation)) => {
+                self.collage = Image::Ready {
+                    allocation,
+                    fade_in: fade_in(now),
+                };
+            }
+            CollectionTaskKind::Image(Err(error)) => {
+                tracing::error!("Thumbnail poster allocation error: \n{error}");
+            }
+        }
+    }
+
+    pub fn collage<'a, Message: 'a>(&'a self, now: Instant) -> Element<'a, Message> {
         match &self.collage {
-            Some(handle) => image(handle)
-                .border_radius(IMAGE_RADIUS)
-                .height(Self::HEIGHT)
-                .width(Self::WIDTH)
-                .content_fit(ContentFit::Contain)
-                .into(),
-            None => {
+            Image::Loading | Image::Default => {
                 let len = self.collection.name.len().min(2);
                 let name = self.collection.name.get(..len).unwrap_or_default();
 
@@ -1092,12 +1124,24 @@ impl CollectionThumbnail {
                     })
                     .into()
             }
+            Image::Ready {
+                allocation,
+                fade_in,
+            } => image(allocation.handle())
+                .border_radius(IMAGE_RADIUS)
+                .height(Self::HEIGHT)
+                .width(Self::WIDTH)
+                .content_fit(ContentFit::Contain)
+                .opacity(fade_in.interpolate(0.0, 1.0, now))
+                .scale(fade_in.interpolate(1.2, 1.0, now))
+                .into(),
         }
     }
 
     pub fn view<'a, Message: 'a + Clone>(
         &'a self,
         on_select: impl Fn(CollectionId) -> Message + 'a,
+        now: Instant,
     ) -> Element<'a, Message> {
         let width = Self::CARD_WIDTH;
         let height = Self::CARD_HEIGHT;
@@ -1114,14 +1158,19 @@ impl CollectionThumbnail {
 
         let img: Element<'_, Message> = {
             match &self.collage {
-                Some(handle) => image(handle)
+                Image::Ready {
+                    allocation,
+                    fade_in,
+                } => image(allocation.handle())
                     .border_radius(IMAGE_RADIUS)
                     .width(Self::CARD_WIDTH)
                     .height(Length::Fill)
                     .content_fit(ContentFit::Fill)
+                    .opacity(fade_in.interpolate(0.0, 1.0, now))
+                    .scale(fade_in.interpolate(1.2, 1.0, now))
                     .into(),
 
-                None => {
+                Image::Loading | Image::Default => {
                     let len = self.collection.name.len().min(2);
                     let name = self.collection.name.get(..len).unwrap_or_default();
 
@@ -1457,4 +1506,11 @@ fn to_color(color: devutils::Color) -> Color {
 
 fn to_handle(img: devutils::Image) -> Handle {
     Handle::from_rgba(img.width, img.height, bytes::Bytes::from(img.bytes))
+}
+
+fn fade_in(now: Instant) -> Animation<bool> {
+    Animation::new(false)
+        .duration(Duration::from_millis(500))
+        .easing(Easing::EaseInOut)
+        .go(true, now)
 }

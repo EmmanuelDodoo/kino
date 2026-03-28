@@ -60,7 +60,8 @@ use pages::{Page, PageKind};
 use season::{SeasonPage, SeasonPageMessage};
 use series::{ShowPage, ShowPageMessage};
 use shared::{
-    CARD_HEIGHT, CARD_WIDTH, CollectionThumbnail, Icon, SearchView, Thumbnail, ThumbnailTaskKind,
+    CARD_HEIGHT, CARD_WIDTH, CollectionTask, CollectionThumbnail, Icon, SearchView, Thumbnail,
+    ThumbnailTaskKind,
 };
 use shows::{TvShows, TvShowsMessage};
 use widgets::marquee;
@@ -435,10 +436,7 @@ pub enum HomeMessage {
     AddCollection(ItemId, CollectionId),
     CloseView,
     Play(ItemId),
-    PlayCollection {
-        id: CollectionId,
-        items: Items,
-    },
+    PlayCollection { id: CollectionId, items: Items },
     ToggleLayout,
     Goto(PageKind),
     NewCollection,
@@ -446,16 +444,7 @@ pub enum HomeMessage {
     Scroll(scrollable::Viewport),
     RefreshContent,
     Hovered(ItemId, bool),
-    FetchedCollections(Vec<CollectionThumbnail>),
-    FetchedCollection {
-        collection: Box<CollectionThumbnail>,
-        itriggers: Vec<InsertTrigger>,
-        dtriggers: Vec<DeleteTrigger>,
-        movies: Vec<Thumbnail<Movie>>,
-        shows: Vec<Thumbnail<Show>>,
-        seasons: Vec<Thumbnail<Season>>,
-        episodes: Vec<Thumbnail<Episode>>,
-    },
+    CollectionTask(CollectionTask),
     Trigger(TriggerMessage),
 }
 
@@ -585,46 +574,22 @@ impl Home {
                 self.unfocus(now);
                 Task::done(Message::SettingsOpen)
             }
-            HomeMessage::FetchedCollections(collections) => {
-                self.state = State::Collections(collections);
-
-                self.update_page_scroll()
-            }
-            HomeMessage::FetchedCollection {
-                collection,
-                itriggers,
-                dtriggers,
-                mut movies,
-                mut shows,
-                mut seasons,
-                mut episodes,
-            } => {
-                if let Some(View::Selection(selected)) = &self.view {
-                    for media in &mut movies {
-                        media.selected = selected.contains(&media.media.id.into());
+            HomeMessage::CollectionTask(task) => {
+                match &mut self.state {
+                    State::Collections(collections) => {
+                        if let Some(collection) = collections
+                            .iter_mut()
+                            .find(|collection| collection.collection.id == task.id)
+                        {
+                            collection.task(task.kind, now)
+                        }
                     }
-                    for media in &mut shows {
-                        media.selected = selected.contains(&media.media.id.into());
+                    State::Collection { collection, .. } if task.id == collection.collection.id => {
+                        collection.task(task.kind, now)
                     }
-                    for media in &mut seasons {
-                        media.selected = selected.contains(&media.media.id.into());
-                    }
-                    for media in &mut episodes {
-                        media.selected = selected.contains(&media.media.id.into());
-                    }
+                    _ => {}
                 }
-
-                self.state = State::Collection {
-                    collection,
-                    itriggers,
-                    dtriggers,
-                    shows,
-                    movies,
-                    seasons,
-                    episodes,
-                };
-
-                self.update_page_scroll()
+                Task::none()
             }
             HomeMessage::Goto(kind) => self.goto(kind, now),
             HomeMessage::Movies(message) => {
@@ -926,15 +891,16 @@ impl Home {
                         sort_collections(&mut self.collections);
 
                         let close_view = self.close_view(true);
-                        self.state = State::Collection {
-                            collection: Box::new(CollectionThumbnail::new(new)),
-                            itriggers: vec![],
-                            dtriggers: vec![],
-                            shows: vec![],
-                            movies: vec![],
-                            episodes: vec![],
-                            seasons: vec![],
-                        };
+
+                        let collection = self.fetched_collection(
+                            new,
+                            vec![],
+                            vec![],
+                            vec![],
+                            vec![],
+                            vec![],
+                            vec![],
+                        );
 
                         if let Some(old) = self.current_page.replace(PageKind::Collection(new_id)) {
                             self.backward.push(old)
@@ -955,7 +921,12 @@ impl Home {
                             tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
                         };
 
-                        return Task::batch([Task::done(Message::Query(query)), msg, close_view]);
+                        return Task::batch([
+                            Task::done(Message::Query(query)),
+                            msg,
+                            close_view,
+                            collection,
+                        ]);
                     }
                 }
 
@@ -3612,9 +3583,9 @@ impl Home {
             (State::Movies(movies), Some(Page::Movies(page))) => page
                 .view(now, self.layout, movies.iter())
                 .map(HomeMessage::Movies),
-            (State::Collections(collections), Some(Page::Collections(page))) => {
-                page.view(collections.iter()).map(HomeMessage::Collections)
-            }
+            (State::Collections(collections), Some(Page::Collections(page))) => page
+                .view(collections.iter(), now)
+                .map(HomeMessage::Collections),
             // todo: Needed?
             (State::Collections(_), None) => center("Loading").into(),
             (
@@ -3771,22 +3742,24 @@ impl Home {
             State::Season { episodes, .. } => {
                 episodes.iter().any(|episode| episode.is_animating(now))
             }
-            State::Collections(_) => false,
+            State::Collections(collections) => collections
+                .iter()
+                .any(|collection| collection.is_animating(now)),
             State::Movie { movie, .. } => movie.is_animating(now),
             State::Episode { episode, .. } => episode.is_animating(now),
             State::Collection {
+                collection,
                 shows,
                 movies,
                 seasons,
                 episodes,
                 ..
             } => {
-                let shows = shows.iter().any(|show| show.is_animating(now));
-                let movies = movies.iter().any(|movie| movie.is_animating(now));
-                let seasons = seasons.iter().any(|season| season.is_animating(now));
-                let episodes = episodes.iter().any(|episode| episode.is_animating(now));
-
-                shows || movies || seasons || episodes
+                collection.is_animating(now)
+                    || shows.iter().any(|show| show.is_animating(now))
+                    || movies.iter().any(|movie| movie.is_animating(now))
+                    || seasons.iter().any(|season| season.is_animating(now))
+                    || episodes.iter().any(|episode| episode.is_animating(now))
             }
         };
 
@@ -4173,15 +4146,17 @@ impl Home {
     }
 
     pub fn fetched_collections(&mut self, collections: Vec<Collection>) -> Task<Message> {
-        Task::perform(
-            async move {
-                collections
-                    .into_iter()
-                    .map(CollectionThumbnail::new)
-                    .collect::<Vec<_>>()
-            },
-            move |collections| Message::Home(HomeMessage::FetchedCollections(collections)),
-        )
+        let (collections, tasks): (Vec<_>, Vec<_>) = collections
+            .into_iter()
+            .map(CollectionThumbnail::new)
+            .unzip();
+
+        self.state = State::Collections(collections);
+
+        let task = Task::batch(tasks).map(|task| Message::Home(HomeMessage::CollectionTask(task)));
+        let scroll = self.update_page_scroll();
+
+        Task::batch([task, scroll])
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -4190,30 +4165,41 @@ impl Home {
         collection: Collection,
         itriggers: Vec<InsertTrigger>,
         dtriggers: Vec<DeleteTrigger>,
-        movies: Vec<Thumbnail<Movie>>,
-        shows: Vec<Thumbnail<Show>>,
-        seasons: Vec<Thumbnail<Season>>,
-        episodes: Vec<Thumbnail<Episode>>,
+        mut movies: Vec<Thumbnail<Movie>>,
+        mut shows: Vec<Thumbnail<Show>>,
+        mut seasons: Vec<Thumbnail<Season>>,
+        mut episodes: Vec<Thumbnail<Episode>>,
     ) -> Task<Message> {
-        Task::perform(
-            async move {
-                let collection = CollectionThumbnail::new(collection);
-                (
-                    collection, itriggers, dtriggers, movies, shows, seasons, episodes,
-                )
-            },
-            move |(collection, itriggers, dtriggers, movies, shows, seasons, episodes)| {
-                Message::Home(HomeMessage::FetchedCollection {
-                    collection: Box::new(collection),
-                    itriggers,
-                    dtriggers,
-                    movies,
-                    shows,
-                    seasons,
-                    episodes,
-                })
-            },
-        )
+        let (collection, task) = CollectionThumbnail::new(collection);
+        let task = task.map(|task| Message::Home(HomeMessage::CollectionTask(task)));
+        let scroll = self.update_page_scroll();
+
+        if let Some(View::Selection(selected)) = &self.view {
+            for media in &mut movies {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+            for media in &mut shows {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+            for media in &mut seasons {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+            for media in &mut episodes {
+                media.selected = selected.contains(&media.media.id.into());
+            }
+        }
+
+        self.state = State::Collection {
+            collection: Box::new(collection),
+            itriggers,
+            dtriggers,
+            shows,
+            movies,
+            seasons,
+            episodes,
+        };
+
+        Task::batch([task, scroll])
     }
 
     pub fn fetched_memberships_ids(&mut self, memberships: Vec<CollectionId>) -> Task<Message> {

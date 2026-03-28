@@ -2,6 +2,7 @@ use super::{HomeMessage, PageKind, shared::*};
 use crate::utils::Scroll;
 use iced::{
     Element, Padding, Task,
+    time::Instant,
     widget::{self, container, grid, operation, scrollable},
 };
 use registry::models::CollectionId;
@@ -48,8 +49,9 @@ impl Collections {
     pub fn view<'a>(
         &self,
         thumbnails: impl Iterator<Item = &'a CollectionThumbnail>,
+        now: Instant,
     ) -> Element<'a, CollectionsMessage> {
-        self.grid(thumbnails)
+        self.grid(thumbnails, now)
     }
 
     pub fn update_scroll(&mut self) -> Task<()> {
@@ -59,8 +61,9 @@ impl Collections {
     fn grid<'a>(
         &self,
         thumbnails: impl Iterator<Item = &'a CollectionThumbnail>,
+        now: Instant,
     ) -> Element<'a, CollectionsMessage> {
-        let content = thumbnails.map(|thumbnail| thumbnail.view(CollectionsMessage::Details));
+        let content = thumbnails.map(|thumbnail| thumbnail.view(CollectionsMessage::Details, now));
 
         let content = grid(content)
             .spacing(16)
