@@ -61,7 +61,7 @@ pub fn collage<'a>(paths: impl Iterator<Item = String>, width: u32, height: u32)
 
     let len = imgs.len();
     let mut canvas: ImageBuffer<Rgba<u8>, Vec<_>> = ImageBuffer::new(width, height);
-    let filter = FilterType::Triangle;
+    let filter = FilterType::CatmullRom;
 
     match len {
         0 => return None,
