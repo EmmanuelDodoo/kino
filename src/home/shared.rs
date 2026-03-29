@@ -76,7 +76,7 @@ pub fn duration<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
 pub fn ratings<'a, T: Media, Message: 'a>(media: &T, show_text: bool) -> Element<'a, Message> {
     let size = H7;
     let color = |theme: &Theme| -> text::Style {
-        let color = theme.extended_palette().primary.strong.color;
+        let color = theme.palette().primary.strong.color;
         text::Style { color: Some(color) }
     };
 
@@ -142,7 +142,7 @@ pub fn progress<'a, T: Media, Message: 'a>(
             } else {
                 text::Style {
                     color: if primary {
-                        Some(theme.extended_palette().primary.strong.text)
+                        Some(theme.palette().primary.strong.text)
                     } else {
                         None
                     },
@@ -157,7 +157,7 @@ pub fn progress<'a, T: Media, Message: 'a>(
         } else {
             text::Style {
                 color: if primary {
-                    Some(theme.extended_palette().primary.strong.text)
+                    Some(theme.palette().primary.strong.text)
                 } else {
                     None
                 },
@@ -199,7 +199,7 @@ pub fn data<'a, Message: 'a>(
 ) -> Element<'a, Message> {
     let size = H7;
     let color = |theme: &Theme| text::Style {
-        color: Some(theme.extended_palette().primary.weak.color),
+        color: Some(theme.palette().primary.weak.color),
     };
 
     let value = h7(value).style(color);
@@ -775,7 +775,7 @@ impl<T: Media + 'static> Thumbnail<T> {
                 let border = if selected {
                     border
                         .width(SELECTED_WIDTH)
-                        .color(theme.extended_palette().primary.strong.color)
+                        .color(theme.palette().primary.strong.color)
                 } else {
                     border
                 };
@@ -803,7 +803,7 @@ impl<T: Media + 'static> Thumbnail<T> {
                 text::Style { color: sample }
             } else {
                 text::Style {
-                    color: Some(theme.extended_palette().primary.strong.text),
+                    color: Some(theme.palette().primary.strong.text),
                 }
             }
         };
@@ -906,7 +906,7 @@ impl<T: Media + 'static> Thumbnail<T> {
                 let border = if selected {
                     border
                         .width(SELECTED_WIDTH)
-                        .color(theme.extended_palette().primary.strong.color)
+                        .color(theme.palette().primary.strong.color)
                 } else {
                     border
                 };
@@ -1025,7 +1025,7 @@ impl<T: Media + 'static> Thumbnail<T> {
             let border = if selected {
                 border
                     .width(SELECTED_WIDTH)
-                    .color(theme.extended_palette().primary.strong.color)
+                    .color(theme.palette().primary.strong.color)
             } else {
                 border
             };
@@ -1252,12 +1252,12 @@ impl SearchView {
         set_play: bool,
     ) -> Element<'a, Message> {
         fn pair(theme: &Theme) -> Color {
-            theme.extended_palette().primary.strong.color
+            theme.palette().primary.strong.color
         }
 
         let separator = || {
             Element::from(text("•").line_height(0.9).size(H5).style(|theme: &Theme| {
-                let color = theme.extended_palette().background.strongest.color;
+                let color = theme.palette().background.strongest.color;
                 text::Style { color: Some(color) }
             }))
         };
@@ -1267,7 +1267,7 @@ impl SearchView {
                 .size(H6)
                 .font(mono_bold_font())
                 .style(|theme: &Theme| {
-                    let color = theme.extended_palette().background.strong.text;
+                    let color = theme.palette().background.strong.text;
                     text::Style { color: Some(color) }
                 })
                 .width(Length::Fill);

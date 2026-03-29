@@ -2595,7 +2595,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         let secs = duration % 60;
 
         let color = move |theme: &Theme| {
-            let color = theme.extended_palette().primary.base.color;
+            let color = theme.palette().primary.base.color;
 
             text::Style {
                 color: current.then_some(color),
@@ -2640,7 +2640,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
         let size = H6;
         let position = tp::Position::Top;
         let color = |theme: &Theme, active: bool| {
-            let color = theme.extended_palette().primary.base.color;
+            let color = theme.palette().primary.base.color;
 
             text::Style {
                 color: active.then_some(color),
@@ -2890,7 +2890,7 @@ fn draw_collection_add<'a>(
     let collections = container(collections)
         .padding(if is_empty { [0, 0] } else { [6, 8] })
         .style(|theme: &Theme| {
-            let color = theme.extended_palette().secondary.strong.color;
+            let color = theme.palette().secondary.strong.color;
             let default = styles::container::transparent(theme);
             let border = default.border.rounded(5).color(color).width(1.5);
 

@@ -17,55 +17,55 @@ pub mod container {
     }
 
     pub fn sw(theme: &Theme) -> Style {
-        style(theme.extended_palette().secondary.weak)
+        style(theme.palette().secondary.weak)
     }
 
     pub fn sb(theme: &Theme) -> Style {
-        style(theme.extended_palette().secondary.base)
+        style(theme.palette().secondary.base)
     }
 
     pub fn ss(theme: &Theme) -> Style {
-        style(theme.extended_palette().secondary.strong)
+        style(theme.palette().secondary.strong)
     }
 
     pub fn pw(theme: &Theme) -> Style {
-        style(theme.extended_palette().primary.weak)
+        style(theme.palette().primary.weak)
     }
 
     pub fn pb(theme: &Theme) -> Style {
-        style(theme.extended_palette().primary.base)
+        style(theme.palette().primary.base)
     }
 
     pub fn ps(theme: &Theme) -> Style {
-        style(theme.extended_palette().primary.strong)
+        style(theme.palette().primary.strong)
     }
 
     pub fn bw2(theme: &Theme) -> Style {
-        style(theme.extended_palette().background.weaker)
+        style(theme.palette().background.weaker)
     }
 
     pub fn bw3(theme: &Theme) -> Style {
-        style(theme.extended_palette().background.weakest)
+        style(theme.palette().background.weakest)
     }
 
     pub fn bw(theme: &Theme) -> Style {
-        style(theme.extended_palette().background.weak)
+        style(theme.palette().background.weak)
     }
 
     pub fn bb(theme: &Theme) -> Style {
-        style(theme.extended_palette().background.base)
+        style(theme.palette().background.base)
     }
 
     pub fn bs(theme: &Theme) -> Style {
-        style(theme.extended_palette().background.strong)
+        style(theme.palette().background.strong)
     }
 
     pub fn bs2(theme: &Theme) -> Style {
-        style(theme.extended_palette().background.stronger)
+        style(theme.palette().background.stronger)
     }
 
     pub fn bs3(theme: &Theme) -> Style {
-        style(theme.extended_palette().background.strongest)
+        style(theme.palette().background.strongest)
     }
 
     pub fn dark(theme: &Theme) -> Style {
@@ -73,7 +73,7 @@ pub mod container {
     }
 
     pub fn bordered(theme: &Theme) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
 
         Style {
             background: Some(palette.background.base.color.into()),
@@ -100,7 +100,7 @@ pub mod container {
     }
 
     pub fn text_pb(theme: &Theme) -> Style {
-        let text_color = theme.extended_palette().primary.base.color;
+        let text_color = theme.palette().primary.base.color;
 
         Style {
             text_color: Some(text_color),
@@ -110,7 +110,7 @@ pub mod container {
     }
 
     pub fn text_ps(theme: &Theme) -> Style {
-        let text_color = theme.extended_palette().primary.strong.color;
+        let text_color = theme.palette().primary.strong.color;
 
         Style {
             text_color: Some(text_color),
@@ -145,7 +145,7 @@ pub mod button {
     }
 
     pub fn primary(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let base = styled(palette.primary.base);
 
         match status {
@@ -159,7 +159,7 @@ pub mod button {
     }
 
     pub fn secondary(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let base = styled(palette.secondary.base);
 
         match status {
@@ -173,7 +173,7 @@ pub mod button {
     }
 
     pub fn background(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let base = styled(palette.background.base);
 
         match status {
@@ -191,7 +191,7 @@ pub mod button {
     }
 
     pub fn bw2(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let base = styled(palette.background.weaker);
 
         match status {
@@ -209,7 +209,7 @@ pub mod button {
     }
 
     pub fn danger(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let base = styled(palette.danger.base);
 
         match status {
@@ -223,7 +223,7 @@ pub mod button {
     }
 
     pub fn text(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
 
         let base = Style {
             text_color: palette.background.base.text,
@@ -257,9 +257,9 @@ pub mod button {
     }
 
     pub fn text_danger(theme: &Theme, status: Status) -> Style {
-        let danger = theme.extended_palette().danger;
+        let danger = theme.palette().danger;
 
-        let base = theme.extended_palette().danger.base;
+        let base = theme.palette().danger.base;
         let text_color = base.color;
 
         let base = Style {
@@ -278,7 +278,7 @@ pub mod button {
     }
 
     pub fn text_primary(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
 
         let base = Style {
             text_color: palette.primary.base.color,
@@ -296,7 +296,7 @@ pub mod button {
     }
 
     pub fn text_background(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
 
         let base = Style {
             text_color: palette.background.base.color,
@@ -314,7 +314,7 @@ pub mod button {
     }
 
     pub fn text_secondary(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
 
         let base = Style {
             text_color: palette.secondary.base.color,
@@ -348,7 +348,7 @@ pub mod button {
     }
 
     pub fn subtle(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let base = styled(palette.background.weak);
 
         match status {
@@ -366,7 +366,7 @@ pub mod button {
     }
 
     pub fn subtler(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let base = styled(palette.background.weaker);
 
         match status {
@@ -384,7 +384,7 @@ pub mod button {
     }
 
     pub fn subtlest(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let base = styled(palette.background.weakest);
 
         match status {
@@ -402,7 +402,7 @@ pub mod button {
     }
 
     pub fn subtle_primary(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
 
         let pair = theme::palette::Pair {
             color: palette.primary.strong.color.scale_alpha(0.5),
@@ -429,7 +429,7 @@ pub mod button {
     }
 
     pub fn background_primary(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let pair = theme::palette::Pair {
             color: palette.background.weaker.color,
             text: palette.primary.strong.color,
@@ -452,7 +452,7 @@ pub mod button {
     }
 
     pub fn weak_primary(theme: &Theme, status: Status) -> Style {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let pair = theme::palette::Pair {
             color: palette.background.weak.color,
             text: palette.primary.strong.color,

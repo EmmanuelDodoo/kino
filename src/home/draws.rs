@@ -73,7 +73,7 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
             .font(regular_font())
             .padding(padding)
             .style(move |theme: &Theme, status| {
-                let error = theme.extended_palette().danger.strong.color;
+                let error = theme.palette().danger.strong.color;
                 let default = text_input::default(theme, status);
                 let border = default.border.rounded(radius);
                 let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {
@@ -142,7 +142,7 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let views = container(views)
             .padding(padding)
             .style(move |theme: &Theme| {
-                let color = theme.extended_palette().secondary.weak.color;
+                let color = theme.palette().secondary.weak.color;
                 let default = styles::container::transparent(theme);
                 let border = default.border.rounded(radius).color(color).width(1.5);
 
@@ -176,7 +176,7 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let icons = container(icons)
             .padding(padding)
             .style(move |theme: &Theme| {
-                let color = theme.extended_palette().secondary.weak.color;
+                let color = theme.palette().secondary.weak.color;
                 let default = styles::container::transparent(theme);
                 let border = default.border.rounded(radius).color(color).width(1.5);
 
@@ -318,7 +318,7 @@ pub fn draw_collection_add<'a>(
     let collections = container(collections)
         .padding(if is_empty { [0, 0] } else { [6, 8] })
         .style(|theme: &Theme| {
-            let color = theme.extended_palette().secondary.strong.color;
+            let color = theme.palette().secondary.strong.color;
             let default = styles::container::transparent(theme);
             let border = default.border.rounded(5).color(color).width(1.5);
 
@@ -399,7 +399,7 @@ pub fn draw_rating<'a>(state: &Rating) -> Element<'a, HomeMessage> {
         let frac = rem - unstars;
 
         let color = |theme: &Theme| -> text::Style {
-            let color = theme.extended_palette().primary.strong.color;
+            let color = theme.palette().primary.strong.color;
             text::Style { color: Some(color) }
         };
 
@@ -444,7 +444,7 @@ pub fn draw_rename<'a>(
         .size(H7)
         .width(250)
         .style(move |theme: &Theme, status| {
-            let error = theme.extended_palette().danger.strong.color;
+            let error = theme.palette().danger.strong.color;
             let default = text_input::default(theme, status);
             let border = default.border.rounded(5);
             let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {

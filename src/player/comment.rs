@@ -294,7 +294,7 @@ impl Comment {
                         let border = base.border.rounded(rounding).width(border_width);
                         let border = match status {
                             button::Status::Hovered => {
-                                border.color(theme.extended_palette().primary.weak.color)
+                                border.color(theme.palette().primary.weak.color)
                             }
                             _ => border,
                         };
@@ -415,7 +415,7 @@ impl<'a, Message: 'a + CommentMessage> markdown::Viewer<'a, Message> for Comment
 
                 text(msg)
                     .style(|theme: &Theme| text::Style {
-                        color: Some(theme.extended_palette().danger.weak.color),
+                        color: Some(theme.palette().danger.weak.color),
                     })
                     .into()
             }

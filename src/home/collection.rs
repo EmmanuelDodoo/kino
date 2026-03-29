@@ -237,7 +237,7 @@ impl CollectionPage {
 
                 let base = container(icon(ELLIPSIS_VER).size(H7))
                     .style(|theme| {
-                        let pair = theme.extended_palette().background.weakest;
+                        let pair = theme.palette().background.weakest;
                         let text = pair.text;
                         let color = pair.color;
                         let border = Border::default().rounded(2);
@@ -285,7 +285,7 @@ impl CollectionPage {
 
                 let base = container(icon(ELLIPSIS_VER).size(H7))
                     .style(|theme| {
-                        let pair = theme.extended_palette().background.weakest;
+                        let pair = theme.palette().background.weakest;
                         let text = pair.text;
                         let color = pair.color;
                         let border = Border::default().rounded(2);
@@ -837,7 +837,7 @@ fn delete_btn<'a>(
         row!(
             icon(DELETE).size(P).style(|theme| {
                 text::Style {
-                    color: Some(theme.extended_palette().danger.base.color),
+                    color: Some(theme.palette().danger.base.color),
                 }
             }),
             sized_medium(label, H7)

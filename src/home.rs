@@ -2742,12 +2742,7 @@ impl Home {
     fn side(&self) -> Element<'_, HomeMessage> {
         let header = {
             let color = |theme: &Theme| {
-                let color = theme
-                    .extended_palette()
-                    .primary
-                    .base
-                    .color
-                    .scale_alpha(0.85);
+                let color = theme.palette().primary.base.color.scale_alpha(0.85);
 
                 text::Style { color: Some(color) }
             };
@@ -3527,7 +3522,7 @@ impl Home {
 
                         let svg = loading_svg(scanning, now).height(size).width(size).style(
                             |theme, _| widget::svg::Style {
-                                color: Some(theme.extended_palette().primary.base.color),
+                                color: Some(theme.palette().primary.base.color),
                             },
                         );
 

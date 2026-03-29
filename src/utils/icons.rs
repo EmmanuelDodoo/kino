@@ -10,7 +10,7 @@ use super::typo::*;
 
 pub static ICONS: &[u8] = include_bytes!("../../resources/fonts/kino-icons.ttf");
 const NAME: &str = "kino-icons";
-pub const FONT: Font = Font::with_name(NAME);
+pub const FONT: Font = Font::new(NAME);
 
 pub const LOGO: char = '\u{e80b}';
 pub const SEARCH: char = '\u{e80c}';
@@ -137,7 +137,7 @@ pub static LOADING_SVG_HANDLE: LazyLock<iced::widget::svg::Handle> =
     LazyLock::new(|| iced::widget::svg::Handle::from_memory(LOADING_SVG));
 
 fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
-    let fnt: Font = Font::with_name(name);
+    let fnt: Font = Font::new(name);
     text(unicode.to_string())
         .font(fnt)
         .align_x(alignment::Horizontal::Center)

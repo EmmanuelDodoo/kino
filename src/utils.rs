@@ -34,7 +34,7 @@ pub fn loading_svg(
         .width(50)
         .height(50)
         .style(|theme: &iced::Theme, _status| {
-            let color = theme.extended_palette().background.base.text;
+            let color = theme.palette().background.base.text;
 
             Style { color: Some(color) }
         })
@@ -73,7 +73,7 @@ pub fn tooltip<'a, Message: 'a>(
             .max_height(100)
             .padding([3, 6])
             .style(|theme: &Theme| {
-                let color = theme.extended_palette().secondary.weak.color;
+                let color = theme.palette().secondary.weak.color;
                 let default = styles::container::bw2(theme);
                 let border = default.border.rounded(5.0).width(1.0).color(color);
                 let shadow = Shadow {

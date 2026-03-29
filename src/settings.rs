@@ -1723,7 +1723,7 @@ fn draw_capture_key<'a>(
     .width(Length::Fill)
     .padding([2, 4])
     .style(|theme: &Theme| {
-        let color = theme.extended_palette().secondary.strong.color;
+        let color = theme.palette().secondary.strong.color;
         let default = styles::container::transparent(theme);
         let border = default.border.rounded(5).color(color).width(1.5);
 
@@ -1736,7 +1736,7 @@ fn draw_capture_key<'a>(
         KeyAction::General(Some(action)) => medium(format!("Conflicts with {action}"))
             .size(size / RATIO)
             .style(|theme| {
-                let color = theme.extended_palette().danger.base.color;
+                let color = theme.palette().danger.base.color;
 
                 text::Style { color: Some(color) }
             })
@@ -1744,7 +1744,7 @@ fn draw_capture_key<'a>(
         KeyAction::Video(Some(action)) => medium(format!("Conflicts with {action}"))
             .size(size / RATIO)
             .style(|theme| {
-                let color = theme.extended_palette().danger.base.color;
+                let color = theme.palette().danger.base.color;
 
                 text::Style { color: Some(color) }
             })
@@ -1752,7 +1752,7 @@ fn draw_capture_key<'a>(
         KeyAction::Settings(Some(action)) => medium(format!("Conflicts with {action}"))
             .size(size / RATIO)
             .style(|theme| {
-                let color = theme.extended_palette().danger.base.color;
+                let color = theme.palette().danger.base.color;
 
                 text::Style { color: Some(color) }
             })
@@ -2871,7 +2871,7 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
 fn picklist_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
     use pick_list::{Status, Style};
 
-    let palette = theme.extended_palette();
+    let palette = theme.palette();
     let pair = palette.background.weakest;
 
     let active = Style {
