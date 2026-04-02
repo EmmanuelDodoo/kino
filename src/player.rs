@@ -1540,17 +1540,18 @@ impl Manager {
     }
 
     fn subtitle_draw(&self) -> Element<'_, ManagerMessage> {
-        if !self.settings.show_subtitles {
-            return empty();
-        }
-
         let Some(Player {
+            item,
             subtitles: Some(subtitles),
             ..
         }) = self.player()
         else {
             return empty();
         };
+
+        if !self.settings.show_subtitles || item.subtitle_id.is_none() {
+            return empty();
+        }
 
         let subtitles = draw_subtitles(subtitles, self.settings.subtitles);
 

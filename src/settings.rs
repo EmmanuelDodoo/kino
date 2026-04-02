@@ -2358,7 +2358,7 @@ fn draw_media<'a>(
     let preferred_sub = {
         let label = label_maker("Preferred Subtitle Language ");
         let icon = help(
-            "Specify a subtitle codec to prefer for embedded subtitle tracks (eg 'en', 'fr'). If not set or unavailable, a neighboring subtitle file with the same name will be used instead.",
+            "Specify a subtitle language code to prefer for embedded subtitle tracks (eg 'en', 'fr'). If not set or unavailable, a neighboring subtitle file with the same name will be used instead.",
         );
 
         let preferred = preferred_sub.as_deref().unwrap_or_default();
