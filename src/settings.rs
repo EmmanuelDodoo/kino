@@ -165,6 +165,7 @@ pub enum MediaMessage {
     AddFolder,
     IncrMovieDepth,
     DecrMovieDepth,
+    PreferredSub(String),
     None,
 }
 
@@ -561,6 +562,12 @@ impl Settings {
                 }
                 MediaMessage::RestoreDeleted(enable) => {
                     self.config.general.restore_deleted = enable;
+
+                    Task::none()
+                }
+                MediaMessage::PreferredSub(preferred) => {
+                    self.config.general.preferred_subtitle_codec =
+                        (!preferred.is_empty()).then_some(preferred);
 
                     Task::none()
                 }
@@ -1219,6 +1226,7 @@ impl Settings {
             fetching_interval,
             restore_deleted,
             tmdb_rating,
+            preferred_subtitle_codec,
         } = &self.config.general;
 
         let general = draw_general(refresh_interval, recents_limit, search_limit)
@@ -1232,6 +1240,7 @@ impl Settings {
             *scan_discoverer,
             *restore_deleted,
             *movie_depth,
+            preferred_subtitle_codec,
         )
         .map(SettingsMessage::Media);
 
@@ -2160,6 +2169,7 @@ fn draw_media<'a>(
     scan_discoverer: bool,
     restore_deleted: bool,
     movie_depth: u8,
+    preferred_sub: &Option<String>,
 ) -> Element<'a, MediaMessage> {
     let dirs = {
         let top = {
@@ -2345,6 +2355,26 @@ fn draw_media<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
+    let preferred_sub = {
+        let label = label_maker("Preferred Subtitle Language ");
+        let icon = help(
+            "Specify a subtitle codec to prefer for embedded subtitle tracks (eg 'en', 'fr'). If not set or unavailable, a neighboring subtitle file with the same name will be used instead.",
+        );
+
+        let preferred = preferred_sub.as_deref().unwrap_or_default();
+        let input = text_input("", preferred)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .font(regular_font())
+            .padding(INPUT_PADDING)
+            .on_input(MediaMessage::PreferredSub)
+            .align_x(Horizontal::Right);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
     let content = column!(
         dirs,
         horizontal_rule(),
@@ -2352,7 +2382,9 @@ fn draw_media<'a>(
         horizontal_rule(),
         discoverer,
         horizontal_rule(),
-        restore_deletes
+        restore_deletes,
+        horizontal_rule(),
+        preferred_sub
     )
     .spacing(SECTION_SPACING);
 

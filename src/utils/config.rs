@@ -147,6 +147,7 @@ pub struct GeneralSettings {
     pub movie_depth: u8,
     pub fetching_interval: Duration,
     pub restore_deleted: bool,
+    pub preferred_subtitle_codec: Option<String>,
     pub tmdb_rating: bool,
 }
 
@@ -163,6 +164,7 @@ impl GeneralSettings {
             movie_depth: 2,
             fetching_interval: Duration::from_secs(600),
             restore_deleted: true,
+            preferred_subtitle_codec: Some("en".into()),
             tmdb_rating: true,
         }
     }
@@ -179,6 +181,7 @@ impl GeneralSettings {
             movie_depth: 0,
             fetching_interval: Duration::from_secs(30),
             restore_deleted: true,
+            preferred_subtitle_codec: Some("en".into()),
             tmdb_rating: true,
         }
     }

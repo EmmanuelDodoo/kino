@@ -18,6 +18,7 @@ This document covers advanced usage, tips, configuration and customization optio
 - Multiple sorts can be applied; their order is shown by the number indicator
 - Click on the ratings within the media details screen to leave your own local rating
 - Kino supports these subtitle extension types: `srt`, `ass`, `ssa`, `vtt`, `sub`, `sbv`, `ttml`, `dfxp`, `lrc`
+- Subtitle files directly neighboring a video file and sharing the same name are automatically associated with that video.
 - In the video player, double clicking enters full-screen mode, right clicking opens the video config dialog
 - Ctrl + Clicking on a media item starts building a playlist
 - Navigating to other pages while building a playlist maintains the selected media

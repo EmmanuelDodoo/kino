@@ -4,10 +4,10 @@ use gstreamer_pbutils::Discoverer;
 use registry::db::{BatchResult, Database};
 use registry::models::{
     Directory, DirectoryId, Episode, EpisodeId, MediaType, Movie, MovieId, Season, SeasonId, Show,
-    ShowId, Subtitle, SubtitleId,
+    ShowId, Subtitle, SubtitleId, VideoId,
 };
 use rusqlite::OptionalExtension;
-use rusqlite::types::ToSqlOutput;
+use rusqlite::types::{ToSqlOutput, ValueRef};
 use std::collections::HashMap;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
 use std::sync::LazyLock;
@@ -86,6 +86,7 @@ pub fn scan_dir<'a>(
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
+    preferred_subtitle_code: Option<String>,
 ) -> Option<BatchResult<'a>> {
     tracing::debug!("Scanning directory {}", dir.path);
     let discoverer = if discoverer {
@@ -115,7 +116,14 @@ pub fn scan_dir<'a>(
         }
     };
 
-    scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth, restore)
+    scan_dir_helper(
+        &mut db,
+        dir,
+        discoverer.as_ref(),
+        movie_depth,
+        restore,
+        preferred_subtitle_code.as_ref(),
+    )
 }
 
 pub fn scan_dirs<'a>(
@@ -124,6 +132,7 @@ pub fn scan_dirs<'a>(
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
+    preferred_subtitle_code: Option<String>,
 ) -> (Option<BatchResult<'a>>, Vec<DirectoryId>) {
     tracing::debug!("Scanning {} directories", dirs.len());
     let discoverer = if discoverer {
@@ -152,7 +161,14 @@ pub fn scan_dirs<'a>(
 
     for dir in dirs {
         let id = dir.id;
-        match scan_dir_helper(&mut db, dir, discoverer.as_ref(), movie_depth, restore) {
+        match scan_dir_helper(
+            &mut db,
+            dir,
+            discoverer.as_ref(),
+            movie_depth,
+            restore,
+            preferred_subtitle_code.as_ref(),
+        ) {
             Some(res) => {
                 scanned.push(id);
                 result.merge(res);
@@ -170,11 +186,10 @@ pub fn scan_dir_helper<'a>(
     discoverer: Option<&Discoverer>,
     movie_depth: u8,
     restore: bool,
+    preferred_subtitle_code: Option<&String>,
 ) -> Option<BatchResult<'a>> {
     let mut successes = vec![];
     let mut failures = vec![];
-
-    let prefered_subtitle_codec = "en".to_owned();
 
     match dir.media_type {
         MediaType::Movies => {
@@ -219,7 +234,7 @@ pub fn scan_dir_helper<'a>(
 
             for movie in videos {
                 let dir_movie = dir_movies.get_mut(&movie.path);
-                let save_subs = dir_movie.is_none();
+                let pick_sub = dir_movie.is_none();
 
                 if dir_movie
                     .as_ref()
@@ -261,34 +276,8 @@ pub fn scan_dir_helper<'a>(
                     }
                 }
 
-                if save_subs {
-                    match db
-                        .query_row(
-                            "SELECT id FROM subtitle WHERE video=:video AND (path NOT NULL OR lang=:lang)",
-                            &[
-                                (":lang", &ToSqlOutput::from(prefered_subtitle_codec.clone())),
-                                (":video", &ToSqlOutput::from(id)),
-                            ],
-                            SubtitleId::from_row,
-                        )
-                        .optional()
-                    {
-                        Ok(None) => {}
-                        Ok(Some(subtitle_id)) => {
-                            if let Err(error) = db.execute(
-                                "UPDATE movie SET subtitle_id=:subtitle WHERE id=:id",
-                                &[
-                                    (":id", &ToSqlOutput::from(id)),
-                                    (":subtitle", &ToSqlOutput::from(subtitle_id)),
-                                ],
-                            ) {
-                                tracing::error!("Set movie subtitle error.\n {error}");
-                            };
-                        }
-                        Err(error) => {
-                            tracing::error!("Select movie subtitle error. \n{error}");
-                        }
-                    }
+                if pick_sub {
+                    pick_subtitle(db, id, preferred_subtitle_code);
                 }
             }
 
@@ -496,7 +485,7 @@ pub fn scan_dir_helper<'a>(
 
                     for episode in episodes {
                         let dir_ep = dir_episodes.get_mut(&episode.path);
-                        let save_subtitle = dir_ep.is_none();
+                        let pick_sub = dir_ep.is_none();
 
                         if dir_ep.as_ref().map(|ep| ep.tombstone).unwrap_or_default() && !restore {
                             continue;
@@ -548,34 +537,8 @@ pub fn scan_dir_helper<'a>(
                             }
                         }
 
-                        if save_subtitle {
-                            match db
-                                .query_row(
-                            "SELECT id FROM subtitle WHERE video=:video AND (path NOT NULL OR lang=:lang)",
-                            &[
-                                (":lang", &ToSqlOutput::from(prefered_subtitle_codec.clone())),
-                                (":video", &ToSqlOutput::from(episode_id)),
-                            ],
-                                    SubtitleId::from_row,
-                                )
-                                .optional()
-                            {
-                                Ok(None) => {}
-                                Ok(Some(subtitle_id)) => {
-                                    if let Err(error) = db.execute(
-                                        "UPDATE episode SET subtitle_id=:subtitle WHERE id=:id",
-                                        &[
-                                            (":id", &ToSqlOutput::from(episode_id)),
-                                            (":subtitle", &ToSqlOutput::from(subtitle_id)),
-                                        ],
-                                    ) {
-                                        tracing::error!("Set episode subtitle error.\n {error}");
-                                    };
-                                }
-                                Err(error) => {
-                                    tracing::error!("Select episode subtitle error. \n{error}");
-                                }
-                            }
+                        if pick_sub {
+                            pick_subtitle(db, episode_id, preferred_subtitle_code);
                         }
                     }
 
@@ -944,5 +907,57 @@ fn discover(discoverer: &Discoverer, url: url::Url, path: &Path) -> (u64, Vec<(S
             (duration, subs)
         }
         None => (0, vec![]),
+    }
+}
+
+fn pick_subtitle(db: &Database, id: impl Into<VideoId>, preferred: Option<&String>) {
+    let id = id.into();
+
+    let table = if matches!(id, VideoId::Movie(_)) {
+        "movie"
+    } else {
+        "episode"
+    };
+
+    let res = match preferred {
+        Some(lang) => db
+            .query_row(
+                "SELECT id FROM subtitle WHERE video=:video AND (path NOT NULL OR lang=:lang)",
+                &[
+                    (
+                        ":lang",
+                        &ToSqlOutput::Borrowed(ValueRef::Text(lang.as_bytes())),
+                    ),
+                    (":video", &ToSqlOutput::from(id)),
+                ],
+                SubtitleId::from_row,
+            )
+            .optional(),
+        None => db
+            .query_row(
+                "SELECT id FROM subtitle WHERE video=:video AND path NOT NULL",
+                &[(":video", &ToSqlOutput::from(id))],
+                SubtitleId::from_row,
+            )
+            .optional(),
+    };
+
+    let sql = format!("UPDATE {table} SET subtitle_id=:subtitle WHERE id=:id");
+    match res {
+        Ok(None) => {}
+        Ok(Some(subtitle_id)) => {
+            if let Err(error) = db.execute(
+                &sql,
+                &[
+                    (":id", &ToSqlOutput::from(id)),
+                    (":subtitle", &ToSqlOutput::from(subtitle_id)),
+                ],
+            ) {
+                tracing::error!("Set movie subtitle error.\n {error}");
+            };
+        }
+        Err(error) => {
+            tracing::error!("Select movie subtitle error. \n{error}");
+        }
     }
 }

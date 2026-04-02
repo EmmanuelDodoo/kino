@@ -1130,8 +1130,16 @@ impl App {
                 let db_path = self.config.db_path();
                 let movie_depth = self.config.general.movie_depth;
                 let restore = self.config.general.restore_deleted;
+                let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
 
-                let scans = scan_task(db_path, scans, discoverer, movie_depth, restore);
+                let scans = scan_task(
+                    db_path,
+                    scans,
+                    discoverer,
+                    movie_depth,
+                    restore,
+                    preferred_sub,
+                );
 
                 let auth = self.config.auth();
 
@@ -1174,8 +1182,16 @@ impl App {
                 let db_path = self.config.db_path();
                 let movie_depth = self.config.general.movie_depth;
                 let restore = self.config.general.restore_deleted;
+                let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
 
-                let scan = scan_task(db_path, dirs, discoverer, movie_depth, restore);
+                let scan = scan_task(
+                    db_path,
+                    dirs,
+                    discoverer,
+                    movie_depth,
+                    restore,
+                    preferred_sub,
+                );
 
                 Task::batch([home_task, scan])
             }
@@ -1706,9 +1722,19 @@ fn scan_task(
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
+    preferred_sub: Option<String>,
 ) -> Task<Message> {
     Task::perform(
-        async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth, restore) },
+        async move {
+            scan::scan_dirs(
+                db_path,
+                dirs,
+                discoverer,
+                movie_depth,
+                restore,
+                preferred_sub,
+            )
+        },
         |(batch, res)| {
             if let Some(batch) = batch {
                 batch.log()
