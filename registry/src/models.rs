@@ -10,17 +10,19 @@ pub mod image;
 pub mod movies;
 pub mod seasons;
 pub mod shows;
+pub mod subtitle;
 pub mod video;
 
 pub use collection::ItemId;
 pub use collection::{Collection, CollectionId, CollectionView, SimpleCollection};
 pub use comment::*;
 pub use episodes::*;
+use image::Image;
 pub use movies::*;
 pub use seasons::*;
 pub use shows::*;
+pub use subtitle::*;
 pub use video::*;
-use image::Image;
 
 use crate::db::{Operation, Query, Table};
 

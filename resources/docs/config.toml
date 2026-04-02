@@ -36,6 +36,7 @@ auth_token = ""
 movie_depth = 2
 restore_deleted = true
 tmdb_rating = true
+preferred_subtitle_codec = "en"
 
 [general.refresh_interval]
 secs = 600

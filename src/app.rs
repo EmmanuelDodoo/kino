@@ -1041,38 +1041,28 @@ impl App {
                     },
                 }
             }
-            Message::VideoStats(item) => match item.id {
-                VideoId::Movie(id) => {
-                    match self.db.update_movie_stats(
-                        id,
-                        item.watch_count,
-                        item.progress,
-                        item.duration,
-                        item.subtitle_uri.map(|path| path.display().to_string()),
-                    ) {
-                        Ok(_) => {
-                            tracing::debug!("Updated {id:?} statistics");
-                            Task::none()
-                        }
-                        Err(error) => Task::done(Message::error(error)),
+            Message::VideoStats(item) => {
+                for sub in item.subtitles {
+                    if let Err(error) = sub.insert().execute(&self.db) {
+                        tracing::error!("Saving subtitle {} failed. \n{}", sub.id, error.error);
                     }
                 }
-                VideoId::Episode(id) => {
-                    match self.db.update_episode_stats(
-                        id,
-                        item.watch_count,
-                        item.progress,
-                        item.duration,
-                        item.subtitle_uri.map(|path| path.display().to_string()),
-                    ) {
-                        Ok(_) => {
-                            tracing::debug!("Updated {id:?} statistics");
-                            Task::none()
-                        }
-                        Err(error) => Task::done(Message::error(error)),
+
+                match self.db.update_video_stats(
+                    item.id,
+                    item.watch_count,
+                    item.progress,
+                    item.duration,
+                    item.subtitle_id,
+                ) {
+                    Ok(_) => {
+                        tracing::debug!("Updated {:?} statistics", item.id);
                     }
+                    Err(error) => return Task::done(Message::error(error)),
                 }
-            },
+
+                Task::none()
+            }
             Message::Random => {
                 let random = match self.db.get_random() {
                     Ok(random) => {
@@ -1140,8 +1130,16 @@ impl App {
                 let db_path = self.config.db_path();
                 let movie_depth = self.config.general.movie_depth;
                 let restore = self.config.general.restore_deleted;
+                let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
 
-                let scans = scan_task(db_path, scans, discoverer, movie_depth, restore);
+                let scans = scan_task(
+                    db_path,
+                    scans,
+                    discoverer,
+                    movie_depth,
+                    restore,
+                    preferred_sub,
+                );
 
                 let auth = self.config.auth();
 
@@ -1184,8 +1182,16 @@ impl App {
                 let db_path = self.config.db_path();
                 let movie_depth = self.config.general.movie_depth;
                 let restore = self.config.general.restore_deleted;
+                let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
 
-                let scan = scan_task(db_path, dirs, discoverer, movie_depth, restore);
+                let scan = scan_task(
+                    db_path,
+                    dirs,
+                    discoverer,
+                    movie_depth,
+                    restore,
+                    preferred_sub,
+                );
 
                 Task::batch([home_task, scan])
             }
@@ -1532,14 +1538,9 @@ impl App {
             sort
         };
 
-        let items = self.db.get_season_episodes(
-            season,
-            None,
-            None,
-            filter::Filter::none(),
-            sort,
-            Video::from_episode,
-        )?;
+        let items = self
+            .db
+            .get_season_videos(season, None, None, filter::Filter::none(), sort)?;
 
         let pos = recent
             .and_then(|recent| {
@@ -1608,7 +1609,7 @@ impl App {
     fn play_item(&mut self, item: ItemId) -> Result<(Playlist, Vec<String>), Error> {
         match item {
             ItemId::Movie(id) => {
-                let item = self.db.get_movie(id, Video::from_movie)?;
+                let item = self.db.get_video(id)?;
                 if item.path.try_exists()? {
                     tracing::debug!("Movie {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
@@ -1620,7 +1621,7 @@ impl App {
                 }
             }
             ItemId::Episode(id) => {
-                let item = self.db.get_episode(id, Video::from_episode)?;
+                let item = self.db.get_video(id)?;
                 if item.path.try_exists()? {
                     tracing::debug!("Episode {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
@@ -1721,9 +1722,19 @@ fn scan_task(
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
+    preferred_sub: Option<String>,
 ) -> Task<Message> {
     Task::perform(
-        async move { scan::scan_dirs(db_path, dirs, discoverer, movie_depth, restore) },
+        async move {
+            scan::scan_dirs(
+                db_path,
+                dirs,
+                discoverer,
+                movie_depth,
+                restore,
+                preferred_sub,
+            )
+        },
         |(batch, res)| {
             if let Some(batch) = batch {
                 batch.log()

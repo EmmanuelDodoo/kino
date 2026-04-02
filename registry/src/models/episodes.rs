@@ -31,7 +31,7 @@ impl EpisodeId {
         Self::from_row_helper("media_id", row)
     }
 
-    fn from_row_helper(column: &str, row: &Row<'_>) -> rusqlite::Result<Self> {
+    pub(super) fn from_row_helper(column: &str, row: &Row<'_>) -> rusqlite::Result<Self> {
         row.get::<_, String>(column)
             .map(|id| EpisodeId(Uuid::try_parse(&id).unwrap()))
     }
@@ -48,7 +48,6 @@ pub struct Episode {
     pub id: EpisodeId,
     name: String,
     original_name: String,
-    subtitle_uri: Option<String>,
     path: String,
     poster: Option<Image>,
     // Join from show
@@ -74,7 +73,6 @@ impl Episode {
 
         let name = row.get::<_, String>("name")?;
         let original_name = row.get::<_, String>("original_name")?;
-        let subtitle_uri = row.get::<_, Option<String>>("subtitle_uri")?;
 
         let poster = {
             let poster = row.get::<_, Option<String>>("poster")?;
@@ -113,7 +111,6 @@ impl Episode {
             id,
             name,
             original_name,
-            subtitle_uri,
             path,
             poster,
             backdrop,
@@ -136,7 +133,6 @@ impl Episode {
             id,
             name,
             original_name,
-            subtitle_uri,
             path,
             poster,
             backdrop: _backdrop,
@@ -159,11 +155,6 @@ impl Episode {
 
         let name = ToSqlOutput::from(name.clone());
         let original_name = ToSqlOutput::from(original_name.clone());
-
-        let subtitle_uri = match subtitle_uri.as_ref() {
-            Some(sub) => ToSqlOutput::from(sub.to_owned()),
-            None => ToSqlOutput::Owned(Value::Null),
-        };
 
         let poster = poster
             .as_ref()
@@ -191,7 +182,6 @@ impl Episode {
             (":season", season),
             (":name", name),
             (":original_name", original_name),
-            (":subtitle_uri", subtitle_uri),
             (":path", path),
             (":poster", poster),
             (":synopsis", synopsis),
@@ -209,7 +199,7 @@ impl Episode {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO episode (id, season_id, name, original_name, subtitle_uri, path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :subtitle_uri, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :episode_number) ON CONFLICT(season_id, path) DO NOTHING";
+        let sql = "INSERT INTO episode (id, season_id, name, original_name,  path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :episode_number) ON CONFLICT(season_id, path) DO UPDATE SET removed=FALSE";
 
         let params = self.insert_params();
 
@@ -327,7 +317,6 @@ impl Episode {
         name: String,
         original_name: String,
         path: String,
-        subtitle_uri: Option<String>,
         duration: u64,
         number: Option<u16>,
     ) -> (Self, Query<'a>) {
@@ -341,7 +330,6 @@ impl Episode {
             id: EpisodeId(Uuid::now_v7()),
             name,
             original_name,
-            subtitle_uri,
             path,
             season,
             backdrop,
