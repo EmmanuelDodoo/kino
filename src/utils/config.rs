@@ -3,7 +3,7 @@ use core::variants;
 pub use keys::{KeyModifier, KeyPress, KeyStore};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};
-pub use subtitles::{SubtitleDescription, SubtitleFont};
+pub use subtitles::SubtitleDescription;
 
 variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -1684,6 +1684,7 @@ mod keys {
 }
 
 mod subtitles {
+    use crate::utils::typo::subtitle_font;
     use iced::{Font, font};
     use serde::{Deserialize, Serialize};
 
@@ -1693,7 +1694,7 @@ mod subtitles {
         pub size: u32,
         pub color: u32,
         #[serde(skip)]
-        pub font: SubtitleFont,
+        pub font: Font,
         pub background_color: u32,
     }
 
@@ -1702,36 +1703,8 @@ mod subtitles {
             Self {
                 size: 20,
                 color: 0xff8243ff,
-                font: SubtitleFont {
-                    family: font::Family::Serif,
-                    weight: font::Weight::Semibold,
-                    style: font::Style::Normal,
-                },
+                font: subtitle_font(),
                 background_color: 0xaf,
-            }
-        }
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    pub struct SubtitleFont {
-        pub family: font::Family,
-        pub weight: font::Weight,
-        pub style: font::Style,
-    }
-
-    impl From<SubtitleFont> for Font {
-        fn from(value: SubtitleFont) -> Self {
-            let SubtitleFont {
-                family,
-                weight,
-                style,
-            } = value;
-
-            Font {
-                family,
-                weight,
-                style,
-                stretch: font::Stretch::Normal,
             }
         }
     }
