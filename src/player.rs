@@ -5,8 +5,9 @@ use iced::{
     animation::{Animation, Easing},
     time::Instant,
     widget::{
-        self, button, center, checkbox, column, container, image, mouse_area, operation, pick_list,
-        row, rule, scrollable, slider, space, stack, text, text_editor, text_input, tooltip as tp,
+        self, button, center, checkbox, column, combo_box, container, image, mouse_area, operation,
+        pick_list, row, rule, scrollable, slider, space, stack, text, text_editor, text_input,
+        tooltip as tp,
     },
     window,
 };
@@ -26,7 +27,7 @@ pub mod playlist;
 use crate::app::{FetchId, Message};
 use crate::home::shared::Icon;
 use crate::utils::{
-    self, PlayerAction, VideoSettings, cancel_btn, convert_color_str, draw_subtitles,
+    self, FontState, PlayerAction, VideoSettings, cancel_btn, convert_color_str, draw_subtitles,
     duration_string, empty,
     icons::{self, CANCEL, sized_button},
     loading_animation, loading_svg,
@@ -57,6 +58,7 @@ enum Modal {
         selected_audio: Option<AudioTag>,
         text_color: String,
         background_color: String,
+        subtitle_font: FontState,
     },
 }
 
@@ -189,6 +191,7 @@ pub enum ConfigMessage {
     SubSizeDecr,
     SubColor(String),
     SubBackground(String),
+    SubFont(iced::font::Family),
     Span(String),
 }
 
@@ -287,6 +290,7 @@ pub struct Manager {
     show_controls: bool,
 
     pub settings: VideoSettings,
+    fonts: Vec<iced::font::Family>,
 
     maximised: bool,
     is_fullscreen: bool,
@@ -304,6 +308,7 @@ impl Manager {
         window: Option<window::Id>,
         settings: VideoSettings,
         playlist: Playlist,
+        fonts: Vec<iced::font::Family>,
     ) -> (Self, Task<ManagerMessage>) {
         let load_video = match playlist.current().cloned() {
             Some(item) => load_video(item, |video| ManagerMessage::Video(false, video)),
@@ -316,10 +321,15 @@ impl Manager {
 
         let tasks = Task::batch([size, load_video]);
 
-        (Self::new(window, settings, playlist), tasks)
+        (Self::new(window, settings, playlist, fonts), tasks)
     }
 
-    fn new(window: Option<window::Id>, settings: VideoSettings, playlist: Playlist) -> Self {
+    fn new(
+        window: Option<window::Id>,
+        settings: VideoSettings,
+        playlist: Playlist,
+        fonts: Vec<iced::font::Family>,
+    ) -> Self {
         let state = if !playlist.is_empty() {
             State::Loading(loading_animation(Instant::now()))
         } else {
@@ -329,6 +339,7 @@ impl Manager {
         Self {
             window,
             playlist,
+            fonts,
             show_controls: true,
             settings,
             maximised: false,
@@ -432,7 +443,7 @@ impl Manager {
 
                 let last_watched = if !is_next || matches!(&self.state, State::Idle) {
                     let task = Task::done(Message::LastWatched(player.item.id));
-                    apply_settings(self.settings, &mut player);
+                    apply_settings(&self.settings, &mut player);
 
                     let awake = keep_awake().unwrap();
 
@@ -444,7 +455,7 @@ impl Manager {
 
                     task
                 } else {
-                    apply_settings(self.settings, &mut player);
+                    apply_settings(&self.settings, &mut player);
                     player.video.set_paused(true);
                     self.next = AutoState::Ready {
                         player: Box::new(player),
@@ -733,6 +744,7 @@ impl Manager {
                     selected_audio,
                     text_color,
                     background_color,
+                    subtitle_font,
                 }) = self.modal.as_mut()
                 else {
                     return Task::none();
@@ -912,6 +924,12 @@ impl Manager {
                         };
 
                         *background_color = color;
+
+                        Task::none()
+                    }
+                    ConfigMessage::SubFont(family) => {
+                        self.settings.subtitles.font = family.to_string();
+                        subtitle_font.selected = Some(family);
 
                         Task::none()
                     }
@@ -1553,7 +1571,7 @@ impl Manager {
             return empty();
         }
 
-        let subtitles = draw_subtitles(subtitles, self.settings.subtitles);
+        let subtitles = draw_subtitles(subtitles, &self.settings.subtitles);
 
         let content = row!(space::horizontal(), subtitles, space::horizontal())
             .width(Length::Fill)
@@ -1631,6 +1649,7 @@ impl Manager {
                 selected_audio,
                 text_color,
                 background_color,
+                subtitle_font,
             }) => {
                 let (subs, audio) = self
                     .player()
@@ -1648,6 +1667,7 @@ impl Manager {
                         subs,
                         audio,
                         subtitle_uri,
+                        subtitle_font,
                         *tab,
                         selected_text,
                         selected_audio,
@@ -1940,7 +1960,7 @@ impl Manager {
 
                 let last_watched = Message::LastWatched(player.item.id);
 
-                apply_settings(self.settings, &mut player);
+                apply_settings(&self.settings, &mut player);
                 player.video.set_paused(false);
 
                 let awake = keep_awake().unwrap();
@@ -2024,12 +2044,13 @@ impl Manager {
             selected_audio,
             text_color: _text,
             background_color: _background,
+            subtitle_font: _font,
         } = config
         else {
             return self.play_toggle();
         };
 
-        apply_settings(self.settings, player);
+        apply_settings(&self.settings, player);
 
         let set_loaded = |player: &mut Player, url: url::Url| {
             let position = player.position;
@@ -2228,6 +2249,7 @@ impl Manager {
             selected_audio,
             text_color: format!("#{:08x}", self.settings.subtitles.color),
             background_color: format!("#{:08x}", self.settings.subtitles.background_color),
+            subtitle_font: FontState::new(self.fonts.clone(), &self.settings.subtitles.font),
         });
 
         Task::none()
@@ -2483,7 +2505,7 @@ fn load_video<Message: 'static + MaybeSend>(
     )
 }
 
-fn apply_settings(settings: VideoSettings, player: &mut Player) {
+fn apply_settings(settings: &VideoSettings, player: &mut Player) {
     let VideoSettings {
         thumbnail_interval: _thumbnails,
         volume,
@@ -2512,17 +2534,17 @@ fn apply_settings(settings: VideoSettings, player: &mut Player) {
     } = settings;
 
     {
-        player.video.set_contrast(contrast);
-        player.video.set_brightness(brightness);
-        player.video.set_hue(hue);
-        player.video.set_saturation(saturation);
+        player.video.set_contrast(*contrast);
+        player.video.set_brightness(*brightness);
+        player.video.set_hue(*hue);
+        player.video.set_saturation(*saturation);
     }
 
-    player.video.set_volume(volume);
-    player.video.set_speed(speed).unwrap();
+    player.video.set_volume(*volume);
+    player.video.set_speed(*speed).unwrap();
     player.video.set_paused(!auto_start);
-    player.video.set_gamma(gamma);
-    player.video.set_muted(muted);
+    player.video.set_gamma(*gamma);
+    player.video.set_muted(*muted);
 }
 
 fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
@@ -2895,6 +2917,7 @@ fn draw_config<'a>(
     embedded: &'a [Subtitle],
     audio: &'a [AudioTag],
     subtitle: &Option<PathBuf>,
+    subtitle_font: &'a FontState,
     curr_tab: ConfigTab,
     selected_text: &Option<Subtitle>,
     selected_audio: &Option<AudioTag>,
@@ -3179,7 +3202,7 @@ fn draw_config<'a>(
 
             let style = {
                 let label = label_maker("Subtitle Style").size(P);
-                let dummy = draw_subtitles("An example subtitle", config.subtitles);
+                let dummy = draw_subtitles("An example subtitle", &config.subtitles);
 
                 let sub_size = {
                     let label = label_maker("Size: ");
@@ -3246,7 +3269,26 @@ fn draw_config<'a>(
                         .spacing(spacing)
                 };
 
-                let content = column!(sub_size, color, background).spacing(8.0);
+                let font = {
+                    let label = label_maker("Font ");
+
+                    let selection = combo_box(
+                        &subtitle_font.state,
+                        "",
+                        subtitle_font.selected.as_ref(),
+                        ConfigMessage::SubFont,
+                    )
+                    .width(200)
+                    .size(size)
+                    .font(regular_font())
+                    .padding(padding);
+
+                    row!(label, space::horizontal(), selection)
+                        .align_y(Vertical::Center)
+                        .spacing(spacing)
+                };
+
+                let content = column!(font, sub_size, color, background).spacing(8.0);
 
                 let content = column!(content, dummy)
                     .spacing(16)

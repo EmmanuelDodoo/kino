@@ -153,9 +153,10 @@ pub fn trim_path(path: &Path, components: usize) -> String {
 
 pub fn draw_subtitles<'a, Message: 'a>(
     subtitles: &'a str,
-    description: SubtitleDescription,
+    description: &'a SubtitleDescription,
 ) -> iced::Element<'a, Message> {
     use iced::alignment::Vertical;
+    use iced::font::Family;
     use iced::widget::container;
 
     let SubtitleDescription {
@@ -166,9 +167,9 @@ pub fn draw_subtitles<'a, Message: 'a>(
     } = description;
 
     let content = typo::regular(subtitles)
-        .size(size.max(5))
-        .color(u32_to_rgba(color))
-        .font(font)
+        .size((*size).max(5))
+        .color(u32_to_rgba(*color))
+        .font(Family::name(font))
         .align_y(Vertical::Center);
 
     let subtitles = container(content)
@@ -177,7 +178,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
         .style(move |_| {
             let border = iced::border::rounded(5);
             container::Style {
-                background: Some(u32_to_rgba(background_color).into()),
+                background: Some(u32_to_rgba(*background_color).into()),
                 text_color: None,
                 border,
                 ..Default::default()
@@ -284,6 +285,24 @@ impl Scroll {
 impl Default for Scroll {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Debug)]
+pub struct FontState {
+    pub state: iced::widget::combo_box::State<iced::font::Family>,
+    pub selected: Option<iced::font::Family>,
+}
+
+impl FontState {
+    pub fn new(fonts: Vec<iced::font::Family>, default: &String) -> Self {
+        let selected = fonts
+            .iter()
+            .find(|family| family.to_string() == *default)
+            .copied();
+        let state = iced::widget::combo_box::State::with_selection(fonts, selected.as_ref());
+
+        Self { state, selected }
     }
 }
 

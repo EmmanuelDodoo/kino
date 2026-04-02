@@ -1,6 +1,7 @@
 use chrono::Local;
 use iced::{
     Element, Subscription, Task, Theme, event,
+    font::Family,
     keyboard::{self, Key, Modifiers},
     mouse,
     time::{self, Instant},
@@ -140,6 +141,7 @@ pub enum Message {
         id: VideoId,
         img: devutils::Image,
     },
+    AvailableFonts(Result<Vec<Family>, iced::font::Error>),
     None,
 }
 
@@ -186,6 +188,7 @@ pub struct App {
 
     last_refresh: Instant,
 
+    available_fonts: Vec<Family>,
     config: Config,
 
     db: db::Database,
@@ -211,6 +214,8 @@ impl App {
         ));
 
         let load_id = window::oldest().map(Message::WindowId);
+
+        let fonts = iced::font::list().map(Message::AvailableFonts);
 
         let (auth_tx, auth_rx) = mpsc::channel(2);
         let auth = config.auth();
@@ -245,7 +250,7 @@ impl App {
 
         let new = Self::new(config, db, home, auth_tx, rating_tx);
 
-        let tasks = Task::batch([load_errors, load_id, home_tasks, fetcher, img_proc]);
+        let tasks = Task::batch([load_errors, load_id, home_tasks, fetcher, img_proc, fonts]);
 
         (new, tasks)
     }
@@ -265,6 +270,7 @@ impl App {
             window: None,
             player: None,
             settings: None,
+            available_fonts: vec![],
             config,
             home,
             db,
@@ -327,6 +333,16 @@ impl App {
             Message::Exit(id) => {
                 tracing::debug!("Exiting App");
                 window::close::<Message>(id).discard()
+            }
+            Message::AvailableFonts(Ok(fonts)) => {
+                tracing::debug!("Acquired available fonts");
+                self.available_fonts = fonts;
+
+                Task::none()
+            }
+            Message::AvailableFonts(Err(error)) => {
+                tracing::debug!("Failed to get available fonts. \n{error:?}");
+                Task::none()
             }
             Message::PushToast(message, status) => {
                 self.push_toast(toast::Toast::new(message, status));
@@ -1497,7 +1513,7 @@ impl App {
     }
 
     fn settings(&mut self) -> Task<Message> {
-        let (settings, tasks) = Settings::boot(self.config.clone());
+        let (settings, tasks) = Settings::boot(self.config.clone(), self.available_fonts.clone());
         self.screen = Screen::Settings;
         self.settings = Some(settings);
 
@@ -1665,7 +1681,12 @@ impl App {
             }
         }
 
-        let (player, player_tasks) = Player::boot(self.window, self.config.video, playlist);
+        let (player, player_tasks) = Player::boot(
+            self.window,
+            self.config.video.clone(),
+            playlist,
+            self.available_fonts.clone(),
+        );
         self.player = Some(player);
         self.screen = Screen::Player;
 

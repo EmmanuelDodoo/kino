@@ -74,7 +74,7 @@ pub struct VideoFilters {
     pub gamma: f64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default = "VideoSettings::defaults", rename = "Player")]
 pub struct VideoSettings {
     pub thumbnail_interval: u32,
@@ -211,7 +211,7 @@ impl Clone for Config {
         } = self;
 
         Self {
-            video: *video,
+            video: video.clone(),
             general: general.clone(),
             keystore: keystore.clone(),
             config_dir: config_dir.clone(),
@@ -1684,17 +1684,16 @@ mod keys {
 }
 
 mod subtitles {
-    use crate::utils::typo::subtitle_font;
+    use crate::utils::typo::DEFAULT_SUBTITLE_FONT_NAME;
     use iced::{Font, font};
     use serde::{Deserialize, Serialize};
 
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(default = "SubtitleDescription::defaults")]
     pub struct SubtitleDescription {
         pub size: u32,
         pub color: u32,
-        #[serde(skip)]
-        pub font: Font,
+        pub font: String,
         pub background_color: u32,
     }
 
@@ -1703,7 +1702,7 @@ mod subtitles {
             Self {
                 size: 20,
                 color: 0xff8243ff,
-                font: subtitle_font(),
+                font: DEFAULT_SUBTITLE_FONT_NAME.to_owned(),
                 background_color: 0xaf,
             }
         }

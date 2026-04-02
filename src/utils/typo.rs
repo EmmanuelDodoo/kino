@@ -26,7 +26,7 @@ static FRAUNCES: &[u8] = include_bytes!("../../resources/fonts/Fraunces-SemiBold
 const FRAUNCES_NAME: &str = "Fraunces-SB";
 
 static ROBOTO_MD: &[u8] = include_bytes!("../../resources/fonts/Roboto-Medium.ttf");
-const ROBOTO_NAME_MD: &str = "Roboto-MD";
+pub const DEFAULT_SUBTITLE_FONT_NAME: &str = "Roboto-MD";
 
 pub const RATIO: f32 = 1.125;
 pub const H1: f32 = H2 * RATIO;
@@ -123,15 +123,6 @@ pub fn medium_font() -> Font {
         weight: Weight::Medium,
         style: Style::Normal,
         stretch: Stretch::Normal,
-    }
-}
-
-pub fn subtitle_font() -> Font {
-    Font {
-        family: Family::name(ROBOTO_NAME_MD),
-        weight: Weight::Medium,
-        stretch: Stretch::Normal,
-        style: Style::Normal,
     }
 }
 

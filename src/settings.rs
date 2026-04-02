@@ -1,8 +1,8 @@
 use crate::app::Message;
 use crate::db::Operation;
 use crate::utils::{
-    self, AppTheme, Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
-    SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
+    self, AppTheme, Config, FontState, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction,
+    Scroll, SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
     convert_color_str, empty, icons, icons::sized_button, modal::modal, modal_container,
     picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo::*,
 };
@@ -11,9 +11,10 @@ use registry::models::{Directory, DirectoryId, MediaType, humanize_datetime};
 use iced::{
     Border, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
+    font::Family,
     widget::{
-        button, center_x, checkbox, column, container, operation, pick_list, rich_text, row, rule,
-        scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
+        button, center_x, checkbox, column, combo_box, container, operation, pick_list, rich_text,
+        row, rule, scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
 use widgets::{expandable, marquee};
@@ -229,6 +230,7 @@ pub enum SubtitleMessage {
     SubSize(String),
     SubColor(String),
     SubBackground(String),
+    Font(Family),
 }
 
 #[derive(Debug, Clone)]
@@ -331,6 +333,7 @@ impl Dir {
 #[derive(Debug)]
 pub struct Settings {
     pub config: Config,
+    subtitle_state: FontState,
 
     page: Page,
     view: Option<View>,
@@ -347,8 +350,8 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn boot(config: Config) -> (Self, Task<Message>) {
-        let mut new = Self::new(config);
+    pub fn boot(config: Config, fonts: Vec<Family>) -> (Self, Task<Message>) {
+        let mut new = Self::new(config, fonts);
         let scroll = new.update_scroll();
         let dirs = Task::done(Message::FetchDirectories);
 
@@ -357,11 +360,15 @@ impl Settings {
         (new, tasks)
     }
 
-    fn new(config: Config) -> Self {
+    fn new(config: Config, fonts: Vec<Family>) -> Self {
         let text_color = format!("#{:08x}", config.video.subtitles.color);
         let background_color = format!("#{:08x}", config.video.subtitles.background_color);
+
+        let subtitle_state = FontState::new(fonts, &config.video.subtitles.font);
+
         Self {
             config,
+            subtitle_state,
             page: Page::default(),
             view: None,
             scroll_state: ScrollState::new(),
@@ -940,6 +947,11 @@ impl Settings {
 
                     Task::none()
                 }
+                SubtitleMessage::Font(family) => {
+                    self.config.video.subtitles.font = family.to_string();
+                    self.subtitle_state.selected = Some(family);
+                    Task::none()
+                }
             },
             SettingsMessage::FolderSelected(folder) => {
                 let Some(folder) = folder else {
@@ -1332,7 +1344,8 @@ impl Settings {
 
         let subtitles = draw_subtitles(
             *show_subtitles,
-            *subtitles,
+            &self.subtitle_state,
+            &subtitles,
             &self.subtitle_dummy,
             &self.text_color,
             &self.background_color,
@@ -1915,7 +1928,8 @@ fn binding_tooltip<'a>(
 
 fn draw_subtitles<'a>(
     show_subtitles: bool,
-    subtitles: SubtitleDescription,
+    state: &'a FontState,
+    subtitles: &'a SubtitleDescription,
     subtitle_dummy: &'a str,
     text_color: &'a str,
     background_color: &'a str,
@@ -2000,10 +2014,28 @@ fn draw_subtitles<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
+    let font = {
+        let label = label_maker("Font ");
+
+        let selection = combo_box(
+            &state.state,
+            "",
+            state.selected.as_ref(),
+            SubtitleMessage::Font,
+        )
+        .width(256)
+        .size(TEXT_SIZE)
+        .font(regular_font());
+
+        row!(label, space::horizontal(), selection).align_y(Vertical::Center)
+    };
+
     let content = column!(
         subtitles_toggle,
         horizontal_rule(),
         dummy_input,
+        horizontal_rule(),
+        font,
         horizontal_rule(),
         sub_size,
         horizontal_rule(),

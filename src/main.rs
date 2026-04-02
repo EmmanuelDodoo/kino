@@ -10,10 +10,10 @@ use iced::{
     color, font, keyboard, padding,
     time::{Duration, Instant, every, milliseconds},
     widget::{
-        self, Space, bottom, bottom_center, button, center, center_x, center_y, column, container,
-        float, grid, markdown, mouse_area, operation, pick_list, rich_text, row, scrollable,
-        sensor, slider, space, span, stack, text, text_editor, text_input, tooltip as tp,
-        vertical_slider,
+        self, Space, bottom, bottom_center, button, center, center_x, center_y, column, combo_box,
+        container, float, grid, markdown, mouse_area, operation, pick_list, rich_text, row,
+        scrollable, sensor, slider, space, span, stack, text, text_editor, text_input,
+        tooltip as tp, vertical_slider,
     },
     window,
 };
@@ -152,49 +152,66 @@ impl BootFn<App, app::Message> for BootMode {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Toggle(bool),
+    Family(font::Family),
+    Fonts(Result<Vec<font::Family>, font::Error>),
     None,
 }
 
 struct Playground {
     now: Instant,
-    open: bool,
+    selected: Option<font::Family>,
+    state: combo_box::State<font::Family>,
 }
 
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let now = Instant::now();
 
-        let new = Self { now, open: false };
+        let new = Self {
+            now,
+            selected: None,
+            state: combo_box::State::new(vec![]),
+        };
 
-        (new, Task::none())
+        (new, font::list().map(Message::Fonts))
     }
 
     fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
         self.now = now;
 
         match message {
-            Message::Toggle(open) => {
-                self.open = open;
+            Message::None => Task::none(),
+            Message::Fonts(Ok(fams)) => {
+                self.state = combo_box::State::new(fams);
                 Task::none()
             }
-            Message::None => Task::none(),
+            Message::Fonts(Err(error)) => {
+                println!("{error:?}");
+                Task::none()
+            }
+            Message::Family(family) => {
+                self.selected = Some(family);
+                Task::none()
+            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let root = sized_medium("Menu", H6);
+        let content = "Something to test kino";
 
-        let content = column!(text("One"), text("Two"), text("Three")).spacing(16);
+        let default = display(content).size(P);
+        let other = text(content)
+            .font(self.selected.unwrap_or_default())
+            .size(P);
 
-        let content = container(content).style(container::dark).padding(5);
+        let selection =
+            combo_box(&self.state, "", self.selected.as_ref(), Message::Family).width(250);
 
-        let content = menu(root, content)
-            .auto_close(false)
-            .position(menu::Position::Bottom)
-            .on_toggle(Message::Toggle);
+        let content = column!(default, other).spacing(10);
 
-        let content = center(content);
+        let content = column!(selection, content).spacing(20);
+
+        let content = center_x(content);
 
         content.into()
     }
