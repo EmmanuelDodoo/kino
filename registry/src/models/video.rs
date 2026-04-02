@@ -1,4 +1,4 @@
-use super::{EpisodeId, ItemId, MovieId};
+use super::{EpisodeId, ItemId, MovieId, Subtitle, SubtitleId};
 use rusqlite::Row;
 use std::path::PathBuf;
 
@@ -44,6 +44,18 @@ impl From<VideoId> for ItemId {
     }
 }
 
+impl From<MovieId> for VideoId {
+    fn from(value: MovieId) -> Self {
+        VideoId::Movie(value)
+    }
+}
+
+impl From<EpisodeId> for VideoId {
+    fn from(value: EpisodeId) -> Self {
+        VideoId::Episode(value)
+    }
+}
+
 impl std::fmt::Display for VideoId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -70,8 +82,9 @@ pub struct Video {
     pub progress: f32,
     pub duration: u64,
     pub watch_count: u32,
-    pub subtitle_uri: Option<PathBuf>,
+    pub subtitle_id: Option<SubtitleId>,
     pub generate_poster: bool,
+    pub subtitles: Vec<Subtitle>,
 }
 
 impl Video {
@@ -125,10 +138,10 @@ impl Video {
         let progress = row.get::<_, f32>("progress")?;
         let duration = row.get::<_, u64>("duration")?;
         let watch_count = row.get::<_, u32>("watch_count")?;
-        let subtitle = row.get::<_, Option<String>>("subtitle_uri")?;
-        let subtitle_uri = subtitle.map(PathBuf::from);
         let generate_poster = row.get::<_, bool>("generate_poster")?;
         let fetched = row.get::<_, bool>("fetched")?;
+
+        let subtitle_id = SubtitleId::from_row_maybe("subtitle_id", row)?;
 
         Ok(Self {
             id,
@@ -137,9 +150,14 @@ impl Video {
             progress,
             duration,
             watch_count,
-            subtitle_uri,
+            subtitle_id,
+            subtitles: vec![],
             generate_poster: generate_poster && !fetched,
         })
+    }
+
+    pub fn set_subtitles(&mut self, subs: Vec<Subtitle>) {
+        self.subtitles = subs;
     }
 
     pub fn progress(&mut self, progress: f32) {

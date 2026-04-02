@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -90,10 +90,11 @@ CREATE TABLE episode (
 	episode_number       INT NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
 	fetched		     BOOLEAN DEFAULT FALSE,
-	subtitle_uri	     TEXT,
+	subtitle_id	     TEXT ,
 	removed		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(season_id, path),
 	FOREIGN KEY ( season_id ) REFERENCES season( id ) ON DELETE CASCADE ,
+	FOREIGN KEY ( subtitle_id ) REFERENCES subtitle( id ),
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
 	CHECK ( 0 <= rating AND rating <= 5 )
 );
@@ -122,9 +123,10 @@ CREATE TABLE movie (
 	duration	     INTEGER NOT NULL DEFAULT 0,
 	comment_count	     INTEGER NOT NULL DEFAULT 0,
 	fetched		     BOOLEAN DEFAULT FALSE,
-	subtitle_uri	     TEXT,
+	subtitle_id	     TEXT,
 	removed		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(directory, path),
+	FOREIGN KEY ( subtitle_id ) REFERENCES subtitle( id ),
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
 	CHECK ( 0 <= rating AND rating <= 5 ),
 	FOREIGN KEY ( directory ) REFERENCES directory( id ) ON DELETE CASCADE
@@ -142,6 +144,26 @@ CREATE TABLE comment (
 	removed		     BOOLEAN DEFAULT FALSE,
 	CHECK (media_type IN ('movie', 'episode'))
 );
+
+CREATE TABLE subtitle (
+	id                   TEXT NOT NULL  PRIMARY KEY  ,
+	video                TEXT NOT NULL,
+	media_type	     TEXT NOT NULL,
+	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
+	kind		     TEXT NOT NULL,
+	path		     TEXT,
+	title		     TEXT NOT NULL,
+	lang		     TEXT NOT NULL,
+	removed		     BOOLEAN DEFAULT FALSE,
+	CHECK (kind IN ('embedded', 'loaded')),
+	CHECK (media_type IN ('movie', 'episode'))
+);
+
+CREATE UNIQUE INDEX subtitle_unique_embedded ON subtitle(video, title, lang)
+WHERE kind='embedded';
+
+CREATE UNIQUE INDEX subtitle_unique_loaded ON subtitle(video, path) WHERE
+kind='loaded';
 
 CREATE TABLE collection (
 	id              TEXT NOT NULL PRIMARY KEY,
@@ -486,6 +508,16 @@ END;
 CREATE TRIGGER movie_comment_delete_tr AFTER DELETE ON movie
 BEGIN
 	DELETE FROM comment WHERE media_type = 'movie' AND media_id = OLD.id;
+END;
+
+CREATE TRIGGER episode_subtitle_delete_tr AFTER DELETE ON episode
+BEGIN
+	DELETE FROM subtitle WHERE media_type= 'episode' AND video = OLD.id;
+END;
+
+CREATE TRIGGER movie_subtitle_delete_tr AFTER DELETE ON movie
+BEGIN
+	DELETE FROM subtitle WHERE media_type= 'movie' AND video = OLD.id;
 END;
 
 

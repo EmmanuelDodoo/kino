@@ -4,8 +4,11 @@ use gstreamer_pbutils::Discoverer;
 use registry::db::{BatchResult, Database};
 use registry::models::{
     Directory, DirectoryId, Episode, EpisodeId, MediaType, Movie, MovieId, Season, SeasonId, Show,
-    ShowId,
+    ShowId, Subtitle, SubtitleId,
 };
+use rusqlite::OptionalExtension;
+use rusqlite::types::ToSqlOutput;
+use std::collections::HashMap;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -59,7 +62,8 @@ pub const VIDEO_EXT: &[&str] = &[
 struct Video {
     name: String,
     path: String,
-    sub: Option<String>,
+    loaded_sub: Option<String>,
+    embedded_subs: Vec<(String, String)>,
     duration: u64,
 }
 
@@ -170,97 +174,204 @@ pub fn scan_dir_helper<'a>(
     let mut successes = vec![];
     let mut failures = vec![];
 
+    let prefered_subtitle_codec = "en".to_owned();
+
     match dir.media_type {
         MediaType::Movies => {
             tracing::debug!("Scanning movie directory {}", dir.path);
-            if let Some(videos) = scan_video_dir(&dir.path, discoverer, movie_depth, None) {
-                let mut scanned = std::collections::HashSet::with_capacity(videos.len());
-
-                for movie in videos {
-                    let name = process_name(&movie.name).unwrap_or(movie.name.clone());
-                    let (_, query) = Movie::new(
-                        dir.id,
-                        movie.path.clone(),
-                        name,
-                        movie.name,
-                        movie.sub,
-                        movie.duration,
-                    );
-                    match query.execute(db) {
-                        Ok(succ) => {
-                            scanned.insert(movie.path);
-                            successes.push(succ)
-                        }
-                        Err(fail) => failures.push(fail),
-                    };
-                }
-
-                struct DirMovie {
-                    id: MovieId,
-                    path: String,
-                    tombstone: bool,
-                }
-
-                tracing::debug!("Fetching Directory movies");
-                if let Ok(dir_movies) = db
-                    .get_dir_movies(dir.id, |row| {
-                        let id = MovieId::from_row(row)?;
-                        let path = row.get::<_, String>("path")?;
-                        let tombstone = row.get::<_, bool>("removed")?;
-
-                        Ok(DirMovie {
-                            id,
-                            path,
-                            tombstone,
-                        })
-                    })
-                    .inspect_err(|error| tracing::error!("{error}"))
-                {
-                    let movies = dir_movies
-                        .into_iter()
-                        .map(|movie| {
-                            let scanned = scanned.contains(&movie.path);
-                            #[allow(clippy::nonminimal_bool)]
-                            let insert = (scanned && restore && movie.tombstone)
-                                || (scanned && !movie.tombstone);
-                            (movie.id, insert)
-                        })
-                        .collect();
-
-                    tracing::debug!("Performing movies insert/remove");
-                    if let Err(error) = db.insert_remove_movies(movies) {
-                        tracing::error!("{error}")
-                    };
-                };
+            struct DirMovie {
+                id: MovieId,
+                tombstone: bool,
+                scanned: bool,
             }
+
+            let Some(videos) = scan_video_dir(&dir.path, discoverer, movie_depth, None) else {
+                return None;
+            };
+
+            tracing::debug!("Fetching Directory movies");
+            let mut dir_movies = match db.get_dir_movies(dir.id, |row| {
+                let id = MovieId::from_row(row)?;
+                let path = row.get::<_, String>("path")?;
+                let tombstone = row.get::<_, bool>("removed")?;
+                Ok((
+                    path,
+                    DirMovie {
+                        id,
+                        tombstone,
+                        scanned: false,
+                    },
+                ))
+            }) {
+                Ok(dir_movies) => {
+                    // todo: Db could return an iterator instead?
+                    let mut map = HashMap::new();
+
+                    map.extend(dir_movies.into_iter());
+
+                    map
+                }
+                Err(error) => {
+                    tracing::error!("Directory movies error. \n{error}");
+                    return None;
+                }
+            };
+
+            for movie in videos {
+                let dir_movie = dir_movies.get_mut(&movie.path);
+                let save_subs = dir_movie.is_none();
+
+                if dir_movie
+                    .as_ref()
+                    .map(|mv| mv.tombstone)
+                    .unwrap_or_default()
+                    && !restore
+                {
+                    continue;
+                }
+
+                let name = process_name(&movie.name).unwrap_or(movie.name.clone());
+                let (new, query) =
+                    Movie::new(dir.id, movie.path.clone(), name, movie.name, movie.duration);
+                let id = dir_movie.as_ref().map(|mv| mv.id).unwrap_or(new.id);
+
+                match query.execute(db) {
+                    Ok(succ) => {
+                        if let Some(entry) = dir_movie {
+                            entry.scanned = true;
+                        }
+
+                        successes.push(succ)
+                    }
+                    Err(fail) => failures.push(fail),
+                };
+
+                let loaded = movie.loaded_sub.map(|path| Subtitle::new_loaded(id, path));
+                let subtitles = movie
+                    .embedded_subs
+                    .into_iter()
+                    .map(|(title, lang)| Subtitle::new_embedded(id, title, lang))
+                    .chain(loaded.into_iter());
+
+                for sub in subtitles {
+                    let query = sub.insert();
+                    match query.execute(db) {
+                        Ok(succ) => successes.push(succ),
+                        Err(fail) => failures.push(fail),
+                    }
+                }
+
+                if save_subs {
+                    match db
+                        .query_row(
+                            "SELECT id FROM subtitle WHERE video=:video AND (path NOT NULL OR lang=:lang)",
+                            &[
+                                (":lang", &ToSqlOutput::from(prefered_subtitle_codec.clone())),
+                                (":video", &ToSqlOutput::from(id)),
+                            ],
+                            SubtitleId::from_row,
+                        )
+                        .optional()
+                    {
+                        Ok(None) => {}
+                        Ok(Some(subtitle_id)) => {
+                            if let Err(error) = db.execute(
+                                "UPDATE movie SET subtitle_id=:subtitle WHERE id=:id",
+                                &[
+                                    (":id", &ToSqlOutput::from(id)),
+                                    (":subtitle", &ToSqlOutput::from(subtitle_id)),
+                                ],
+                            ) {
+                                tracing::error!("Set movie subtitle error.\n {error}");
+                            };
+                        }
+                        Err(error) => {
+                            tracing::error!("Select movie subtitle error. \n{error}");
+                        }
+                    }
+                }
+            }
+
+            tracing::debug!("Performing movies insert/remove");
+
+            let deletes = dir_movies
+                .into_values()
+                .filter_map(|value| {
+                    if value.scanned {
+                        None
+                    } else {
+                        Some((value.id, false))
+                    }
+                })
+                .collect();
+
+            if let Err(error) = db.insert_remove_movies(deletes) {
+                tracing::error!("{error}")
+            };
         }
         MediaType::Shows => {
             struct DirEpisode {
                 id: EpisodeId,
-                path: String,
                 tombstone: bool,
+                scanned: bool,
             }
 
             struct DirSeason {
                 id: SeasonId,
-                path: String,
+                scanned: bool,
                 tombstone: bool,
             }
 
             struct DirShow {
                 id: ShowId,
-                path: String,
+                scanned: bool,
                 tombstone: bool,
             }
 
             tracing::debug!("Scanning shows directory {}", dir.path);
             let shows = scan_shows(&dir.path, discoverer)?;
-            let mut scanned_shows = std::collections::HashSet::with_capacity(shows.len());
+
+            tracing::debug!("Fetching Directory shows");
+            let mut dir_shows = match db.get_dir_shows(dir.id, |row| {
+                let id = ShowId::from_row(row)?;
+                let path = row.get::<_, String>("path")?;
+                let tombstone = row.get::<_, bool>("removed")?;
+
+                Ok((
+                    path,
+                    DirShow {
+                        id,
+                        scanned: false,
+                        tombstone,
+                    },
+                ))
+            }) {
+                Ok(shows) => {
+                    let mut map = HashMap::new();
+                    map.extend(shows.into_iter());
+                    map
+                }
+                Err(error) => {
+                    tracing::error!("Directory shows error. \n{error}");
+                    return None;
+                }
+            };
 
             for show in shows {
+                let dir_show = dir_shows.get_mut(&show.path);
+
+                if dir_show
+                    .as_ref()
+                    .map(|show| show.tombstone)
+                    .unwrap_or_default()
+                    && !restore
+                {
+                    continue;
+                }
+
                 let ShowPrim { path, seasons } = show;
                 let name = process_name(&path).unwrap_or(path.clone());
-                let (show, query) = Show::new(
+                let (new, query) = Show::new(
                     dir.id,
                     path.clone(),
                     name.clone(),
@@ -268,11 +379,17 @@ pub fn scan_dir_helper<'a>(
                     seasons.len() as _,
                 );
 
-                let new = match query.execute(db) {
+                let show = dir_show.as_ref().map(|show| show.id).unwrap_or(new.id);
+
+                match query.execute(db) {
                     Ok(succ) => {
                         let modified = succ.rows > 0;
                         successes.push(succ);
-                        scanned_shows.insert(path.clone());
+
+                        if let Some(entry) = dir_show {
+                            entry.scanned = true;
+                        }
+
                         modified
                     }
                     Err(error) => {
@@ -281,22 +398,46 @@ pub fn scan_dir_helper<'a>(
                     }
                 };
 
-                let show = if new {
-                    show.id
-                } else {
-                    match get_existing_show(db, &dir, &path) {
-                        Ok(id) => id,
-                        Err(error) => {
-                            tracing::error!("{error}");
-                            continue;
-                        }
+                tracing::debug!("Scanning {name} seasons");
+                tracing::debug!("Fetching show seasons");
+
+                let mut dir_seasons = match db.get_show_seasons_removed(show, |row| {
+                    let id = SeasonId::from_row(row)?;
+                    let path = row.get::<_, String>("path")?;
+                    let tombstone = row.get::<_, bool>("removed")?;
+
+                    Ok((
+                        path,
+                        DirSeason {
+                            id,
+                            scanned: false,
+                            tombstone,
+                        },
+                    ))
+                }) {
+                    Ok(seasons) => {
+                        let mut map = HashMap::new();
+                        map.extend(seasons.into_iter());
+                        map
+                    }
+                    Err(error) => {
+                        tracing::error!("Directory seasons error. \n{error}");
+                        continue;
                     }
                 };
 
-                let mut scanned_seasons = std::collections::HashSet::with_capacity(seasons.len());
-
-                tracing::debug!("Scanning {name} seasons");
                 for season in seasons {
+                    let dir_season = dir_seasons.get_mut(&season.path);
+
+                    if dir_season
+                        .as_ref()
+                        .map(|sea| sea.tombstone)
+                        .unwrap_or_default()
+                        && !restore
+                    {
+                        continue;
+                    }
+
                     let SeasonPrim { path, episodes } = season;
                     let number = process_season(&path);
                     let name = match number {
@@ -306,11 +447,17 @@ pub fn scan_dir_helper<'a>(
 
                     let (season, query) = Season::new(show, name.clone(), path.clone(), number);
 
-                    let new = match query.execute(db) {
+                    let season = dir_season.as_ref().map(|sea| sea.id).unwrap_or(season.id);
+
+                    match query.execute(db) {
                         Ok(succ) => {
                             let modified = succ.rows > 0;
+
+                            if let Some(entry) = dir_season {
+                                entry.scanned = true;
+                            }
+
                             successes.push(succ);
-                            scanned_seasons.insert(path.clone());
                             modified
                         }
                         Err(error) => {
@@ -319,143 +466,170 @@ pub fn scan_dir_helper<'a>(
                         }
                     };
 
-                    let season = if new {
-                        season.id
-                    } else {
-                        match get_existing_season(db, show, &path) {
-                            Ok(id) => id,
-                            Err(error) => {
-                                tracing::error!("{error}");
-                                continue;
-                            }
+                    tracing::debug!("Scanning {name} episodes");
+                    tracing::debug!("Fetching season episodes");
+                    let mut dir_episodes = match db.get_season_episodes_removed(season, |row| {
+                        let id = EpisodeId::from_row(row)?;
+                        let path = row.get::<_, String>("path")?;
+                        let tombstone = row.get::<_, bool>("removed")?;
+
+                        Ok((
+                            path,
+                            DirEpisode {
+                                id,
+                                tombstone,
+                                scanned: false,
+                            },
+                        ))
+                    }) {
+                        Ok(episodes) => {
+                            let mut map = HashMap::new();
+                            map.extend(episodes.into_iter());
+
+                            map
+                        }
+                        Err(error) => {
+                            tracing::error!("Directory episodes error. \n{error}");
+                            continue;
                         }
                     };
 
-                    let mut scanned_episodes =
-                        std::collections::HashSet::with_capacity(episodes.len());
-
-                    tracing::debug!("Scanning {name} episodes");
                     for episode in episodes {
+                        let dir_ep = dir_episodes.get_mut(&episode.path);
+                        let save_subtitle = dir_ep.is_none();
+
+                        if dir_ep.as_ref().map(|ep| ep.tombstone).unwrap_or_default() && !restore {
+                            continue;
+                        }
+
                         let number = process_episode(&episode.path);
                         let name = match number {
                             Some(number) => format!("Episode {number:02}"),
                             None => episode.name.clone(),
                         };
 
-                        let (_, query) = Episode::new(
+                        let (new, query) = Episode::new(
                             season,
                             name,
                             episode.name,
                             episode.path.clone(),
-                            episode.sub,
                             episode.duration,
                             number,
                         );
+
+                        let episode_id = dir_ep.as_ref().map(|ep| ep.id).unwrap_or(new.id);
+
                         match query.execute(db) {
                             Ok(succ) => {
-                                scanned_episodes.insert(episode.path);
+                                if let Some(entry) = dir_ep {
+                                    entry.scanned = true;
+                                }
+
                                 successes.push(succ)
                             }
                             Err(fail) => failures.push(fail),
                         }
+
+                        let loaded = episode
+                            .loaded_sub
+                            .map(|path| Subtitle::new_loaded(episode_id, path));
+
+                        let subtitles = episode
+                            .embedded_subs
+                            .into_iter()
+                            .map(|(title, lang)| Subtitle::new_embedded(episode_id, title, lang))
+                            .chain(loaded.into_iter());
+
+                        for sub in subtitles {
+                            let query = sub.insert();
+                            match query.execute(db) {
+                                Ok(succ) => successes.push(succ),
+                                Err(fail) => failures.push(fail),
+                            }
+                        }
+
+                        if save_subtitle {
+                            match db
+                                .query_row(
+                            "SELECT id FROM subtitle WHERE video=:video AND (path NOT NULL OR lang=:lang)",
+                            &[
+                                (":lang", &ToSqlOutput::from(prefered_subtitle_codec.clone())),
+                                (":video", &ToSqlOutput::from(episode_id)),
+                            ],
+                                    SubtitleId::from_row,
+                                )
+                                .optional()
+                            {
+                                Ok(None) => {}
+                                Ok(Some(subtitle_id)) => {
+                                    if let Err(error) = db.execute(
+                                        "UPDATE episode SET subtitle_id=:subtitle WHERE id=:id",
+                                        &[
+                                            (":id", &ToSqlOutput::from(episode_id)),
+                                            (":subtitle", &ToSqlOutput::from(subtitle_id)),
+                                        ],
+                                    ) {
+                                        tracing::error!("Set episode subtitle error.\n {error}");
+                                    };
+                                }
+                                Err(error) => {
+                                    tracing::error!("Select episode subtitle error. \n{error}");
+                                }
+                            }
+                        }
                     }
 
-                    tracing::debug!("Fetching season episodes");
-                    if let Ok(dir_episodes) = db
-                        .get_season_episodes_removed(season, |row| {
-                            let id = EpisodeId::from_row(row)?;
-                            let path = row.get::<_, String>("path")?;
-                            let tombstone = row.get::<_, bool>("removed")?;
+                    tracing::debug!("Performing episodes insert/remove");
 
-                            Ok(DirEpisode {
-                                id,
-                                path,
-                                tombstone,
-                            })
-                        })
-                        .inspect_err(|error| tracing::error!("{error}"))
-                    {
-                        let episodes = dir_episodes
-                            .into_iter()
-                            .map(|episode| {
-                                let scanned = scanned_episodes.contains(&episode.path);
-                                #[allow(clippy::nonminimal_bool)]
-                                let insert = (scanned && restore && episode.tombstone)
-                                    || (scanned && !episode.tombstone);
-                                (episode.id, insert)
-                            })
-                            .collect();
-
-                        tracing::debug!("Performing episodes insert/remove");
-                        if let Err(error) = db.insert_remove_episodes(episodes) {
-                            tracing::error!("{error}")
-                        };
-                    };
-                }
-
-                tracing::debug!("Fetching show seasons");
-                if let Ok(dir_seasons) = db
-                    .get_show_seasons_removed(show, |row| {
-                        let id = SeasonId::from_row(row)?;
-                        let path = row.get::<_, String>("path")?;
-                        let tombstone = row.get::<_, bool>("removed")?;
-
-                        Ok(DirSeason {
-                            id,
-                            path,
-                            tombstone,
-                        })
-                    })
-                    .inspect_err(|error| tracing::error!("{error}"))
-                {
-                    let seasons = dir_seasons
-                        .into_iter()
-                        .map(|season| {
-                            let scanned = scanned_seasons.contains(&season.path);
-                            #[allow(clippy::nonminimal_bool)]
-                            let insert = (scanned && restore && season.tombstone)
-                                || (scanned && !season.tombstone);
-                            (season.id, insert)
+                    let deletes = dir_episodes
+                        .into_values()
+                        .filter_map(|value| {
+                            if value.scanned {
+                                None
+                            } else {
+                                Some((value.id, false))
+                            }
                         })
                         .collect();
 
-                    tracing::debug!("Performing season insert/remove");
-                    if let Err(error) = db.insert_remove_seasons(seasons) {
+                    if let Err(error) = db.insert_remove_episodes(deletes) {
                         tracing::error!("{error}")
                     };
-                };
-            }
+                }
 
-            tracing::debug!("Fetching Directory shows");
-            if let Ok(dir_shows) = db
-                .get_dir_shows(dir.id, |row| {
-                    let id = ShowId::from_row(row)?;
-                    let path = row.get::<_, String>("path")?;
-                    let tombstone = row.get::<_, bool>("removed")?;
+                tracing::debug!("Performing season insert/remove");
 
-                    Ok(DirShow {
-                        id,
-                        path,
-                        tombstone,
-                    })
-                })
-                .inspect_err(|error| tracing::error!("{error}"))
-            {
-                let shows = dir_shows
-                    .into_iter()
-                    .map(|show| {
-                        let scanned = scanned_shows.contains(&show.path);
-                        #[allow(clippy::nonminimal_bool)]
-                        let insert =
-                            (scanned && restore && show.tombstone) || (scanned && !show.tombstone);
-                        (show.id, insert)
+                let deletes = dir_seasons
+                    .into_values()
+                    .filter_map(|value| {
+                        if value.scanned {
+                            None
+                        } else {
+                            Some((value.id, false))
+                        }
                     })
                     .collect();
 
-                tracing::debug!("Performing movies insert/remove");
-                if let Err(error) = db.insert_remove_shows(shows) {
+                if let Err(error) = db.insert_remove_seasons(deletes) {
                     tracing::error!("{error}")
                 };
+            }
+
+            tracing::debug!("Performing movies insert/remove");
+
+            let deletes = dir_shows
+                .into_values()
+                .filter_map(|value| {
+                    if value.scanned {
+                        None
+                    } else {
+                        Some((value.id, false))
+                    }
+                })
+                .collect();
+
+            if let Err(error) = db.insert_remove_shows(deletes) {
+                tracing::error!("{error}")
             };
         }
     }
@@ -644,26 +818,21 @@ fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<Video> {
     let url = url::Url::from_file_path(&path)
         .inspect_err(|_| tracing::error!("Scan file url error on {}", path.display()))
         .ok();
-    let duration = match discoverer.zip(url) {
-        Some((discoverer, url)) => discoverer
-            .discover_uri(url.as_str())
-            .inspect_err(|error| {
-                tracing::error!("Scan discover error on {}. Error {error}", path.display())
-            })
-            .ok()
-            .and_then(|info| info.duration().map(|clock| clock.seconds()))
-            .unwrap_or_default(),
-        _ => 0,
+
+    let (duration, embedded_subs) = match discoverer.zip(url) {
+        Some((discoverer, url)) => discover(discoverer, url, &path),
+        None => (0, vec![]),
     };
 
     let name = path.file_stem().and_then(|name| name.to_str())?.to_owned();
-    let sub = subtitles(&path);
+    let loaded_sub = subtitles(&path);
     let path = path.file_name().and_then(|path| path.to_str())?.to_owned();
 
     Some(Video {
         name,
         path,
-        sub,
+        loaded_sub,
+        embedded_subs,
         duration,
     })
 }
@@ -684,34 +853,6 @@ fn path_name(path: &Path) -> &str {
     path.file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("Invalid UTF8 name")
-}
-
-fn get_existing_show(db: &Database, dir: &Directory, path: &str) -> rusqlite::Result<ShowId> {
-    use rusqlite::types::ToSqlOutput;
-    let sql = "SELECT * FROM tv_show WHERE directory=:dir AND path=:path";
-
-    let mut statement = db.prepare_cached(sql)?;
-    statement.query_row(
-        &[
-            (":dir", &ToSqlOutput::from(dir.id)),
-            (":path", &ToSqlOutput::from(path)),
-        ],
-        ShowId::from_row,
-    )
-}
-
-fn get_existing_season(db: &Database, show: ShowId, path: &str) -> rusqlite::Result<SeasonId> {
-    use rusqlite::types::ToSqlOutput;
-    let sql = "SELECT * FROM season WHERE show_id=:show_id AND path=:path";
-
-    let mut statement = db.prepare_cached(sql)?;
-    statement.query_row(
-        &[
-            (":show_id", &ToSqlOutput::from(show)),
-            (":path", &ToSqlOutput::from(path)),
-        ],
-        SeasonId::from_row,
-    )
 }
 
 fn process_name(name: &str) -> Option<String> {
@@ -762,4 +903,46 @@ fn process_episode(name: &str) -> Option<u16> {
         .parse::<u16>()
         .inspect_err(|err| tracing::error!("Episode processing Error {name:}.\n{err:?}"))
         .ok()
+}
+
+fn discover(discoverer: &Discoverer, url: url::Url, path: &Path) -> (u64, Vec<(String, String)>) {
+    let discovered = discoverer
+        .discover_uri(url.as_str())
+        .inspect_err(|error| {
+            tracing::error!("Scan discover error on {}. Error {error}", path.display())
+        })
+        .ok();
+
+    match discovered {
+        Some(info) => {
+            use gstreamer_pbutils::prelude::DiscovererStreamInfoExt;
+
+            let subs = info
+                .subtitle_streams()
+                .into_iter()
+                .map(|sub| {
+                    sub.tags().and_then(|info| {
+                        let title = info
+                            .get::<gstreamer::tags::Title>()
+                            .map(|code| code.get().to_owned());
+
+                        let lang = info
+                            .get::<gstreamer::tags::LanguageCode>()
+                            .map(|code| code.get().to_owned());
+
+                        title.zip(lang)
+                    })
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+
+            let duration = info
+                .duration()
+                .map(|clock| clock.seconds())
+                .unwrap_or_default();
+
+            (duration, subs)
+        }
+        None => (0, vec![]),
+    }
 }

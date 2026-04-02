@@ -1,13 +1,16 @@
 use crate::models::{
     CollectionId, Comment, CommentId, Directory, DirectoryId, EpisodeId, MovieId, SearchItem,
-    SeasonId, ShowId, VideoId,
+    SeasonId, ShowId, Subtitle, SubtitleId, Video, VideoId,
     collection::{self, ItemId, Items},
 };
 
 use crate::filter::{self, Filter, search::SearchFilter};
 use crate::sort::{self, Sort};
 
-use rusqlite::{Connection, Result, Row, ToSql, params_from_iter, types::ToSqlOutput};
+use rusqlite::{
+    Connection, Result, Row, ToSql, params_from_iter,
+    types::{ToSqlOutput, Value},
+};
 use std::fs::read_to_string;
 use std::ops::Deref;
 use std::path::Path;
@@ -43,6 +46,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 5,
         sql: include_str!("../../resources/db/migrations/5.sql"),
+    },
+    Migration {
+        version: 6,
+        sql: include_str!("../../resources/db/migrations/6.sql"),
     },
 ];
 
@@ -328,6 +335,91 @@ impl Database {
         let mut statement = self.prepare_cached(&sql)?;
 
         statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)
+    }
+
+    pub fn get_video_subtitles(&self, video: VideoId) -> rusqlite::Result<Vec<Subtitle>> {
+        let sql = "SELECT * FROM subtitle WHERE subtitle.video=:video AND NOT subtitle.removed ORDER BY kind DESC";
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_map(&[(":video", &ToSqlOutput::from(video))], |row| {
+                Subtitle::from_row(row)
+            })?
+            .collect()
+    }
+
+    pub fn get_video(&self, id: impl Into<VideoId>) -> rusqlite::Result<Video> {
+        let id = id.into();
+        let is_movie = matches!(id, VideoId::Movie(_));
+
+        let map = if is_movie {
+            Video::from_movie
+        } else {
+            Video::from_episode
+        };
+
+        let sql = if is_movie {
+            "SELECT movie.name, movie.id, movie.progress, movie.duration, movie.watch_count, movie.subtitle_id, movie.generate_poster, movie.fetched, movie.path, directory.path AS directory_path FROM movie JOIN directory ON movie.directory=directory.id WHERE movie.id=:id AND NOT movie.removed"
+        } else {
+            "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.subtitle_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE episode.id=:id AND NOT episode.removed"
+        };
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        let mut video = statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)?;
+
+        let subs = self.get_video_subtitles(video.id)?;
+
+        video.set_subtitles(subs);
+
+        Ok(video)
+    }
+
+    pub fn get_season_videos(
+        &self,
+        season: SeasonId,
+        limit: Option<i32>,
+        offset: Option<i32>,
+        filter: Filter,
+        sort: Sort,
+    ) -> rusqlite::Result<Vec<Video>> {
+        let limit = limit.unwrap_or(-1);
+        let offset = offset.unwrap_or(-1);
+
+        let filter = filter
+            .query(Some("episode"))
+            .map(|query| format!("AND ( {query} )"))
+            .unwrap_or_default();
+        let sort = sort
+            .query(Some("episode"))
+            .map(|query| format!("ORDER BY {query}"))
+            .unwrap_or_default();
+
+        let query = "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.subtitle_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE NOT episode.removed";
+
+        let sql =
+            format!("{query} AND season.id=:season {filter} {sort} LIMIT :limit OFFSET :offset",);
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        let mut videos = statement
+            .query_map(
+                &[
+                    (":season", &ToSqlOutput::from(season)),
+                    (":limit", &ToSqlOutput::from(limit)),
+                    (":offset", &ToSqlOutput::from(offset)),
+                ],
+                Video::from_episode,
+            )?
+            .collect::<rusqlite::Result<Vec<Video>>>()?;
+
+        for video in videos.iter_mut() {
+            let subs = self.get_video_subtitles(video.id)?;
+            video.set_subtitles(subs);
+        }
+
+        Ok(videos)
     }
 
     pub fn get_video_comments<T>(
@@ -950,55 +1042,37 @@ impl Database {
         Ok(())
     }
 
-    pub fn update_episode_stats(
+    pub fn update_video_stats(
         &self,
-        id: EpisodeId,
+        id: VideoId,
         watch_count: u32,
         progress: f32,
         duration: u64,
-        subtitle_uri: Option<String>,
-    ) -> rusqlite::Result<()> {
-        let sql = "UPDATE episode SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_uri=:subtitle_uri, last_watched=CURRENT_TIMESTAMP WHERE episode.id=:id";
-
-        let mut statement = self.prepare_cached(sql)?;
-
-        let subtitle_uri = subtitle_uri
-            .to_sql()
-            .expect("Option<String> ToSqlOutput conversion always successful");
-
-        let _ = statement.execute(&[
-            (":id", &ToSqlOutput::from(id)),
-            (":watch_count", &ToSqlOutput::from(watch_count)),
-            (":progress", &ToSqlOutput::from(progress)),
-            (":duration", &ToSqlOutput::from(duration as isize)),
-            (":subtitle_uri", &subtitle_uri),
-        ])?;
-
-        Ok(())
-    }
-
-    pub fn update_movie_stats(
-        &self,
-        id: MovieId,
-        watch_count: u32,
-        progress: f32,
-        duration: u64,
-        subtitle_uri: Option<String>,
+        subtitle_id: Option<SubtitleId>,
     ) -> rusqlite::Result<usize> {
-        let sql = "UPDATE movie SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_uri=:subtitle_uri, last_watched=CURRENT_TIMESTAMP WHERE movie.id=:id";
+        let table = if matches!(id, VideoId::Movie(_)) {
+            "movie"
+        } else {
+            "episode"
+        };
 
-        let mut statement = self.prepare_cached(sql)?;
+        let sql = format!(
+            "UPDATE {table} SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_id=:subtitle_id, last_watched=CURRENT_TIMESTAMP WHERE {table}.id=:id"
+        );
 
-        let subtitle_uri = subtitle_uri
-            .to_sql()
-            .expect("Option<String> ToSqlOutput conversion always successful");
+        let subtitle_id = match subtitle_id {
+            Some(id) => ToSqlOutput::from(id),
+            None => ToSqlOutput::Owned(Value::Null),
+        };
+
+        let mut statement = self.prepare_cached(&sql)?;
 
         let rows = statement.execute(&[
             (":id", &ToSqlOutput::from(id)),
             (":watch_count", &ToSqlOutput::from(watch_count)),
             (":progress", &ToSqlOutput::from(progress)),
             (":duration", &ToSqlOutput::from(duration as isize)),
-            (":subtitle_uri", &subtitle_uri),
+            (":subtitle_id", &subtitle_id),
         ])?;
 
         Ok(rows)
@@ -1332,6 +1406,7 @@ pub enum Table {
     Episode,
     Image,
     Comment,
+    Subtitle,
     Collection,
     CollectionItem,
     WatchList,
