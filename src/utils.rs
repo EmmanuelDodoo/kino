@@ -155,7 +155,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
     description: &'a SubtitleDescription,
 ) -> iced::Element<'a, Message> {
     use iced::alignment::Vertical;
-    use iced::font::Family;
+    use iced::font::{Family, Font, Weight};
     use iced::widget::container;
 
     let SubtitleDescription {
@@ -165,10 +165,20 @@ pub fn draw_subtitles<'a, Message: 'a>(
         background_color,
     } = description;
 
+    let font = if font == typo::DEFAULT_SUBTITLE_FONT_NAME {
+        Font {
+            family: Family::name(typo::DEFAULT_SUBTITLE_FONT_NAME),
+            weight: Weight::Medium,
+            ..Default::default()
+        }
+    } else {
+        Family::name(font).into()
+    };
+
     let content = typo::regular(subtitles)
         .size((*size).max(5))
         .color(u32_to_rgba(*color))
-        .font(Family::name(font))
+        .font(font)
         .align_y(Vertical::Center);
 
     let subtitles = container(content)
