@@ -1345,7 +1345,7 @@ impl Settings {
         let subtitles = draw_subtitles(
             *show_subtitles,
             &self.subtitle_state,
-            &subtitles,
+            subtitles,
             &self.subtitle_dummy,
             &self.text_color,
             &self.background_color,

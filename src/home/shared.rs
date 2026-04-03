@@ -548,13 +548,6 @@ impl<T: Media + 'static> Thumbnail<T> {
         self.float.go_mut(new_state, at);
     }
 
-    pub fn sample(&mut self, samples: Option<(Color, Color)>) {
-        if let Some((color, text)) = samples {
-            self.sample_color = Some(color);
-            self.sample_text = Some(text);
-        }
-    }
-
     pub fn task(&mut self, task: ThumbnailTaskKind, now: Instant) {
         match task {
             ThumbnailTaskKind::Samples { main, accent } => {

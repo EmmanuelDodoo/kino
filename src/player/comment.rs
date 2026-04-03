@@ -1,14 +1,13 @@
-use crate::db::Query;
 use crate::utils::{cancel_btn, icons, save_btn, styles, typo};
 use fancy_regex::{Captures, Regex};
 use iced::{
     Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
-    animation::{self, Animation},
-    time::{Duration, Instant, milliseconds},
+    animation::Animation,
+    time::{Instant, milliseconds},
     widget::{
-        self, bottom_right, button, center_x, column, container, hover, markdown, mouse_area,
-        operation, rich_text, row, scrollable, sensor, text, text_editor,
+        self, button, center_x, column, container, hover, markdown, operation, rich_text, row,
+        scrollable, sensor, text, text_editor,
     },
 };
 use registry::models::{self, CommentId, VideoId};
@@ -41,7 +40,7 @@ pub trait CommentMessage {
 
 #[derive(Debug)]
 enum Mode {
-    View(markdown::Content),
+    View(Box<markdown::Content>),
     Edit(text_editor::Content),
 }
 
@@ -111,7 +110,7 @@ impl Comment {
         Self {
             inner,
             text_editor: editor,
-            mode: Mode::View(markdown),
+            mode: Mode::View(Box::new(markdown)),
             images: HashMap::default(),
         }
     }
@@ -126,12 +125,12 @@ impl Comment {
 
         let replaced = REGEX.replace_all(&inner.content, replacer);
         let markdown = markdown::Content::parse(&replaced);
-        let mode = Mode::View(markdown);
-        let text_editor = editor.unwrap_or_else(|| widget::Id::unique());
+        let mode = Mode::View(Box::new(markdown));
+        let text_editor = editor.unwrap_or_else(widget::Id::unique);
 
         Self {
             inner,
-            text_editor: text_editor,
+            text_editor,
             mode,
             images: HashMap::default(),
         }
@@ -155,7 +154,7 @@ impl Comment {
         let (raw, markdown) = Self::prep(text, &video, Some(now), &mut self.inner.timestamp);
 
         self.inner.content = raw;
-        self.mode = Mode::View(markdown);
+        self.mode = Mode::View(Box::new(markdown));
 
         self.inner.timestamp
     }
@@ -175,7 +174,7 @@ impl Comment {
         let replaced = REGEX.replace_all(&self.inner.content, replacer);
         let markdown = markdown::Content::parse(&replaced);
 
-        self.mode = Mode::View(markdown)
+        self.mode = Mode::View(Box::new(markdown))
     }
 
     pub fn edit<Message>(&mut self) -> Task<Message> {
@@ -261,7 +260,7 @@ impl Comment {
                         id,
                         timestamp,
                         images: &self.images,
-                        now: now,
+                        now,
                     },
                 );
 

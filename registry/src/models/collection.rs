@@ -466,7 +466,7 @@ pub enum CollectionView {
 }
 
 impl CollectionView {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "pinned" => Some(Self::Pinned),
             "shown" => Some(Self::Shown),
@@ -480,7 +480,7 @@ impl FromSql for CollectionView {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value
             .as_str()
-            .and_then(|s| CollectionView::from_str(s).ok_or(FromSqlError::InvalidType))
+            .and_then(|s| CollectionView::parse_str(s).ok_or(FromSqlError::InvalidType))
     }
 }
 
@@ -549,7 +549,7 @@ variants! {
 impl Items {
     pub const TAGS: [Items; 2] = [Self::Movies, Self::Shows];
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "all" => Some(Self::All),
             "movies" => Some(Self::Movies),
@@ -565,7 +565,7 @@ impl FromSql for Items {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value
             .as_str()
-            .and_then(|s| Items::from_str(s).ok_or(FromSqlError::InvalidType))
+            .and_then(|s| Items::parse_str(s).ok_or(FromSqlError::InvalidType))
     }
 }
 

@@ -1685,7 +1685,6 @@ mod keys {
 
 mod subtitles {
     use crate::utils::typo::DEFAULT_SUBTITLE_FONT_NAME;
-    use iced::{Font, font};
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]

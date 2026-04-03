@@ -11,9 +11,7 @@ use iced::{
     },
     window,
 };
-use iced_video_player::{
-    AudioTag, Button, Kind, MouseAction, MouseClick, TextTag, Video, VideoPlayer,
-};
+use iced_video_player::{AudioTag, Button, Kind, MouseAction, MouseClick, Video, VideoPlayer};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{
@@ -24,7 +22,7 @@ use widgets::marquee;
 
 pub mod comment;
 pub mod playlist;
-use crate::app::{FetchId, Message};
+use crate::app::Message;
 use crate::home::shared::Icon;
 use crate::utils::{
     self, FontState, PlayerAction, VideoSettings, cancel_btn, convert_color_str, draw_subtitles,
@@ -2092,7 +2090,7 @@ impl Manager {
                 .find_map(|sub| match &sub.kind {
                     SubtitleKind::Loaded { path, .. } => {
                         let path = path.clone();
-                        if &selected == &path {
+                        if selected == path {
                             Some((sub.id, path))
                         } else {
                             None
@@ -2125,26 +2123,24 @@ impl Manager {
             }
         }
 
-        if let Some(selected) = selected_text {
-            if player.item.subtitle_id != Some(selected.id) {
-                player.item.subtitle_id = Some(selected.id);
-                match &selected.kind {
-                    SubtitleKind::Loaded { path, .. } => {
-                        let path = path.clone();
+        if let Some(selected) = selected_text
+            && player.item.subtitle_id != Some(selected.id)
+        {
+            player.item.subtitle_id = Some(selected.id);
+            match &selected.kind {
+                SubtitleKind::Loaded { path, .. } => {
+                    let path = path.clone();
 
-                        if let Some(message) = set_uri(player, path) {
-                            return Task::done(message);
-                        }
+                    if let Some(message) = set_uri(player, path) {
+                        return Task::done(message);
                     }
-                    SubtitleKind::Embedded => {
-                        if let Some(tag) =
-                            player.video.available_subtitles().into_iter().find(|tag| {
-                                tag.title == selected.title && tag.language_code == selected.lang
-                            })
-                        {
-                            player.video.set_text(tag);
-                        };
-                    }
+                }
+                SubtitleKind::Embedded => {
+                    if let Some(tag) = player.video.available_subtitles().into_iter().find(|tag| {
+                        tag.title == selected.title && tag.language_code == selected.lang
+                    }) {
+                        player.video.set_text(tag);
+                    };
                 }
             }
         }

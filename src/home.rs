@@ -1,5 +1,5 @@
 use iced::{
-    Color, Element, Length, Padding, Subscription, Task, Theme,
+    Element, Length, Padding, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
     animation::Animation,
     border::Border,
@@ -35,7 +35,7 @@ use registry::models::{
     },
 };
 use registry::{
-    filter::{self, Filter, FilterMode, SearchFilter},
+    filter::{self, Filter, SearchFilter},
     sort::{Sort, SortKind},
 };
 
@@ -43,7 +43,7 @@ use crate::app::{MediaUpdate, MediaUpdateKind};
 
 use crate::app::{FetchId, Message};
 use crate::utils::{
-    self, HomeAction, Layout, Scroll, empty, icons,
+    HomeAction, Layout, Scroll, empty, icons,
     icons::*,
     loading_animation, loading_svg,
     modal::{self, modal},

@@ -200,9 +200,7 @@ pub fn scan_dir_helper<'a>(
                 scanned: bool,
             }
 
-            let Some(videos) = scan_video_dir(&dir.path, discoverer, movie_depth, None) else {
-                return None;
-            };
+            let videos = scan_video_dir(&dir.path, discoverer, movie_depth, None)?;
 
             tracing::debug!("Fetching Directory movies");
             let mut dir_movies = match db.get_dir_movies(dir.id, |row| {
@@ -222,7 +220,7 @@ pub fn scan_dir_helper<'a>(
                     // todo: Db could return an iterator instead?
                     let mut map = HashMap::new();
 
-                    map.extend(dir_movies.into_iter());
+                    map.extend(dir_movies);
 
                     map
                 }
@@ -266,7 +264,7 @@ pub fn scan_dir_helper<'a>(
                     .embedded_subs
                     .into_iter()
                     .map(|(title, lang)| Subtitle::new_embedded(id, title, lang))
-                    .chain(loaded.into_iter());
+                    .chain(loaded);
 
                 for sub in subtitles {
                     let query = sub.insert();
@@ -337,7 +335,7 @@ pub fn scan_dir_helper<'a>(
             }) {
                 Ok(shows) => {
                     let mut map = HashMap::new();
-                    map.extend(shows.into_iter());
+                    map.extend(shows);
                     map
                 }
                 Err(error) => {
@@ -406,7 +404,7 @@ pub fn scan_dir_helper<'a>(
                 }) {
                     Ok(seasons) => {
                         let mut map = HashMap::new();
-                        map.extend(seasons.into_iter());
+                        map.extend(seasons);
                         map
                     }
                     Err(error) => {
@@ -473,7 +471,7 @@ pub fn scan_dir_helper<'a>(
                     }) {
                         Ok(episodes) => {
                             let mut map = HashMap::new();
-                            map.extend(episodes.into_iter());
+                            map.extend(episodes);
 
                             map
                         }
@@ -527,7 +525,7 @@ pub fn scan_dir_helper<'a>(
                             .embedded_subs
                             .into_iter()
                             .map(|(title, lang)| Subtitle::new_embedded(episode_id, title, lang))
-                            .chain(loaded.into_iter());
+                            .chain(loaded);
 
                         for sub in subtitles {
                             let query = sub.insert();
@@ -800,7 +798,7 @@ fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<Video> {
     })
 }
 
-fn subtitles(path: &PathBuf) -> Option<String> {
+fn subtitles(path: &Path) -> Option<String> {
     for ext in SUB_EXT {
         let sub = path.with_extension(ext);
 
@@ -883,7 +881,7 @@ fn discover(discoverer: &Discoverer, url: url::Url, path: &Path) -> (u64, Vec<(S
             let subs = info
                 .subtitle_streams()
                 .into_iter()
-                .map(|sub| {
+                .flat_map(|sub| {
                     sub.tags().and_then(|info| {
                         let title = info
                             .get::<gstreamer::tags::Title>()
@@ -896,7 +894,6 @@ fn discover(discoverer: &Discoverer, url: url::Url, path: &Path) -> (u64, Vec<(S
                         title.zip(lang)
                     })
                 })
-                .flatten()
                 .collect::<Vec<_>>();
 
             let duration = info

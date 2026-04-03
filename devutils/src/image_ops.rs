@@ -52,7 +52,7 @@ pub fn default_poster() -> Option<Image> {
     })
 }
 
-pub fn collage<'a>(paths: impl Iterator<Item = String>, width: u32, height: u32) -> Option<Image> {
+pub fn collage(paths: impl Iterator<Item = String>, width: u32, height: u32) -> Option<Image> {
     let imgs: Vec<DynamicImage> = paths.filter_map(|path| open(&path)).take(4).collect();
 
     if imgs.is_empty() {

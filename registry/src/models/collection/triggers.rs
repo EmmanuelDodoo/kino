@@ -19,7 +19,7 @@ variants! {
 impl Media {
     pub const ROOTS: &[Self] = &[Self::Movies, Self::Shows];
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "movie" => Some(Self::Movies),
             "show" => Some(Self::Shows),
@@ -43,7 +43,7 @@ impl FromSql for Media {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value
             .as_str()
-            .and_then(|s| Media::from_str(s).ok_or(FromSqlError::InvalidType))
+            .and_then(|s| Media::parse_str(s).ok_or(FromSqlError::InvalidType))
     }
 }
 
@@ -102,7 +102,7 @@ pub enum Comparison {
 }
 
 impl Comparison {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "<" => Some(Self::Less),
             "<=" => Some(Self::LE),
@@ -520,7 +520,7 @@ impl std::str::FromStr for Logic {
                         return Err(());
                     }
 
-                    let Some(comparison) = fields.next().and_then(Comparison::from_str) else {
+                    let Some(comparison) = fields.next().and_then(Comparison::parse_str) else {
                         return Err(());
                     };
 
@@ -538,7 +538,7 @@ impl std::str::FromStr for Logic {
                         return Err(());
                     }
 
-                    let Some(comparison) = fields.next().and_then(Comparison::from_str) else {
+                    let Some(comparison) = fields.next().and_then(Comparison::parse_str) else {
                         return Err(());
                     };
 
@@ -556,7 +556,7 @@ impl std::str::FromStr for Logic {
                         return Err(());
                     }
 
-                    let Some(comparison) = fields.next().and_then(Comparison::from_str) else {
+                    let Some(comparison) = fields.next().and_then(Comparison::parse_str) else {
                         return Err(());
                     };
 
@@ -574,7 +574,7 @@ impl std::str::FromStr for Logic {
                         return Err(());
                     }
 
-                    let Some(comparison) = fields.next().and_then(Comparison::from_str) else {
+                    let Some(comparison) = fields.next().and_then(Comparison::parse_str) else {
                         return Err(());
                     };
 
@@ -590,7 +590,7 @@ impl std::str::FromStr for Logic {
                         return Err(());
                     }
 
-                    let Some(comparison) = fields.next().and_then(Comparison::from_str) else {
+                    let Some(comparison) = fields.next().and_then(Comparison::parse_str) else {
                         return Err(());
                     };
 
@@ -608,7 +608,7 @@ impl std::str::FromStr for Logic {
                         return Err(());
                     }
 
-                    let Some(comparison) = fields.next().and_then(Comparison::from_str) else {
+                    let Some(comparison) = fields.next().and_then(Comparison::parse_str) else {
                         return Err(());
                     };
 
@@ -624,7 +624,7 @@ impl std::str::FromStr for Logic {
                         return Err(());
                     }
 
-                    let Some(comparison) = fields.next().and_then(Comparison::from_str) else {
+                    let Some(comparison) = fields.next().and_then(Comparison::parse_str) else {
                         return Err(());
                     };
 

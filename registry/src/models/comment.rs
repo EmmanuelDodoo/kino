@@ -149,10 +149,7 @@ impl Comment {
         let timestamp = timestamp.map(|timestamp| timestamp as i64);
         let timestamp = ToSqlOutput::Owned(Value::from(timestamp));
 
-        let params = [
-            (":id", ToSqlOutput::from(id)),
-            (":timestamp", ToSqlOutput::from(timestamp)),
-        ];
+        let params = [(":id", ToSqlOutput::from(id)), (":timestamp", timestamp)];
 
         Query {
             id: id.0,

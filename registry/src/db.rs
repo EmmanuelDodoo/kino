@@ -340,7 +340,7 @@ impl Database {
     pub fn get_video_subtitles(&self, video: VideoId) -> rusqlite::Result<Vec<Subtitle>> {
         let sql = "SELECT * FROM subtitle WHERE subtitle.video=:video AND NOT subtitle.removed ORDER BY kind DESC";
 
-        let mut statement = self.prepare_cached(&sql)?;
+        let mut statement = self.prepare_cached(sql)?;
 
         statement
             .query_map(&[(":video", &ToSqlOutput::from(video))], |row| {

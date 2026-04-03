@@ -209,7 +209,7 @@ pub enum MediaType {
 impl MediaType {
     pub const ALL: [Self; 2] = [Self::Movies, Self::Shows];
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "movies" => Some(Self::Movies),
             "shows" => Some(Self::Shows),
@@ -222,7 +222,7 @@ impl FromSql for MediaType {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value
             .as_str()
-            .and_then(|s| MediaType::from_str(s).ok_or(FromSqlError::InvalidType))
+            .and_then(|s| MediaType::parse_str(s).ok_or(FromSqlError::InvalidType))
     }
 }
 

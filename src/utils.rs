@@ -1,5 +1,4 @@
 use iced::animation::{Animation, Easing};
-use iced::widget::image;
 use std::path::{Path, PathBuf};
 
 use core::variants;
