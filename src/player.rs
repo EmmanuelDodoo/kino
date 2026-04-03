@@ -49,15 +49,18 @@ enum Modal {
         selected: HashSet<CollectionId>,
         initial: HashSet<CollectionId>,
     },
-    Config {
-        tab: ConfigTab,
-        subtitle_uri: Option<PathBuf>,
-        selected_text: Option<Subtitle>,
-        selected_audio: Option<AudioTag>,
-        text_color: String,
-        background_color: String,
-        subtitle_font: FontState,
-    },
+    Config(Box<Config>),
+}
+
+#[derive(Debug)]
+struct Config {
+    tab: ConfigTab,
+    subtitle_uri: Option<PathBuf>,
+    selected_text: Option<Subtitle>,
+    selected_audio: Option<AudioTag>,
+    text_color: String,
+    background_color: String,
+    subtitle_font: FontState,
 }
 
 #[derive(Debug, Clone)]
@@ -167,30 +170,76 @@ variants! {
     }
 }
 
+// #[derive(Debug, Clone)]
+// pub enum ConfigMessage {
+//     Tab(ConfigTab),
+//     VolumeAmt(String),
+//     SpeedAmt(String),
+//     SeekAmt(String),
+//     SeekShiftAmt(String),
+//     Gamma(f64),
+//     Brightness(f64),
+//     Contrast(f64),
+//     Hue(f64),
+//     Saturation(f64),
+//     SelectFile,
+//     Selected(Option<PathBuf>),
+//     ClearSelected,
+//     CurrentText(Subtitle),
+//     CurrentAudio(AudioTag),
+//     SubSize(String),
+//     SubSizeIncr,
+//     SubSizeDecr,
+//     SubColor(String),
+//     SubBackground(String),
+//     SubFont(iced::font::Family),
+//     Span(String),
+// }
+
 #[derive(Debug, Clone)]
 pub enum ConfigMessage {
     Tab(ConfigTab),
+    General(GeneralConfig),
+    Video(VideoConfig),
+    Subtitle(SubtitleConfig),
+    Audio(AudioConfig),
+}
+
+#[derive(Debug, Clone)]
+pub enum AudioConfig {
+    CurrentAudio(AudioTag),
+}
+
+#[derive(Debug, Clone)]
+pub enum GeneralConfig {
     VolumeAmt(String),
     SpeedAmt(String),
     SeekAmt(String),
     SeekShiftAmt(String),
+    Span(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum VideoConfig {
     Gamma(f64),
     Brightness(f64),
     Contrast(f64),
     Hue(f64),
     Saturation(f64),
-    SelectFile,
-    Selected(Option<PathBuf>),
-    ClearSelected,
-    CurrentText(Subtitle),
-    CurrentAudio(AudioTag),
+}
+
+#[derive(Debug, Clone)]
+pub enum SubtitleConfig {
     SubSize(String),
     SubSizeIncr,
     SubSizeDecr,
     SubColor(String),
     SubBackground(String),
     SubFont(iced::font::Family),
-    Span(String),
+    SelectFile,
+    Selected(Option<PathBuf>),
+    ClearSelected,
+    CurrentText(Subtitle),
 }
 
 #[derive(Debug)]
@@ -735,218 +784,221 @@ impl Manager {
                 Task::none()
             }
             ManagerMessage::Config(csg) => {
-                let Some(Modal::Config {
-                    tab,
-                    subtitle_uri,
-                    selected_text,
-                    selected_audio,
-                    text_color,
-                    background_color,
-                    subtitle_font,
-                }) = self.modal.as_mut()
-                else {
+                let Some(Modal::Config(config)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
                 match csg {
                     ConfigMessage::Tab(new) => {
-                        *tab = new;
+                        config.tab = new;
                         Task::none()
                     }
-                    ConfigMessage::VolumeAmt(amt) => {
-                        let amt = amt.trim();
-                        if amt.is_empty() {
-                            self.settings.volume_change_amt = 0.0;
-                            return Task::none();
+                    ConfigMessage::General(gsg) => match gsg {
+                        GeneralConfig::VolumeAmt(amt) => {
+                            let amt = amt.trim();
+                            if amt.is_empty() {
+                                self.settings.volume_change_amt = 0.0;
+                                return Task::none();
+                            }
+
+                            let Ok(amt) = amt.parse::<f64>() else {
+                                let msg = Message::error(format!("Invalid input: {amt}"));
+                                return Task::done(msg);
+                            };
+
+                            self.settings.volume_change_amt = amt.min(1.0);
+
+                            Task::none()
                         }
+                        GeneralConfig::SpeedAmt(amt) => {
+                            let amt = amt.trim();
+                            if amt.is_empty() {
+                                self.settings.speed_change_amt = 0.0;
+                                return Task::none();
+                            }
 
-                        let Ok(amt) = amt.parse::<f64>() else {
-                            let msg = Message::error(format!("Invalid input: {amt}"));
-                            return Task::done(msg);
-                        };
+                            let Ok(amt) = amt.parse::<f64>() else {
+                                let msg = Message::error(format!("Invalid input: {amt}"));
+                                return Task::done(msg);
+                            };
 
-                        self.settings.volume_change_amt = amt.min(1.0);
+                            self.settings.speed_change_amt = amt;
 
-                        Task::none()
-                    }
-                    ConfigMessage::SpeedAmt(amt) => {
-                        let amt = amt.trim();
-                        if amt.is_empty() {
-                            self.settings.speed_change_amt = 0.0;
-                            return Task::none();
+                            Task::none()
                         }
+                        GeneralConfig::SeekAmt(amt) => {
+                            let amt = amt.trim();
+                            if amt.is_empty() {
+                                self.settings.seek_change_amt = 0.0;
+                                return Task::none();
+                            }
 
-                        let Ok(amt) = amt.parse::<f64>() else {
-                            let msg = Message::error(format!("Invalid input: {amt}"));
-                            return Task::done(msg);
-                        };
+                            let Ok(amt) = amt.parse::<f64>() else {
+                                let msg = Message::error(format!("Invalid input: {amt}"));
+                                return Task::done(msg);
+                            };
 
-                        self.settings.speed_change_amt = amt;
+                            self.settings.seek_change_amt = amt;
 
-                        Task::none()
-                    }
-                    ConfigMessage::SeekAmt(amt) => {
-                        let amt = amt.trim();
-                        if amt.is_empty() {
-                            self.settings.seek_change_amt = 0.0;
-                            return Task::none();
+                            Task::none()
                         }
+                        GeneralConfig::SeekShiftAmt(amt) => {
+                            let amt = amt.trim();
+                            if amt.is_empty() {
+                                self.settings.seek_shift_change_amt = 0.0;
+                                return Task::none();
+                            }
 
-                        let Ok(amt) = amt.parse::<f64>() else {
-                            let msg = Message::error(format!("Invalid input: {amt}"));
-                            return Task::done(msg);
-                        };
+                            let Ok(amt) = amt.parse::<f64>() else {
+                                let msg = Message::error(format!("Invalid input: {amt}"));
+                                return Task::done(msg);
+                            };
 
-                        self.settings.seek_change_amt = amt;
+                            self.settings.seek_shift_change_amt = amt;
 
-                        Task::none()
-                    }
-                    ConfigMessage::SeekShiftAmt(amt) => {
-                        let amt = amt.trim();
-                        if amt.is_empty() {
-                            self.settings.seek_shift_change_amt = 0.0;
-                            return Task::none();
+                            Task::none()
                         }
+                        GeneralConfig::Span(span) => {
+                            let span = span.trim();
+                            if span.is_empty() {
+                                self.settings.comment_span = 0;
+                                return Task::none();
+                            }
 
-                        let Ok(amt) = amt.parse::<f64>() else {
-                            let msg = Message::error(format!("Invalid input: {amt}"));
-                            return Task::done(msg);
-                        };
+                            let Ok(span) = span.parse::<u64>() else {
+                                let msg = Message::error(format!("Invalid input: {span}"));
+                                return Task::done(msg);
+                            };
 
-                        self.settings.seek_shift_change_amt = amt;
+                            self.settings.comment_span = span;
 
-                        Task::none()
-                    }
-                    ConfigMessage::Gamma(gamma) => {
-                        self.settings.filters.gamma = gamma;
-
-                        Task::none()
-                    }
-                    ConfigMessage::Brightness(brightness) => {
-                        self.settings.filters.brightness = brightness;
-
-                        Task::none()
-                    }
-                    ConfigMessage::Contrast(contrast) => {
-                        self.settings.filters.contrast = contrast;
-
-                        Task::none()
-                    }
-                    ConfigMessage::Hue(hue) => {
-                        self.settings.filters.hue = hue;
-
-                        Task::none()
-                    }
-                    ConfigMessage::Saturation(saturation) => {
-                        self.settings.filters.saturation = saturation;
-
-                        Task::none()
-                    }
-                    ConfigMessage::SelectFile => Task::perform(
-                        rfd::AsyncFileDialog::new()
-                            .add_filter("", devutils::scan::SUB_EXT)
-                            .pick_file(),
-                        |handle| {
-                            ManagerMessage::Config(ConfigMessage::Selected(
-                                handle.map(|handle| handle.path().to_path_buf()),
-                            ))
-                        },
-                    )
-                    .map(Message::Player),
-                    ConfigMessage::Selected(selected) => {
-                        *subtitle_uri = selected;
-                        selected_text.take();
-                        Task::none()
-                    }
-                    ConfigMessage::ClearSelected => {
-                        subtitle_uri.take();
-
-                        *selected_text = match &mut self.state {
-                            State::Ready { player, .. } => player
-                                .item
-                                .subtitle_id
-                                .and_then(|id| {
-                                    player.item.subtitles.iter().find(|sub| sub.id == id)
-                                })
-                                .cloned(),
-                            _ => None,
-                        };
-
-                        Task::none()
-                    }
-                    ConfigMessage::CurrentText(text) => {
-                        *selected_text = Some(text);
-                        subtitle_uri.take();
-                        Task::none()
-                    }
-                    ConfigMessage::CurrentAudio(audio) => {
-                        *selected_audio = Some(audio);
-                        Task::none()
-                    }
-                    ConfigMessage::SubSize(size) => {
-                        let size = size.trim();
-                        if size.is_empty() {
-                            self.settings.subtitles.size = 5;
-                            return Task::none();
+                            Task::none()
                         }
+                    },
+                    ConfigMessage::Video(vsg) => match vsg {
+                        VideoConfig::Gamma(gamma) => {
+                            self.settings.filters.gamma = gamma;
 
-                        let Ok(size) = size.parse::<u32>() else {
-                            let msg = Message::error(format!("Invalid input: {size}"));
-                            return Task::done(msg);
-                        };
-
-                        self.settings.subtitles.size = size.max(5);
-
-                        Task::none()
-                    }
-                    ConfigMessage::SubSizeIncr => {
-                        self.settings.subtitles.size = (self.settings.subtitles.size + 1).min(60);
-                        Task::none()
-                    }
-                    ConfigMessage::SubSizeDecr => {
-                        self.settings.subtitles.size = (self.settings.subtitles.size - 1).max(5);
-                        Task::none()
-                    }
-                    ConfigMessage::SubColor(color) => {
-                        if let Some(color) = convert_color_str(&color) {
-                            self.settings.subtitles.color = color;
-                        };
-
-                        *text_color = color;
-
-                        Task::none()
-                    }
-                    ConfigMessage::SubBackground(color) => {
-                        if let Some(color) = convert_color_str(&color) {
-                            self.settings.subtitles.background_color = color;
-                        };
-
-                        *background_color = color;
-
-                        Task::none()
-                    }
-                    ConfigMessage::SubFont(family) => {
-                        self.settings.subtitles.font = family.to_string();
-                        subtitle_font.selected = Some(family);
-
-                        Task::none()
-                    }
-                    ConfigMessage::Span(span) => {
-                        let span = span.trim();
-                        if span.is_empty() {
-                            self.settings.comment_span = 0;
-                            return Task::none();
+                            Task::none()
                         }
+                        VideoConfig::Brightness(brightness) => {
+                            self.settings.filters.brightness = brightness;
 
-                        let Ok(span) = span.parse::<u64>() else {
-                            let msg = Message::error(format!("Invalid input: {span}"));
-                            return Task::done(msg);
-                        };
+                            Task::none()
+                        }
+                        VideoConfig::Contrast(contrast) => {
+                            self.settings.filters.contrast = contrast;
 
-                        self.settings.comment_span = span;
+                            Task::none()
+                        }
+                        VideoConfig::Hue(hue) => {
+                            self.settings.filters.hue = hue;
 
-                        Task::none()
-                    }
+                            Task::none()
+                        }
+                        VideoConfig::Saturation(saturation) => {
+                            self.settings.filters.saturation = saturation;
+
+                            Task::none()
+                        }
+                    },
+                    ConfigMessage::Subtitle(ssg) => match ssg {
+                        SubtitleConfig::SelectFile => Task::perform(
+                            rfd::AsyncFileDialog::new()
+                                .add_filter("", devutils::scan::SUB_EXT)
+                                .pick_file(),
+                            |handle| {
+                                ManagerMessage::Config(ConfigMessage::Subtitle(
+                                    SubtitleConfig::Selected(
+                                        handle.map(|handle| handle.path().to_path_buf()),
+                                    ),
+                                ))
+                            },
+                        )
+                        .map(Message::Player),
+                        SubtitleConfig::Selected(selected) => {
+                            config.subtitle_uri = selected;
+                            config.selected_text.take();
+                            Task::none()
+                        }
+                        SubtitleConfig::ClearSelected => {
+                            config.subtitle_uri.take();
+
+                            config.selected_text = match &mut self.state {
+                                State::Ready { player, .. } => player
+                                    .item
+                                    .subtitle_id
+                                    .and_then(|id| {
+                                        player.item.subtitles.iter().find(|sub| sub.id == id)
+                                    })
+                                    .cloned(),
+                                _ => None,
+                            };
+
+                            Task::none()
+                        }
+                        SubtitleConfig::CurrentText(text) => {
+                            config.selected_text = Some(text);
+                            config.subtitle_uri.take();
+                            Task::none()
+                        }
+                        SubtitleConfig::SubSize(size) => {
+                            let size = size.trim();
+                            if size.is_empty() {
+                                self.settings.subtitles.size = 5;
+                                return Task::none();
+                            }
+
+                            let Ok(size) = size.parse::<u32>() else {
+                                let msg = Message::error(format!("Invalid input: {size}"));
+                                return Task::done(msg);
+                            };
+
+                            self.settings.subtitles.size = size.max(5);
+
+                            Task::none()
+                        }
+                        SubtitleConfig::SubSizeIncr => {
+                            self.settings.subtitles.size =
+                                (self.settings.subtitles.size + 1).min(60);
+                            Task::none()
+                        }
+                        SubtitleConfig::SubSizeDecr => {
+                            self.settings.subtitles.size =
+                                (self.settings.subtitles.size - 1).max(5);
+                            Task::none()
+                        }
+                        SubtitleConfig::SubColor(color) => {
+                            if let Some(color) = convert_color_str(&color) {
+                                self.settings.subtitles.color = color;
+                            };
+
+                            config.text_color = color;
+
+                            Task::none()
+                        }
+                        SubtitleConfig::SubBackground(color) => {
+                            if let Some(color) = convert_color_str(&color) {
+                                self.settings.subtitles.background_color = color;
+                            };
+
+                            config.background_color = color;
+
+                            Task::none()
+                        }
+                        SubtitleConfig::SubFont(family) => {
+                            self.settings.subtitles.font = family.to_string();
+                            config.subtitle_font.selected = Some(family);
+
+                            Task::none()
+                        }
+                    },
+                    ConfigMessage::Audio(asg) => match asg {
+                        AudioConfig::CurrentAudio(audio) => {
+                            config.selected_audio = Some(audio);
+                            Task::none()
+                        }
+                    },
                 }
             }
             ManagerMessage::CommentMessage(csg) => {
@@ -1640,15 +1692,7 @@ impl Manager {
                 draw_collection_add(selected, collections.is_empty(), collections.iter()),
                 ManagerMessage::CloseView,
             ),
-            Some(Modal::Config {
-                tab,
-                subtitle_uri,
-                selected_text,
-                selected_audio,
-                text_color,
-                background_color,
-                subtitle_font,
-            }) => {
+            Some(Modal::Config(config)) => {
                 let (subs, audio) = self
                     .player()
                     .map(|player| {
@@ -1660,18 +1704,7 @@ impl Manager {
                     .unwrap_or_default();
                 modal(
                     content,
-                    draw_config(
-                        &self.settings,
-                        subs,
-                        audio,
-                        subtitle_uri,
-                        subtitle_font,
-                        *tab,
-                        selected_text,
-                        selected_audio,
-                        text_color,
-                        background_color,
-                    ),
+                    draw_config(&self.settings, config, subs, audio),
                     ManagerMessage::CloseView,
                 )
             }
@@ -2025,7 +2058,7 @@ impl Manager {
         Task::none()
     }
 
-    fn save_config(&mut self, config: Modal) -> Task<Message> {
+    fn save_config(&mut self, modal: Modal) -> Task<Message> {
         let State::Ready {
             player,
             awake,
@@ -2035,18 +2068,19 @@ impl Manager {
             return Task::none();
         };
 
-        let Modal::Config {
-            subtitle_uri,
-            tab: _tab,
-            selected_text,
-            selected_audio,
-            text_color: _text,
-            background_color: _background,
-            subtitle_font: _font,
-        } = config
-        else {
+        let Modal::Config(config) = modal else {
             return self.play_toggle();
         };
+
+        let Config {
+            subtitle_uri,
+            selected_text,
+            selected_audio,
+            tab: _tab,
+            text_color: _text_color,
+            background_color: _background,
+            subtitle_font: _subtitle,
+        } = *config;
 
         apply_settings(&self.settings, player);
 
@@ -2238,7 +2272,7 @@ impl Manager {
             (None, None, None)
         };
 
-        self.modal = Some(Modal::Config {
+        self.modal = Some(Modal::Config(Box::new(Config {
             tab: ConfigTab::General,
             subtitle_uri,
             selected_text,
@@ -2246,7 +2280,7 @@ impl Manager {
             text_color: format!("#{:08x}", self.settings.subtitles.color),
             background_color: format!("#{:08x}", self.settings.subtitles.background_color),
             subtitle_font: FontState::new(self.fonts.clone(), &self.settings.subtitles.font),
-        });
+        })));
 
         Task::none()
     }
@@ -2907,24 +2941,414 @@ fn draw_collection_add<'a>(
     modal_container(content).max_width(400).into()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn draw_config<'a>(
-    config: &'a VideoSettings,
-    embedded: &'a [Subtitle],
+fn draw_general<'a>(
+    settings: &'a VideoSettings,
+    size: f32,
+    padding: Padding,
+    spacing: f32,
+) -> Element<'a, GeneralConfig> {
+    let input_width = 48;
+    let volume_amt = {
+        let label = label_maker("Volume amount: ");
+
+        let amt = format!("{:.02}", settings.volume_change_amt);
+        let input = text_input("", &amt)
+            .width(input_width)
+            .size(size)
+            .font(regular_font())
+            .align_x(Horizontal::Right)
+            .padding(padding)
+            .on_input(GeneralConfig::VolumeAmt);
+
+        row!(label, space::horizontal(), input)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let speed_amt = {
+        let label = label_maker("Speed amount: ");
+
+        let amt = format!("{:.02}", settings.speed_change_amt);
+        let input = text_input("", &amt)
+            .width(input_width)
+            .size(size)
+            .font(regular_font())
+            .align_x(Horizontal::Right)
+            .padding(padding)
+            .on_input(GeneralConfig::SpeedAmt);
+
+        row!(label, space::horizontal(), input)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let seek_amt = {
+        let label = label_maker("Seek amount: ");
+
+        let amt = format!("{:.02}", settings.seek_change_amt);
+        let input = text_input("", &amt)
+            .width(input_width)
+            .size(size)
+            .font(regular_font())
+            .align_x(Horizontal::Right)
+            .padding(padding)
+            .on_input(GeneralConfig::SeekAmt);
+
+        let input = row!(input).align_y(Vertical::Center).spacing(4);
+
+        row!(label, space::horizontal(), input)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let seek_amt_shift = {
+        let label = label_maker("Seek Shift amount: ");
+
+        let amt = format!("{:.02}", settings.seek_shift_change_amt);
+        let input = text_input("", &amt)
+            .width(input_width)
+            .size(size)
+            .font(regular_font())
+            .align_x(Horizontal::Right)
+            .padding(padding)
+            .on_input(GeneralConfig::SeekShiftAmt);
+
+        let input = row!(input).align_y(Vertical::Center).spacing(4);
+
+        row!(label, space::horizontal(), input)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let cspan = {
+        let label = label_maker("Comment span(seconds) ");
+
+        let amt = settings.comment_span.to_string();
+        let input = text_input("", &amt)
+            .font(regular_font())
+            .width(input_width)
+            .size(size)
+            .align_x(Horizontal::Right)
+            .padding(padding)
+            .on_input(GeneralConfig::Span);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    column!(volume_amt, speed_amt, seek_amt, seek_amt_shift, cspan)
+        .spacing(16)
+        .into()
+}
+
+fn draw_filters<'a>(settings: &'a VideoSettings, size: f32) -> Element<'a, VideoConfig> {
+    let width = 200;
+    let slider_width = 200;
+
+    let gamma = {
+        let label = label_maker("Gamma: ").width(width);
+
+        let slider = slider(1.0..=3.0, settings.filters.gamma, VideoConfig::Gamma)
+            .step(0.05)
+            .shift_step(0.1)
+            .width(slider_width);
+
+        let gamma = sized_regular(format!("{:.01}", settings.filters.gamma), size);
+        let slider = row!(gamma, slider).spacing(4.0).align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+    };
+
+    let brightness = {
+        let label = label_maker("Brightness: ").width(width);
+
+        let slider = slider(
+            -1.0..=1.0,
+            settings.filters.brightness,
+            VideoConfig::Brightness,
+        )
+        .step(0.05)
+        .shift_step(0.1)
+        .width(slider_width);
+
+        let brightness = sized_regular(format!("{:.01}", settings.filters.brightness), size);
+        let slider = row!(brightness, slider)
+            .spacing(4.0)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+    };
+
+    let contrast = {
+        let label = label_maker("Contrast: ").width(width);
+
+        let slider = slider(0.0..=2.0, settings.filters.contrast, VideoConfig::Contrast)
+            .step(0.05)
+            .shift_step(0.1)
+            .width(slider_width);
+
+        let contrast = sized_regular(format!("{:.01}", settings.filters.contrast), size);
+        let slider = row!(contrast, slider)
+            .spacing(4.0)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+    };
+
+    let hue = {
+        let label = label_maker("Hue: ").width(width);
+
+        let slider = slider(-1.0..=1.0, settings.filters.hue, VideoConfig::Hue)
+            .step(0.05)
+            .shift_step(0.1)
+            .width(slider_width);
+
+        let hue = sized_regular(format!("{:.01}", settings.filters.hue), size);
+        let slider = row!(hue, slider).spacing(4.0).align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+    };
+
+    let saturation = {
+        let label = label_maker("Saturation: ").width(width);
+
+        let slider = slider(
+            0.0..=2.0,
+            settings.filters.saturation,
+            VideoConfig::Saturation,
+        )
+        .step(0.05)
+        .shift_step(0.1)
+        .width(slider_width);
+
+        let saturation = sized_regular(format!("{:.01}", settings.filters.saturation), size);
+        let slider = row!(saturation, slider)
+            .spacing(4.0)
+            .align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), slider).align_y(Vertical::Center)
+    };
+
+    column!(gamma, brightness, contrast, hue, saturation)
+        .spacing(16)
+        .into()
+}
+
+fn draw_subs<'a>(
+    settings: &'a VideoSettings,
+    config: &'a Config,
+    subtitles: &'a [Subtitle],
+    size: f32,
+    padding: Padding,
+    spacing: f32,
+) -> Element<'a, SubtitleConfig> {
+    let input_width = 48.0;
+    let color_width = 150.0;
+    let file = {
+        let add = button(
+            row!(
+                icons::icon(icons::FILE_UP).size(size),
+                sized_medium("Load Subtitles", size)
+            )
+            .spacing(8.0)
+            .align_y(Vertical::Center),
+        )
+        .padding([3, 6])
+        .style(styles::button::subtle)
+        .on_press(SubtitleConfig::SelectFile);
+
+        let path = config.subtitle_uri.as_ref().map(|path| trim_path(path, 3));
+        let path: Element<'_, SubtitleConfig> = match path {
+            Some(path) => button(
+                row!(
+                    container(marquee(path).font(mono_font()).size(size))
+                        .max_width(250)
+                        .height(20)
+                        .clip(true),
+                    icons::icon(icons::CANCEL).size(size)
+                )
+                .spacing(4)
+                .align_y(Vertical::Center),
+            )
+            .padding([2, 5])
+            .style(styles::button::text)
+            .on_press(SubtitleConfig::ClearSelected)
+            .into(),
+            None => empty(),
+        };
+
+        row!(add, space::horizontal(), path)
+            .align_y(Vertical::Center)
+            .spacing(12)
+    };
+
+    let selection = {
+        let label = label_maker("Available Subtitles: ");
+
+        let handle = picklist_handle(size);
+
+        let pick: Element<'_, SubtitleConfig> = if subtitles.is_empty() {
+            label_maker("None").size(size).into()
+        } else {
+            pick_list(config.selected_text.clone(), subtitles, subtitle_to_string)
+                .handle(handle)
+                .ellipsis(text::Ellipsis::Start)
+                .on_select(SubtitleConfig::CurrentText)
+                .padding(padding)
+                .text_size(size)
+                .into()
+        };
+
+        row!(label, space::horizontal(), pick)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let style = {
+        let label = label_maker("Subtitle Style").size(P);
+        let dummy = draw_subtitles("An example subtitle", &settings.subtitles);
+
+        let sub_size = {
+            let label = label_maker("Size: ");
+
+            let amt = format!("{}", settings.subtitles.size);
+
+            let actions = {
+                let incr = button(icons::icon(icons::CHEV_UP).size(10))
+                    .padding([2, 2])
+                    .style(styles::button::subtler)
+                    .on_press(SubtitleConfig::SubSizeIncr);
+                let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
+                    .padding([2, 2])
+                    .style(styles::button::subtler)
+                    .on_press(SubtitleConfig::SubSizeDecr);
+
+                column!(incr, decr).spacing(2.0)
+            };
+
+            let input = text_input("", &amt)
+                .width(input_width)
+                .size(size)
+                .font(regular_font())
+                .align_x(Horizontal::Right)
+                .padding(padding)
+                .on_input(SubtitleConfig::SubSize);
+
+            let input = row!(input, actions).spacing(4.0).align_y(Vertical::Center);
+
+            row!(label, space::horizontal(), input)
+                .align_y(Vertical::Center)
+                .spacing(spacing)
+        };
+
+        let color = {
+            let label = label_maker("Text Color (rgba): ");
+
+            let input = text_input("", &config.text_color)
+                .width(color_width)
+                .size(size)
+                .font(regular_font())
+                .align_x(Horizontal::Right)
+                .padding(padding)
+                .on_input(SubtitleConfig::SubColor);
+
+            row!(label, space::horizontal(), input)
+                .align_y(Vertical::Center)
+                .spacing(spacing)
+        };
+
+        let background = {
+            let label = label_maker("Background Color (rgba): ");
+
+            let input = text_input("", &config.background_color)
+                .width(color_width)
+                .size(size)
+                .font(regular_font())
+                .align_x(Horizontal::Right)
+                .padding(padding)
+                .on_input(SubtitleConfig::SubBackground);
+
+            row!(label, space::horizontal(), input)
+                .align_y(Vertical::Center)
+                .spacing(spacing)
+        };
+
+        let font = {
+            let label = label_maker("Font ");
+
+            let selection = combo_box(
+                &config.subtitle_font.state,
+                "",
+                config.subtitle_font.selected.as_ref(),
+                SubtitleConfig::SubFont,
+            )
+            .width(200)
+            .size(size)
+            .font(regular_font())
+            .padding(padding);
+
+            row!(label, space::horizontal(), selection)
+                .align_y(Vertical::Center)
+                .spacing(spacing)
+        };
+
+        let content = column!(font, sub_size, color, background).spacing(8.0);
+
+        let content = column!(content, dummy)
+            .spacing(16)
+            .align_x(Horizontal::Center);
+
+        column!(label, content).spacing(12)
+    };
+
+    column!(file, selection, style)
+        .width(Length::Fill)
+        .spacing(12)
+        .into()
+}
+
+fn draw_audio<'a>(
+    config: &'a Config,
     audio: &'a [AudioTag],
-    subtitle: &Option<PathBuf>,
-    subtitle_font: &'a FontState,
-    curr_tab: ConfigTab,
-    selected_text: &Option<Subtitle>,
-    selected_audio: &Option<AudioTag>,
-    text_color: &'a str,
-    background_color: &'a str,
+    size: f32,
+    padding: Padding,
+    spacing: f32,
+) -> Element<'a, AudioConfig> {
+    let selection = {
+        let label = label_maker("Embedded Audio: ");
+
+        let handle = picklist_handle(size);
+
+        let pick: Element<'_, AudioConfig> = if audio.is_empty() {
+            label_maker("None").size(size).into()
+        } else {
+            pick_list(config.selected_audio.clone(), audio, ToString::to_string)
+                .handle(handle)
+                .on_select(AudioConfig::CurrentAudio)
+                .padding(padding)
+                .text_size(size)
+                .into()
+        };
+
+        row!(label, space::horizontal(), pick)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    column!(selection).width(Length::Fill).spacing(12).into()
+}
+
+fn draw_config<'a>(
+    settings: &'a VideoSettings,
+    config: &'a Config,
+    subtitles: &'a [Subtitle],
+    audio: &'a [AudioTag],
 ) -> Element<'a, ManagerMessage> {
     // todo: Hardware volume, Aspect Ratio
     let size = H7;
-    let padding = [2, 5];
-    let spacing = 8;
+    let padding = Padding::new(2.0).horizontal(5.0);
+    let spacing = 8.0;
 
+    let curr_tab = config.tab;
     let header = h6("Video Config").center().width(Length::Fill);
 
     let tabs = ConfigTab::VARIANTS.iter().map(|tab| {
@@ -2949,378 +3373,13 @@ fn draw_config<'a>(
 
     let content: Element<'_, ConfigMessage> = match curr_tab {
         ConfigTab::General => {
-            let input_width = 48;
-            let volume_amt = {
-                let label = label_maker("Volume amount: ");
-
-                let amt = format!("{:.02}", config.volume_change_amt);
-                let input = text_input("", &amt)
-                    .width(input_width)
-                    .size(size)
-                    .font(regular_font())
-                    .align_x(Horizontal::Right)
-                    .padding(padding)
-                    .on_input(ConfigMessage::VolumeAmt);
-
-                row!(label, space::horizontal(), input)
-                    .align_y(Vertical::Center)
-                    .spacing(spacing)
-            };
-
-            let speed_amt = {
-                let label = label_maker("Speed amount: ");
-
-                let amt = format!("{:.02}", config.speed_change_amt);
-                let input = text_input("", &amt)
-                    .width(input_width)
-                    .size(size)
-                    .font(regular_font())
-                    .align_x(Horizontal::Right)
-                    .padding(padding)
-                    .on_input(ConfigMessage::SpeedAmt);
-
-                row!(label, space::horizontal(), input)
-                    .align_y(Vertical::Center)
-                    .spacing(spacing)
-            };
-
-            let seek_amt = {
-                let label = label_maker("Seek amount: ");
-
-                let amt = format!("{:.02}", config.seek_change_amt);
-                let input = text_input("", &amt)
-                    .width(input_width)
-                    .size(size)
-                    .font(regular_font())
-                    .align_x(Horizontal::Right)
-                    .padding(padding)
-                    .on_input(ConfigMessage::SeekAmt);
-
-                let input = row!(input).align_y(Vertical::Center).spacing(4);
-
-                row!(label, space::horizontal(), input)
-                    .align_y(Vertical::Center)
-                    .spacing(spacing)
-            };
-
-            let seek_amt_shift = {
-                let label = label_maker("Seek Shift amount: ");
-
-                let amt = format!("{:.02}", config.seek_shift_change_amt);
-                let input = text_input("", &amt)
-                    .width(input_width)
-                    .size(size)
-                    .font(regular_font())
-                    .align_x(Horizontal::Right)
-                    .padding(padding)
-                    .on_input(ConfigMessage::SeekShiftAmt);
-
-                let input = row!(input).align_y(Vertical::Center).spacing(4);
-
-                row!(label, space::horizontal(), input)
-                    .align_y(Vertical::Center)
-                    .spacing(spacing)
-            };
-
-            let cspan = {
-                let label = label_maker("Comment span(seconds) ");
-
-                let amt = config.comment_span.to_string();
-                let input = text_input("", &amt)
-                    .font(regular_font())
-                    .width(input_width)
-                    .size(size)
-                    .align_x(Horizontal::Right)
-                    .padding(padding)
-                    .on_input(ConfigMessage::Span);
-
-                row!(label, space::horizontal(), input).align_y(Vertical::Center)
-            };
-
-            column!(volume_amt, speed_amt, seek_amt, seek_amt_shift, cspan)
-                .spacing(16)
-                .into()
+            draw_general(settings, size, padding, spacing).map(ConfigMessage::General)
         }
-        ConfigTab::Filters => {
-            let width = 200;
-            let slider_width = 200;
-
-            let gamma = {
-                let label = label_maker("Gamma: ").width(width);
-
-                let slider = slider(1.0..=3.0, config.filters.gamma, ConfigMessage::Gamma)
-                    .step(0.05)
-                    .shift_step(0.1)
-                    .width(slider_width);
-
-                let gamma = sized_regular(format!("{:.01}", config.filters.gamma), size);
-                let slider = row!(gamma, slider).spacing(4.0).align_y(Vertical::Center);
-
-                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
-            };
-
-            let brightness = {
-                let label = label_maker("Brightness: ").width(width);
-
-                let slider = slider(
-                    -1.0..=1.0,
-                    config.filters.brightness,
-                    ConfigMessage::Brightness,
-                )
-                .step(0.05)
-                .shift_step(0.1)
-                .width(slider_width);
-
-                let brightness = sized_regular(format!("{:.01}", config.filters.brightness), size);
-                let slider = row!(brightness, slider)
-                    .spacing(4.0)
-                    .align_y(Vertical::Center);
-
-                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
-            };
-
-            let contrast = {
-                let label = label_maker("Contrast: ").width(width);
-
-                let slider = slider(0.0..=2.0, config.filters.contrast, ConfigMessage::Contrast)
-                    .step(0.05)
-                    .shift_step(0.1)
-                    .width(slider_width);
-
-                let contrast = sized_regular(format!("{:.01}", config.filters.contrast), size);
-                let slider = row!(contrast, slider)
-                    .spacing(4.0)
-                    .align_y(Vertical::Center);
-
-                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
-            };
-
-            let hue = {
-                let label = label_maker("Hue: ").width(width);
-
-                let slider = slider(-1.0..=1.0, config.filters.hue, ConfigMessage::Hue)
-                    .step(0.05)
-                    .shift_step(0.1)
-                    .width(slider_width);
-
-                let hue = sized_regular(format!("{:.01}", config.filters.hue), size);
-                let slider = row!(hue, slider).spacing(4.0).align_y(Vertical::Center);
-
-                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
-            };
-
-            let saturation = {
-                let label = label_maker("Saturation: ").width(width);
-
-                let slider = slider(
-                    0.0..=2.0,
-                    config.filters.saturation,
-                    ConfigMessage::Saturation,
-                )
-                .step(0.05)
-                .shift_step(0.1)
-                .width(slider_width);
-
-                let saturation = sized_regular(format!("{:.01}", config.filters.saturation), size);
-                let slider = row!(saturation, slider)
-                    .spacing(4.0)
-                    .align_y(Vertical::Center);
-
-                row!(label, space::horizontal(), slider).align_y(Vertical::Center)
-            };
-
-            column!(gamma, brightness, contrast, hue, saturation)
-                .spacing(16)
-                .into()
-        }
-        ConfigTab::Subtitles => {
-            let input_width = 48.0;
-            let color_width = 150.0;
-            let file = {
-                let add = button(
-                    row!(
-                        icons::icon(icons::FILE_UP).size(size),
-                        sized_medium("Load Subtitles", size)
-                    )
-                    .spacing(8.0)
-                    .align_y(Vertical::Center),
-                )
-                .padding([3, 6])
-                .style(styles::button::subtle)
-                .on_press(ConfigMessage::SelectFile);
-
-                let path = subtitle.as_ref().map(|path| trim_path(path, 3));
-                let path: Element<'_, ConfigMessage> = match path {
-                    Some(path) => button(
-                        row!(
-                            container(marquee(path).font(mono_font()).size(size))
-                                .max_width(250)
-                                .height(20)
-                                .clip(true),
-                            icons::icon(icons::CANCEL).size(size)
-                        )
-                        .spacing(4)
-                        .align_y(Vertical::Center),
-                    )
-                    .padding([2, 5])
-                    .style(styles::button::text)
-                    .on_press(ConfigMessage::ClearSelected)
-                    .into(),
-                    None => empty(),
-                };
-
-                row!(add, space::horizontal(), path)
-                    .align_y(Vertical::Center)
-                    .spacing(12)
-            };
-
-            let selection = {
-                let label = label_maker("Available Subtitles: ");
-
-                let handle = picklist_handle(size);
-
-                let pick: Element<'_, ConfigMessage> = if embedded.is_empty() {
-                    label_maker("None").size(size).into()
-                } else {
-                    pick_list(selected_text.clone(), embedded, subtitle_to_string)
-                        .handle(handle)
-                        .ellipsis(text::Ellipsis::Start)
-                        .on_select(ConfigMessage::CurrentText)
-                        .padding(padding)
-                        .text_size(size)
-                        .into()
-                };
-
-                row!(label, space::horizontal(), pick)
-                    .align_y(Vertical::Center)
-                    .spacing(spacing)
-            };
-
-            let style = {
-                let label = label_maker("Subtitle Style").size(P);
-                let dummy = draw_subtitles("An example subtitle", &config.subtitles);
-
-                let sub_size = {
-                    let label = label_maker("Size: ");
-
-                    let amt = format!("{}", config.subtitles.size);
-
-                    let actions = {
-                        let incr = button(icons::icon(icons::CHEV_UP).size(10))
-                            .padding([2, 2])
-                            .style(styles::button::subtler)
-                            .on_press(ConfigMessage::SubSizeIncr);
-                        let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
-                            .padding([2, 2])
-                            .style(styles::button::subtler)
-                            .on_press(ConfigMessage::SubSizeDecr);
-
-                        column!(incr, decr).spacing(2.0)
-                    };
-
-                    let input = text_input("", &amt)
-                        .width(input_width)
-                        .size(size)
-                        .font(regular_font())
-                        .align_x(Horizontal::Right)
-                        .padding(padding)
-                        .on_input(ConfigMessage::SubSize);
-
-                    let input = row!(input, actions).spacing(4.0).align_y(Vertical::Center);
-
-                    row!(label, space::horizontal(), input)
-                        .align_y(Vertical::Center)
-                        .spacing(spacing)
-                };
-
-                let color = {
-                    let label = label_maker("Text Color (rgba): ");
-
-                    let input = text_input("", text_color)
-                        .width(color_width)
-                        .size(size)
-                        .font(regular_font())
-                        .align_x(Horizontal::Right)
-                        .padding(padding)
-                        .on_input(ConfigMessage::SubColor);
-
-                    row!(label, space::horizontal(), input)
-                        .align_y(Vertical::Center)
-                        .spacing(spacing)
-                };
-
-                let background = {
-                    let label = label_maker("Background Color (rgba): ");
-
-                    let input = text_input("", background_color)
-                        .width(color_width)
-                        .size(size)
-                        .font(regular_font())
-                        .align_x(Horizontal::Right)
-                        .padding(padding)
-                        .on_input(ConfigMessage::SubBackground);
-
-                    row!(label, space::horizontal(), input)
-                        .align_y(Vertical::Center)
-                        .spacing(spacing)
-                };
-
-                let font = {
-                    let label = label_maker("Font ");
-
-                    let selection = combo_box(
-                        &subtitle_font.state,
-                        "",
-                        subtitle_font.selected.as_ref(),
-                        ConfigMessage::SubFont,
-                    )
-                    .width(200)
-                    .size(size)
-                    .font(regular_font())
-                    .padding(padding);
-
-                    row!(label, space::horizontal(), selection)
-                        .align_y(Vertical::Center)
-                        .spacing(spacing)
-                };
-
-                let content = column!(font, sub_size, color, background).spacing(8.0);
-
-                let content = column!(content, dummy)
-                    .spacing(16)
-                    .align_x(Horizontal::Center);
-
-                column!(label, content).spacing(12)
-            };
-
-            column!(file, selection, style)
-                .width(Length::Fill)
-                .spacing(12)
-                .into()
-        }
+        ConfigTab::Filters => draw_filters(settings, size).map(ConfigMessage::Video),
+        ConfigTab::Subtitles => draw_subs(settings, config, subtitles, size, padding, spacing)
+            .map(ConfigMessage::Subtitle),
         ConfigTab::Audio => {
-            let selection = {
-                let label = label_maker("Embedded Audio: ");
-
-                let handle = picklist_handle(size);
-
-                let pick: Element<'_, ConfigMessage> = if audio.is_empty() {
-                    label_maker("None").size(size).into()
-                } else {
-                    pick_list(selected_audio.clone(), audio, ToString::to_string)
-                        .handle(handle)
-                        .on_select(ConfigMessage::CurrentAudio)
-                        .padding(padding)
-                        .text_size(size)
-                        .into()
-                };
-
-                row!(label, space::horizontal(), pick)
-                    .align_y(Vertical::Center)
-                    .spacing(spacing)
-            };
-
-            column!(selection).width(Length::Fill).spacing(12).into()
+            draw_audio(config, audio, size, padding, spacing).map(ConfigMessage::Audio)
         }
     };
 
