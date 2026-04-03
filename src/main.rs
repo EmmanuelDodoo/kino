@@ -75,7 +75,6 @@ fn main() -> iced::Result {
     #[allow(unused_variables)]
     let mode = match mode.as_deref() {
         Some("dev") => BootMode::Dev,
-        Some("dummies") => BootMode::Dummies,
         _ => BootMode::Prod,
     };
 
@@ -114,22 +113,12 @@ fn main() -> iced::Result {
 #[derive(Debug, Clone, Copy)]
 pub enum BootMode {
     Dev,
-    Dummies,
     Prod,
 }
 
 impl BootFn<App, app::Message> for BootMode {
     fn boot(&self) -> (App, Task<app::Message>) {
         match self {
-            Self::Dummies => {
-                let config = Config::dev();
-                let dummies = "dummy.txt";
-                let db = db::Database::open_with_dummies(config.db_path(), dummies)
-                    .expect("Failed to open dummy database");
-
-                tracing::debug!("Starting up Dummies instance");
-                App::boot(config, db, std::iter::empty(), false)
-            }
             Self::Dev => {
                 let config = Config::dev();
                 let db = db::Database::open_with_schema(config.db_path())

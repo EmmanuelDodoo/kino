@@ -11,7 +11,6 @@ use rusqlite::{
     Connection, Result, Row, ToSql, params_from_iter,
     types::{ToSqlOutput, Value},
 };
-use std::fs::read_to_string;
 use std::ops::Deref;
 use std::path::Path;
 use uuid::Uuid;
@@ -1331,29 +1330,12 @@ impl Database {
         Ok(rows)
     }
 
-    pub fn open_with_dummies(
-        path: impl AsRef<Path>,
-        dummies: impl AsRef<Path>,
-    ) -> core::error::Result<Database> {
-        let exists = path.as_ref().try_exists()?;
-        let conn = Database::open(path)?;
-
-        if !exists {
-            tracing::debug!("writing DB schema");
-            let schema = include_str!("../../resources/db/schema.sql");
-            conn.execute_batch(schema)?;
-
-            tracing::debug!("writing DB dummies");
-            let dummies = read_to_string(dummies)?;
-            conn.execute_batch(&dummies)?;
-            Ok(conn)
-        } else {
-            Ok(apply_migration(conn)?)
-        }
-    }
-
     pub fn open_with_schema(db: impl AsRef<Path>) -> core::error::Result<Database> {
-        let exists = db.as_ref().try_exists()?;
+        let db = db.as_ref();
+
+        let backup = db.with_added_extension("backup");
+
+        let exists = db.try_exists()?;
         let conn = Database::open(db)?;
 
         if !exists {
@@ -1362,6 +1344,8 @@ impl Database {
             conn.execute_batch(schema)?;
             Ok(conn)
         } else {
+            let _ = std::fs::copy(db, backup)?;
+
             Ok(apply_migration(conn)?)
         }
     }
