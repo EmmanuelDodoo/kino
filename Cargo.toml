@@ -21,13 +21,14 @@ glib = "0.20"  # gobject traits and error type
 gstreamer = "0.23"
 iced = { git = "https://github.com/iced-rs/iced", rev = "4f02d83", features = [
   "advanced",
+  "canvas",
   "highlighter",
   "hot",
   "image",
   "markdown",
   "svg",
   "tokio",
-  "wgpu"
+  "wgpu",
 ] }
 image = "0.25"
 rand = "0.8"
@@ -75,11 +76,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url.workspace = true
 widgets.workspace = true
 
-[profile.release]
-lto = "thin"
-
 [profile.dev]
 opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.release]
+lto = "thin"
