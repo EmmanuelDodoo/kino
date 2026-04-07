@@ -45,7 +45,6 @@ use crate::app::{FetchId, Message};
 use crate::utils::{
     HomeAction, Layout, Scroll, empty, icons,
     icons::*,
-    loading_animation, loading_svg,
     modal::{self, modal},
     picklist_handle, styles, tooltip,
     typo::*,
@@ -64,8 +63,8 @@ use shared::{
     ThumbnailTaskKind,
 };
 use shows::{TvShows, TvShowsMessage};
-use widgets::marquee;
 use widgets::menu::{Position, menu};
+use widgets::{marquee, throbber};
 
 const SIDE_ICON_SPACING: f32 = 8.0;
 
@@ -365,7 +364,7 @@ pub enum View {
 
 #[derive(Debug, Clone)]
 enum State {
-    Loading(Animation<bool>),
+    Loading,
     Recent {
         shows: Vec<Thumbnail<Show>>,
         movies: Vec<Thumbnail<Movie>>,
@@ -471,7 +470,7 @@ pub struct Home {
 
     recent_limit: Option<i32>,
 
-    scanning: Option<Animation<bool>>,
+    scanning: bool,
 
     focused: Option<ItemId>,
 
@@ -519,12 +518,12 @@ impl Home {
 
             show_sorts: false,
             show_filters: false,
-            state: State::Loading(loading_animation(Instant::now())),
+            state: State::Loading,
             scroll: Scroll::new(),
             collections: Vec::default(),
             view: None,
             recent_limit,
-            scanning: None,
+            scanning: false,
             focused: None,
             command: false,
         }
@@ -536,7 +535,7 @@ impl Home {
         };
 
         match (id, &mut self.state) {
-            (_, State::Loading(_)) => {}
+            (_, State::Loading) => {}
             (ItemId::Show(id), State::Recent { shows, .. })
             | (ItemId::Show(id), State::Shows(shows))
             | (ItemId::Show(id), State::Collection { shows, .. }) => {
@@ -959,7 +958,7 @@ impl Home {
 
                 let remove = Message::RemoveCollectionItems { collection, items }.tasked();
 
-                Task::batch([remove, self.content_refresh(now)])
+                Task::batch([remove, self.content_refresh()])
             }
             HomeMessage::SearchMessage(ssg) => {
                 let Some(View::Search(state, _)) = self.view.as_mut() else {
@@ -1271,7 +1270,7 @@ impl Home {
                     }
                     SelectionMessage::Cancel => {
                         match &mut self.state {
-                            State::Loading(_)
+                            State::Loading
                             | State::Collections(_)
                             | State::Movie { .. }
                             | State::Episode { .. } => {}
@@ -2389,7 +2388,7 @@ impl Home {
                     SortMessage::ToggleReverse => self.sort.reverse(),
                 }
 
-                self.content_refresh(now)
+                self.content_refresh()
             }
             HomeMessage::ToggleSort => {
                 self.show_sorts = !self.show_sorts;
@@ -2418,7 +2417,7 @@ impl Home {
                         let number = number.trim();
                         if number.is_empty() {
                             self.filters.comments = None;
-                            return self.content_refresh(now);
+                            return self.content_refresh();
                         }
 
                         let Ok(number) = number.parse::<u32>() else {
@@ -2454,7 +2453,7 @@ impl Home {
                                 }
                             }
 
-                            return self.content_refresh(now);
+                            return self.content_refresh();
                         }
 
                         let Ok(minutes) = minutes.parse::<u64>() else {
@@ -2489,7 +2488,7 @@ impl Home {
                                 }
                             }
 
-                            return self.content_refresh(now);
+                            return self.content_refresh();
                         }
 
                         let Ok(hours) = hours.parse::<u64>() else {
@@ -2522,7 +2521,7 @@ impl Home {
 
                         if year.is_empty() {
                             self.filters.release = None;
-                            return self.content_refresh(now);
+                            return self.content_refresh();
                         }
 
                         let Ok(year) = year.parse::<i32>() else {
@@ -2550,7 +2549,7 @@ impl Home {
                     }
                 }
 
-                self.content_refresh(now)
+                self.content_refresh()
             }
             HomeMessage::NewCollection => {
                 let (config, name_input) = CollectionConfig::new();
@@ -2561,7 +2560,7 @@ impl Home {
                 Task::batch([focus, self.update_page_scroll()])
             }
             HomeMessage::Random => Task::done(Message::Random),
-            HomeMessage::RefreshContent => self.content_refresh(now),
+            HomeMessage::RefreshContent => self.content_refresh(),
             HomeMessage::Play(item) => {
                 if matches!(self.view, Some(View::Selection(_))) {
                     Message::Home(HomeMessage::Selection(SelectionMessage::Select(item))).tasked()
@@ -2586,7 +2585,7 @@ impl Home {
                 let is_hovered = is_hovered && !matches!(self.view, Some(View::Selection(_)));
 
                 match (&mut self.state, id) {
-                    (State::Loading(_), _)
+                    (State::Loading, _)
                     | (State::Episode { .. }, _)
                     | (State::Movie { .. }, _)
                     | (State::Collections(_), _) => Task::none(),
@@ -3464,7 +3463,7 @@ impl Home {
                 season, episodes, ..
             } => (season.media.name(), episodes.len()),
             State::Episode { episode, .. } => (episode.media.name(), 0),
-            State::Loading(_) => ("Loading", 0),
+            State::Loading => ("Loading", 0),
             State::Collections(collections) => ("Collections", collections.len()),
             State::Collection {
                 collection,
@@ -3509,30 +3508,25 @@ impl Home {
             .map(|page| page.show_tools())
             .unwrap_or(true);
 
-        let bottom: Element<'_, HomeMessage> = if items > 0 || self.scanning.is_some() {
+        let bottom: Element<'_, HomeMessage> = if items > 0 || self.scanning {
             let size = H8;
             let padding = Padding::new(3.0).right(10);
 
             let items = sized_medium(format!("{items} items"), size);
 
-            let scanning: Element<'_, HomeMessage> =
-                match &self.scanning {
-                    Some(scanning) => {
-                        let label = sized_medium("Scanning Directories", size);
+            let scanning: Element<'_, HomeMessage> = if self.scanning {
+                let label = sized_medium("Scanning Directories", size);
 
-                        let svg = loading_svg(scanning, now).height(size).width(size).style(
-                            |theme, _| widget::svg::Style {
-                                color: Some(theme.palette().primary.base.color),
-                            },
-                        );
+                let throbber = throbber::circular().radius(20.0).bar_height(2.0);
 
-                        row!(svg, label)
-                            .spacing(4.0)
-                            .align_y(Vertical::Center)
-                            .into()
-                    }
-                    None => empty(),
-                };
+
+                row!(throbber, label)
+                    .spacing(4.0)
+                    .align_y(Vertical::Center)
+                    .into()
+            } else {
+                empty()
+            };
 
             let content = row!(scanning, space::horizontal(), items).align_y(Vertical::Center);
 
@@ -3570,7 +3564,7 @@ impl Home {
 
     pub fn content(&self, now: Instant) -> Element<'_, HomeMessage> {
         match (&self.state, self.current_page()) {
-            (State::Loading(animation), _) => center(loading_svg(animation, now)).into(),
+            (State::Loading, _) => center(throbber::circular().radius(60.0).bar_height(5.0)).into(),
             (State::Recent { shows, movies }, Some(Page::Home)) => self.recents(now, movies, shows),
             (State::Shows(shows), Some(Page::Shows(page))) => page
                 .view(now, self.layout, shows.iter())
@@ -3723,8 +3717,8 @@ impl Home {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        let state = match &self.state {
-            State::Loading(animation) => animation.is_animating(now),
+        match &self.state {
+            State::Loading => false,
             State::Recent { shows, movies } => {
                 let shows = shows.iter().any(|show| show.is_animating(now));
                 let movies = movies.iter().any(|movie| movie.is_animating(now));
@@ -3756,15 +3750,7 @@ impl Home {
                     || seasons.iter().any(|season| season.is_animating(now))
                     || episodes.iter().any(|episode| episode.is_animating(now))
             }
-        };
-
-        let scan = self
-            .scanning
-            .as_ref()
-            .map(|scan| scan.is_animating(now))
-            .unwrap_or_default();
-
-        state || scan
+        }
     }
 
     pub fn back(&mut self, now: Instant, clear: bool) -> Task<Message> {
@@ -3775,7 +3761,7 @@ impl Home {
 
         let (task, msg) = match self.current_page.take() {
             Some(current) => {
-                self.state = State::Loading(loading_animation(now));
+                self.state = State::Loading;
                 if clear {
                     self.forward.clear();
                 } else {
@@ -3814,7 +3800,7 @@ impl Home {
             Some(current) => {
                 self.backward.push(current);
 
-                self.state = State::Loading(loading_animation(now));
+                self.state = State::Loading;
                 let page = self
                     .pages
                     .get_mut(&new)
@@ -3838,9 +3824,9 @@ impl Home {
         Task::batch([msg.tasked(), task])
     }
 
-    pub fn content_refresh(&mut self, now: Instant) -> Task<Message> {
+    pub fn content_refresh(&mut self) -> Task<Message> {
         let (id, limit) = match &self.state {
-            State::Loading(_) => return Task::none(),
+            State::Loading => return Task::none(),
             State::Recent { .. } => (FetchId::Recents, self.recent_limit),
             State::Movies(_) => (FetchId::Movies, None),
             State::Shows(_) => (FetchId::Shows, None),
@@ -3854,14 +3840,14 @@ impl Home {
             }
         };
 
-        self.state = State::Loading(loading_animation(now));
+        self.state = State::Loading;
 
         let msg = fetch_kind_aux(id, self.filters, self.sort, limit, None);
 
         Task::done(msg)
     }
 
-    pub fn refresh(&mut self, now: Instant) -> Task<Message> {
+    pub fn refresh(&mut self) -> Task<Message> {
         let rsg = Message::Fetch {
             id: FetchId::CollectionsSimple,
             filters: self.filters,
@@ -3871,7 +3857,7 @@ impl Home {
         };
         let rsg = Task::done(rsg);
 
-        Task::batch([rsg, self.content_refresh(now)])
+        Task::batch([rsg, self.content_refresh()])
     }
 
     fn layout_toggle(&mut self) -> Task<Message> {
@@ -3923,7 +3909,7 @@ impl Home {
             self.backward.push(old)
         };
         self.forward.clear();
-        self.state = State::Loading(loading_animation(now));
+        self.state = State::Loading;
 
         let limit = if matches!(kind, PageKind::Home) {
             self.recent_limit
@@ -4013,8 +3999,8 @@ impl Home {
         match action {
             HomeAction::SettingsOpen => Task::done(Message::SettingsOpen),
             HomeAction::LayoutToggle => self.layout_toggle(),
-            HomeAction::RefreshContent => self.content_refresh(now),
-            HomeAction::Refresh => self.refresh(now),
+            HomeAction::RefreshContent => self.content_refresh(),
+            HomeAction::Refresh => self.refresh(),
             HomeAction::SearchToggle => self.toggle_search(None, now),
             HomeAction::CloseModal => self.close_view(true),
             HomeAction::Back => self.back(now, false),
@@ -4374,13 +4360,13 @@ impl Home {
         Task::batch([focus, self.update_page_scroll()])
     }
 
-    pub fn scanning(&mut self, scanning: bool, now: Instant) -> Task<Message> {
+    pub fn scanning(&mut self, scanning: bool) -> Task<Message> {
+        self.scanning = scanning;
+
         if scanning {
-            self.scanning = Some(loading_animation(now));
             Task::none()
         } else {
-            self.scanning.take();
-            self.content_refresh(now)
+            self.content_refresh()
         }
     }
 }

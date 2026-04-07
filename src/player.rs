@@ -18,7 +18,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     path::PathBuf,
 };
-use widgets::marquee;
+use widgets::{marquee, throbber};
 
 pub mod comment;
 pub mod playlist;
@@ -28,7 +28,6 @@ use crate::utils::{
     self, FontState, PlayerAction, VideoSettings, cancel_btn, convert_color_str, draw_subtitles,
     duration_string, empty,
     icons::{self, CANCEL, sized_button},
-    loading_animation, loading_svg,
     modal::modal,
     modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo,
 };
@@ -282,7 +281,7 @@ enum AutoState {
 }
 
 enum State {
-    Loading(Animation<bool>),
+    Loading,
     Idle,
     Ready {
         player: Box<Player>,
@@ -378,7 +377,7 @@ impl Manager {
         fonts: Vec<iced::font::Family>,
     ) -> Self {
         let state = if !playlist.is_empty() {
-            State::Loading(loading_animation(Instant::now()))
+            State::Loading
         } else {
             State::Idle
         };
@@ -557,7 +556,7 @@ impl Manager {
             }
             ManagerMessage::EndOfStream => {
                 if self.settings.auto_next && self.playlist.has_next() {
-                    self.play_next(now)
+                    self.play_next()
                 } else {
                     if let State::Ready { awake, .. } = &mut self.state {
                         awake.take();
@@ -665,8 +664,8 @@ impl Manager {
                     .chain(Task::batch([Task::done(Message::Back), stats]))
             }
             ManagerMessage::ToggleSubtitles => self.subtitles_toggle(),
-            ManagerMessage::PlayNext => self.play_next(now),
-            ManagerMessage::PlayPrevious => self.play_previous(now),
+            ManagerMessage::PlayNext => self.play_next(),
+            ManagerMessage::PlayPrevious => self.play_previous(),
             ManagerMessage::AddCollection => self.collection_add(),
             ManagerMessage::OpenConfig => self.video_config(),
             ManagerMessage::Comment => self.video_comment(),
@@ -1241,7 +1240,7 @@ impl Manager {
                     .center_y(36)
                     .into()
             }
-            State::Loading(_) | State::Idle => empty(),
+            State::Loading | State::Idle => empty(),
         };
 
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
@@ -1338,7 +1337,7 @@ impl Manager {
         matches!(&self.state, State::Ready { .. }).then_some(message)
     }
 
-    fn media_controls(&self, now: Instant) -> Element<'_, ManagerMessage> {
+    fn media_controls(&self) -> Element<'_, ManagerMessage> {
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
         let tp = tp::Position::Top;
 
@@ -1421,7 +1420,7 @@ impl Manager {
                 State::Idle => sized_button(icons::PLAY, size)
                     .style(styles::button::text_slate)
                     .into(),
-                State::Loading(animation) => container(loading_svg(animation, now))
+                State::Loading => container(throbber::circular().bar_height(3.0))
                     .style(styles::container::text)
                     .width(size)
                     .height(size)
@@ -1581,7 +1580,7 @@ impl Manager {
         content.into()
     }
 
-    fn video_elem(&self, now: Instant) -> Element<'_, ManagerMessage> {
+    fn video_elem(&self) -> Element<'_, ManagerMessage> {
         match &self.state {
             State::Ready { player, .. } => {
                 let video = container(
@@ -1602,7 +1601,7 @@ impl Manager {
 
                 video.into()
             }
-            State::Loading(animation) => center(loading_svg(animation, now)).into(),
+            State::Loading => center(throbber::circular().radius(60.0).bar_height(5.0)).into(),
             State::Idle => center("No video loaded").into(),
         }
     }
@@ -1634,8 +1633,8 @@ impl Manager {
 
     pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, ManagerMessage> {
         let content = stack!(
-            self.video_elem(now),
-            column!(self.top(), space::vertical(), self.media_controls(now))
+            self.video_elem(),
+            column!(self.top(), space::vertical(), self.media_controls())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(Padding::new(3.0).left(8).right(16))
@@ -1716,8 +1715,7 @@ impl Manager {
             State::Ready { comments, .. } => comments
                 .iter()
                 .any(|(_, comments)| comments.iter().any(|comment| comment.is_animating(now))),
-            State::Loading(animation) => animation.is_animating(now),
-            State::Idle => false,
+            State::Loading | State::Idle => false,
         }
     }
 
@@ -1955,7 +1953,7 @@ impl Manager {
         Task::none()
     }
 
-    fn play_next(&mut self, now: Instant) -> Task<Message> {
+    fn play_next(&mut self) -> Task<Message> {
         if !self.playlist.has_next() {
             return Task::none();
         }
@@ -1968,7 +1966,7 @@ impl Manager {
 
         match &mut self.next {
             AutoState::Idle => {
-                self.state = State::Loading(loading_animation(now));
+                self.state = State::Loading;
 
                 let load = load_video(next.clone(), |video| ManagerMessage::Video(false, video))
                     .map(Message::Player);
@@ -2007,7 +2005,7 @@ impl Manager {
         }
     }
 
-    fn play_previous(&mut self, now: Instant) -> Task<Message> {
+    fn play_previous(&mut self) -> Task<Message> {
         if !self.playlist.has_previous() {
             return Task::none();
         }
@@ -2020,7 +2018,7 @@ impl Manager {
 
         // Intentionally discarding the current video. Don't want to hold on to
         // some arbitarily sized memory for who knows how long
-        self.state = State::Loading(loading_animation(now));
+        self.state = State::Loading;
         self.next = AutoState::Idle;
 
         let load = load_video(previous.clone(), |video| {
@@ -2294,11 +2292,11 @@ impl Manager {
         }
     }
 
-    pub fn action(&mut self, action: PlayerAction, now: Instant) -> Task<Message> {
+    pub fn action(&mut self, action: PlayerAction) -> Task<Message> {
         match action {
             PlayerAction::PlayToggle => self.play_toggle(),
-            PlayerAction::PlayNext => self.play_next(now),
-            PlayerAction::PlayPrevious => self.play_previous(now),
+            PlayerAction::PlayNext => self.play_next(),
+            PlayerAction::PlayPrevious => self.play_previous(),
             PlayerAction::FullscreenToggle => self.fullscreen_toggle(),
             PlayerAction::Exit => {
                 if self.modal.is_some() || self.panel.is_some() {

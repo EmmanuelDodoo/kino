@@ -297,7 +297,7 @@ impl App {
                     || refresh.duration_since(self.last_refresh) >= self.config.refresh_interval()
                 {
                     self.last_refresh = refresh;
-                    self.home.refresh(now).chain(self.home.update_page_scroll())
+                    self.home.refresh().chain(self.home.update_page_scroll())
                 } else {
                     Task::none()
                 }
@@ -436,7 +436,7 @@ impl App {
                 match query.execute(&self.db) {
                     Ok(todo) => {
                         tracing::debug!("{todo:?}");
-                        self.home.content_refresh(now)
+                        self.home.content_refresh()
                     }
                     Err(error) => {
                         // todo
@@ -1033,7 +1033,7 @@ impl App {
                     Err(error) => Message::error(error),
                 };
 
-                let refresh = self.home.content_refresh(now);
+                let refresh = self.home.content_refresh();
                 Task::batch([Task::done(msg), refresh])
             }
             Message::LastWatched(id) => {
@@ -1138,7 +1138,7 @@ impl App {
                 };
 
                 let home_task = if !scans.is_empty() {
-                    self.home.scanning(true, now)
+                    self.home.scanning(true)
                 } else {
                     Task::none()
                 };
@@ -1193,7 +1193,7 @@ impl App {
                     }
                 };
 
-                let home_task = self.home.scanning(true, now);
+                let home_task = self.home.scanning(true);
                 let discoverer = self.config.general.scan_discoverer;
                 let db_path = self.config.db_path();
                 let movie_depth = self.config.general.movie_depth;
@@ -1226,7 +1226,7 @@ impl App {
                     }
                 };
 
-                self.home.scanning(false, now)
+                self.home.scanning(false)
             }
             Message::MovieTask(ThumbnailTask { id, kind }) => self.home.movie_task(id, kind, now),
             Message::ShowTask(ThumbnailTask { id, kind }) => self.home.show_task(id, kind, now),
@@ -1702,7 +1702,7 @@ impl App {
             Action::Player(pat) => self
                 .player
                 .as_mut()
-                .map(|player| player.action(pat, now))
+                .map(|player| player.action(pat))
                 .unwrap_or_default(),
             Action::Settings(sat) => self
                 .settings

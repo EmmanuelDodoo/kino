@@ -18,36 +18,6 @@ pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
     iced::widget::Space::new().width(0).height(0).into()
 }
 
-pub fn loading_svg(
-    animation: &Animation<bool>,
-    now: iced::time::Instant,
-) -> iced::widget::Svg<'static> {
-    use iced::widget::svg::{Style, Svg};
-    use iced::{Radians, Rotation};
-
-    let handle = &*icons::LOADING_SVG_HANDLE;
-    let rotation = animation.interpolate(0.0, std::f32::consts::TAU, now);
-    let rotation = Rotation::Floating(Radians(rotation));
-
-    Svg::new(handle.clone())
-        .width(50)
-        .height(50)
-        .style(|theme: &iced::Theme, _status| {
-            let color = theme.palette().background.base.text;
-
-            Style { color: Some(color) }
-        })
-        .rotation(rotation)
-}
-
-pub fn loading_animation(now: iced::time::Instant) -> Animation<bool> {
-    Animation::new(false)
-        .easing(Easing::EaseInOut)
-        .duration(iced::time::Duration::from_millis(1000))
-        .repeat_forever()
-        .go(true, now)
-}
-
 pub fn save_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message> {
     iced::widget::button(typo::medium("Save")).style(styles::button::primary)
 }
