@@ -39,6 +39,8 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 
 - [x] Comments on videos
 
+- [x] Subtitle syncing
+
 - [ ] Mini player mode
 
 - [ ] Wishlist support
@@ -46,8 +48,6 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 - [ ] Support for multiple metadata scrappers
 
 - [ ] One-off video playback (without adding to library)
-
-- [ ] Subtitle syncing
 
 ## Installation
 
