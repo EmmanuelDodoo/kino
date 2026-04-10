@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 6;
+PRAGMA user_version = 7;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -155,6 +155,7 @@ CREATE TABLE subtitle (
 	title		     TEXT NOT NULL,
 	lang		     TEXT NOT NULL,
 	removed		     BOOLEAN DEFAULT FALSE,
+	sub_offset	     FLOAT DEFAULT 0.0,
 	CHECK (kind IN ('embedded', 'loaded')),
 	CHECK (media_type IN ('movie', 'episode'))
 );
@@ -224,7 +225,7 @@ CREATE TABLE image (
     main            TEXT,
     accent          TEXT,
     generated       BOOL DEFAULT FALSE,
-	created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE VIEW get_episode_data AS SELECT
@@ -239,6 +240,7 @@ directory.path AS directory_path,
 image.main as poster_main,
 image.accent as poster_accent,
 image.path as poster_path,
+image.generated as poster_generated,
 CASE WHEN (NOT episode.fetched) AND episode.generate_poster THEN NULL ELSE episode.poster END AS poster,
 episode.*
 FROM episode 

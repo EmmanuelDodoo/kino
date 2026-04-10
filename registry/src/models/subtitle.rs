@@ -47,6 +47,7 @@ pub struct Subtitle {
     pub kind: SubtitleKind,
     pub title: String,
     pub lang: String,
+    pub offset: f32,
 }
 
 impl Subtitle {
@@ -84,12 +85,15 @@ impl Subtitle {
         let title = row.get::<_, String>("title")?;
         let lang = row.get::<_, String>("lang")?;
 
+        let offset = row.get::<_, f32>("sub_offset")?;
+
         Ok(Self {
             id,
             video,
             kind,
             title,
             lang,
+            offset,
         })
     }
 
@@ -105,11 +109,12 @@ impl Subtitle {
             video: video.into(),
             title: title.into(),
             lang: lang.into(),
+            offset: 0.0,
         }
     }
 
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO subtitle (id, video, media_type, kind, path, title, lang, removed) VALUES (:id, :video, :media_type, :kind, :path, :title, :lang, :removed) ON CONFLICT DO NOTHING";
+        let sql = "INSERT INTO subtitle (id, video, media_type, kind, path, title, lang, removed, sub_offset) VALUES (:id, :video, :media_type, :kind, :path, :title, :lang, :removed, :sub_offset) ON CONFLICT(id) DO UPDATE SET sub_offset=:sub_offset";
 
         let Self {
             id,
@@ -117,6 +122,7 @@ impl Subtitle {
             kind,
             title,
             lang,
+            offset,
         } = &self;
 
         let media_type = video.name_str().to_owned();
@@ -146,6 +152,7 @@ impl Subtitle {
             (":removed", removed),
             (":title", ToSqlOutput::from(title.clone())),
             (":lang", ToSqlOutput::from(lang.clone())),
+            (":sub_offset", ToSqlOutput::from(*offset)),
         ];
 
         Query {

@@ -169,32 +169,6 @@ variants! {
     }
 }
 
-// #[derive(Debug, Clone)]
-// pub enum ConfigMessage {
-//     Tab(ConfigTab),
-//     VolumeAmt(String),
-//     SpeedAmt(String),
-//     SeekAmt(String),
-//     SeekShiftAmt(String),
-//     Gamma(f64),
-//     Brightness(f64),
-//     Contrast(f64),
-//     Hue(f64),
-//     Saturation(f64),
-//     SelectFile,
-//     Selected(Option<PathBuf>),
-//     ClearSelected,
-//     CurrentText(Subtitle),
-//     CurrentAudio(AudioTag),
-//     SubSize(String),
-//     SubSizeIncr,
-//     SubSizeDecr,
-//     SubColor(String),
-//     SubBackground(String),
-//     SubFont(iced::font::Family),
-//     Span(String),
-// }
-
 #[derive(Debug, Clone)]
 pub enum ConfigMessage {
     Tab(ConfigTab),
@@ -239,6 +213,9 @@ pub enum SubtitleConfig {
     Selected(Option<PathBuf>),
     ClearSelected,
     CurrentText(Subtitle),
+    Offset(String),
+    OffsetIncr,
+    OffsetDecr,
 }
 
 #[derive(Debug)]
@@ -988,6 +965,38 @@ impl Manager {
                         SubtitleConfig::SubFont(family) => {
                             self.settings.subtitles.font = family.to_string();
                             config.subtitle_font.selected = Some(family);
+
+                            Task::none()
+                        }
+                        SubtitleConfig::OffsetIncr => {
+                            if let Some(selected) = config.selected_text.as_mut() {
+                                selected.offset += 0.25;
+                            }
+
+                            Task::none()
+                        }
+                        SubtitleConfig::OffsetDecr => {
+                            if let Some(selected) = config.selected_text.as_mut() {
+                                selected.offset -= 0.25;
+                            }
+
+                            Task::none()
+                        }
+                        SubtitleConfig::Offset(input) => {
+                            let Some(selected) = config.selected_text.as_mut() else {
+                                return Task::none();
+                            };
+
+                            if input.is_empty() {
+                                selected.offset = 0.0;
+                                return Task::none();
+                            }
+
+                            let Ok(input) = input.trim().parse::<f32>() else {
+                                return Message::error("Invalid input").tasked();
+                            };
+
+                            selected.offset = input;
 
                             Task::none()
                         }
@@ -2155,26 +2164,43 @@ impl Manager {
             }
         }
 
-        if let Some(selected) = selected_text
-            && player.item.subtitle_id != Some(selected.id)
-        {
-            player.item.subtitle_id = Some(selected.id);
-            match &selected.kind {
-                SubtitleKind::Loaded { path, .. } => {
-                    let path = path.clone();
+        if let Some(selected) = selected_text {
+            let changed = player.item.subtitle_id != Some(selected.id);
 
-                    if let Some(message) = set_uri(player, path) {
-                        return Task::done(message);
+            if changed {
+                player.item.subtitle_id = Some(selected.id);
+                match &selected.kind {
+                    SubtitleKind::Loaded { path, .. } => {
+                        let path = path.clone();
+
+                        if let Some(message) = set_uri(player, path) {
+                            return Task::done(message);
+                        }
+                    }
+                    SubtitleKind::Embedded => {
+                        if let Some(tag) =
+                            player.video.available_subtitles().into_iter().find(|tag| {
+                                tag.title == selected.title && tag.language_code == selected.lang
+                            })
+                        {
+                            player.video.set_text(tag);
+                        };
                     }
                 }
-                SubtitleKind::Embedded => {
-                    if let Some(tag) = player.video.available_subtitles().into_iter().find(|tag| {
-                        tag.title == selected.title && tag.language_code == selected.lang
-                    }) {
-                        player.video.set_text(tag);
-                    };
-                }
             }
+
+            if let Some(save_offset) = player
+                .item
+                .subtitles
+                .iter_mut()
+                .find(|sub| selected.id == sub.id && (sub.offset != selected.offset || changed))
+            {
+                save_offset.offset = selected.offset;
+
+                let offset = (1_000_000_000 as f32 * selected.offset) as i64;
+
+                player.video.set_text_offset(offset);
+            };
         }
 
         if let Some(audio) = selected_audio {
@@ -2493,6 +2519,10 @@ fn load_video<Message: 'static + MaybeSend>(
                         }
                     }
                 }
+
+                let offset = (1_000_000_000 as f32 * saved_sub.offset) as i64;
+
+                video.set_text_offset(offset);
             }
 
             std::thread::sleep(std::time::Duration::from_millis(150));
@@ -3201,6 +3231,42 @@ fn draw_subs<'a>(
             .spacing(spacing)
     };
 
+    let offset: Element<'_, SubtitleConfig> = match &config.selected_text {
+        Some(selected) => {
+            let label = label_maker("Subtitle Offset(seconds): ");
+            let offset = format!("{:.02}", selected.offset);
+
+            let actions = {
+                let incr = button(icons::icon(icons::CHEV_UP).size(10))
+                    .padding([2, 2])
+                    .style(styles::button::subtler)
+                    .on_press(SubtitleConfig::OffsetIncr);
+                let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
+                    .padding([2, 2])
+                    .style(styles::button::subtler)
+                    .on_press(SubtitleConfig::OffsetDecr);
+
+                column!(incr, decr).spacing(2.0)
+            };
+
+            let input = text_input("", &offset)
+                .width(input_width)
+                .size(size)
+                .font(regular_font())
+                .align_x(Horizontal::Right)
+                .padding(padding)
+                .on_input(SubtitleConfig::Offset);
+
+            let input = row!(input, actions).spacing(4.0).align_y(Vertical::Center);
+
+            row!(label, space::horizontal(), input)
+                .align_y(Vertical::Center)
+                .spacing(spacing)
+                .into()
+        }
+        None => empty(),
+    };
+
     let style = {
         let label = label_maker("Subtitle Style").size(P);
         let dummy = draw_subtitles("An example subtitle", &settings.subtitles);
@@ -3271,7 +3337,7 @@ fn draw_subs<'a>(
         };
 
         let font = {
-            let label = label_maker("Font ");
+            let label = label_maker("Font: ");
 
             let selection = combo_box(
                 &config.subtitle_font.state,
@@ -3298,7 +3364,7 @@ fn draw_subs<'a>(
         column!(label, content).spacing(12)
     };
 
-    column!(file, selection, style)
+    column!(file, selection, offset, style)
         .width(Length::Fill)
         .spacing(12)
         .into()

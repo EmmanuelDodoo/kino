@@ -50,6 +50,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 6,
         sql: include_str!("../../resources/db/migrations/6.sql"),
     },
+    Migration {
+        version: 7,
+        sql: include_str!("../../resources/db/migrations/7.sql"),
+    },
 ];
 
 pub struct Database {
