@@ -60,6 +60,7 @@ struct Config {
     text_color: String,
     background_color: String,
     subtitle_font: FontState,
+    subtitle_offset: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -895,6 +896,7 @@ impl Manager {
                         SubtitleConfig::Selected(selected) => {
                             config.subtitle_uri = selected;
                             config.selected_text.take();
+                            config.subtitle_offset = 0.0;
                             Task::none()
                         }
                         SubtitleConfig::ClearSelected => {
@@ -911,9 +913,16 @@ impl Manager {
                                 _ => None,
                             };
 
+                            config.subtitle_offset = config
+                                .selected_text
+                                .as_ref()
+                                .map(|sub| sub.offset)
+                                .unwrap_or_default();
+
                             Task::none()
                         }
                         SubtitleConfig::CurrentText(text) => {
+                            config.subtitle_offset = text.offset;
                             config.selected_text = Some(text);
                             config.subtitle_uri.take();
                             Task::none()
@@ -969,26 +978,18 @@ impl Manager {
                             Task::none()
                         }
                         SubtitleConfig::OffsetIncr => {
-                            if let Some(selected) = config.selected_text.as_mut() {
-                                selected.offset += 0.25;
-                            }
+                            config.subtitle_offset += 0.25;
 
                             Task::none()
                         }
                         SubtitleConfig::OffsetDecr => {
-                            if let Some(selected) = config.selected_text.as_mut() {
-                                selected.offset -= 0.25;
-                            }
+                            config.subtitle_offset -= 0.25;
 
                             Task::none()
                         }
                         SubtitleConfig::Offset(input) => {
-                            let Some(selected) = config.selected_text.as_mut() else {
-                                return Task::none();
-                            };
-
                             if input.is_empty() {
-                                selected.offset = 0.0;
+                                config.subtitle_offset = 0.0;
                                 return Task::none();
                             }
 
@@ -996,7 +997,7 @@ impl Manager {
                                 return Message::error("Invalid input").tasked();
                             };
 
-                            selected.offset = input;
+                            config.subtitle_offset = input;
 
                             Task::none()
                         }
@@ -2087,6 +2088,7 @@ impl Manager {
             text_color: _text_color,
             background_color: _background,
             subtitle_font: _subtitle,
+            subtitle_offset,
         } = *config;
 
         apply_settings(&self.settings, player);
@@ -2164,43 +2166,39 @@ impl Manager {
             }
         }
 
-        if let Some(selected) = selected_text {
-            let changed = player.item.subtitle_id != Some(selected.id);
+        if let Some(selected) = selected_text
+            && player.item.subtitle_id != Some(selected.id)
+        {
+            player.item.subtitle_id = Some(selected.id);
+            match &selected.kind {
+                SubtitleKind::Loaded { path, .. } => {
+                    let path = path.clone();
 
-            if changed {
-                player.item.subtitle_id = Some(selected.id);
-                match &selected.kind {
-                    SubtitleKind::Loaded { path, .. } => {
-                        let path = path.clone();
-
-                        if let Some(message) = set_uri(player, path) {
-                            return Task::done(message);
-                        }
-                    }
-                    SubtitleKind::Embedded => {
-                        if let Some(tag) =
-                            player.video.available_subtitles().into_iter().find(|tag| {
-                                tag.title == selected.title && tag.language_code == selected.lang
-                            })
-                        {
-                            player.video.set_text(tag);
-                        };
+                    if let Some(message) = set_uri(player, path) {
+                        return Task::done(message);
                     }
                 }
+                SubtitleKind::Embedded => {
+                    if let Some(tag) = player.video.available_subtitles().into_iter().find(|tag| {
+                        tag.title == selected.title && tag.language_code == selected.lang
+                    }) {
+                        player.video.set_text(tag);
+                    };
+                }
             }
+        }
 
-            if let Some(save_offset) = player
+        if let Some(subtitle) = player.item.subtitle_id.and_then(|id| {
+            player
                 .item
                 .subtitles
                 .iter_mut()
-                .find(|sub| selected.id == sub.id && (sub.offset != selected.offset || changed))
-            {
-                save_offset.offset = selected.offset;
+                .find(|sub| sub.id == id && (sub.offset != subtitle_offset))
+        }) {
+            subtitle.offset = subtitle_offset;
+            let offset = (1_000_000_000 as f32 * subtitle_offset) as i64;
 
-                let offset = (1_000_000_000 as f32 * selected.offset) as i64;
-
-                player.video.set_text_offset(offset);
-            };
+            player.video.set_text_offset(offset);
         }
 
         if let Some(audio) = selected_audio {
@@ -2296,6 +2294,11 @@ impl Manager {
             (None, None, None)
         };
 
+        let subtitle_offset = selected_text
+            .as_ref()
+            .map(|sub| sub.offset)
+            .unwrap_or_default();
+
         self.modal = Some(Modal::Config(Box::new(Config {
             tab: ConfigTab::General,
             subtitle_uri,
@@ -2304,6 +2307,7 @@ impl Manager {
             text_color: format!("#{:08x}", self.settings.subtitles.color),
             background_color: format!("#{:08x}", self.settings.subtitles.background_color),
             subtitle_font: FontState::new(self.fonts.clone(), &self.settings.subtitles.font),
+            subtitle_offset,
         })));
 
         Task::none()
@@ -3231,10 +3235,10 @@ fn draw_subs<'a>(
             .spacing(spacing)
     };
 
-    let offset: Element<'_, SubtitleConfig> = match &config.selected_text {
-        Some(selected) => {
+    let offset: Element<'_, SubtitleConfig> =
+        if config.selected_text.is_some() || config.subtitle_uri.is_some() {
             let label = label_maker("Subtitle Offset(seconds): ");
-            let offset = format!("{:.02}", selected.offset);
+            let offset = format!("{:.02}", config.subtitle_offset);
 
             let actions = {
                 let incr = button(icons::icon(icons::CHEV_UP).size(10))
@@ -3263,9 +3267,9 @@ fn draw_subs<'a>(
                 .align_y(Vertical::Center)
                 .spacing(spacing)
                 .into()
-        }
-        None => empty(),
-    };
+        } else {
+            empty()
+        };
 
     let style = {
         let label = label_maker("Subtitle Style").size(P);
