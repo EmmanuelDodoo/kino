@@ -69,12 +69,15 @@ pub const SUBTITLES_ON: char = '\u{e82e}';
 pub const SUBTITLES_OFF: char = '\u{e82f}';
 
 pub const VOLUME: char = '\u{e830}';
+pub const VOLUME_DOWN: char = '\u{e867}';
 pub const MUTE: char = '\u{e831}';
 
 pub const PREVIOUS_VIDEO: char = '\u{e81d}';
 pub const NEXT_VIDEO: char = '\u{e81c}';
 pub const SEEK_BACK: char = '\u{e81f}';
 pub const SEEK_FRONT: char = '\u{e81e}';
+pub const SEEK_BACK_DOUBLE: char = '\u{e868}';
+pub const SEEK_FRONT_DOUBLE: char = '\u{e869}';
 
 pub const PLAY: char = '\u{e808}';
 pub const PAUSE: char = '\u{e820}';

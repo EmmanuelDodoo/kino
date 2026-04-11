@@ -1709,7 +1709,7 @@ impl App {
             Action::Player(pat) => self
                 .player
                 .as_mut()
-                .map(|player| player.action(pat))
+                .map(|player| player.action(pat, now))
                 .unwrap_or_default(),
             Action::Settings(sat) => self
                 .settings

@@ -220,6 +220,67 @@ pub enum SubtitleConfig {
     OffsetDecr,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum IndicatorKind {
+    VolumeUp,
+    VolumeDown,
+    Mute,
+    Unmute,
+    SeekFront,
+    SeekBack,
+    Play,
+    Pause,
+}
+
+impl IndicatorKind {
+    fn char(&self) -> char {
+        match self {
+            Self::VolumeUp => icons::VOLUME,
+            Self::VolumeDown => icons::VOLUME_DOWN,
+            Self::Mute => icons::MUTE,
+            Self::Unmute => icons::VOLUME,
+            Self::SeekFront => icons::SEEK_FRONT_DOUBLE,
+            Self::SeekBack => icons::SEEK_BACK_DOUBLE,
+            Self::Play => icons::PLAY,
+            Self::Pause => icons::PAUSE,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Indicator {
+    kind: IndicatorKind,
+    animation: Animation<bool>,
+    _handle: task::Handle,
+}
+
+impl Indicator {
+    fn new(kind: IndicatorKind, now: Instant) -> (Self, Task<ManagerMessage>) {
+        let duration = Duration::from_millis(1000);
+        let animation = Animation::new(false)
+            .easing(Easing::EaseInOut)
+            .duration(duration)
+            .go(true, now);
+
+        let (task, handle) =
+            Task::perform(async move { tokio::time::sleep(duration).await }, |_| {
+                ManagerMessage::ClearIndicator
+            })
+            .abortable();
+
+        let handle = handle.abort_on_drop();
+
+        (
+            Self {
+                kind,
+                animation,
+                _handle: handle,
+            },
+            task,
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct Player {
     video: Video,
@@ -308,6 +369,7 @@ pub enum ManagerMessage {
     Config(ConfigMessage),
     Error(String),
     CommentMessage(CommentMessage),
+    ClearIndicator,
     None,
 }
 
@@ -318,6 +380,8 @@ pub struct Manager {
 
     pub settings: VideoSettings,
     fonts: Vec<iced::font::Family>,
+
+    indicator: Option<Indicator>,
 
     maximised: bool,
     is_fullscreen: bool,
@@ -368,6 +432,7 @@ impl Manager {
             playlist,
             fonts,
             show_controls: true,
+            indicator: None,
             settings,
             maximised: false,
             is_fullscreen: false,
@@ -619,7 +684,7 @@ impl Manager {
 
                 Task::none()
             }
-            ManagerMessage::TogglePlay => self.play_toggle(),
+            ManagerMessage::TogglePlay => self.play_toggle(Some(now)),
             ManagerMessage::ChangeVolume(volume) => {
                 let volume = volume.clamp(0.0, 1.0);
                 self.settings.volume = volume;
@@ -630,9 +695,9 @@ impl Manager {
 
                 Task::none()
             }
-            ManagerMessage::ToggleMute => self.mute_toggle(),
-            ManagerMessage::SeekBack(shift) => self.seek_back(shift),
-            ManagerMessage::SeekFront(shift) => self.seek_front(shift),
+            ManagerMessage::ToggleMute => self.mute_toggle(now),
+            ManagerMessage::SeekBack(shift) => self.seek_back(shift, now),
+            ManagerMessage::SeekFront(shift) => self.seek_front(shift, now),
             ManagerMessage::CursorExit => {
                 if self.is_fullscreen || self.maximised {
                     self.show_controls = false;
@@ -1046,7 +1111,7 @@ impl Manager {
                     CommentMessage::NewCancel => {
                         new.take();
 
-                        self.play()
+                        self.play(None)
                     }
                     CommentMessage::NewSubmit => {
                         let Some((editor, comment)) = new.take() else {
@@ -1065,14 +1130,14 @@ impl Manager {
                             .or_default();
                         batch.push(comment);
 
-                        self.play()
+                        self.play(None)
                     }
                     CommentMessage::NewAction(action) => {
                         if let Some((_, content)) = new {
                             content.perform(action);
                         }
 
-                        self.pause()
+                        self.pause(None)
                     }
                     CommentMessage::Link(url) => {
                         match url::Url::parse(&url) {
@@ -1134,7 +1199,7 @@ impl Manager {
                         let batch = comments.entry(timestamp).or_default();
                         batch.push(saved);
 
-                        self.play()
+                        self.play(None)
                     }
                     CommentMessage::Action {
                         id,
@@ -1150,7 +1215,7 @@ impl Manager {
                             comment.perform_action(action);
                         }
 
-                        self.pause()
+                        self.pause(None)
                     }
                     CommentMessage::Cancel { id, timestamp } => {
                         if let Some(comment) = comments
@@ -1162,7 +1227,7 @@ impl Manager {
                             comment.cancel();
                         }
 
-                        self.play()
+                        self.play(None)
                     }
                     CommentMessage::Delete { id, timestamp } => {
                         if let Some(comment) = comments
@@ -1237,6 +1302,10 @@ impl Manager {
                         Task::none()
                     }
                 }
+            }
+            ManagerMessage::ClearIndicator => {
+                self.indicator.take();
+                Task::none()
             }
         }
     }
@@ -1647,13 +1716,65 @@ impl Manager {
         content.into()
     }
 
+    pub fn indicator(&self, now: Instant) -> Element<'_, ManagerMessage> {
+        let Some(indicator) = &self.indicator else {
+            return empty();
+        };
+
+        let size = H1 * typo::RATIO;
+
+        let padding = if matches!(indicator.kind, IndicatorKind::Pause | IndicatorKind::Play) {
+            Padding::new(24.0).horizontal(32.0)
+        } else {
+            Padding::new(24.0)
+        };
+
+        let alpha = indicator.animation.interpolate(1.0, 0.0, now);
+        let content = icons::icon(indicator.kind.char())
+            .size(size)
+            .style(move |theme| {
+                let default = text::primary(theme);
+
+                text::Style {
+                    color: default
+                        .color
+                        .map(|color| iced::Color::from_rgba(color.r, color.g, color.b, alpha)),
+                }
+            });
+
+        let content = container(content).padding(padding).style(move |theme| {
+            let default = styles::container::dark(theme);
+            let border = default.border.rounded(100.0);
+
+            container::Style {
+                border,
+                background: default
+                    .background
+                    .map(|background| background.scale_alpha(alpha)),
+                ..default
+            }
+        });
+
+        match indicator.kind {
+            IndicatorKind::SeekBack => row!(content, space::horizontal()).into(),
+            IndicatorKind::SeekFront => row!(space::horizontal(), content).into(),
+            _ => row!(space::horizontal(), content, space::horizontal()).into(),
+        }
+    }
+
     pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, ManagerMessage> {
         let content = stack!(
             self.video_elem(),
-            column!(self.top(), space::vertical(), self.media_controls())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(Padding::new(3.0).left(8).right(16))
+            column!(
+                self.top(),
+                space::vertical(),
+                self.indicator(now),
+                space::vertical(),
+                self.media_controls()
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(Padding::new(3.0).left(8).right(16))
         )
         .height(Length::Fill)
         .width(Length::Fill);
@@ -1728,12 +1849,20 @@ impl Manager {
     }
 
     pub fn is_animating(&self, now: Instant) -> bool {
-        match &self.state {
+        let state = match &self.state {
             State::Ready { comments, .. } => comments
                 .iter()
                 .any(|(_, comments)| comments.iter().any(|comment| comment.is_animating(now))),
             State::Loading | State::Idle => false,
-        }
+        };
+
+        let indicator = self
+            .indicator
+            .as_ref()
+            .map(|indicator| indicator.animation.is_animating(now))
+            .unwrap_or_default();
+
+        state || indicator
     }
 
     fn player(&self) -> Option<&Player> {
@@ -1750,7 +1879,7 @@ impl Manager {
         }
     }
 
-    fn play_toggle(&mut self) -> Task<Message> {
+    fn play_toggle(&mut self, now: Option<Instant>) -> Task<Message> {
         let State::Ready {
             player,
             awake: _awake,
@@ -1765,10 +1894,14 @@ impl Manager {
 
         let is_paused = video.paused();
 
-        if is_paused { self.play() } else { self.pause() }
+        if is_paused {
+            self.play(now)
+        } else {
+            self.pause(now)
+        }
     }
 
-    fn play(&mut self) -> Task<Message> {
+    fn play(&mut self, now: Option<Instant>) -> Task<Message> {
         let State::Ready {
             player,
             awake,
@@ -1803,10 +1936,18 @@ impl Manager {
             video.set_paused(!video.paused());
         }
 
-        Task::none()
+        match now {
+            Some(now) => {
+                let (indicator, task) = Indicator::new(IndicatorKind::Play, now);
+                self.indicator = Some(indicator);
+
+                task.map(Message::Player)
+            }
+            None => Task::none(),
+        }
     }
 
-    fn pause(&mut self) -> Task<Message> {
+    fn pause(&mut self, now: Option<Instant>) -> Task<Message> {
         let State::Ready {
             player,
             awake,
@@ -1827,7 +1968,15 @@ impl Manager {
 
         video.set_paused(true);
 
-        Task::none()
+        match now {
+            Some(now) => {
+                let (indicator, task) = Indicator::new(IndicatorKind::Pause, now);
+                self.indicator = Some(indicator);
+
+                task.map(Message::Player)
+            }
+            None => Task::none(),
+        }
     }
 
     fn fullscreen_toggle(&mut self) -> Task<Message> {
@@ -1875,7 +2024,7 @@ impl Manager {
             .chain(Task::batch([Task::done(Message::Back), stats]))
     }
 
-    fn seek_back(&mut self, shift: bool) -> Task<Message> {
+    fn seek_back(&mut self, shift: bool, now: Instant) -> Task<Message> {
         if let State::Ready { player, .. } = &mut self.state {
             player.is_dragging = false;
             let amt = if shift {
@@ -1892,10 +2041,13 @@ impl Manager {
                 .unwrap();
         }
 
-        Task::none()
+        let (indicator, task) = Indicator::new(IndicatorKind::SeekBack, now);
+        self.indicator = Some(indicator);
+
+        task.map(Message::Player)
     }
 
-    fn seek_front(&mut self, shift: bool) -> Task<Message> {
+    fn seek_front(&mut self, shift: bool, now: Instant) -> Task<Message> {
         if let State::Ready { player, .. } = &mut self.state {
             player.is_dragging = false;
             let duration = player.video.duration().as_secs_f64();
@@ -1912,30 +2064,40 @@ impl Manager {
                 .seek(Duration::from_secs_f64(player.position), false)
                 .unwrap();
         }
-        Task::none()
+
+        let (indicator, task) = Indicator::new(IndicatorKind::SeekFront, now);
+        self.indicator = Some(indicator);
+
+        task.map(Message::Player)
     }
 
-    fn volume_increase(&mut self) -> Task<Message> {
+    fn volume_increase(&mut self, now: Instant) -> Task<Message> {
         if let State::Ready { player, .. } = &mut self.state {
             self.settings.volume =
                 (self.settings.volume + self.settings.volume_change_amt).min(1.0);
             player.video.set_volume(self.settings.volume);
         }
 
-        Task::none()
+        let (indicator, task) = Indicator::new(IndicatorKind::VolumeUp, now);
+        self.indicator = Some(indicator);
+
+        task.map(Message::Player)
     }
 
-    fn volume_decrease(&mut self) -> Task<Message> {
+    fn volume_decrease(&mut self, now: Instant) -> Task<Message> {
         if let State::Ready { player, .. } = &mut self.state {
             self.settings.volume =
                 (self.settings.volume - self.settings.volume_change_amt).max(0.0);
             player.video.set_volume(self.settings.volume);
         }
 
-        Task::none()
+        let (indicator, task) = Indicator::new(IndicatorKind::VolumeDown, now);
+        self.indicator = Some(indicator);
+
+        task.map(Message::Player)
     }
 
-    fn mute_toggle(&mut self) -> Task<Message> {
+    fn mute_toggle(&mut self, now: Instant) -> Task<Message> {
         if let State::Ready { player, .. } = &mut self.state {
             let mute = !player.video.muted();
             player.video.set_muted(mute);
@@ -1948,7 +2110,15 @@ impl Manager {
             }
         }
 
-        Task::none()
+        let kind = if self.settings.muted {
+            IndicatorKind::Mute
+        } else {
+            IndicatorKind::Unmute
+        };
+        let (indicator, task) = Indicator::new(kind, now);
+        self.indicator = Some(indicator);
+
+        task.map(Message::Player)
     }
 
     fn speed_increase(&mut self) -> Task<Message> {
@@ -2105,7 +2275,7 @@ impl Manager {
         };
 
         let Modal::Config(config) = modal else {
-            return self.play_toggle();
+            return self.play_toggle(None);
         };
 
         let Config {
@@ -2352,9 +2522,9 @@ impl Manager {
         }
     }
 
-    pub fn action(&mut self, action: PlayerAction) -> Task<Message> {
+    pub fn action(&mut self, action: PlayerAction, now: Instant) -> Task<Message> {
         match action {
-            PlayerAction::PlayToggle => self.play_toggle(),
+            PlayerAction::PlayToggle => self.play_toggle(Some(now)),
             PlayerAction::PlayNext => self.play_next(),
             PlayerAction::PlayPrevious => self.play_previous(),
             PlayerAction::FullscreenToggle => self.fullscreen_toggle(),
@@ -2365,13 +2535,13 @@ impl Manager {
                     self.fullscreen_exit()
                 }
             }
-            PlayerAction::SeekBack => self.seek_back(false),
-            PlayerAction::SeekBackShift => self.seek_back(true),
-            PlayerAction::SeekFront => self.seek_front(false),
-            PlayerAction::SeekFrontShift => self.seek_front(true),
-            PlayerAction::VolumeIncrease => self.volume_increase(),
-            PlayerAction::VolumeDecrease => self.volume_decrease(),
-            PlayerAction::MuteToggle => self.mute_toggle(),
+            PlayerAction::SeekBack => self.seek_back(false, now),
+            PlayerAction::SeekBackShift => self.seek_back(true, now),
+            PlayerAction::SeekFront => self.seek_front(false, now),
+            PlayerAction::SeekFrontShift => self.seek_front(true, now),
+            PlayerAction::VolumeIncrease => self.volume_increase(now),
+            PlayerAction::VolumeDecrease => self.volume_decrease(now),
+            PlayerAction::MuteToggle => self.mute_toggle(now),
             PlayerAction::SpeedIncrease => self.speed_increase(),
             PlayerAction::SpeedDecrease => self.speed_decrease(),
             PlayerAction::SpeedReset => self.speed_reset(),
