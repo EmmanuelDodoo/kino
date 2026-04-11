@@ -630,17 +630,7 @@ impl Manager {
                 Task::none()
             }
             ManagerMessage::ToggleFullscreen => self.fullscreen_toggle(),
-            ManagerMessage::PreviousScreen => {
-                let eos = self
-                    .player()
-                    .map(|player| player.video.eos())
-                    .unwrap_or_default();
-
-                let stats = if eos { Task::none() } else { self.stats() };
-
-                self.fullscreen_exit()
-                    .chain(Task::batch([Task::done(Message::Back), stats]))
-            }
+            ManagerMessage::PreviousScreen => self.previous_screen(),
             ManagerMessage::ToggleSubtitles => self.subtitles_toggle(),
             ManagerMessage::PlayNext => self.play_next(),
             ManagerMessage::PlayPrevious => self.play_previous(),
@@ -1844,13 +1834,25 @@ impl Manager {
             .unwrap_or_default()
     }
 
-    fn fullscreen_exit(&mut self) -> Task<Message> {
+    pub fn fullscreen_exit(&mut self) -> Task<Message> {
         self.show_controls = true;
         self.is_fullscreen = false;
 
         self.window
             .map(move |id| window::set_mode::<Message>(id, window::Mode::Windowed).discard())
             .unwrap_or_default()
+    }
+
+    fn previous_screen(&mut self) -> Task<Message> {
+        let eos = self
+            .player()
+            .map(|player| player.video.eos())
+            .unwrap_or_default();
+
+        let stats = if eos { Task::none() } else { self.stats() };
+
+        self.fullscreen_exit()
+            .chain(Task::batch([Task::done(Message::Back), stats]))
     }
 
     fn seek_back(&mut self, shift: bool) -> Task<Message> {
@@ -2350,7 +2352,7 @@ impl Manager {
             PlayerAction::VideoConfig => self.video_config(),
             PlayerAction::VideoComment => self.video_comment(),
             PlayerAction::CloseView => self.close_view(),
-            PlayerAction::Back => Task::done(Message::Back),
+            PlayerAction::Back => self.previous_screen(),
             PlayerAction::PlaylistToggle => self.toggle_playlist(),
             PlayerAction::VideoCommentNew => self.new_comment(),
         }

@@ -506,13 +506,20 @@ impl App {
                 Screen::Home => self.home.back(now, false),
                 Screen::Player => {
                     self.screen = Screen::Home;
-                    if let Some(player) = self.player.take() {
-                        tracing::debug!("Exiting player");
+                    let task = match self.player.take() {
+                        Some(mut player) => {
+                            let fullscreen = player.fullscreen_exit();
+                            let stats = player.stats();
+                            tracing::debug!("Exiting player");
 
-                        self.config.video = player.settings;
-                    }
+                            self.config.video = player.settings;
 
-                    Message::Refresh(now, true).tasked()
+                            Task::batch([fullscreen, stats])
+                        }
+                        None => Task::none(),
+                    };
+
+                    task.chain(Message::Refresh(now, true).tasked())
                 }
                 Screen::Settings => {
                     self.settings.take();
