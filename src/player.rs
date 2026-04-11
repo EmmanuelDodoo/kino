@@ -3,6 +3,7 @@ use iced::{
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
+    task,
     time::Instant,
     widget::{
         self, button, center, checkbox, column, combo_box, container, image, mouse_area, operation,
@@ -254,6 +255,7 @@ enum AutoState {
     Idle,
     Ready {
         player: Box<Player>,
+        thumbnails_handle: Option<task::Handle>,
         comments: BTreeMap<u64, Vec<Comment>>,
     },
 }
@@ -263,6 +265,7 @@ enum State {
     Idle,
     Ready {
         player: Box<Player>,
+        thumbnails_handle: Option<task::Handle>,
         comments: BTreeMap<u64, Vec<Comment>>,
         awake: Option<keepawake::KeepAwake>,
     },
@@ -465,6 +468,9 @@ impl Manager {
                     },
                 );
 
+                let (load_thumbnails, handle) = load_thumbnails.map(Message::Player).abortable();
+                let handle = handle.abort_on_drop();
+
                 let last_watched = if !is_next || matches!(&self.state, State::Idle) {
                     let task = Task::done(Message::LastWatched(player.item.id));
                     apply_settings(&self.settings, &mut player);
@@ -475,6 +481,7 @@ impl Manager {
                         awake: Some(awake),
                         player: Box::new(player),
                         comments: BTreeMap::default(),
+                        thumbnails_handle: Some(handle),
                     };
 
                     task
@@ -484,11 +491,12 @@ impl Manager {
                     self.next = AutoState::Ready {
                         player: Box::new(player),
                         comments: BTreeMap::default(),
+                        thumbnails_handle: Some(handle),
                     };
                     Task::none()
                 };
 
-                Task::batch([load_thumbnails.map(Message::Player), last_watched, comments])
+                Task::batch([load_thumbnails, last_watched, comments])
             }
             ManagerMessage::Thumbnail {
                 id,
@@ -501,19 +509,25 @@ impl Manager {
                     .unwrap_or_default();
 
                 if current {
-                    if let Some(Player {
-                        item, thumbnails, ..
-                    }) = self.player_mut()
-                        && item.id == id
+                    if let State::Ready {
+                        player,
+                        thumbnails_handle,
+                        comments: _comments,
+                        awake: _awake,
+                    } = &mut self.state
+                        && player.item.id == id
                     {
-                        *thumbnails = generated;
+                        thumbnails_handle.take();
+                        player.thumbnails = generated;
                     }
                 } else if let AutoState::Ready {
                     player,
+                    thumbnails_handle,
                     comments: _comments,
                 } = &mut self.next
                     && player.item.id == id
                 {
+                    thumbnails_handle.take();
                     player.thumbnails = generated;
                 }
 
@@ -689,6 +703,7 @@ impl Manager {
                             player,
                             awake,
                             comments: _comments,
+                            thumbnails_handle: _handle,
                         } = &mut self.state
                         {
                             if awake.is_none() {
@@ -1005,6 +1020,7 @@ impl Manager {
                     player,
                     comments,
                     awake: _awake,
+                    thumbnails_handle: _handle,
                 } = &mut self.state
                 else {
                     return Task::none();
@@ -1662,6 +1678,7 @@ impl Manager {
                     player,
                     comments,
                     awake: _awake,
+                    thumbnails_handle: _handle,
                 } => row!(
                     content,
                     draw_comments(
@@ -1738,6 +1755,7 @@ impl Manager {
             player,
             awake: _awake,
             comments: _comments,
+            thumbnails_handle: _handle,
         } = &mut self.state
         else {
             return Task::none();
@@ -1755,6 +1773,7 @@ impl Manager {
             player,
             awake,
             comments: _comments,
+            thumbnails_handle: _handle,
         } = &mut self.state
         else {
             return Task::none();
@@ -1792,6 +1811,7 @@ impl Manager {
             player,
             awake,
             comments: _comments,
+            thumbnails_handle: _handle,
         } = &mut self.state
         else {
             return Task::none();
@@ -1994,8 +2014,12 @@ impl Manager {
             }
             ready => {
                 let player = std::mem::replace(ready, AutoState::Idle);
-                let (mut player, comments) = match player {
-                    AutoState::Ready { player, comments } => (player, comments),
+                let (mut player, comments, thumbnails_handle) = match player {
+                    AutoState::Ready {
+                        player,
+                        comments,
+                        thumbnails_handle,
+                    } => (player, comments, thumbnails_handle),
                     _ => unreachable!(),
                 };
 
@@ -2010,6 +2034,7 @@ impl Manager {
                     player,
                     awake: Some(awake),
                     comments,
+                    thumbnails_handle,
                 };
 
                 Task::batch([Task::done(last_watched), stats])
@@ -2073,6 +2098,7 @@ impl Manager {
             player,
             awake,
             comments: _comment,
+            thumbnails_handle: _handle,
         } = &mut self.state
         else {
             return Task::none();
@@ -2249,6 +2275,7 @@ impl Manager {
             player,
             awake,
             comments: _comments,
+            thumbnails_handle: _handle,
         } = &mut self.state
         else {
             return Task::none();
@@ -2278,6 +2305,7 @@ impl Manager {
             player,
             awake,
             comments: _comments,
+            thumbnails_handle: _handle,
         } = &mut self.state
         {
             awake.take();
@@ -2433,6 +2461,7 @@ impl Manager {
                 player,
                 comments: curr,
                 awake: _awake,
+                thumbnails_handle: _handle,
             } if player.item.id == id => {
                 update(player, curr);
 
@@ -2442,6 +2471,7 @@ impl Manager {
                 AutoState::Ready {
                     player,
                     comments: curr,
+                    thumbnails_handle: _handle,
                 } if player.item.id == id => {
                     update(player, curr);
 

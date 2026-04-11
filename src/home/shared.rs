@@ -7,7 +7,7 @@ use iced::{
     Color, ContentFit, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
-    mouse,
+    mouse, task,
     time::{Duration, Instant},
     widget::{
         self, button, center, column, container, image,
@@ -454,6 +454,7 @@ pub struct Thumbnail<T: Media> {
     background: Animation<bool>,
     icon: Animation<bool>,
     float: Animation<bool>,
+    _tasks: task::Handle,
     pub media: T,
 }
 
@@ -490,6 +491,9 @@ impl<T: Media + 'static> Thumbnail<T> {
             None => Task::none(),
         };
 
+        let (task, handle) = task.abortable();
+        let handle = handle.abort_on_drop();
+
         let mut sample_text = None;
         let mut sample_color = None;
 
@@ -521,6 +525,7 @@ impl<T: Media + 'static> Thumbnail<T> {
             sample_color,
             backdrop,
             media,
+            _tasks: handle,
         };
 
         (new, task)
