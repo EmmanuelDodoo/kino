@@ -3425,7 +3425,7 @@ fn draw_subs<'a>(
         } else {
             pick_list(config.selected_text.clone(), subtitles, subtitle_to_string)
                 .handle(handle)
-                .ellipsis(text::Ellipsis::Start)
+                .ellipsis(text::Ellipsis::End)
                 .on_select(SubtitleConfig::CurrentText)
                 .padding(padding)
                 .text_size(size)
@@ -3719,9 +3719,6 @@ fn subtitle_to_string(sub: &Subtitle) -> String {
                 .expect("Cannot have a non-file subtitles file");
 
             let name = file.to_string_lossy();
-            // let len = name.len();
-            // let end = len.min(36);
-            // todo!()
 
             name.into()
         }
