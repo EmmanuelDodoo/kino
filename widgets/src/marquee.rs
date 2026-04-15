@@ -45,6 +45,7 @@ where
     delay: Duration,
     easing: Easing,
     rtl: bool,
+    animate: bool,
     behavior: Behavior,
     class: Theme::Class<'a>,
 }
@@ -62,6 +63,7 @@ where
             delay: Duration::from_millis(1000),
             format: Format::default(),
             rtl: false,
+            animate: false,
             easing: Easing::Linear,
             class: Theme::default(),
             behavior: Behavior::default(),
@@ -96,6 +98,12 @@ where
     /// Sets the [`Behavior`] of the widget
     pub fn behavior(mut self, behavior: Behavior) -> Self {
         self.behavior = behavior;
+        self
+    }
+
+    /// Sets whether the animation should be toggled
+    pub fn toggle(mut self, toggle: bool) -> Self {
+        self.animate = toggle;
         self
     }
 
@@ -213,6 +221,7 @@ where
     duration: Duration,
     animation: Option<Animation<f32>>,
     bounds: Rectangle,
+    hovering: bool,
 }
 
 impl<P> State<P>
@@ -226,6 +235,7 @@ where
             duration: Duration::ZERO,
             animation: None,
             bounds: Rectangle::new(Point::ORIGIN, Size::ZERO),
+            hovering: false,
         }
     }
 
@@ -255,6 +265,34 @@ where
 
         Point::new(anchor.x + x, anchor.y)
     }
+
+    fn start_animation(&mut self, behavior: Behavior, easing: Easing, delay: Duration, rtl: bool) {
+        let animation = match behavior {
+            Behavior::Alternate => Animation::new(self.start(rtl))
+                .auto_reverse()
+                .repeat_forever()
+                .go(self.end(rtl), Instant::now()),
+            Behavior::Slide => Animation::new(self.start(rtl)).go(self.end(rtl), Instant::now()),
+            Behavior::Scroll => {
+                let width = self.paragraph.min_width();
+
+                let (start, end) = if rtl {
+                    (-width, width + self.diff)
+                } else {
+                    (width + self.diff, -width)
+                };
+
+                Animation::new(start)
+                    .repeat_forever()
+                    .go(end, Instant::now())
+            }
+        }
+        .easing(easing)
+        .duration(self.duration)
+        .delay(delay);
+
+        self.animation = Some(animation);
+    }
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Marquee<'_, Theme, Renderer>
@@ -274,6 +312,14 @@ where
         Size {
             width: self.format.width,
             height: self.format.height,
+        }
+    }
+
+    fn diff(&self, tree: &mut tree::Tree) {
+        let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+
+        if !self.animate && !state.hovering {
+            state.reset();
         }
     }
 
@@ -367,10 +413,16 @@ where
             return;
         }
 
+        if self.animate && state.animation.is_none() {
+            state.start_animation(self.behavior, self.easing, self.delay, self.rtl);
+            shell.request_redraw();
+        }
+
         match event {
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                state.hovering = cursor.is_over(layout.bounds());
                 if !cursor.is_over(layout.bounds()) {
-                    if state.animation.is_some() {
+                    if state.animation.is_some() && !self.animate {
                         state.reset();
                         shell.request_redraw();
                     }
@@ -382,32 +434,7 @@ where
                     return;
                 }
 
-                let animation = match self.behavior {
-                    Behavior::Alternate => Animation::new(state.start(self.rtl))
-                        .auto_reverse()
-                        .repeat_forever()
-                        .go(state.end(self.rtl), Instant::now()),
-                    Behavior::Slide => Animation::new(state.start(self.rtl))
-                        .go(state.end(self.rtl), Instant::now()),
-                    Behavior::Scroll => {
-                        let width = state.paragraph.min_width();
-
-                        let (start, end) = if self.rtl {
-                            (-width, width + state.diff)
-                        } else {
-                            (width + state.diff, -width)
-                        };
-
-                        Animation::new(start)
-                            .repeat_forever()
-                            .go(end, Instant::now())
-                    }
-                }
-                .easing(self.easing)
-                .duration(state.duration)
-                .delay(self.delay);
-
-                state.animation = Some(animation);
+                state.start_animation(self.behavior, self.easing, self.delay, self.rtl);
                 shell.request_redraw();
             }
             Event::Window(window::Event::RedrawRequested(at)) => {
