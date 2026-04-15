@@ -455,6 +455,7 @@ pub struct Thumbnail<T: Media> {
     icon: Animation<bool>,
     float: Animation<bool>,
     _tasks: task::Handle,
+    hovered: bool,
     pub media: T,
 }
 
@@ -525,6 +526,7 @@ impl<T: Media + 'static> Thumbnail<T> {
             sample_color,
             backdrop,
             media,
+            hovered: false,
             _tasks: handle,
         };
 
@@ -548,6 +550,7 @@ impl<T: Media + 'static> Thumbnail<T> {
     }
 
     pub fn go_mut(&mut self, new_state: bool, at: Instant) {
+        self.hovered = new_state;
         self.background.go_mut(new_state, at);
         self.icon.go_mut(new_state, at);
         self.float.go_mut(new_state, at);
@@ -684,6 +687,7 @@ impl<T: Media + 'static> Thumbnail<T> {
         unique: impl Fn(&T) -> Element<'a, Message>,
     ) -> Element<'a, Message> {
         let title = marquee(self.media.name())
+            .toggle(self.hovered)
             .size(H6)
             .font(medium_font())
             .height(24.0);
@@ -717,8 +721,6 @@ impl<T: Media + 'static> Thumbnail<T> {
         let img = container(self.poster_helper(1.0, now)).width(LIST_WIDTH * 1.75);
         let img = mouse_area(img)
             .interaction(iced::mouse::Interaction::Pointer)
-            .on_exit((on_hover)(self.media.id(), false))
-            .on_enter((on_hover)(self.media.id(), true))
             .on_press((on_play)(self.media.id()));
 
         let overlay = {
@@ -782,6 +784,10 @@ impl<T: Media + 'static> Thumbnail<T> {
             })
             .on_press((on_select)(self.media.id()));
 
+        let content = mouse_area(content)
+            .on_exit((on_hover)(self.media.id(), false))
+            .on_enter((on_hover)(self.media.id(), true));
+
         content.into()
     }
 
@@ -820,7 +826,10 @@ impl<T: Media + 'static> Thumbnail<T> {
         };
 
         let details = {
-            let title = marquee(self.media.name()).size(P).font(medium_font());
+            let title = marquee(self.media.name())
+                .size(P)
+                .font(medium_font())
+                .toggle(self.hovered);
             let title = container(title).max_height(20.0).clip(true);
             let ratings = ratings(&self.media, true);
             let release = {
@@ -928,6 +937,7 @@ impl<T: Media + 'static> Thumbnail<T> {
         now: Instant,
         on_add: impl Fn(T::Id) -> Message + 'a,
         on_select: impl Fn(T::Id) -> Message + 'a,
+        on_hover: impl Fn(T::Id, bool) -> Message + 'a,
         on_play: impl Fn(T::Id) -> Message + 'a,
     ) -> Element<'a, Message> {
         let width = 56.0;
@@ -971,6 +981,7 @@ impl<T: Media + 'static> Thumbnail<T> {
             .on_press((on_play)(self.media.id()));
 
         let name = marquee(self.media.name())
+            .toggle(self.hovered)
             .size(P)
             .font(medium_font())
             .width(Length::Fill);
@@ -1010,7 +1021,7 @@ impl<T: Media + 'static> Thumbnail<T> {
             .padding(0);
 
         let selected = self.selected;
-        button(
+        let content = button(
             row!(img, name, ratings, progress, duration, recent, add)
                 .spacing(20.0)
                 .align_y(Vertical::Center),
@@ -1029,8 +1040,13 @@ impl<T: Media + 'static> Thumbnail<T> {
             };
 
             button::Style { border, ..default }
-        })
-        .into()
+        });
+
+        let content = mouse_area(content)
+            .on_exit((on_hover)(self.media.id(), false))
+            .on_enter((on_hover)(self.media.id(), true));
+
+        content.into()
     }
 }
 

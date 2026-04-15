@@ -134,6 +134,7 @@ impl Movies {
                 now,
                 MoviesMessage::Add,
                 MoviesMessage::Details,
+                MoviesMessage::Hovered,
                 MoviesMessage::Play,
             )
         });

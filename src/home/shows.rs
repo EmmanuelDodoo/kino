@@ -110,6 +110,7 @@ impl TvShows {
                 now,
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
+                TvShowsMessage::Hovered,
                 TvShowsMessage::Play,
             )
         });

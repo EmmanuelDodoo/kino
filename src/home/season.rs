@@ -232,6 +232,10 @@ impl SeasonPage {
                     id: season,
                     message: Message::Details(id),
                 },
+                move |id, hovered| SeasonPageMessage {
+                    id: season,
+                    message: Message::Hovered(id, hovered),
+                },
                 move |id| SeasonPageMessage {
                     id: season,
                     message: Message::Play(id),

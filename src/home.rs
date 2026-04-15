@@ -2923,6 +2923,7 @@ impl Home {
                             now,
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
+                            |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
                             |id| HomeMessage::Play(ItemId::Movie(id)),
                         )
                     });
@@ -2978,6 +2979,7 @@ impl Home {
                             now,
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
+                            |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
                             |id| HomeMessage::Play(ItemId::Show(id)),
                         )
                     });

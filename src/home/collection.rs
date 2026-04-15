@@ -497,6 +497,7 @@ impl CollectionPage {
                             now,
                             move |id| add(collection, ItemId::Movie(id)),
                             move |id| select(collection, ItemId::Movie(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Movie(id)),
                             move |id| play(collection, ItemId::Movie(id)),
                         )
                     });
@@ -520,6 +521,7 @@ impl CollectionPage {
                             now,
                             move |id| add(collection, ItemId::Show(id)),
                             move |id| select(collection, ItemId::Show(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Show(id)),
                             move |id| play(collection, ItemId::Show(id)),
                         )
                     });
@@ -542,6 +544,7 @@ impl CollectionPage {
                             now,
                             move |id| add(collection, ItemId::Season(id)),
                             move |id| select(collection, ItemId::Season(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Season(id)),
                             move |id| play(collection, ItemId::Season(id)),
                         )
                     });
@@ -564,6 +567,7 @@ impl CollectionPage {
                             now,
                             move |id| add(collection, ItemId::Episode(id)),
                             move |id| select(collection, ItemId::Episode(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
                             move |id| play(collection, ItemId::Episode(id)),
                         )
                     });

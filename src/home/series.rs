@@ -238,6 +238,10 @@ impl ShowPage {
                     id: show,
                     message: Message::Details(id),
                 },
+                move |id, is_hovered| ShowPageMessage {
+                    id: show,
+                    message: Message::Hovered(id, is_hovered),
+                },
                 move |id| ShowPageMessage {
                     id: show,
                     message: Message::Play(id),
