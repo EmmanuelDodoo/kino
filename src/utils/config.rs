@@ -148,6 +148,7 @@ pub struct GeneralSettings {
     pub fetching_interval: Duration,
     pub restore_deleted: bool,
     pub preferred_subtitle_codec: Option<String>,
+    pub preferred_audio_codec: Option<String>,
     pub tmdb_rating: bool,
 }
 
@@ -165,6 +166,7 @@ impl GeneralSettings {
             fetching_interval: Duration::from_secs(600),
             restore_deleted: true,
             preferred_subtitle_codec: Some("en".into()),
+            preferred_audio_codec: Some("en".into()),
             tmdb_rating: true,
         }
     }
@@ -182,6 +184,7 @@ impl GeneralSettings {
             fetching_interval: Duration::from_secs(30),
             restore_deleted: true,
             preferred_subtitle_codec: Some("en".into()),
+            preferred_audio_codec: Some("en".into()),
             tmdb_rating: true,
         }
     }

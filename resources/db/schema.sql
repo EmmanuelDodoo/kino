@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 7;
+PRAGMA user_version = 8;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -91,6 +91,7 @@ CREATE TABLE episode (
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
 	fetched		     BOOLEAN DEFAULT FALSE,
 	subtitle_id	     TEXT ,
+	audio_id	     TEXT,
 	removed		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(season_id, path),
 	FOREIGN KEY ( season_id ) REFERENCES season( id ) ON DELETE CASCADE ,
@@ -124,6 +125,7 @@ CREATE TABLE movie (
 	comment_count	     INTEGER NOT NULL DEFAULT 0,
 	fetched		     BOOLEAN DEFAULT FALSE,
 	subtitle_id	     TEXT,
+	audio_id	     TEXT,
 	removed		     BOOLEAN DEFAULT FALSE,
 	UNIQUE(directory, path),
 	FOREIGN KEY ( subtitle_id ) REFERENCES subtitle( id ),
@@ -157,6 +159,42 @@ CREATE TABLE subtitle (
 	removed		     BOOLEAN DEFAULT FALSE,
 	sub_offset	     FLOAT DEFAULT 0.0,
 	CHECK (kind IN ('embedded', 'loaded')),
+	CHECK (media_type IN ('movie', 'episode'))
+);
+
+CREATE TABLE audio (
+	id                   TEXT NOT NULL  PRIMARY KEY  ,
+	media                TEXT NOT NULL,
+	media_type	     TEXT NOT NULL,
+	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
+	stream		     INTEGER NOT NULL DEFAULT 0,
+	codec		     TEXT,
+	lang		     TEXT,
+	channels	     INTEGER NOT NULL DEFAULT 0,
+	sample_rate	     INTEGER NOT NULL DEFAULT 0,
+	bitrate	     	     INTEGER NOT NULL DEFAULT 0,
+	depth	     	     INTEGER NOT NULL DEFAULT 0,
+	UNIQUE(media, stream),
+	CHECK (media_type IN ('movie', 'episode'))
+);
+
+CREATE TABLE video (
+	id                   TEXT NOT NULL  PRIMARY KEY  ,
+	media                TEXT NOT NULL,
+	media_type	     TEXT NOT NULL,
+	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
+	stream		     INTEGER NOT NULL DEFAULT 0,
+	tag		     TEXT,
+	codec		     TEXT,
+	bitrate	     	     INTEGER NOT NULL DEFAULT 0,
+	width	     	     INTEGER NOT NULL DEFAULT 0,
+	height	     	     INTEGER NOT NULL DEFAULT 0,
+	depth	     	     INTEGER NOT NULL DEFAULT 0,
+	framerate	     FLOAT NOT NULL DEFAULT 0.0,
+	interlaced	     BOOLEAN DEFAULT FALSE,
+	dar_num	     	     INTEGER NOT NULL DEFAULT 0,
+	dar_denom	     INTEGER NOT NULL DEFAULT 0,
+	UNIQUE(media, stream),
 	CHECK (media_type IN ('movie', 'episode'))
 );
 
@@ -512,14 +550,18 @@ BEGIN
 	DELETE FROM comment WHERE media_type = 'movie' AND media_id = OLD.id;
 END;
 
-CREATE TRIGGER episode_subtitle_delete_tr AFTER DELETE ON episode
+CREATE TRIGGER episode_info_delete_tr AFTER DELETE ON episode
 BEGIN
 	DELETE FROM subtitle WHERE media_type= 'episode' AND video = OLD.id;
+	DELETE FROM audio WHERE media_type= 'episode' AND media = OLD.id;
+	DELETE FROM video WHERE media_type= 'episode' AND media = OLD.id;
 END;
 
-CREATE TRIGGER movie_subtitle_delete_tr AFTER DELETE ON movie
+CREATE TRIGGER movie_info_delete_tr AFTER DELETE ON movie
 BEGIN
 	DELETE FROM subtitle WHERE media_type= 'movie' AND video = OLD.id;
+	DELETE FROM audio WHERE media_type= 'movie' AND media = OLD.id;
+	DELETE FROM video WHERE media_type= 'movie' AND media = OLD.id;
 END;
 
 

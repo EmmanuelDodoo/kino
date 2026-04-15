@@ -3,11 +3,11 @@ use fancy_regex::Regex;
 use gstreamer_pbutils::Discoverer;
 use registry::db::{BatchResult, Database};
 use registry::models::{
-    Directory, DirectoryId, Episode, EpisodeId, MediaType, Movie, MovieId, Season, SeasonId, Show,
-    ShowId, Subtitle, SubtitleId, VideoId,
+    Audio, AudioId, Directory, DirectoryId, Episode, EpisodeId, MediaType, Movie, MovieId, Season,
+    SeasonId, Show, ShowId, Subtitle, SubtitleId, VideoId, video,
 };
 use rusqlite::OptionalExtension;
-use rusqlite::types::{ToSqlOutput, ValueRef};
+use rusqlite::types::{ToSqlOutput, Value, ValueRef};
 use std::collections::HashMap;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
 use std::sync::LazyLock;
@@ -63,7 +63,9 @@ struct Video {
     name: String,
     path: String,
     loaded_sub: Option<String>,
-    embedded_subs: Vec<(String, String)>,
+    embedded_subs: Vec<SubtitleInfo>,
+    audio: Vec<AudioInfo>,
+    video: Vec<VideoInfo>,
     duration: u64,
 }
 
@@ -80,6 +82,39 @@ struct ShowPrim {
     seasons: Vec<SeasonPrim>,
 }
 
+#[derive(Debug)]
+struct SubtitleInfo {
+    title: String,
+    lang: String,
+}
+
+#[derive(Debug)]
+struct AudioInfo {
+    stream: u32,
+    codec: Option<String>,
+    lang: Option<String>,
+    channels: u32,
+    sample_rate: u32,
+    bitrate: u32,
+    depth: u32,
+}
+
+#[derive(Debug)]
+struct VideoInfo {
+    stream: u32,
+    tag: Option<String>,
+    codec: Option<String>,
+    bitrate: u32,
+    width: u32,
+    height: u32,
+    depth: u32,
+    framerate: f32,
+    interlaced: bool,
+    /// Display Aspect Ratio
+    dar_num: u32,
+    dar_denom: u32,
+}
+
 pub fn scan_dir<'a>(
     db: &str,
     dir: Directory,
@@ -87,6 +122,7 @@ pub fn scan_dir<'a>(
     movie_depth: u8,
     restore: bool,
     preferred_subtitle_code: Option<String>,
+    preferred_audio_code: Option<String>,
 ) -> Option<BatchResult<'a>> {
     tracing::debug!("Scanning directory {}", dir.path);
     let discoverer = if discoverer {
@@ -123,6 +159,7 @@ pub fn scan_dir<'a>(
         movie_depth,
         restore,
         preferred_subtitle_code.as_ref(),
+        preferred_audio_code.as_ref(),
     )
 }
 
@@ -133,6 +170,7 @@ pub fn scan_dirs<'a>(
     movie_depth: u8,
     restore: bool,
     preferred_subtitle_code: Option<String>,
+    preferred_audio_code: Option<String>,
 ) -> (Option<BatchResult<'a>>, Vec<DirectoryId>) {
     tracing::debug!("Scanning {} directories", dirs.len());
     let discoverer = if discoverer {
@@ -168,6 +206,7 @@ pub fn scan_dirs<'a>(
             movie_depth,
             restore,
             preferred_subtitle_code.as_ref(),
+            preferred_audio_code.as_ref(),
         ) {
             Some(res) => {
                 scanned.push(id);
@@ -187,6 +226,7 @@ pub fn scan_dir_helper<'a>(
     movie_depth: u8,
     restore: bool,
     preferred_subtitle_code: Option<&String>,
+    preferred_audio_code: Option<&String>,
 ) -> Option<BatchResult<'a>> {
     let mut successes = vec![];
     let mut failures = vec![];
@@ -232,7 +272,7 @@ pub fn scan_dir_helper<'a>(
 
             for movie in videos {
                 let dir_movie = dir_movies.get_mut(&movie.path);
-                let pick_sub = dir_movie.is_none();
+                let pick_preferred = dir_movie.is_none();
 
                 if dir_movie
                     .as_ref()
@@ -259,24 +299,19 @@ pub fn scan_dir_helper<'a>(
                     Err(fail) => failures.push(fail),
                 };
 
-                let loaded = movie.loaded_sub.map(|path| Subtitle::new_loaded(id, path));
-                let subtitles = movie
-                    .embedded_subs
-                    .into_iter()
-                    .map(|(title, lang)| Subtitle::new_embedded(id, title, lang))
-                    .chain(loaded);
-
-                for sub in subtitles {
-                    let query = sub.insert();
-                    match query.execute(db) {
-                        Ok(succ) => successes.push(succ),
-                        Err(fail) => failures.push(fail),
-                    }
-                }
-
-                if pick_sub {
-                    pick_subtitle(db, id, preferred_subtitle_code);
-                }
+                save_video_metadata(
+                    db,
+                    &mut successes,
+                    &mut failures,
+                    id,
+                    movie.embedded_subs,
+                    movie.loaded_sub,
+                    pick_preferred,
+                    preferred_subtitle_code,
+                    movie.audio,
+                    preferred_audio_code,
+                    movie.video,
+                );
             }
 
             tracing::debug!("Performing movies insert/remove");
@@ -517,27 +552,19 @@ pub fn scan_dir_helper<'a>(
                             Err(fail) => failures.push(fail),
                         }
 
-                        let loaded = episode
-                            .loaded_sub
-                            .map(|path| Subtitle::new_loaded(episode_id, path));
-
-                        let subtitles = episode
-                            .embedded_subs
-                            .into_iter()
-                            .map(|(title, lang)| Subtitle::new_embedded(episode_id, title, lang))
-                            .chain(loaded);
-
-                        for sub in subtitles {
-                            let query = sub.insert();
-                            match query.execute(db) {
-                                Ok(succ) => successes.push(succ),
-                                Err(fail) => failures.push(fail),
-                            }
-                        }
-
-                        if pick_sub {
-                            pick_subtitle(db, episode_id, preferred_subtitle_code);
-                        }
+                        save_video_metadata(
+                            db,
+                            &mut successes,
+                            &mut failures,
+                            episode_id,
+                            episode.embedded_subs,
+                            episode.loaded_sub,
+                            pick_sub,
+                            preferred_subtitle_code,
+                            episode.audio,
+                            preferred_audio_code,
+                            episode.video,
+                        );
                     }
 
                     tracing::debug!("Performing episodes insert/remove");
@@ -780,9 +807,9 @@ fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<Video> {
         .inspect_err(|_| tracing::error!("Scan file url error on {}", path.display()))
         .ok();
 
-    let (duration, embedded_subs) = match discoverer.zip(url) {
+    let (duration, embedded_subs, audio, video) = match discoverer.zip(url) {
         Some((discoverer, url)) => discover(discoverer, url, &path),
-        None => (0, vec![]),
+        None => (0, vec![], vec![], vec![]),
     };
 
     let name = path.file_stem().and_then(|name| name.to_str())?.to_owned();
@@ -794,6 +821,8 @@ fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<Video> {
         path,
         loaded_sub,
         embedded_subs,
+        audio,
+        video,
         duration,
     })
 }
@@ -866,7 +895,11 @@ fn process_episode(name: &str) -> Option<u16> {
         .ok()
 }
 
-fn discover(discoverer: &Discoverer, url: url::Url, path: &Path) -> (u64, Vec<(String, String)>) {
+fn discover(
+    discoverer: &Discoverer,
+    url: url::Url,
+    path: &Path,
+) -> (u64, Vec<SubtitleInfo>, Vec<AudioInfo>, Vec<VideoInfo>) {
     let discovered = discoverer
         .discover_uri(url.as_str())
         .inspect_err(|error| {
@@ -881,29 +914,105 @@ fn discover(discoverer: &Discoverer, url: url::Url, path: &Path) -> (u64, Vec<(S
             let subs = info
                 .subtitle_streams()
                 .into_iter()
-                .flat_map(|sub| {
-                    sub.tags().and_then(|info| {
-                        let title = info
-                            .get::<gstreamer::tags::Title>()
-                            .map(|code| code.get().to_owned());
+                .filter_map(|sub| {
+                    let tags = sub.tags()?;
+                    let title = tags
+                        .get::<gstreamer::tags::Title>()
+                        .map(|code| code.get().to_owned())?;
+                    let lang = tags
+                        .get::<gstreamer::tags::LanguageCode>()
+                        .map(|code| code.get().to_owned())?;
 
-                        let lang = info
-                            .get::<gstreamer::tags::LanguageCode>()
-                            .map(|code| code.get().to_owned());
-
-                        title.zip(lang)
-                    })
+                    Some(SubtitleInfo { title, lang })
                 })
                 .collect::<Vec<_>>();
+
+            let mut audios = vec![];
+            let mut audio_stream = 0;
+
+            for audio in info.audio_streams().into_iter() {
+                let caps = audio.caps();
+                let codec = caps.as_ref().map(|caps| {
+                    gstreamer_pbutils::pb_utils_get_codec_description(caps).to_string()
+                });
+
+                let stream = audio_stream;
+                audio_stream += 1;
+
+                let depth = audio.depth();
+                let lang = audio.language().map(|lang| lang.to_string());
+                let channels = audio.channels();
+                let sample_rate = audio.sample_rate();
+                let bitrate = audio.bitrate();
+
+                let audio = AudioInfo {
+                    codec,
+                    lang,
+                    stream,
+                    channels,
+                    sample_rate,
+                    bitrate,
+                    depth,
+                };
+
+                audios.push(audio);
+            }
+
+            let mut videos = vec![];
+            let mut video_stream = 0;
+
+            for video in info.video_streams().into_iter() {
+                let caps = video.caps();
+                let codec = caps.as_ref().map(|caps| {
+                    gstreamer_pbutils::pb_utils_get_codec_description(caps).to_string()
+                });
+
+                let tag = video.tags().and_then(|tags| {
+                    tags.get::<gstreamer::tags::VideoCodec>()
+                        .map(|tag| tag.get().to_owned())
+                });
+
+                let bitrate = video.bitrate();
+                let par = video.par();
+
+                let depth = video.depth();
+                let width = video.width();
+                let height = video.height();
+                let framerate = video.framerate();
+                let framerate = (framerate.numer() as f32) / (framerate.denom() as f32);
+
+                let dar_num = width * par.numer() as u32;
+                let dar_denom = height * par.denom() as u32;
+                let interlaced = video.is_interlaced();
+
+                let stream = video_stream;
+                video_stream += 1;
+
+                let video = VideoInfo {
+                    stream,
+                    tag,
+                    codec,
+                    bitrate,
+                    width,
+                    height,
+                    depth,
+                    framerate,
+                    interlaced,
+                    dar_num,
+                    dar_denom,
+                };
+
+                videos.push(video)
+            }
 
             let duration = info
                 .duration()
                 .map(|clock| clock.seconds())
                 .unwrap_or_default();
 
-            (duration, subs)
+            (duration, subs, audios, videos)
         }
-        None => (0, vec![]),
+        None => (0, vec![], vec![], vec![]),
     }
 }
 
@@ -950,11 +1059,155 @@ fn pick_subtitle(db: &Database, id: impl Into<VideoId>, preferred: Option<&Strin
                     (":subtitle", &ToSqlOutput::from(subtitle_id)),
                 ],
             ) {
-                tracing::error!("Set movie subtitle error.\n {error}");
+                tracing::error!("Set {table} subtitle error.\n {error}");
             };
         }
         Err(error) => {
-            tracing::error!("Select movie subtitle error. \n{error}");
+            tracing::error!("Select {table} subtitle error. \n{error}");
         }
+    }
+}
+
+fn pick_audio(db: &Database, id: impl Into<VideoId>, preferred: Option<&String>) {
+    let Some(preferred) = preferred else {
+        return;
+    };
+
+    let id = id.into();
+
+    let table = if matches!(id, VideoId::Movie(_)) {
+        "movie"
+    } else {
+        "episode"
+    };
+
+    let res = db
+        .query_row(
+            "SELECT id FROM audio WHERE media=:media AND lang=:lang",
+            &[
+                (
+                    ":lang",
+                    &ToSqlOutput::Borrowed(ValueRef::Text(preferred.as_bytes())),
+                ),
+                (":media", &ToSqlOutput::from(id)),
+            ],
+            AudioId::from_row,
+        )
+        .optional();
+
+    let sql = format!("UPDATE {table} SET audio_id=:audio WHERE id=:id");
+    match res {
+        Ok(None) => {}
+        Ok(Some(audio_id)) => {
+            if let Err(error) = db.execute(
+                &sql,
+                &[
+                    (":id", &ToSqlOutput::from(id)),
+                    (":audio", &ToSqlOutput::from(audio_id)),
+                ],
+            ) {
+                tracing::error!("Set {table} audio error.\n {error}");
+            };
+        }
+        Err(error) => {
+            tracing::error!("Select {table} audio error. \n{error}");
+        }
+    }
+}
+
+fn save_video_metadata(
+    db: &Database,
+    successes: &mut Vec<registry::db::Success>,
+    failures: &mut Vec<registry::db::Failure<'_>>,
+    id: impl Into<VideoId>,
+    subtitles: Vec<SubtitleInfo>,
+    loaded_sub: Option<String>,
+    pick_preferred: bool,
+    preferred_subtitle_code: Option<&String>,
+    audio: Vec<AudioInfo>,
+    preferred_audio_code: Option<&String>,
+    videos: Vec<VideoInfo>,
+) {
+    let id = id.into();
+    let loaded = loaded_sub.map(|path| Subtitle::new_loaded(id, path));
+    let subtitles = subtitles
+        .into_iter()
+        .map(|sub| Subtitle::new_embedded(id, sub.title, sub.lang))
+        .chain(loaded);
+
+    for sub in subtitles {
+        let query = sub.insert();
+        match query.execute(db) {
+            Ok(succ) => successes.push(succ),
+            Err(fail) => failures.push(fail),
+        }
+    }
+
+    let mut selected_audio = None;
+
+    let audios = audio.into_iter().map(|audio| {
+        Audio::new(
+            id,
+            audio.codec,
+            audio.lang,
+            audio.channels,
+            audio.sample_rate,
+            audio.bitrate,
+            audio.depth,
+            audio.stream,
+        )
+    });
+
+    for audio in audios {
+        if selected_audio.is_none() {
+            selected_audio = Some(audio.id);
+        }
+
+        let query = audio.insert();
+        match query.execute(db) {
+            Ok(succ) => successes.push(succ),
+            Err(fail) => failures.push(fail),
+        }
+    }
+
+    let selected_audio = selected_audio
+        .map(|audio| ToSqlOutput::from(audio))
+        .unwrap_or(ToSqlOutput::Owned(Value::Null));
+
+    if let Err(error) = db.execute(
+        "UPDATE movie SET audio_id=:audio WHERE id=:id",
+        &[(":audio", &selected_audio), (":id", &ToSqlOutput::from(id))],
+    ) {
+        tracing::error!("Failed to save movie audio. \n{error}");
+    };
+
+    let videos = videos.into_iter().map(|video| {
+        video::VideoInfo::new(
+            id,
+            video.tag,
+            video.codec,
+            video.bitrate,
+            video.width,
+            video.height,
+            video.depth,
+            video.framerate,
+            video.interlaced,
+            video.dar_num,
+            video.dar_denom,
+            video.stream,
+        )
+    });
+
+    for video in videos {
+        let query = video.insert();
+        match query.execute(db) {
+            Ok(succ) => successes.push(succ),
+            Err(fail) => failures.push(fail),
+        }
+    }
+
+    if pick_preferred {
+        pick_subtitle(db, id, preferred_subtitle_code);
+        pick_audio(db, id, preferred_audio_code);
     }
 }

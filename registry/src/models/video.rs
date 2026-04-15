@@ -1,6 +1,14 @@
-use super::{EpisodeId, ItemId, MovieId, Subtitle, SubtitleId};
+use super::{EpisodeId, ItemId, MovieId};
 use rusqlite::Row;
 use std::path::PathBuf;
+
+pub mod audio;
+pub mod info;
+pub mod subtitle;
+
+pub use audio::*;
+pub use info::*;
+pub use subtitle::{Subtitle, SubtitleId, SubtitleKind};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VideoId {
@@ -83,8 +91,11 @@ pub struct Video {
     pub duration: u64,
     pub watch_count: u32,
     pub subtitle_id: Option<SubtitleId>,
+    pub audio_id: Option<AudioId>,
     pub generate_poster: bool,
     pub subtitles: Vec<Subtitle>,
+    pub audios: Vec<Audio>,
+    pub videos: Vec<VideoInfo>,
 }
 
 impl Video {
@@ -142,6 +153,7 @@ impl Video {
         let fetched = row.get::<_, bool>("fetched")?;
 
         let subtitle_id = SubtitleId::from_row_maybe("subtitle_id", row)?;
+        let audio_id = AudioId::from_row_maybe("audio_id", row)?;
 
         Ok(Self {
             id,
@@ -151,13 +163,24 @@ impl Video {
             duration,
             watch_count,
             subtitle_id,
+            audio_id,
             subtitles: vec![],
+            audios: vec![],
+            videos: vec![],
             generate_poster: generate_poster && !fetched,
         })
     }
 
     pub fn set_subtitles(&mut self, subs: Vec<Subtitle>) {
         self.subtitles = subs;
+    }
+
+    pub fn set_audios(&mut self, audios: Vec<Audio>) {
+        self.audios = audios;
+    }
+
+    pub fn set_videos(&mut self, videos: Vec<VideoInfo>) {
+        self.videos = videos;
     }
 
     pub fn progress(&mut self, progress: f32) {

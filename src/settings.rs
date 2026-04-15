@@ -167,6 +167,7 @@ pub enum MediaMessage {
     IncrMovieDepth,
     DecrMovieDepth,
     PreferredSub(String),
+    PreferredAudio(String),
     None,
 }
 
@@ -574,6 +575,12 @@ impl Settings {
                 }
                 MediaMessage::PreferredSub(preferred) => {
                     self.config.general.preferred_subtitle_codec =
+                        (!preferred.is_empty()).then_some(preferred);
+
+                    Task::none()
+                }
+                MediaMessage::PreferredAudio(preferred) => {
+                    self.config.general.preferred_audio_codec =
                         (!preferred.is_empty()).then_some(preferred);
 
                     Task::none()
@@ -1239,6 +1246,7 @@ impl Settings {
             restore_deleted,
             tmdb_rating,
             preferred_subtitle_codec,
+            preferred_audio_codec,
         } = &self.config.general;
 
         let general = draw_general(refresh_interval, recents_limit, search_limit)
@@ -1253,6 +1261,7 @@ impl Settings {
             *restore_deleted,
             *movie_depth,
             preferred_subtitle_codec,
+            preferred_audio_codec,
         )
         .map(SettingsMessage::Media);
 
@@ -2202,6 +2211,7 @@ fn draw_media<'a>(
     restore_deleted: bool,
     movie_depth: u8,
     preferred_sub: &Option<String>,
+    preferred_audio: &Option<String>,
 ) -> Element<'a, MediaMessage> {
     let dirs = {
         let top = {
@@ -2407,6 +2417,26 @@ fn draw_media<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
+    let preferred_audio = {
+        let label = label_maker("Preferred Audio Language ");
+        let icon = help(
+            "Specify an audio language code to prefer for embedded audio tracks (eg 'en', 'fr').",
+        );
+
+        let preferred = preferred_audio.as_deref().unwrap_or_default();
+        let input = text_input("", preferred)
+            .width(INPUT_WIDTH)
+            .size(TEXT_SIZE)
+            .font(regular_font())
+            .padding(INPUT_PADDING)
+            .on_input(MediaMessage::PreferredAudio)
+            .align_x(Horizontal::Right);
+
+        let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
     let content = column!(
         dirs,
         horizontal_rule(),
@@ -2415,6 +2445,8 @@ fn draw_media<'a>(
         discoverer,
         horizontal_rule(),
         restore_deletes,
+        horizontal_rule(),
+        preferred_audio,
         horizontal_rule(),
         preferred_sub
     )

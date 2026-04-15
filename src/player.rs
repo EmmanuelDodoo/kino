@@ -12,7 +12,7 @@ use iced::{
     },
     window,
 };
-use iced_video_player::{AudioTag, Button, Kind, MouseAction, MouseClick, Video, VideoPlayer};
+use iced_video_player::{Button, Kind, MouseAction, MouseClick, Video, VideoPlayer};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{
@@ -37,7 +37,7 @@ use core::{Error, variants};
 use devutils::thumbnails::{Image, ThumbnailGenerator};
 pub use playlist::*;
 use registry::models::{
-    self, CollectionId, CommentId, SimpleCollection, Subtitle, SubtitleKind, VideoId,
+    self, Audio, CollectionId, CommentId, SimpleCollection, Subtitle, SubtitleKind, VideoId,
 };
 use typo::*;
 
@@ -57,7 +57,7 @@ struct Config {
     tab: ConfigTab,
     subtitle_uri: Option<PathBuf>,
     selected_text: Option<Subtitle>,
-    selected_audio: Option<AudioTag>,
+    selected_audio: Option<Audio>,
     text_color: String,
     background_color: String,
     subtitle_font: FontState,
@@ -182,7 +182,7 @@ pub enum ConfigMessage {
 
 #[derive(Debug, Clone)]
 pub enum AudioConfig {
-    CurrentAudio(AudioTag),
+    CurrentAudio(Audio),
 }
 
 #[derive(Debug, Clone)]
@@ -291,8 +291,6 @@ pub struct Player {
     watch_time: Duration,
     last_frame: Option<Instant>,
     subtitles: Option<String>,
-    current_audio: Option<AudioTag>,
-    embedded_audio: Vec<AudioTag>,
 }
 
 impl Player {
@@ -1835,7 +1833,7 @@ impl Manager {
                     .map(|player| {
                         (
                             player.item.subtitles.as_slice(),
-                            player.embedded_audio.as_slice(),
+                            player.item.audios.as_slice(),
                         )
                     })
                     .unwrap_or_default();
@@ -2399,14 +2397,16 @@ impl Manager {
             player.video.set_text_offset(offset);
         }
 
-        if let Some(audio) = selected_audio {
-            let changed = player
-                .current_audio
-                .as_ref()
-                .map(|og| og != &audio)
-                .unwrap_or(true);
-            if changed {
-                player.video.set_audio(audio);
+        if let Some(audio) = selected_audio
+            && player.item.audio_id != Some(audio.id)
+        {
+            player.item.audio_id = Some(audio.id);
+
+            if let Some(tag) = player.video.available_audio().into_iter().find(|tag| {
+                Some(&tag.codec) == audio.codec.as_ref()
+                    && audio.lang.as_ref() == Some(&tag.language_code)
+            }) {
+                player.video.set_audio(tag);
             }
         }
 
@@ -2489,7 +2489,16 @@ impl Manager {
                     .cloned()
             });
 
-            (current, player.current_audio.clone(), None)
+            let audio = player.item.audio_id.and_then(|id| {
+                player
+                    .item
+                    .audios
+                    .iter()
+                    .find(|audio| audio.id == id)
+                    .cloned()
+            });
+
+            (current, audio, None)
         } else {
             (None, None, None)
         };
@@ -2686,7 +2695,7 @@ fn load_video<Message: 'static + MaybeSend>(
                     continue;
                 }
 
-                let new = models::Subtitle::new_embedded(item.id, &em.title, &em.language_code);
+                let new = Subtitle::new_embedded(item.id, &em.title, &em.language_code);
                 item.subtitles.push(new);
             }
 
@@ -2731,6 +2740,17 @@ fn load_video<Message: 'static + MaybeSend>(
                 video.set_text_offset(offset);
             }
 
+            if let Some(saved_audio) = item
+                .audio_id
+                .and_then(|id| item.audios.iter().find(|audio| audio.id == id))
+                && let Some(audio) = video.available_audio().iter().find(|audio| {
+                    audio.id == saved_audio.stream as i32
+                        && Some(&audio.language_code) == saved_audio.lang.as_ref()
+                })
+            {
+                video.set_audio(audio.clone());
+            }
+
             std::thread::sleep(std::time::Duration::from_millis(150));
 
             let progress = if item.progress >= 0.98 {
@@ -2748,10 +2768,6 @@ fn load_video<Message: 'static + MaybeSend>(
 
             video.set_paused(true);
 
-            let curr_audio = video.get_audio();
-
-            let audio = video.available_audio();
-
             Arc::new(Player {
                 item,
                 video,
@@ -2761,8 +2777,6 @@ fn load_video<Message: 'static + MaybeSend>(
                 watch_time: Duration::ZERO,
                 last_frame: None,
                 subtitles: None,
-                current_audio: curr_audio,
-                embedded_audio: audio,
             })
         }),
         move |res| f(res.unwrap()),
@@ -3578,7 +3592,7 @@ fn draw_subs<'a>(
 
 fn draw_audio<'a>(
     config: &'a Config,
-    audio: &'a [AudioTag],
+    audio: &'a [Audio],
     size: f32,
     padding: Padding,
     spacing: f32,
@@ -3591,7 +3605,7 @@ fn draw_audio<'a>(
         let pick: Element<'_, AudioConfig> = if audio.is_empty() {
             label_maker("None").size(size).into()
         } else {
-            pick_list(config.selected_audio.clone(), audio, ToString::to_string)
+            pick_list(config.selected_audio.clone(), audio, audio_to_string)
                 .handle(handle)
                 .on_select(AudioConfig::CurrentAudio)
                 .padding(padding)
@@ -3611,7 +3625,7 @@ fn draw_config<'a>(
     settings: &'a VideoSettings,
     config: &'a Config,
     subtitles: &'a [Subtitle],
-    audio: &'a [AudioTag],
+    audio: &'a [Audio],
 ) -> Element<'a, ManagerMessage> {
     // todo: Hardware volume, Aspect Ratio
     let size = H7;
@@ -3723,4 +3737,12 @@ fn subtitle_to_string(sub: &Subtitle) -> String {
             name.into()
         }
     }
+}
+
+fn audio_to_string(audio: &Audio) -> String {
+    format!(
+        "{} - {}",
+        audio.lang.as_deref().unwrap_or("Unknown language"),
+        audio.codec.as_deref().unwrap_or("Unknown codec"),
+    )
 }

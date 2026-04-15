@@ -10,7 +10,6 @@ pub mod image;
 pub mod movies;
 pub mod seasons;
 pub mod shows;
-pub mod subtitle;
 pub mod video;
 
 pub use collection::ItemId;
@@ -21,7 +20,6 @@ use image::Image;
 pub use movies::*;
 pub use seasons::*;
 pub use shows::*;
-pub use subtitle::*;
 pub use video::*;
 
 use crate::db::{Operation, Query, Table};

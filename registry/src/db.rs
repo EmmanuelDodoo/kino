@@ -1,6 +1,6 @@
 use crate::models::{
-    CollectionId, Comment, CommentId, Directory, DirectoryId, EpisodeId, MovieId, SearchItem,
-    SeasonId, ShowId, Subtitle, SubtitleId, Video, VideoId,
+    Audio, AudioId, CollectionId, Comment, CommentId, Directory, DirectoryId, EpisodeId, MovieId,
+    SearchItem, SeasonId, ShowId, Subtitle, SubtitleId, Video, VideoId, VideoInfo,
     collection::{self, ItemId, Items},
 };
 
@@ -53,6 +53,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 7,
         sql: include_str!("../../resources/db/migrations/7.sql"),
+    },
+    Migration {
+        version: 8,
+        sql: include_str!("../../resources/db/migrations/8.sql"),
     },
 ];
 
@@ -352,6 +356,30 @@ impl Database {
             .collect()
     }
 
+    pub fn get_video_audios(&self, video: VideoId) -> rusqlite::Result<Vec<Audio>> {
+        let sql = "SELECT * FROM audio WHERE audio.media=:video";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":video", &ToSqlOutput::from(video))], |row| {
+                Audio::from_row(row)
+            })?
+            .collect()
+    }
+
+    pub fn get_video_info(&self, video: VideoId) -> rusqlite::Result<Vec<VideoInfo>> {
+        let sql = "SELECT * FROM video WHERE video.media=:video";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement
+            .query_map(&[(":video", &ToSqlOutput::from(video))], |row| {
+                VideoInfo::from_row(row)
+            })?
+            .collect()
+    }
+
     pub fn get_video(&self, id: impl Into<VideoId>) -> rusqlite::Result<Video> {
         let id = id.into();
         let is_movie = matches!(id, VideoId::Movie(_));
@@ -363,9 +391,9 @@ impl Database {
         };
 
         let sql = if is_movie {
-            "SELECT movie.name, movie.id, movie.progress, movie.duration, movie.watch_count, movie.subtitle_id, movie.generate_poster, movie.fetched, movie.path, directory.path AS directory_path FROM movie JOIN directory ON movie.directory=directory.id WHERE movie.id=:id AND NOT movie.removed"
+            "SELECT movie.name, movie.id, movie.progress, movie.duration, movie.watch_count, movie.subtitle_id, movie.audio_id, movie.generate_poster, movie.fetched, movie.path, directory.path AS directory_path FROM movie JOIN directory ON movie.directory=directory.id WHERE movie.id=:id AND NOT movie.removed"
         } else {
-            "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.subtitle_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE episode.id=:id AND NOT episode.removed"
+            "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE episode.id=:id AND NOT episode.removed"
         };
 
         let mut statement = self.prepare_cached(sql)?;
@@ -373,8 +401,12 @@ impl Database {
         let mut video = statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)?;
 
         let subs = self.get_video_subtitles(video.id)?;
+        let audios = self.get_video_audios(video.id)?;
+        let info = self.get_video_info(video.id)?;
 
         video.set_subtitles(subs);
+        video.set_audios(audios);
+        video.set_videos(info);
 
         Ok(video)
     }
@@ -399,7 +431,7 @@ impl Database {
             .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
-        let query = "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.subtitle_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE NOT episode.removed";
+        let query = "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE NOT episode.removed";
 
         let sql =
             format!("{query} AND season.id=:season {filter} {sort} LIMIT :limit OFFSET :offset",);
@@ -419,7 +451,12 @@ impl Database {
 
         for video in videos.iter_mut() {
             let subs = self.get_video_subtitles(video.id)?;
+            let audios = self.get_video_audios(video.id)?;
+            let info = self.get_video_info(video.id)?;
+
             video.set_subtitles(subs);
+            video.set_audios(audios);
+            video.set_videos(info);
         }
 
         Ok(videos)
@@ -1052,6 +1089,7 @@ impl Database {
         progress: f32,
         duration: u64,
         subtitle_id: Option<SubtitleId>,
+        audio_id: Option<AudioId>,
     ) -> rusqlite::Result<usize> {
         let table = if matches!(id, VideoId::Movie(_)) {
             "movie"
@@ -1060,10 +1098,15 @@ impl Database {
         };
 
         let sql = format!(
-            "UPDATE {table} SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_id=:subtitle_id, last_watched=CURRENT_TIMESTAMP WHERE {table}.id=:id"
+            "UPDATE {table} SET watch_count=:watch_count, duration=:duration, progress=:progress, subtitle_id=:subtitle_id, audio_id=:audio_id, last_watched=CURRENT_TIMESTAMP WHERE {table}.id=:id"
         );
 
         let subtitle_id = match subtitle_id {
+            Some(id) => ToSqlOutput::from(id),
+            None => ToSqlOutput::Owned(Value::Null),
+        };
+
+        let audio_id = match audio_id {
             Some(id) => ToSqlOutput::from(id),
             None => ToSqlOutput::Owned(Value::Null),
         };
@@ -1076,6 +1119,7 @@ impl Database {
             (":progress", &ToSqlOutput::from(progress)),
             (":duration", &ToSqlOutput::from(duration as isize)),
             (":subtitle_id", &subtitle_id),
+            (":audio_id", &audio_id),
         ])?;
 
         Ok(rows)

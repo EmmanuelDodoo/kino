@@ -1077,6 +1077,7 @@ impl App {
                     item.progress,
                     item.duration,
                     item.subtitle_id,
+                    item.audio_id,
                 ) {
                     Ok(_) => {
                         tracing::debug!("Updated {:?} statistics", item.id);
@@ -1154,6 +1155,7 @@ impl App {
                 let movie_depth = self.config.general.movie_depth;
                 let restore = self.config.general.restore_deleted;
                 let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
+                let preferred_audio = self.config.general.preferred_audio_codec.clone();
 
                 let scans = scan_task(
                     db_path,
@@ -1162,6 +1164,7 @@ impl App {
                     movie_depth,
                     restore,
                     preferred_sub,
+                    preferred_audio,
                 );
 
                 let auth = self.config.auth();
@@ -1206,6 +1209,7 @@ impl App {
                 let movie_depth = self.config.general.movie_depth;
                 let restore = self.config.general.restore_deleted;
                 let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
+                let preferred_audio = self.config.general.preferred_audio_codec.clone();
 
                 let scan = scan_task(
                     db_path,
@@ -1214,6 +1218,7 @@ impl App {
                     movie_depth,
                     restore,
                     preferred_sub,
+                    preferred_audio,
                 );
 
                 Task::batch([home_task, scan])
@@ -1751,6 +1756,7 @@ fn scan_task(
     movie_depth: u8,
     restore: bool,
     preferred_sub: Option<String>,
+    preferred_audio: Option<String>,
 ) -> Task<Message> {
     Task::perform(
         async move {
@@ -1761,6 +1767,7 @@ fn scan_task(
                 movie_depth,
                 restore,
                 preferred_sub,
+                preferred_audio,
             )
         },
         |(batch, res)| {
