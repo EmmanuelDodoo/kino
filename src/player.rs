@@ -226,8 +226,8 @@ enum IndicatorKind {
     VolumeDown,
     Mute,
     Unmute,
-    SeekFront,
-    SeekBack,
+    SeekFront(f64),
+    SeekBack(f64),
     Play,
     Pause,
 }
@@ -239,8 +239,8 @@ impl IndicatorKind {
             Self::VolumeDown => icons::VOLUME_DOWN,
             Self::Mute => icons::MUTE,
             Self::Unmute => icons::VOLUME,
-            Self::SeekFront => icons::SEEK_FRONT_DOUBLE,
-            Self::SeekBack => icons::SEEK_BACK_DOUBLE,
+            Self::SeekFront(_) => icons::CHEV_LEFT,
+            Self::SeekBack(_) => icons::CHEV_RIGHT,
             Self::Play => icons::PLAY,
             Self::Pause => icons::PAUSE,
         }
@@ -1719,6 +1719,18 @@ impl Manager {
             return empty();
         };
 
+        let alpha = indicator.animation.interpolate(1.0, 0.0, now);
+
+        let color = move |theme: &Theme| {
+            let default = text::primary(theme);
+
+            text::Style {
+                color: default
+                    .color
+                    .map(|color| iced::Color::from_rgba(color.r, color.g, color.b, alpha)),
+            }
+        };
+
         let size = H1 * typo::RATIO;
 
         let padding = if matches!(indicator.kind, IndicatorKind::Pause | IndicatorKind::Play) {
@@ -1727,36 +1739,41 @@ impl Manager {
             Padding::new(24.0)
         };
 
-        let alpha = indicator.animation.interpolate(1.0, 0.0, now);
-        let content = icons::icon(indicator.kind.char())
-            .size(size)
-            .style(move |theme| {
-                let default = text::primary(theme);
-
-                text::Style {
-                    color: default
-                        .color
-                        .map(|color| iced::Color::from_rgba(color.r, color.g, color.b, alpha)),
-                }
-            });
-
-        let content = container(content).padding(padding).style(move |theme| {
-            let default = styles::container::dark(theme);
-            let border = default.border.rounded(100.0);
-
-            container::Style {
-                border,
-                background: default
-                    .background
-                    .map(|background| background.scale_alpha(alpha)),
-                ..default
-            }
-        });
+        let icon = icons::icon(indicator.kind.char()).size(size).style(color);
 
         match indicator.kind {
-            IndicatorKind::SeekBack => row!(content, space::horizontal()).into(),
-            IndicatorKind::SeekFront => row!(space::horizontal(), content).into(),
-            _ => row!(space::horizontal(), content, space::horizontal()).into(),
+            IndicatorKind::SeekBack(amt) => {
+                let amt = sized_medium(amt, H6).style(color);
+
+                row!(icon, amt, space::horizontal())
+                    .padding(padding)
+                    .align_y(Vertical::Center)
+                    .into()
+            }
+            IndicatorKind::SeekFront(amt) => {
+                let amt = sized_medium(format!("+{amt}"), H6).style(color);
+
+                row!(space::horizontal(), amt, icon)
+                    .padding(padding)
+                    .align_y(Vertical::Center)
+                    .into()
+            }
+            _ => {
+                let content = container(icon).padding(padding).style(move |theme| {
+                    let default = styles::container::dark(theme);
+                    let border = default.border.rounded(100.0);
+
+                    container::Style {
+                        border,
+                        background: default
+                            .background
+                            .map(|background| background.scale_alpha(alpha)),
+                        ..default
+                    }
+                });
+
+                row!(space::horizontal(), content, space::horizontal()).into()
+            }
         }
     }
 
@@ -2023,47 +2040,59 @@ impl Manager {
     }
 
     fn seek_back(&mut self, shift: bool, now: Instant) -> Task<Message> {
+        let shift_amt = if shift {
+            self.settings.seek_shift_change_amt
+        } else {
+            self.settings.seek_change_amt
+        };
+
         if let State::Ready { player, .. } = &mut self.state {
             player.is_dragging = false;
-            let amt = if shift {
-                self.settings.seek_shift_change_amt
-            } else {
-                self.settings.seek_change_amt
-            };
 
             player.last_frame.take();
-            player.position = (player.position - amt).max(0.0);
+            player.position = (player.position - shift_amt).max(0.0);
             player
                 .video
                 .seek(Duration::from_secs_f64(player.position), false)
                 .unwrap();
         }
 
-        let (indicator, task) = Indicator::new(IndicatorKind::SeekBack, now);
+        let indicator_amt = match self.indicator.as_ref().map(|ind| ind.kind) {
+            Some(IndicatorKind::SeekBack(amt)) => amt - shift_amt,
+            _ => -shift_amt,
+        };
+
+        let (indicator, task) = Indicator::new(IndicatorKind::SeekBack(indicator_amt), now);
         self.indicator = Some(indicator);
 
         task.map(Message::Player)
     }
 
     fn seek_front(&mut self, shift: bool, now: Instant) -> Task<Message> {
+        let shift_amt = if shift {
+            self.settings.seek_shift_change_amt
+        } else {
+            self.settings.seek_change_amt
+        };
+
         if let State::Ready { player, .. } = &mut self.state {
             player.is_dragging = false;
             let duration = player.video.duration().as_secs_f64();
-            let amt = if shift {
-                self.settings.seek_shift_change_amt
-            } else {
-                self.settings.seek_change_amt
-            };
 
             player.last_frame.take();
-            player.position = (player.position + amt).min(duration);
+            player.position = (player.position + shift_amt).min(duration);
             player
                 .video
                 .seek(Duration::from_secs_f64(player.position), false)
                 .unwrap();
         }
 
-        let (indicator, task) = Indicator::new(IndicatorKind::SeekFront, now);
+        let indicator_amt = match self.indicator.as_ref().map(|ind| ind.kind) {
+            Some(IndicatorKind::SeekFront(amt)) => amt + shift_amt,
+            _ => shift_amt,
+        };
+
+        let (indicator, task) = Indicator::new(IndicatorKind::SeekFront(indicator_amt), now);
         self.indicator = Some(indicator);
 
         task.map(Message::Player)
