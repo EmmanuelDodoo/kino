@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(dead_code, unused_imports)]
 use iced::{
     Color, ContentFit, Element, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation,
