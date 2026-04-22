@@ -374,7 +374,7 @@ impl Request {
             Status::Data
         };
 
-        let sql = "UPDATE tmdb SET status=:status WHERE media_id=:id";
+        let sql = "UPDATE tmdb SET status=:status, retry=0 WHERE media_id=:id";
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":status", ToSqlOutput::from(status)),
@@ -393,7 +393,7 @@ impl Request {
         let id = id.into();
 
         let status = Status::Data;
-        let sql = "UPDATE tmdb SET status=:status, tmdb_id=:tmdb_id WHERE media_id=:id";
+        let sql = "UPDATE tmdb SET status=:status, tmdb_id=:tmdb_id, retry=0 WHERE media_id=:id";
 
         let params = [
             (":id", ToSqlOutput::from(id)),
@@ -414,7 +414,7 @@ impl Request {
         let id = id.into();
 
         let status = Status::Data;
-        let sql = "UPDATE tmdb SET status=:status, number=:number WHERE media_id=:id";
+        let sql = "UPDATE tmdb SET status=:status, number=:number, retry=0 WHERE media_id=:id";
 
         let params = [
             (":id", ToSqlOutput::from(id)),
