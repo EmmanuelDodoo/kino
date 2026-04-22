@@ -126,7 +126,7 @@ impl BootFn<App, app::Message> for BootMode {
                     .expect("Failed to open dev database");
 
                 tracing::debug!("Starting up Dev instance");
-                App::boot(config, db, std::iter::empty(), false)
+                App::boot(config, db, std::iter::empty())
             }
             Self::Prod => {
                 let (config, errors) = Config::load();
@@ -134,7 +134,7 @@ impl BootFn<App, app::Message> for BootMode {
                     .expect("Failed to open Database");
 
                 tracing::debug!("Starting up Production instance");
-                App::boot(config, db, errors, true)
+                App::boot(config, db, errors)
             }
         }
     }

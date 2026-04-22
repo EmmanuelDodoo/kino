@@ -433,16 +433,23 @@ pub async fn run(
         }
     };
 
+    let img_config = async |auth: &str| {
+        if auth.trim().is_empty() {
+            None
+        } else {
+            get_config(&auth)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        "\nGetting TMDB image config with auth {auth} failed. \nError{error}\n",
+                    )
+                })
+                .ok()
+        }
+    };
+
     let mut auth = auth;
-    let mut image_config =
-        get_config(&auth)
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    "\nGetting TMDB image config with auth {auth} failed. \nError{error}\n",
-                )
-            })
-            .ok();
+    let mut image_config = img_config(&auth).await;
 
     let mut rating = rating;
     let retry_limit = 5;
@@ -454,14 +461,12 @@ pub async fn run(
         {
             tracing::debug!("New TMDB API token received");
             auth = new_auth;
-            image_config = get_config(&auth)
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(
-                        "\nGetting TMDB image config with auth {auth} failed. \nError{error}\n",
-                    )
-                })
-                .ok();
+            image_config = img_config(&auth).await;
+        }
+
+        if auth.is_empty() {
+            time::sleep(interval).await;
+            continue;
         }
 
         if !rating_rx.is_empty()

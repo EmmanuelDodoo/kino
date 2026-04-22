@@ -204,7 +204,6 @@ impl App {
         config: Config,
         db: db::Database,
         errors: impl IntoIterator<Item = String>,
-        fetch: bool,
     ) -> (Self, Task<Message>) {
         let load_errors = Task::done(Message::PushToasts(
             errors
@@ -226,7 +225,7 @@ impl App {
         let img_proc =
             Task::future(devutils::image_ops::image_processor(config.db_path())).discard();
 
-        let sources = if fetch {
+        let sources = {
             let tmdb = Task::future(source::tmdb::run(
                 config.db_path(),
                 tmdb_auth_rx,
@@ -239,8 +238,6 @@ impl App {
             .discard();
 
             Task::batch([tmdb])
-        } else {
-            Task::none()
         };
 
         let (home, home_tasks) = Home::boot(
