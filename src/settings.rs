@@ -6,8 +6,7 @@ use crate::utils::{
     convert_color_str, empty, icons, icons::sized_button, modal::modal, modal_container,
     picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo::*,
 };
-use registry::models::{Directory, DirectoryId, MediaType, humanize_datetime};
-
+use devutils::source::SourceSet;
 use iced::{
     Border, Element, Length, Task, Theme,
     alignment::{Horizontal, Vertical},
@@ -17,6 +16,7 @@ use iced::{
         row, rule, scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
+use registry::models::{Directory, DirectoryId, MediaType, humanize_datetime};
 use widgets::{expandable, marquee};
 
 use std::path::{Path, PathBuf};
@@ -179,6 +179,7 @@ pub enum MetadataMessage {
     Fetch(String),
     IncrFetch,
     DecrFetch,
+    Source(SourceSet),
 }
 
 #[derive(Debug, Clone)]
@@ -629,6 +630,10 @@ impl Settings {
                         .general
                         .fetching_interval
                         .saturating_sub(Duration::from_secs(1));
+                    Task::none()
+                }
+                MetadataMessage::Source(source) => {
+                    self.config.general.default_source = source;
                     Task::none()
                 }
             },
@@ -1247,6 +1252,7 @@ impl Settings {
             tmdb_rating,
             preferred_subtitle_codec,
             preferred_audio_codec,
+            default_source,
         } = &self.config.general;
 
         let general = draw_general(refresh_interval, recents_limit, search_limit)
@@ -1265,7 +1271,7 @@ impl Settings {
         )
         .map(SettingsMessage::Media);
 
-        let metadata = draw_metadata(auth_token, fetching_interval, *tmdb_rating)
+        let metadata = draw_metadata(auth_token, *default_source, fetching_interval, *tmdb_rating)
             .map(SettingsMessage::Metadata);
 
         let open = {
@@ -2457,6 +2463,7 @@ fn draw_media<'a>(
 
 fn draw_metadata<'a>(
     auth_token: &str,
+    default_source: SourceSet,
     fetching_interval: &Duration,
     tmdb_rating: bool,
 ) -> Element<'a, MetadataMessage> {
@@ -2517,8 +2524,27 @@ fn draw_metadata<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
+    let source = {
+        let handle = picklist_handle(TEXT_SIZE);
+        let label = label_maker("Default Source ");
+
+        let layouts = pick_list(Some(default_source), SourceSet::VARIANTS, |source| {
+            source.to_str().to_owned()
+        })
+        .font(regular_font())
+        .on_select(MetadataMessage::Source)
+        .handle(handle.clone())
+        .padding(LIST_PADDING)
+        .text_size(TEXT_SIZE)
+        .style(picklist_style);
+
+        row!(label, space::horizontal(), layouts).align_y(Vertical::Center)
+    };
+
     let content = column!(
         auth,
+        horizontal_rule(),
+        source,
         horizontal_rule(),
         fetching_interval,
         horizontal_rule(),

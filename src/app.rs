@@ -1171,10 +1171,12 @@ impl App {
                 let restore = self.config.general.restore_deleted;
                 let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
                 let preferred_audio = self.config.general.preferred_audio_codec.clone();
+                let default_source = self.config.general.default_source;
 
                 let scans = scan_task(
                     db_path,
                     scans,
+                    default_source,
                     discoverer,
                     movie_depth,
                     restore,
@@ -1225,10 +1227,12 @@ impl App {
                 let restore = self.config.general.restore_deleted;
                 let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
                 let preferred_audio = self.config.general.preferred_audio_codec.clone();
+                let default_source = self.config.general.default_source;
 
                 let scan = scan_task(
                     db_path,
                     dirs,
+                    default_source,
                     discoverer,
                     movie_depth,
                     restore,
@@ -1767,19 +1771,19 @@ fn episode_map(
 fn scan_task(
     db_path: std::path::PathBuf,
     dirs: Vec<Directory>,
+    default_source: source::SourceSet,
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
     preferred_sub: Option<String>,
     preferred_audio: Option<String>,
 ) -> Task<Message> {
-    let todo = source::SourceSet::Tmdb;
     Task::perform(
         async move {
             scan::scan_dirs(
                 db_path,
                 dirs,
-                todo,
+                default_source,
                 discoverer,
                 movie_depth,
                 restore,

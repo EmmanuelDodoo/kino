@@ -4,6 +4,7 @@ pub use keys::{KeyModifier, KeyPress, KeyStore};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};
 pub use subtitles::SubtitleDescription;
+use devutils::source::SourceSet;
 
 variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -150,6 +151,7 @@ pub struct GeneralSettings {
     pub preferred_subtitle_codec: Option<String>,
     pub preferred_audio_codec: Option<String>,
     pub tmdb_rating: bool,
+    pub default_source: SourceSet,
 }
 
 impl GeneralSettings {
@@ -163,11 +165,12 @@ impl GeneralSettings {
             scan_discoverer: true,
             auth_token: String::default(),
             movie_depth: 2,
-            fetching_interval: Duration::from_secs(600),
+            fetching_interval: Duration::from_secs(300),
             restore_deleted: true,
             preferred_subtitle_codec: Some("en".into()),
             preferred_audio_codec: Some("en".into()),
             tmdb_rating: true,
+            default_source: SourceSet::Tmdb,
         }
     }
 
@@ -186,6 +189,7 @@ impl GeneralSettings {
             preferred_subtitle_codec: Some("en".into()),
             preferred_audio_codec: Some("en".into()),
             tmdb_rating: true,
+            default_source: SourceSet::Tmdb,
         }
     }
 }

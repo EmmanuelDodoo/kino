@@ -1,3 +1,4 @@
+use core::variants;
 use registry::{
     db::Query,
     models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId},
@@ -10,6 +11,7 @@ use rusqlite::{
     Row,
     types::{ToSqlOutput, ValueRef},
 };
+use serde::{Serialize, Deserialize};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -28,19 +30,27 @@ const POSTER_SNIPPET: &str = "_poster.jpg";
 const BACKDROP_SNIPPET: &str = "_backdrop.jpg";
 pub(crate) const IMAGE_SQL: &str = "INSERT INTO image (path) VALUES (:path) ON CONFLICT (path) DO UPDATE SET main=NULL, accent=NULL, generated=FALSE";
 
-#[derive(Debug, Clone, Copy)]
+variants! {
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum SourceSet {
+    #[serde(rename="none")]
     None,
+    #[serde(rename="tmdb")]
     Tmdb,
+}
 }
 
 impl SourceSet {
-    const NONE: &str = "none";
-    const TMDB: &str = "tmdb";
+    pub const NONE: &str = "none";
+    pub const TMDB: &str = "tmdb";
 
     pub fn from_str(s: &str) -> Self {
         match s {
             Self::TMDB => Self::Tmdb,
+            "Tmdb" => Self::Tmdb,
+            "TMDB" => Self::Tmdb,
+            "None" => Self::None,
             _ => Self::None,
         }
     }
