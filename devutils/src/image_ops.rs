@@ -330,7 +330,7 @@ pub fn save_generated_poster(
     use registry::{db, models::VideoId};
     use rusqlite::types::ToSqlOutput;
 
-    let path = crate::fetch::poster_path(path, id);
+    let path = crate::source::poster_path(&path, &id);
 
     let Some(img): Option<ImageBuffer<Rgba<u8>, _>> =
         ImageBuffer::from_raw(img.width, img.height, img.bytes)
@@ -373,7 +373,7 @@ pub fn save_generated_poster(
     let path = {
         let path = ToSqlOutput::from(path.display().to_string());
 
-        if let Err(error) = db.execute(crate::fetch::IMAGE_SQL, &[(":path", &path)]) {
+        if let Err(error) = db.execute(crate::source::IMAGE_SQL, &[(":path", &path)]) {
             tracing::error!("Could not insert into image table. Error\n{error}")
         };
 

@@ -21,7 +21,7 @@ use registry::{
 };
 use shared::ThumbnailTask;
 
-use devutils::{fetch, scan};
+use devutils::{scan, source};
 use registry::models::{
     self, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode, EpisodeId,
     ItemId, Media, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Video,
@@ -52,9 +52,9 @@ pub enum MediaUpdateKind {
     Rating(f32),
     Name(String),
     Synopsis(String),
-    Refetch,
+    Refetch(source::SourceSet),
     Remove,
-    TMDBId(u32),
+    TMDBId { id: u32, source: source::SourceSet },
 }
 
 #[derive(Clone, Debug)]
@@ -217,8 +217,8 @@ impl App {
 
         let fonts = iced::font::list().map(Message::AvailableFonts);
 
-        let (auth_tx, auth_rx) = mpsc::channel(2);
-        let auth = config.auth();
+        let (tmdb_auth_tx, tmdb_auth_rx) = mpsc::channel(2);
+        let tmdb_auth = config.tmdb_auth();
 
         let (rating_tx, rating_rx) = mpsc::channel(2);
         let rating = config.general.tmdb_rating;
@@ -226,17 +226,19 @@ impl App {
         let img_proc =
             Task::future(devutils::image_ops::image_processor(config.db_path())).discard();
 
-        let fetcher = if fetch {
-            Task::future(fetch::fetcher(
+        let sources = if fetch {
+            let tmdb = Task::future(source::tmdb::run(
                 config.db_path(),
-                auth_rx,
-                auth,
+                tmdb_auth_rx,
+                tmdb_auth,
                 rating_rx,
                 rating,
                 config.images_path(),
                 config.fetching_interval(),
             ))
-            .discard()
+            .discard();
+
+            Task::batch([tmdb])
         } else {
             Task::none()
         };
@@ -248,9 +250,9 @@ impl App {
             config.general.recents_limit,
         );
 
-        let new = Self::new(config, db, home, auth_tx, rating_tx);
+        let new = Self::new(config, db, home, tmdb_auth_tx, rating_tx);
 
-        let tasks = Task::batch([load_errors, load_id, home_tasks, fetcher, img_proc, fonts]);
+        let tasks = Task::batch([load_errors, load_id, home_tasks, sources, img_proc, fonts]);
 
         (new, tasks)
     }
@@ -413,11 +415,11 @@ impl App {
                         ItemId::Season(id) => Season::set_synopsis(id, value),
                         ItemId::Episode(id) => Episode::set_synopsis(id, value),
                     },
-                    MediaUpdateKind::Refetch => match id {
-                        ItemId::Show(id) => Show::refetch(id),
-                        ItemId::Movie(id) => Movie::refetch(id),
-                        ItemId::Season(id) => Season::refetch(id),
-                        ItemId::Episode(id) => Episode::refetch(id),
+                    MediaUpdateKind::Refetch(source) => match source.refetch(id) {
+                        Some(query) => query,
+                        None => {
+                            return self.home.content_refresh();
+                        }
                     },
                     MediaUpdateKind::Remove => match id {
                         ItemId::Show(id) => Show::remove(id),
@@ -425,12 +427,25 @@ impl App {
                         ItemId::Season(id) => Season::remove(id),
                         ItemId::Episode(id) => Episode::remove(id),
                     },
-                    MediaUpdateKind::TMDBId(new) => match id {
-                        ItemId::Show(id) => Show::set_tmdb_id(id, new),
-                        ItemId::Movie(id) => Movie::set_tmdb_id(id, new),
-                        ItemId::Season(id) => Season::set_user_number(id, new),
-                        ItemId::Episode(id) => Episode::set_user_number(id, new),
-                    },
+                    MediaUpdateKind::TMDBId {
+                        id: tmdb_id,
+                        source,
+                    } => {
+                        let query = match id {
+                            ItemId::Movie(id) => source.set_tmdb_id(id, tmdb_id),
+
+                            ItemId::Show(id) => source.set_tmdb_id(id, tmdb_id),
+                            ItemId::Season(id) => source.set_tmdb_number(id, tmdb_id as u16),
+                            ItemId::Episode(id) => source.set_tmdb_number(id, tmdb_id as u16),
+                        };
+
+                        match query {
+                            Some(query) => query,
+                            None => {
+                                return self.home.content_refresh();
+                            }
+                        }
+                    }
                 };
 
                 match query.execute(&self.db) {
@@ -1167,10 +1182,10 @@ impl App {
                     preferred_audio,
                 );
 
-                let auth = self.config.auth();
+                let auth = self.config.tmdb_auth();
 
                 let auth = if !auth.is_empty() {
-                    tracing::debug!("Updating API token");
+                    tracing::debug!("Updating TMDB API token");
                     let auth_tx = self.auth_tx.clone();
 
                     Task::perform(async move { auth_tx.send(auth).await }, |_| Message::None)
@@ -1758,11 +1773,13 @@ fn scan_task(
     preferred_sub: Option<String>,
     preferred_audio: Option<String>,
 ) -> Task<Message> {
+    let todo = source::SourceSet::Tmdb;
     Task::perform(
         async move {
             scan::scan_dirs(
                 db_path,
                 dirs,
+                todo,
                 discoverer,
                 movie_depth,
                 restore,

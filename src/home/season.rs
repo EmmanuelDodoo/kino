@@ -2,6 +2,7 @@ use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, empty, styles};
+use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{
     Element, Length, Padding, Task,
@@ -29,9 +30,9 @@ pub enum Message {
     Goto(CollectionId),
     Rename(String),
     Synopsis(String),
-    Refetch,
+    Refetch(SourceSet),
     Remove(String),
-    Number,
+    Number(SourceSet),
 }
 
 #[derive(Debug, Clone)]
@@ -138,8 +139,11 @@ impl SeasonPage {
 
                 Some(msg)
             }
-            Message::Refetch => {
-                let msg = HomeMessage::Refetch(self.id.into());
+            Message::Refetch(source) => {
+                let msg = HomeMessage::Refetch {
+                    id: self.id.into(),
+                    source,
+                };
                 Some(msg)
             }
             Message::Remove(name) => {
@@ -149,10 +153,11 @@ impl SeasonPage {
                 });
                 Some(msg)
             }
-            Message::Number => {
+            Message::Number(source) => {
                 let msg = HomeMessage::OpenView(ViewMessage::TMDBId {
                     id: self.id.into(),
                     top_level: false,
+                    source,
                 });
                 Some(msg)
             }
@@ -479,6 +484,8 @@ impl SeasonPage {
         thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, SeasonPageMessage> {
+        let source = SourceSet::from_str(season.media.source());
+
         let content = {
             let width = 750.0;
             let id = self.id;
@@ -493,10 +500,10 @@ impl SeasonPage {
                     &season.media,
                     width,
                     Message::Rename(season.media.name().to_owned()),
-                    Message::Refetch,
+                    Message::Refetch(source),
                     Message::Remove(season.media.name().to_owned()),
                     Message::Synopsis(season.media.synopsis().to_owned()),
-                    (Message::Number, false),
+                    (Message::Number(source), false),
                 )
                 .map(move |message| SeasonPageMessage { id, message }),
                 // todo

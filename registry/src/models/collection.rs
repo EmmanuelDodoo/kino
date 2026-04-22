@@ -75,6 +75,15 @@ impl ItemId {
             Self::Episode(_) => "episode",
         }
     }
+
+    pub(crate) fn inner(&self) -> uuid::Uuid {
+        match self {
+            Self::Movie(id) => id.0,
+            Self::Show(id) => id.0,
+            Self::Season(id) => id.0,
+            Self::Episode(id) => id.0,
+        }
+    }
 }
 
 impl From<MovieId> for ItemId {

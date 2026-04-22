@@ -399,7 +399,7 @@ impl Config {
         self.general.fetching_interval
     }
 
-    pub fn auth(&self) -> String {
+    pub fn tmdb_auth(&self) -> String {
         self.general.auth_token.clone()
     }
 }

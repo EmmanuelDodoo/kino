@@ -2,6 +2,7 @@ use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::utils::icons::*;
 use crate::utils::styles;
 use crate::utils::typo::*;
+use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{
     Color, Element, Length, Shadow,
@@ -20,8 +21,8 @@ pub enum Message {
     Goto(CollectionId),
     Rename(String),
     Synopsis(String),
-    Refetch,
-    Number,
+    Refetch(SourceSet),
+    Number(SourceSet),
     Remove(String),
 }
 
@@ -88,8 +89,11 @@ impl EpisodePage {
 
                 Some(msg)
             }
-            Message::Refetch => {
-                let msg = HomeMessage::Refetch(self.id.into());
+            Message::Refetch(source) => {
+                let msg = HomeMessage::Refetch {
+                    id: self.id.into(),
+                    source,
+                };
                 Some(msg)
             }
             Message::Remove(name) => {
@@ -99,10 +103,11 @@ impl EpisodePage {
                 });
                 Some(msg)
             }
-            Message::Number => {
+            Message::Number(source) => {
                 let msg = HomeMessage::OpenView(ViewMessage::TMDBId {
                     id: self.id.into(),
                     top_level: false,
+                    source,
                 });
 
                 Some(msg)
@@ -117,6 +122,7 @@ impl EpisodePage {
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, EpisodePageMessage> {
         let id = self.id;
+        let source = SourceSet::from_str(episode.media.source());
 
         let img: Element<'_, EpisodePageMessage> = {
             let img_height = 300.0;
@@ -205,10 +211,10 @@ impl EpisodePage {
                     &episode.media,
                     width,
                     Message::Rename(episode.media.name().to_owned()),
-                    Message::Refetch,
+                    Message::Refetch(source),
                     Message::Remove(episode.media.name().to_owned()),
                     Message::Synopsis(episode.media.synopsis().to_owned()),
-                    (Message::Number, false),
+                    (Message::Number(source), false),
                 )
                 .map(move |message| EpisodePageMessage { id, message }),
                 Tab::Collections => {

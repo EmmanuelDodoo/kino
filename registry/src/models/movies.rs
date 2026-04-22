@@ -7,7 +7,7 @@ use super::{DirectoryId, Media, datetime_to_sql, image::Image, naivedate_to_sql}
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MovieId(Uuid);
+pub struct MovieId(pub(super) Uuid);
 
 impl From<MovieId> for ToSqlOutput<'_> {
     fn from(value: MovieId) -> Self {
@@ -27,6 +27,7 @@ impl MovieId {
         Self::from_row_helper("id", row)
     }
 
+    /// Expects 'media_id' column name
     pub fn from_collection(row: &Row<'_>) -> rusqlite::Result<Self> {
         Self::from_row_helper("media_id", row)
     }
@@ -56,6 +57,7 @@ pub struct Movie {
     last_watched: Option<DateTime<Local>>,
     duration: u64,
     comments: u32,
+    source: String,
 }
 
 impl Movie {
@@ -105,6 +107,8 @@ impl Movie {
 
         let comments = row.get::<_, u32>("comment_count")?;
 
+        let source = row.get::<_, String>("source")?;
+
         Ok(Self {
             id,
             directory,
@@ -123,6 +127,7 @@ impl Movie {
             last_watched,
             duration,
             comments,
+            source,
         })
     }
 
@@ -145,6 +150,7 @@ impl Movie {
             last_watched,
             duration,
             comments: _comments,
+            source: _source,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -258,20 +264,6 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn refetch<'a>(id: MovieId) -> Query<'a> {
-        let sql = "UPDATE movie SET tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE, generate_poster=TRUE WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(id))];
-
-        Query {
-            id: id.0,
-            table: Table::Movies,
-            op: Operation::Update,
-            sql,
-            params: params.to_vec(),
-        }
-    }
-
-    #[must_use]
     pub fn set_watch_count<'a>(id: MovieId, count: u32) -> Query<'a> {
         let sql = "UPDATE movie SET watch_count=:count WHERE id=:id";
         let params = [
@@ -296,23 +288,6 @@ impl Movie {
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":rating", ToSqlOutput::from(rating)),
-        ];
-
-        Query {
-            id: id.0,
-            table: Table::Movies,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    #[must_use]
-    pub fn set_tmdb_id<'a>(id: MovieId, tmdb_id: u32) -> Query<'a> {
-        let sql = "UPDATE movie SET user_tmdb_id=:tmdb_id, tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(id)),
-            (":tmdb_id", ToSqlOutput::from(tmdb_id)),
         ];
 
         Query {
@@ -356,6 +331,7 @@ impl Movie {
             last_watched: None,
             duration,
             comments: 0,
+            source: String::default(),
         };
 
         let query = new.insert();
@@ -417,5 +393,9 @@ impl Media for Movie {
 
     fn watch_count(&self) -> u32 {
         self.watch_count
+    }
+
+    fn source(&self) -> &str {
+        &self.source
     }
 }

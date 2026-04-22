@@ -1,3 +1,4 @@
+use crate::source::SourceSet;
 use core::error;
 use fancy_regex::Regex;
 use gstreamer_pbutils::Discoverer;
@@ -118,6 +119,7 @@ struct VideoInfo {
 pub fn scan_dir<'a>(
     db: &str,
     dir: Directory,
+    default_source: SourceSet,
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
@@ -155,6 +157,7 @@ pub fn scan_dir<'a>(
     scan_dir_helper(
         &mut db,
         dir,
+        default_source,
         discoverer.as_ref(),
         movie_depth,
         restore,
@@ -166,6 +169,7 @@ pub fn scan_dir<'a>(
 pub fn scan_dirs<'a>(
     db: impl AsRef<Path>,
     dirs: Vec<Directory>,
+    default_source: SourceSet,
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
@@ -202,6 +206,7 @@ pub fn scan_dirs<'a>(
         match scan_dir_helper(
             &mut db,
             dir,
+            default_source,
             discoverer.as_ref(),
             movie_depth,
             restore,
@@ -222,6 +227,7 @@ pub fn scan_dirs<'a>(
 pub fn scan_dir_helper<'a>(
     db: &mut Database,
     dir: Directory,
+    default_source: SourceSet,
     discoverer: Option<&Discoverer>,
     movie_depth: u8,
     restore: bool,
@@ -238,21 +244,30 @@ pub fn scan_dir_helper<'a>(
                 id: MovieId,
                 tombstone: bool,
                 scanned: bool,
+                request: Option<String>,
+                source: SourceSet,
             }
 
             let videos = scan_video_dir(&dir.path, discoverer, movie_depth, None)?;
 
             tracing::debug!("Fetching Directory movies");
+
             let mut dir_movies = match db.get_dir_movies(dir.id, |row| {
                 let id = MovieId::from_row(row)?;
                 let path = row.get::<_, String>("path")?;
                 let tombstone = row.get::<_, bool>("removed")?;
+
+                let request = row.get::<_, Option<String>>("request")?;
+                let source = SourceSet::from_row(row, "source")?;
+
                 Ok((
                     path,
                     DirMovie {
                         id,
                         tombstone,
                         scanned: false,
+                        request,
+                        source,
                     },
                 ))
             }) {
@@ -271,7 +286,7 @@ pub fn scan_dir_helper<'a>(
             };
 
             for movie in videos {
-                let dir_movie = dir_movies.get_mut(&movie.path);
+                let mut dir_movie = dir_movies.get_mut(&movie.path);
                 let pick_preferred = dir_movie.is_none();
 
                 if dir_movie
@@ -284,13 +299,18 @@ pub fn scan_dir_helper<'a>(
                 }
 
                 let name = process_name(&movie.name).unwrap_or(movie.name.clone());
-                let (new, query) =
-                    Movie::new(dir.id, movie.path.clone(), name, movie.name, movie.duration);
+                let (new, query) = Movie::new(
+                    dir.id,
+                    movie.path.clone(),
+                    name.clone(),
+                    movie.name,
+                    movie.duration,
+                );
                 let id = dir_movie.as_ref().map(|mv| mv.id).unwrap_or(new.id);
 
                 match query.execute(db) {
                     Ok(succ) => {
-                        if let Some(entry) = dir_movie {
+                        if let Some(entry) = dir_movie.as_mut() {
                             entry.scanned = true;
                         }
 
@@ -298,6 +318,42 @@ pub fn scan_dir_helper<'a>(
                     }
                     Err(fail) => failures.push(fail),
                 };
+
+                let movie_source = |source: SourceSet| match source
+                    .movie_request(id, name)
+                    .map(|(query, request)| (query.execute(db), request))
+                {
+                    Some((Ok(succ), request)) => {
+                        successes.push(succ);
+
+                        if let Err(error) = db.execute(
+                            "UPDATE movie SET source=:source, request=:request WHERE id=:id",
+                            &[
+                                (":id", &ToSqlOutput::from(id)),
+                                (":source", &ToSqlOutput::from(source)),
+                                (":request", &ToSqlOutput::from(request.as_str())),
+                            ],
+                        ) {
+                            tracing::error!("Could not insert movie request/source. \n{error}");
+                        };
+                    }
+                    Some((Err(fail), _)) => {
+                        failures.push(fail);
+                    }
+                    None => {}
+                };
+
+                match dir_movie {
+                    Some(dir_movie) => match &dir_movie.request {
+                        Some(_) => {}
+                        None => {
+                            let source = dir_movie.source.merge(default_source);
+
+                            movie_source(source)
+                        }
+                    },
+                    None => movie_source(default_source),
+                }
 
                 save_video_metadata(
                     db,
@@ -336,18 +392,24 @@ pub fn scan_dir_helper<'a>(
                 id: EpisodeId,
                 tombstone: bool,
                 scanned: bool,
+                source: SourceSet,
+                request: Option<String>,
             }
 
             struct DirSeason {
                 id: SeasonId,
                 scanned: bool,
                 tombstone: bool,
+                request: Option<String>,
+                source: SourceSet,
             }
 
             struct DirShow {
                 id: ShowId,
                 scanned: bool,
                 tombstone: bool,
+                request: Option<String>,
+                source: SourceSet,
             }
 
             tracing::debug!("Scanning shows directory {}", dir.path);
@@ -359,12 +421,17 @@ pub fn scan_dir_helper<'a>(
                 let path = row.get::<_, String>("path")?;
                 let tombstone = row.get::<_, bool>("removed")?;
 
+                let request = row.get::<_, Option<String>>("request")?;
+                let source = SourceSet::from_row(row, "source")?;
+
                 Ok((
                     path,
                     DirShow {
                         id,
                         scanned: false,
                         tombstone,
+                        request,
+                        source,
                     },
                 ))
             }) {
@@ -380,7 +447,7 @@ pub fn scan_dir_helper<'a>(
             };
 
             for show in shows {
-                let dir_show = dir_shows.get_mut(&show.path);
+                let mut dir_show = dir_shows.get_mut(&show.path);
 
                 if dir_show
                     .as_ref()
@@ -405,19 +472,55 @@ pub fn scan_dir_helper<'a>(
 
                 match query.execute(db) {
                     Ok(succ) => {
-                        let modified = succ.rows > 0;
                         successes.push(succ);
 
-                        if let Some(entry) = dir_show {
+                        if let Some(entry) = dir_show.as_mut() {
                             entry.scanned = true;
                         }
-
-                        modified
                     }
                     Err(error) => {
                         failures.push(error);
                         continue;
                     }
+                };
+
+                let mut show_source = |source: SourceSet, name: String| match source
+                    .show_request(show, name)
+                    .map(|(query, request)| (query.execute(db), request))
+                {
+                    Some((Ok(succ), request)) => {
+                        successes.push(succ);
+
+                        if let Err(error) = db.execute(
+                            "UPDATE tv_show SET source=:source, request=:request WHERE id=:id",
+                            &[
+                                (":id", &ToSqlOutput::from(show)),
+                                (":source", &ToSqlOutput::from(source)),
+                                (":request", &ToSqlOutput::from(request.as_str())),
+                            ],
+                        ) {
+                            tracing::error!("Could not insert show request/source. \n{error}");
+                        };
+
+                        (source, Some(request))
+                    }
+                    Some((Err(fail), _)) => {
+                        failures.push(fail);
+                        (source, None)
+                    }
+                    None => (source, None),
+                };
+
+                let (show_source, show_request) = match dir_show {
+                    Some(dir_show) => match &dir_show.request {
+                        Some(request) => (dir_show.source, Some(request.to_owned())),
+                        None => {
+                            let source = dir_show.source.merge(default_source);
+
+                            show_source(source, name.clone())
+                        }
+                    },
+                    None => show_source(default_source, name.clone()),
                 };
 
                 tracing::debug!("Scanning {name} seasons");
@@ -428,12 +531,17 @@ pub fn scan_dir_helper<'a>(
                     let path = row.get::<_, String>("path")?;
                     let tombstone = row.get::<_, bool>("removed")?;
 
+                    let request = row.get::<_, Option<String>>("request")?;
+                    let source = SourceSet::from_row(row, "source")?;
+
                     Ok((
                         path,
                         DirSeason {
                             id,
                             scanned: false,
                             tombstone,
+                            request,
+                            source,
                         },
                     ))
                 }) {
@@ -449,7 +557,7 @@ pub fn scan_dir_helper<'a>(
                 };
 
                 for season in seasons {
-                    let dir_season = dir_seasons.get_mut(&season.path);
+                    let mut dir_season = dir_seasons.get_mut(&season.path);
 
                     if dir_season
                         .as_ref()
@@ -467,7 +575,10 @@ pub fn scan_dir_helper<'a>(
                         None => path.clone(),
                     };
 
-                    let (season, query) = Season::new(show, name.clone(), path.clone(), number);
+                    let season_number = number.unwrap_or_default();
+
+                    let (season, query) =
+                        Season::new(show, name.clone(), path.clone(), season_number);
 
                     let season = dir_season.as_ref().map(|sea| sea.id).unwrap_or(season.id);
 
@@ -475,7 +586,7 @@ pub fn scan_dir_helper<'a>(
                         Ok(succ) => {
                             let modified = succ.rows > 0;
 
-                            if let Some(entry) = dir_season {
+                            if let Some(entry) = dir_season.as_mut() {
                                 entry.scanned = true;
                             }
 
@@ -488,6 +599,53 @@ pub fn scan_dir_helper<'a>(
                         }
                     };
 
+                    let mut season_source = |source: SourceSet| {
+                        let Some(parent) = show_request.as_deref() else {
+                            return (source, None);
+                        };
+
+                        match source
+                            .season_request(season, parent, season_number)
+                            .map(|(query, request)| (query.execute(db), request))
+                        {
+                            Some((Ok(succ), request)) => {
+                                successes.push(succ);
+
+                                if let Err(error) = db.execute(
+                                "UPDATE season SET source=:source, request=:request WHERE id=:id",
+                                &[
+                                    (":id", &ToSqlOutput::from(season)),
+                                    (":source", &ToSqlOutput::from(source)),
+                                    (":request", &ToSqlOutput::from(request.as_str())),
+                                ],
+                            ) {
+                                tracing::error!(
+                                    "Could not insert season request/source. \n{error}"
+                                );
+                            };
+
+                                (source, Some(request))
+                            }
+                            Some((Err(fail), _)) => {
+                                failures.push(fail);
+                                (source, None)
+                            }
+                            None => (source, None),
+                        }
+                    };
+
+                    let (season_source, season_request) = match dir_season {
+                        Some(dir_season) => match &dir_season.request {
+                            Some(request) => (dir_season.source, Some(request.to_owned())),
+                            None => {
+                                let source = dir_season.source.merge(show_source);
+
+                                season_source(source)
+                            }
+                        },
+                        None => season_source(show_source),
+                    };
+
                     tracing::debug!("Scanning {name} episodes");
                     tracing::debug!("Fetching season episodes");
                     let mut dir_episodes = match db.get_season_episodes_removed(season, |row| {
@@ -495,12 +653,17 @@ pub fn scan_dir_helper<'a>(
                         let path = row.get::<_, String>("path")?;
                         let tombstone = row.get::<_, bool>("removed")?;
 
+                        let request = row.get::<_, Option<String>>("request")?;
+                        let source = SourceSet::from_row(row, "source")?;
+
                         Ok((
                             path,
                             DirEpisode {
                                 id,
                                 tombstone,
                                 scanned: false,
+                                request,
+                                source,
                             },
                         ))
                     }) {
@@ -517,7 +680,7 @@ pub fn scan_dir_helper<'a>(
                     };
 
                     for episode in episodes {
-                        let dir_ep = dir_episodes.get_mut(&episode.path);
+                        let mut dir_ep = dir_episodes.get_mut(&episode.path);
                         let pick_sub = dir_ep.is_none();
 
                         if dir_ep.as_ref().map(|ep| ep.tombstone).unwrap_or_default() && !restore {
@@ -530,26 +693,72 @@ pub fn scan_dir_helper<'a>(
                             None => episode.name.clone(),
                         };
 
+                        let episode_number = number.unwrap_or_default();
+
                         let (new, query) = Episode::new(
                             season,
                             name,
                             episode.name,
                             episode.path.clone(),
                             episode.duration,
-                            number,
+                            episode_number,
                         );
 
                         let episode_id = dir_ep.as_ref().map(|ep| ep.id).unwrap_or(new.id);
 
                         match query.execute(db) {
                             Ok(succ) => {
-                                if let Some(entry) = dir_ep {
+                                if let Some(entry) = dir_ep.as_mut() {
                                     entry.scanned = true;
                                 }
 
                                 successes.push(succ)
                             }
                             Err(fail) => failures.push(fail),
+                        }
+
+                        let mut episode_source = |source: SourceSet| {
+                            let Some(parent) = season_request.as_deref() else {
+                                return;
+                            };
+
+                            match source
+                                .episode_request(episode_id, parent, season_number, episode_number)
+                                .map(|(query, request)| (query.execute(db), request))
+                            {
+                                Some((Ok(succ), request)) => {
+                                    successes.push(succ);
+
+                                    if let Err(error) = db.execute(
+                                    "UPDATE episode SET source=:source, request=:request WHERE id=:id",
+                                    &[
+                                        (":id", &ToSqlOutput::from(episode_id)),
+                                        (":source", &ToSqlOutput::from(source)),
+                                        (":request", &ToSqlOutput::from(request.as_str())),
+                                    ],
+                                ) {
+                                    tracing::error!(
+                                        "Could not insert episode request/source. \n{error}"
+                                    );
+                                };
+                                }
+                                Some((Err(fail), _)) => {
+                                    failures.push(fail);
+                                }
+                                None => {}
+                            }
+                        };
+
+                        match dir_ep {
+                            Some(dir_episode) => match &dir_episode.request {
+                                Some(_) => {}
+                                None => {
+                                    let source = dir_episode.source.merge(season_source);
+
+                                    episode_source(source)
+                                }
+                            },
+                            None => episode_source(season_source),
                         }
 
                         save_video_metadata(

@@ -2,6 +2,7 @@ use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::utils::icons::*;
 use crate::utils::styles;
 use crate::utils::typo::*;
+use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{
     Color, Element, Length, Shadow,
@@ -19,10 +20,10 @@ pub enum Message {
     Rate(Option<f32>),
     Goto(CollectionId),
     Rename(String),
-    Refetch,
+    Refetch(SourceSet),
     Remove(String),
     Synopsis(String),
-    TmdbId,
+    TmdbId(SourceSet),
 }
 
 #[derive(Debug, Clone)]
@@ -88,8 +89,11 @@ impl MoviePage {
                 let msg = HomeMessage::Goto(PageKind::Collection(id));
                 Some(msg)
             }
-            Message::Refetch => {
-                let msg = HomeMessage::Refetch(self.id.into());
+            Message::Refetch(source) => {
+                let msg = HomeMessage::Refetch {
+                    id: self.id.into(),
+                    source,
+                };
                 Some(msg)
             }
             Message::Remove(name) => {
@@ -99,10 +103,11 @@ impl MoviePage {
                 });
                 Some(msg)
             }
-            Message::TmdbId => {
+            Message::TmdbId(source) => {
                 let msg = HomeMessage::OpenView(ViewMessage::TMDBId {
                     id: self.id.into(),
                     top_level: true,
+                    source,
                 });
 
                 Some(msg)
@@ -117,6 +122,7 @@ impl MoviePage {
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, MoviePageMessage> {
         let id = self.id;
+        let source = SourceSet::from_str(movie.media.source());
 
         let img: Element<'_, MoviePageMessage> = {
             let img_height = 300.0;
@@ -217,10 +223,10 @@ impl MoviePage {
                     &movie.media,
                     width,
                     Message::Rename(movie.media.name().to_owned()),
-                    Message::Refetch,
+                    Message::Refetch(source),
                     Message::Remove(movie.media.name().to_owned()),
                     Message::Synopsis(movie.media.synopsis().to_owned()),
-                    (Message::TmdbId, true),
+                    (Message::TmdbId(source), true),
                 )
                 .map(move |message| MoviePageMessage { id, message }),
                 Tab::Collections => {
