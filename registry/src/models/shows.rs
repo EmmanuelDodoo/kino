@@ -7,7 +7,7 @@ use super::{DirectoryId, Media, SeasonId, datetime_to_sql, image::Image, naiveda
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ShowId(Uuid);
+pub struct ShowId(pub(super) Uuid);
 
 impl std::fmt::Display for ShowId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -20,6 +20,7 @@ impl ShowId {
         Self::from_row_helper("id", row)
     }
 
+    /// Expects 'media_id' column name
     pub fn from_collection(row: &Row<'_>) -> rusqlite::Result<Self> {
         Self::from_row_helper("media_id", row)
     }
@@ -61,6 +62,7 @@ pub struct Show {
     pub recent_season: Option<SeasonId>,
     duration: u64,
     comments: u32,
+    source: String,
 }
 
 impl Show {
@@ -115,6 +117,7 @@ impl Show {
         let duration = row.get::<_, u64>("duration")?;
 
         let comments = row.get::<_, u32>("comment_count")?;
+        let source = row.get::<_, String>("source")?;
 
         Ok(Self {
             id,
@@ -136,6 +139,7 @@ impl Show {
             recent_season,
             duration,
             comments,
+            source,
         })
     }
 
@@ -160,6 +164,7 @@ impl Show {
             recent_season: _recent,
             duration: _duration,
             comments: _comments,
+            source: _source,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -195,20 +200,6 @@ impl Show {
         ]
     }
 
-    // fn update_params<'a>(&self) -> Vec<(&'a str, ToSqlOutput<'a>)> {
-    //     let id = ToSqlOutput::from(self.id);
-    //     let name = ToSqlOutput::from(self.name.clone());
-    //     let poster = ToSqlOutput::Owned(Value::from(self.poster.clone()));
-    //     let backdrop = ToSqlOutput::Owned(Value::from(self.backdrop.clone()));
-    //
-    //     vec![
-    //         (":id", id),
-    //         (":name", name),
-    //         (":poster", poster),
-    //         (":backdrop", backdrop),
-    //     ]
-    // }
-
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
         let sql = "INSERT INTO tv_show (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added) ON CONFLICT(directory, path) DO UPDATE SET removed=FALSE";
@@ -238,20 +229,6 @@ impl Show {
             op: Operation::Delete,
         }
     }
-
-    // #[must_use]
-    // fn update<'a>(&self) -> Query<'a> {
-    //     let sql = "UPDATE tv_show SET name=:name, poster=:poster, backdrop=:backdrop WHERE id=:id";
-    //     let params = self.update_params();
-    //
-    //     Query {
-    //         id: self.id.0,
-    //         table: Table::Show,
-    //         sql,
-    //         params,
-    //         op: Operation::Update,
-    //     }
-    // }
 
     #[must_use]
     pub fn set_name<'a>(id: ShowId, name: String) -> Query<'a> {
@@ -288,20 +265,6 @@ impl Show {
     }
 
     #[must_use]
-    pub fn refetch<'a>(id: ShowId) -> Query<'a> {
-        let sql = "UPDATE tv_show SET tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(id))];
-
-        Query {
-            id: id.0,
-            table: Table::Show,
-            op: Operation::Update,
-            sql,
-            params: params.to_vec(),
-        }
-    }
-
-    #[must_use]
     pub fn set_rating<'a>(id: ShowId, rating: f32) -> Query<'a> {
         debug_assert!((0.0..=5.0).contains(&rating), "Show rating out of range");
 
@@ -316,23 +279,6 @@ impl Show {
             table: Table::Show,
             sql,
             params,
-            op: Operation::Update,
-        }
-    }
-
-    #[must_use]
-    pub fn set_tmdb_id<'a>(id: ShowId, tmdb_id: u32) -> Query<'a> {
-        let sql = "UPDATE tv_show SET user_tmdb_id=:tmdb_id, tmdb_id=NULL, poster=NULL, backdrop=NULL, fetched=FALSE  WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(id)),
-            (":tmdb_id", ToSqlOutput::from(tmdb_id)),
-        ];
-
-        Query {
-            id: id.0,
-            table: Table::Show,
-            sql,
-            params: params.to_vec(),
             op: Operation::Update,
         }
     }
@@ -371,6 +317,7 @@ impl Show {
             recent_season: None,
             duration: 0,
             comments: 0,
+            source: String::default(),
         };
 
         let query = new.insert();
@@ -431,5 +378,9 @@ impl Media for Show {
 
     fn watch_count(&self) -> u32 {
         self.watch_count
+    }
+
+    fn source(&self) -> &str {
+        &self.source
     }
 }

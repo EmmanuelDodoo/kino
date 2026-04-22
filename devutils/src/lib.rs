@@ -1,7 +1,7 @@
-pub mod fetch;
 pub mod image_ops;
 pub mod scan;
 pub mod thumbnails;
+pub mod source;
 
 #[derive(Debug, Clone)]
 pub struct Image {

@@ -58,6 +58,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 8,
         sql: include_str!("../../resources/db/migrations/8.sql"),
     },
+    Migration {
+        version: 9,
+        sql: include_str!("../../resources/db/migrations/9.sql"),
+    },
 ];
 
 pub struct Database {
@@ -79,11 +83,11 @@ impl std::ops::DerefMut for Database {
 }
 
 impl Database {
-    const MOVIE_QUERY: &str = "SELECT directory.id as directory_id,  directory.path as directory_path, image.main as poster_main, image.accent as poster_accent, image.path as poster_path, CASE WHEN (NOT movie.fetched) AND movie.generate_poster THEN NULL ELSE movie.poster END AS poster, CASE WHEN NOT movie.fetched THEN NULL ELSE movie.backdrop END AS backdrop, movie.*  FROM movie INNER JOIN directory ON movie.directory=directory.id LEFT JOIN image ON movie.poster = image.path";
+    const MOVIE_QUERY: &str = "SELECT directory.id as directory_id,  directory.path as directory_path, image.main as poster_main, image.accent as poster_accent, image.path as poster_path, movie.*  FROM movie INNER JOIN directory ON movie.directory=directory.id LEFT JOIN image ON movie.poster = image.path";
 
-    const SHOW_QUERY: &str = "SELECT directory.id as directory_id, directory.path as directory_path, image.main as poster_main, image.accent as poster_accent, image.path as poster_path, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.poster END AS poster, CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.backdrop END AS backdrop, tv_show.* FROM tv_show INNER JOIN directory ON tv_show.directory=directory.id LEFT JOIN image ON tv_show.poster = image.path";
+    const SHOW_QUERY: &str = "SELECT directory.id as directory_id, directory.path as directory_path, image.main as poster_main, image.accent as poster_accent, image.path as poster_path, tv_show.* FROM tv_show INNER JOIN directory ON tv_show.directory=directory.id LEFT JOIN image ON tv_show.poster = image.path";
 
-    const SEASON_QUERY: &str = "SELECT  tv_show.backdrop, image.main as poster_main, image.accent as poster_accent, image.path as poster_path, CASE WHEN NOT season.fetched THEN NULL ELSE season.poster END AS poster, season.* FROM season INNER JOIN tv_show ON season.show_id=tv_show.id LEFT JOIN image ON season.poster = image.path";
+    const SEASON_QUERY: &str = "SELECT  tv_show.backdrop, image.main as poster_main, image.accent as poster_accent, image.path as poster_path,  season.* FROM season INNER JOIN tv_show ON season.show_id=tv_show.id LEFT JOIN image ON season.poster = image.path";
 
     const EPISODE_QUERY: &str = "SELECT * FROM get_episode_data";
 
@@ -1430,20 +1434,21 @@ fn apply_migration(mut db: Database) -> rusqlite::Result<Database> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Table {
+pub(crate) enum Table {
     Directory,
     Movies,
     Show,
     Season,
     Episode,
-    Image,
+    // Image,
     Comment,
     Subtitle,
     Collection,
-    CollectionItem,
-    WatchList,
+    // CollectionItem,
+    // WatchList,
     InsertTrigger,
     DeleteTrigger,
+    TMDBRequest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -1455,11 +1460,11 @@ pub enum Operation {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Query<'a> {
-    pub id: Uuid,
-    pub table: Table,
-    pub op: Operation,
-    pub sql: &'a str,
-    pub params: Vec<(&'a str, ToSqlOutput<'a>)>,
+    pub(crate) id: Uuid,
+    pub(crate) table: Table,
+    pub(crate) op: Operation,
+    pub(crate) sql: &'a str,
+    pub(crate) params: Vec<(&'a str, ToSqlOutput<'a>)>,
 }
 
 impl<'a> Query<'a> {
@@ -1507,8 +1512,8 @@ impl<'a> Query<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Success {
-    pub id: Uuid,
-    pub table: Table,
+    pub(crate) id: Uuid,
+    pub(crate) table: Table,
     pub op: Operation,
     pub rows: usize,
 }

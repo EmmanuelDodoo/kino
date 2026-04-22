@@ -11,6 +11,7 @@ pub mod movies;
 pub mod seasons;
 pub mod shows;
 pub mod video;
+pub mod tmdb;
 
 pub use collection::ItemId;
 pub use collection::{Collection, CollectionId, CollectionView, SimpleCollection};
@@ -52,6 +53,8 @@ pub trait Media {
     fn poster(&self) -> Option<&Image>;
 
     fn backdrop(&self) -> Option<&str>;
+
+    fn source(&self) -> &str;
 
     fn release_year(&self) -> String {
         use chrono::Datelike;

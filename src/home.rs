@@ -25,6 +25,8 @@ mod series;
 pub mod shared;
 mod shows;
 
+use crate::app::{MediaUpdate, MediaUpdateKind};
+use devutils::source::SourceSet;
 use draws::*;
 use registry::models::{
     Collection, CollectionId, CollectionView, Episode, EpisodeId, Media, Movie, MovieId, Season,
@@ -38,8 +40,6 @@ use registry::{
     filter::{self, Filter, SearchFilter},
     sort::{Sort, SortKind},
 };
-
-use crate::app::{MediaUpdate, MediaUpdateKind};
 
 use crate::app::{FetchId, Message};
 use crate::utils::{
@@ -308,11 +308,27 @@ pub enum ViewMessage {
     AddToCollection(CollectionId),
     Search,
     Rating(ItemId, Option<f32>),
-    Rename { id: ItemId, old: String },
-    Synopsis { id: ItemId, old: String },
-    TMDBId { id: ItemId, top_level: bool },
-    RemoveMedia { id: ItemId, name: String },
-    RemoveCollection { id: CollectionId, name: String },
+    Rename {
+        id: ItemId,
+        old: String,
+    },
+    Synopsis {
+        id: ItemId,
+        old: String,
+    },
+    TMDBId {
+        id: ItemId,
+        top_level: bool,
+        source: SourceSet,
+    },
+    RemoveMedia {
+        id: ItemId,
+        name: String,
+    },
+    RemoveCollection {
+        id: CollectionId,
+        name: String,
+    },
     Selection,
 }
 
@@ -342,6 +358,7 @@ pub enum View {
         input: widget::Id,
         value: String,
         top_level: bool,
+        source: SourceSet,
     },
     RemoveMedia {
         id: ItemId,
@@ -430,7 +447,7 @@ pub enum HomeMessage {
     TMDBId(TMDBMessage),
     Selection(SelectionMessage),
     RemoveMedia,
-    Refetch(ItemId),
+    Refetch { id: ItemId, source: SourceSet },
     OpenView(ViewMessage),
     AddCollection(ItemId, CollectionId),
     CloseView,
@@ -782,13 +799,18 @@ impl Home {
 
                         Task::batch([self.update_page_scroll(), operation::focus(editor)])
                     }
-                    ViewMessage::TMDBId { id, top_level } => {
+                    ViewMessage::TMDBId {
+                        id,
+                        top_level,
+                        source,
+                    } => {
                         let input = widget::Id::unique();
                         self.view = Some(View::TMDBId {
                             id,
                             input: input.clone(),
                             value: String::new(),
                             top_level,
+                            source,
                         });
 
                         Task::batch([self.update_page_scroll(), operation::focus(input)])
@@ -1179,6 +1201,7 @@ impl Home {
                     id,
                     value,
                     top_level,
+                    source,
                     ..
                 }) = self.view.as_mut()
                 else {
@@ -1204,7 +1227,10 @@ impl Home {
 
                         let msg = Message::MediaUpdate(MediaUpdate {
                             id: *id,
-                            kind: MediaUpdateKind::TMDBId(tmdb_id),
+                            kind: MediaUpdateKind::TMDBId {
+                                id: tmdb_id,
+                                source: *source,
+                            },
                         });
 
                         Task::batch([Task::done(msg), self.close_view(true)])
@@ -1335,10 +1361,10 @@ impl Home {
                     }
                 }
             }
-            HomeMessage::Refetch(id) => {
+            HomeMessage::Refetch { id, source } => {
                 let msg = Message::MediaUpdate(MediaUpdate {
                     id,
-                    kind: MediaUpdateKind::Refetch,
+                    kind: MediaUpdateKind::Refetch(source),
                 });
 
                 Task::done(msg)
@@ -3520,7 +3546,6 @@ impl Home {
                 let label = sized_medium("Scanning Directories", size);
 
                 let throbber = throbber::circular().radius(20.0).bar_height(2.0);
-
 
                 row!(throbber, label)
                     .spacing(4.0)

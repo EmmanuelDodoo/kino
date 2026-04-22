@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 8;
+PRAGMA user_version = 9;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -10,10 +10,27 @@ CREATE TABLE directory (
 	CHECK ( media_type IN ('movies', 'shows'))
 );
 
+CREATE TABLE tmdb (
+	id                   	TEXT NOT NULL  PRIMARY KEY, 
+	created_at           	DATETIME  DEFAULT CURRENT_TIMESTAMP,
+	tmdb_id			INTEGER,
+	media_type		TEXT NOT NULL,
+	media_id		TEXT NOT NULL,
+	status			INTEGER NOT NULL,
+	retry			INTEGER DEFAULT 0,
+	poster			TEXT,
+
+	parent			TEXT,
+	name			TEXT,
+	number			INTEGER DEFAULT 0,
+	backdrop		TEXT,
+
+	FOREIGN KEY (parent) REFERENCES tmdb(id) ON DELETE CASCADE,
+	CHECK ( media_type IN ('movie', 'show', 'season', 'episode'))
+);
+
 CREATE TABLE tv_show ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
-	tmdb_id              INTEGER,
-	user_tmdb_id         INTEGER,
 	name                 TEXT NOT NULL    ,
 	original_name	     TEXT NOT NULL,
 	directory            TEXT NOT NULL,
@@ -32,8 +49,9 @@ CREATE TABLE tv_show (
 	recent_season        TEXT     ,
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
-	fetched		     BOOLEAN DEFAULT FALSE,
 	removed		     BOOLEAN DEFAULT FALSE,
+	request		     TEXT,
+	source		     TEXT NOT NULL DEFAULT 'none',
 	UNIQUE(directory, path),
 	FOREIGN KEY ( directory ) REFERENCES directory( id ) ON DELETE CASCADE
 );
@@ -42,8 +60,6 @@ CREATE INDEX idx_tv_show_directory ON tv_show ( directory );
 
 CREATE TABLE season ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
-	tmdb_id              INTEGER,
-	user_tmdb_id         INTEGER,
 	name                 TEXT NOT NULL    ,
 	original_name	     TEXT NOT NULL,
 	path        	     TEXT NOT NULL,
@@ -61,8 +77,9 @@ CREATE TABLE season (
 	recent_episode       TEXT     ,
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
-	fetched		     BOOLEAN DEFAULT FALSE,
 	removed		     BOOLEAN DEFAULT FALSE,
+	request		     TEXT,
+	source		     TEXT NOT NULL DEFAULT 'none',
 	UNIQUE(show_id, path),
 	FOREIGN KEY ( show_id ) REFERENCES tv_show( id ) ON DELETE CASCADE 
 );
@@ -71,8 +88,6 @@ CREATE INDEX idx_season_show_id ON season ( show_id );
 
 CREATE TABLE episode ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
-	tmdb_id              INTEGER,
-	user_tmdb_id         INTEGER,
 	name                 TEXT NOT NULL    ,
 	original_name	     TEXT NOT NULL,
 	path                 TEXT NOT NULL,
@@ -93,6 +108,8 @@ CREATE TABLE episode (
 	subtitle_id	     TEXT ,
 	audio_id	     TEXT,
 	removed		     BOOLEAN DEFAULT FALSE,
+	request		     TEXT,
+	source		     TEXT NOT NULL DEFAULT 'none',
 	UNIQUE(season_id, path),
 	FOREIGN KEY ( season_id ) REFERENCES season( id ) ON DELETE CASCADE ,
 	FOREIGN KEY ( subtitle_id ) REFERENCES subtitle( id ),
@@ -104,8 +121,6 @@ CREATE INDEX idx_episode_season_id ON episode ( season_id );
 
 CREATE TABLE movie (
 	id		     TEXT NOT NULL PRIMARY KEY,
-	tmdb_id              INTEGER,
-	user_tmdb_id         INTEGER,
 	name		     TEXT NOT NULL,
 	original_name	     TEXT NOT NULL,
 	directory            TEXT NOT NULL,
@@ -127,6 +142,8 @@ CREATE TABLE movie (
 	subtitle_id	     TEXT,
 	audio_id	     TEXT,
 	removed		     BOOLEAN DEFAULT FALSE,
+	request		     TEXT,
+	source		     TEXT NOT NULL DEFAULT 'none',
 	UNIQUE(directory, path),
 	FOREIGN KEY ( subtitle_id ) REFERENCES subtitle( id ),
 	CHECK ( 0.0 <= progress AND progress <= 1.0 ),
@@ -269,7 +286,6 @@ CREATE TABLE image (
 CREATE VIEW get_episode_data AS SELECT
 season.show_id,
 tv_show.backdrop,
-tv_show.tmdb_id AS show_tmdb_id,
 tv_show.name AS show_name,
 season.path AS season_path,
 season.season_number,
@@ -279,7 +295,6 @@ image.main as poster_main,
 image.accent as poster_accent,
 image.path as poster_path,
 image.generated as poster_generated,
-CASE WHEN (NOT episode.fetched) AND episode.generate_poster THEN NULL ELSE episode.poster END AS poster,
 episode.*
 FROM episode 
 INNER JOIN season ON episode.season_id = season.id
@@ -289,14 +304,14 @@ LEFT JOIN image ON episode.poster = image.path;
 
 CREATE VIEW get_collection_posters AS SELECT collection_id, poster 
 FROM (
-	SELECT CASE WHEN (NOT movie.fetched) AND movie.generate_poster THEN NULL ELSE movie.poster END AS poster, item.collection_id
+	SELECT movie.poster AS poster, item.collection_id
 	FROM collection_item item
 	JOIN movie ON movie.id = item.media_id
 	WHERE item.media_type = 'movie' AND poster IS NOT NULL
 
 	UNION ALL
 
-	SELECT CASE WHEN NOT tv_show.fetched THEN NULL ELSE tv_show.poster END AS poster, item.collection_id
+	SELECT tv_show.poster AS poster, item.collection_id
 	FROM collection_item item
 	JOIN tv_show ON tv_show.id = item.media_id
 	WHERE item.media_type = 'show' AND poster IS NOT NULL
@@ -304,14 +319,14 @@ FROM (
 
 	UNION ALL
 
-	SELECT CASE WHEN NOT season.fetched THEN NULL ELSE season.poster END AS poster, item.collection_id
+	SELECT season.poster AS poster, item.collection_id
 	FROM collection_item item
 	JOIN season ON season.id = item.media_id
 	WHERE item.media_type = 'season' AND poster IS NOT NULL
 
 	UNION ALL
 
-	SELECT CASE WHEN (NOT episode.fetched) AND episode.generate_poster THEN NULL ELSE episode.poster END AS poster, item.collection_id
+	SELECT episode.poster AS poster, item.collection_id
 	FROM collection_item item
 	JOIN episode ON episode.id = item.media_id
 	WHERE item.media_type = 'episode' AND episode.poster IS NOT NULL
@@ -495,6 +510,68 @@ BEGIN
 
     DELETE FROM media_fts_index
     WHERE media_type = 'episode' AND media_id = OLD.id;
+END;
+
+CREATE TRIGGER tmdb_parent_update AFTER UPDATE ON tmdb
+BEGIN
+	-- New TMDB Id
+	UPDATE tmdb SET tmdb_id=NEW.tmdb_id, retry=0 WHERE parent = NEW.id;
+
+	-- Parent Data done
+	UPDATE tmdb SET status=2, retry=0 WHERE parent = NEW.id AND NEW.status > 2;
+
+END;
+
+CREATE TRIGGER tmdb_video_fetched AFTER UPDATE OF status ON tmdb WHEN NEW.status <= 2
+BEGIN
+	UPDATE movie SET fetched=FALSE WHERE id=NEW.media_id;
+
+	UPDATE episode SET fetched=FALSE WHERE id=NEW.media_id;
+END;
+
+CREATE TRIGGER tmdb_season_number_update AFTER UPDATE OF number ON tmdb WHEN NEW.media_type = 'season'
+BEGIN
+	UPDATE tmdb SET name=NEW.number, retry=0 WHERE media_type='episode' AND parent = NEW.id;
+END;
+
+CREATE TRIGGER tmdb_show_source_update AFTER UPDATE OF source ON tv_show
+BEGIN
+	UPDATE season SET source=NEW.source WHERE show_id=NEW.id;
+END;
+
+CREATE TRIGGER tmdb_season_source_update AFTER UPDATE of source on season
+BEGIN
+	UPDATE episode SET source=NEW.source WHERE season_id=NEW.id;
+END;
+
+CREATE TRIGGER tmdb_movie_name_update AFTER UPDATE of name on movie
+BEGIN
+	UPDATE tmdb SET name=NEW.name, status=1, retry=0 WHERE media_id = NEW.id;
+END;
+
+CREATE TRIGGER tmdb_show_name_update AFTER UPDATE of name on tv_show
+BEGIN
+	UPDATE tmdb SET name=NEW.name, status=1, retry=0 WHERE media_id = NEW.id;
+END;
+
+CREATE TRIGGER tmdb_movie_delete AFTER DELETE ON movie
+BEGIN
+	DELETE FROM tmdb WHERE media_id = OLD.id;
+END;
+
+CREATE TRIGGER tmdb_show_delete AFTER DELETE ON tv_show
+BEGIN
+	DELETE FROM tmdb WHERE media_id = OLD.id;
+END;
+
+CREATE TRIGGER tmdb_season_delete AFTER DELETE ON season
+BEGIN
+	DELETE FROM tmdb WHERE media_id = OLD.id;
+END;
+
+CREATE TRIGGER tmdb_episode_delete AFTER DELETE ON episode
+BEGIN
+	DELETE FROM tmdb WHERE media_id = OLD.id;
 END;
 
 CREATE TRIGGER item_movie_delete_tr AFTER DELETE ON movie
@@ -731,30 +808,4 @@ duration = COALESCE((
 		SELECT SUM(season.comment_count) FROM season WHERE season.show_id = NEW.show_id
 ),0) 
     WHERE id = NEW.show_id;
-END;
-
-CREATE TRIGGER show_refetch_tr AFTER UPDATE OF tmdb_id ON tv_show WHEN NEW.tmdb_id IS NULL
-BEGIN
-	UPDATE season
-	SET tmdb_id=NULL,
-	fetched=FALSE,
-	removed=NEW.removed
-	WHERE show_id = NEW.id;
-END;
-
-CREATE TRIGGER show_season_user_tmdb_tr AFTER UPDATE OF user_tmdb_id ON tv_show WHEN NEW.user_tmdb_id IS NOT NULL
-BEGIN
-	UPDATE season
-	SET tmdb_id=NULL,
-	removed=NEW.removed
-	WHERE show_id = NEW.id;
-END;
-
-CREATE TRIGGER season_refetch_tr AFTER UPDATE OF tmdb_id ON season WHEN NEW.tmdb_id IS NULL
-BEGIN
-	UPDATE episode
-	SET tmdb_id=NULL,
-	fetched=FALSE,
-	removed=NEW.removed
-	WHERE season_id = NEW.id;
 END;

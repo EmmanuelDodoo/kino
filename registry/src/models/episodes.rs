@@ -7,7 +7,7 @@ use super::{Media, SeasonId, datetime_to_sql, image::Image, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct EpisodeId(Uuid);
+pub struct EpisodeId(pub(super) Uuid);
 
 impl std::fmt::Display for EpisodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -27,6 +27,7 @@ impl EpisodeId {
             .map(|id| EpisodeId(Uuid::try_parse(&id).unwrap())))
     }
 
+    /// Expects 'media_id' column name
     pub fn from_collection(row: &Row<'_>) -> rusqlite::Result<Self> {
         Self::from_row_helper("media_id", row)
     }
@@ -63,6 +64,7 @@ pub struct Episode {
     duration: u64,
     comments: u32,
     pub number: u16,
+    source: String,
 }
 
 impl Episode {
@@ -106,6 +108,7 @@ impl Episode {
         let duration = row.get::<_, u64>("duration")?;
 
         let comments = row.get::<_, u32>("comment_count")?;
+        let source = row.get::<_, String>("source")?;
 
         Ok(Self {
             id,
@@ -125,6 +128,7 @@ impl Episode {
             duration,
             comments,
             number,
+            source,
         })
     }
 
@@ -147,6 +151,7 @@ impl Episode {
             duration,
             comments,
             number,
+            source: _source,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -279,46 +284,13 @@ impl Episode {
         }
     }
 
-    #[must_use]
-    pub fn refetch<'a>(id: EpisodeId) -> Query<'a> {
-        let sql =
-            "UPDATE episode SET tmdb_id=NULL, fetched=FALSE, generate_poster=TRUE WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(id))];
-
-        Query {
-            id: id.0,
-            table: Table::Episode,
-            op: Operation::Update,
-            sql,
-            params: params.to_vec(),
-        }
-    }
-
-    #[must_use]
-    pub fn set_user_number<'a>(id: EpisodeId, number: u32) -> Query<'a> {
-        let sql =
-            "UPDATE episode SET tmdb_id=NULL, episode_number=:number, fetched=FALSE  WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(id)),
-            (":number", ToSqlOutput::from(number)),
-        ];
-
-        Query {
-            id: id.0,
-            table: Table::Episode,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
     pub fn new<'a>(
         season: SeasonId,
         name: String,
         original_name: String,
         path: String,
         duration: u64,
-        number: Option<u16>,
+        number: u16,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
         let backdrop = None;
@@ -343,7 +315,8 @@ impl Episode {
             progress: 0.0,
             last_watched: None,
             comments: 0,
-            number: number.unwrap_or_default(),
+            number,
+            source: String::default(),
         };
 
         let query = new.insert();
@@ -405,5 +378,9 @@ impl Media for Episode {
 
     fn watch_count(&self) -> u32 {
         self.watch_count
+    }
+
+    fn source(&self) -> &str {
+        &self.source
     }
 }

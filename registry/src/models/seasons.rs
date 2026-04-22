@@ -7,7 +7,7 @@ use super::{EpisodeId, Media, ShowId, datetime_to_sql, image::Image, naivedate_t
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SeasonId(Uuid);
+pub struct SeasonId(pub(super) Uuid);
 
 impl std::fmt::Display for SeasonId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -20,6 +20,7 @@ impl SeasonId {
         Self::from_row_helper("id", row)
     }
 
+    /// Expects 'media_id' column name
     pub fn from_collection(row: &Row<'_>) -> rusqlite::Result<Self> {
         Self::from_row_helper("media_id", row)
     }
@@ -68,6 +69,7 @@ pub struct Season {
     duration: u64,
     comments: u32,
     pub number: u16,
+    source: String,
 }
 
 impl Season {
@@ -115,6 +117,7 @@ impl Season {
         let duration = row.get::<_, u64>("duration")?;
 
         let comments = row.get::<_, u32>("comment_count")?;
+        let source = row.get::<_, String>("source")?;
 
         Ok(Self {
             id,
@@ -136,6 +139,7 @@ impl Season {
             duration,
             comments,
             number,
+            source,
         })
     }
 
@@ -160,6 +164,7 @@ impl Season {
             duration,
             comments,
             number,
+            source: _source,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -298,44 +303,7 @@ impl Season {
         }
     }
 
-    #[must_use]
-    pub fn refetch<'a>(id: SeasonId) -> Query<'a> {
-        let sql = "UPDATE season SET tmdb_id=NULL, fetched=FALSE WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(id))];
-
-        Query {
-            id: id.0,
-            table: Table::Season,
-            op: Operation::Update,
-            sql,
-            params: params.to_vec(),
-        }
-    }
-
-    #[must_use]
-    pub fn set_user_number<'a>(id: SeasonId, number: u32) -> Query<'a> {
-        let sql =
-            "UPDATE season SET tmdb_id=NULL, season_number=:number, fetched=FALSE  WHERE id=:id";
-        let params = [
-            (":id", ToSqlOutput::from(id)),
-            (":number", ToSqlOutput::from(number)),
-        ];
-
-        Query {
-            id: id.0,
-            table: Table::Season,
-            sql,
-            params: params.to_vec(),
-            op: Operation::Update,
-        }
-    }
-
-    pub fn new<'a>(
-        show: ShowId,
-        name: String,
-        path: String,
-        number: Option<u16>,
-    ) -> (Self, Query<'a>) {
+    pub fn new<'a>(show: ShowId, name: String, path: String, number: u16) -> (Self, Query<'a>) {
         let added = Local::now();
         let backdrop = None;
         let poster = None;
@@ -362,7 +330,8 @@ impl Season {
             last_watched: None,
             recent_episode: None,
             comments: 0,
-            number: number.unwrap_or_default(),
+            number,
+            source: String::default(),
         };
 
         let query = new.insert();
@@ -424,5 +393,9 @@ impl Media for Season {
 
     fn watch_count(&self) -> u32 {
         self.watch_count
+    }
+
+    fn source(&self) -> &str {
+        &self.source
     }
 }

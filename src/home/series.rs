@@ -2,6 +2,7 @@ use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, styles};
+use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{
     Element, Length, Padding, Task,
@@ -29,9 +30,9 @@ pub enum Message {
     Goto(CollectionId),
     Rename(String),
     Synopsis(String),
-    Refetch,
+    Refetch(SourceSet),
     Remove(String),
-    TmdbId,
+    TmdbId(SourceSet),
 }
 
 #[derive(Debug, Clone)]
@@ -137,8 +138,11 @@ impl ShowPage {
 
                 Some(msg)
             }
-            Message::Refetch => {
-                let msg = HomeMessage::Refetch(self.id.into());
+            Message::Refetch(source) => {
+                let msg = HomeMessage::Refetch {
+                    id: self.id.into(),
+                    source,
+                };
                 Some(msg)
             }
             Message::Remove(name) => {
@@ -148,10 +152,11 @@ impl ShowPage {
                 });
                 Some(msg)
             }
-            Message::TmdbId => {
+            Message::TmdbId(source) => {
                 let msg = HomeMessage::OpenView(ViewMessage::TMDBId {
                     id: self.id.into(),
                     top_level: true,
+                    source,
                 });
                 Some(msg)
             }
@@ -495,6 +500,7 @@ impl ShowPage {
         thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, ShowPageMessage> {
+        let source = SourceSet::from_str(show.media.source());
         let content = {
             let width = 750.0;
             let id = self.id;
@@ -509,10 +515,10 @@ impl ShowPage {
                     &show.media,
                     width,
                     Message::Rename(show.media.name().to_owned()),
-                    Message::Refetch,
+                    Message::Refetch(source),
                     Message::Remove(show.media.name().to_owned()),
                     Message::Synopsis(show.media.synopsis().to_owned()),
-                    (Message::TmdbId, true),
+                    (Message::TmdbId(source), true),
                 )
                 .map(move |message| ShowPageMessage { id, message }),
                 // todo
