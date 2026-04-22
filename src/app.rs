@@ -413,9 +413,23 @@ impl App {
                         ItemId::Episode(id) => Episode::set_synopsis(id, value),
                     },
                     MediaUpdateKind::Refetch(source) => match source.refetch(id) {
-                        Some(query) => query,
+                        Some(query) => {
+                            match query.execute(&self.db) {
+                                Ok(todo) => {
+                                    tracing::debug!("{todo:?}");
+                                    let msg = Message::success("Refetch queued").tasked();
+                                    return Task::batch([self.home.content_refresh(), msg]);
+                                }
+                                Err(error) => {
+                                    // todo
+                                    let msg = Message::error(error.error);
+
+                                    return Task::done(msg);
+                                }
+                            }
+                        }
                         None => {
-                            return self.home.content_refresh();
+                            return Task::none();
                         }
                     },
                     MediaUpdateKind::Remove => match id {
@@ -437,9 +451,23 @@ impl App {
                         };
 
                         match query {
-                            Some(query) => query,
+                            Some(query) => {
+                                match query.execute(&self.db) {
+                                    Ok(todo) => {
+                                        tracing::debug!("{todo:?}");
+                                        let msg = Message::success("Refetch queued").tasked();
+                                        return Task::batch([self.home.content_refresh(), msg]);
+                                    }
+                                    Err(error) => {
+                                        // todo
+                                        let msg = Message::error(error.error);
+
+                                        return Task::done(msg);
+                                    }
+                                }
+                            }
                             None => {
-                                return self.home.content_refresh();
+                                return Task::none();
                             }
                         }
                     }
