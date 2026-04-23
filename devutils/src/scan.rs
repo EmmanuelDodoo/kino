@@ -119,7 +119,6 @@ struct VideoInfo {
 pub fn scan_dir<'a>(
     db: &str,
     dir: Directory,
-    default_source: SourceSet,
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
@@ -157,7 +156,6 @@ pub fn scan_dir<'a>(
     scan_dir_helper(
         &mut db,
         dir,
-        default_source,
         discoverer.as_ref(),
         movie_depth,
         restore,
@@ -169,7 +167,6 @@ pub fn scan_dir<'a>(
 pub fn scan_dirs<'a>(
     db: impl AsRef<Path>,
     dirs: Vec<Directory>,
-    default_source: SourceSet,
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
@@ -206,7 +203,6 @@ pub fn scan_dirs<'a>(
         match scan_dir_helper(
             &mut db,
             dir,
-            default_source,
             discoverer.as_ref(),
             movie_depth,
             restore,
@@ -227,13 +223,13 @@ pub fn scan_dirs<'a>(
 pub fn scan_dir_helper<'a>(
     db: &mut Database,
     dir: Directory,
-    default_source: SourceSet,
     discoverer: Option<&Discoverer>,
     movie_depth: u8,
     restore: bool,
     preferred_subtitle_code: Option<&String>,
     preferred_audio_code: Option<&String>,
 ) -> Option<BatchResult<'a>> {
+    let default_source = SourceSet::from_str(&dir.source);
     let mut successes = vec![];
     let mut failures = vec![];
 

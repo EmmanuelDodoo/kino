@@ -1169,13 +1169,13 @@ impl App {
                 let mut scans = vec![];
                 let mut dirs = vec![];
 
-                for (dir, op, scan) in directories {
-                    if scan {
+                for (dir, op, scan, source_changed) in directories {
+                    if scan && !matches!(op, Some(registry::db::Operation::Delete)) {
                         scans.push(dir.clone())
                     }
 
                     if let Some(op) = op {
-                        dirs.push((dir, op))
+                        dirs.push((dir, op, source_changed))
                     }
                 }
 
@@ -1196,12 +1196,10 @@ impl App {
                 let restore = self.config.general.restore_deleted;
                 let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
                 let preferred_audio = self.config.general.preferred_audio_codec.clone();
-                let default_source = self.config.general.default_source;
 
                 let scans = scan_task(
                     db_path,
                     scans,
-                    default_source,
                     discoverer,
                     movie_depth,
                     restore,
@@ -1252,12 +1250,10 @@ impl App {
                 let restore = self.config.general.restore_deleted;
                 let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
                 let preferred_audio = self.config.general.preferred_audio_codec.clone();
-                let default_source = self.config.general.default_source;
 
                 let scan = scan_task(
                     db_path,
                     dirs,
-                    default_source,
                     discoverer,
                     movie_depth,
                     restore,
@@ -1796,7 +1792,6 @@ fn episode_map(
 fn scan_task(
     db_path: std::path::PathBuf,
     dirs: Vec<Directory>,
-    default_source: source::SourceSet,
     discoverer: bool,
     movie_depth: u8,
     restore: bool,
@@ -1808,7 +1803,6 @@ fn scan_task(
             scan::scan_dirs(
                 db_path,
                 dirs,
-                default_source,
                 discoverer,
                 movie_depth,
                 restore,

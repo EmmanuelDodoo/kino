@@ -10,8 +10,8 @@ pub mod image;
 pub mod movies;
 pub mod seasons;
 pub mod shows;
-pub mod video;
 pub mod tmdb;
+pub mod video;
 
 pub use collection::ItemId;
 pub use collection::{Collection, CollectionId, CollectionView, SimpleCollection};
@@ -262,6 +262,7 @@ pub struct Directory {
     pub active: bool,
     pub media_type: MediaType,
     pub last_scan: DateTime<Local>,
+    pub source: String,
 }
 
 impl Directory {
@@ -272,6 +273,7 @@ impl Directory {
         let media_type = row.get::<_, MediaType>("media_type")?;
         let active = row.get::<_, bool>("active")?;
         let last_scan = row.get::<_, DateTime<Local>>("last_scan")?;
+        let source = row.get::<_, String>("source")?;
 
         Ok(Self {
             id,
@@ -279,6 +281,7 @@ impl Directory {
             media_type,
             active,
             last_scan,
+            source,
         })
     }
 
@@ -289,6 +292,7 @@ impl Directory {
             active,
             media_type,
             last_scan,
+            source,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -297,6 +301,7 @@ impl Directory {
         let active = ToSqlOutput::from(*active);
         let media_type = ToSqlOutput::from(*media_type);
         let last_scan = datetime_to_sql(last_scan);
+        let source = ToSqlOutput::from(source.clone());
 
         vec![
             (":id", id),
@@ -304,12 +309,13 @@ impl Directory {
             (":active", active),
             (":media_type", media_type),
             (":last_scan", last_scan),
+            (":source", source),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO directory (id, path, active, media_type, last_scan) VALUES (:id, :path, :active, :media_type, :last_scan)";
+        let sql = "INSERT INTO directory (id, path, active, media_type, last_scan, source) VALUES (:id, :path, :active, :media_type, :last_scan, :source)";
 
         let params = self.insert_params();
 
@@ -396,7 +402,7 @@ impl Directory {
         }
     }
 
-    pub fn new(path: String, media_type: MediaType, active: bool) -> Self {
+    pub fn new(path: String, media_type: MediaType, active: bool, source: String) -> Self {
         let last_scan = Local::now();
 
         Self {
@@ -405,6 +411,7 @@ impl Directory {
             path,
             active,
             last_scan,
+            source,
         }
     }
 }

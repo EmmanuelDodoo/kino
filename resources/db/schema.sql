@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 9;
+PRAGMA user_version = 10;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -7,6 +7,7 @@ CREATE TABLE directory (
 	active		BOOLEAN NOT NULL,
 	media_type	TEXT NOT NULL,
 	last_scan       DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	source		TEXT NOT NULL DEFAULT 'none',
 	CHECK ( media_type IN ('movies', 'shows'))
 );
 

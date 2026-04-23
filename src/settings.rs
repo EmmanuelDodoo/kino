@@ -163,6 +163,7 @@ pub enum MediaMessage {
     ScanAll,
     ToggleDirectoryAdd(DirectoryId),
     ToggleDirKind(DirectoryId),
+    DirSource(DirectoryId, SourceSet),
     AddFolder,
     IncrMovieDepth,
     DecrMovieDepth,
@@ -267,6 +268,7 @@ struct Dir {
     toggled: Option<bool>,
     operation: Operation,
     original_media: MediaType,
+    original_source: SourceSet,
     scan: bool,
 }
 
@@ -276,6 +278,7 @@ impl Dir {
             toggled: None,
             operation: Operation::Insert,
             original_media: dir.media_type,
+            original_source: SourceSet::from_str(&dir.source),
             scan: true,
             dir,
         }
@@ -286,6 +289,7 @@ impl Dir {
             toggled: Some(false),
             operation: Operation::Update,
             original_media: dir.media_type,
+            original_source: SourceSet::from_str(&dir.source),
             scan: false,
             dir,
         }
@@ -312,12 +316,24 @@ impl Dir {
         }
     }
 
-    fn save(self) -> Option<(Directory, Option<Operation>, bool)> {
+    fn select_source(&mut self, source: SourceSet) {
+        self.dir.source = source.to_str().to_owned();
+        self.scan = self.dir.source != self.original_source.to_str();
+    }
+
+    fn save(self) -> Option<(Directory, Option<Operation>, bool, bool)> {
+        let source_changed = self.dir.source != self.original_source.to_str();
         match self.toggled {
-            Some(false) if matches!(self.operation, Operation::Update) && !self.scan => None,
+            // Pre-existing not being scanned or deleted or source changed
+            Some(false)
+                if matches!(self.operation, Operation::Update) && !self.scan && !source_changed =>
+            {
+                None
+            }
             None if matches!(self.operation, Operation::Delete) => None,
             _ => {
                 let operation = if self.original_media != self.dir.media_type
+                    || source_changed
                     || matches!(self.operation, Operation::Insert)
                     || (self.toggled.is_some() && matches!(self.operation, Operation::Delete))
                 {
@@ -326,7 +342,7 @@ impl Dir {
                     None
                 };
 
-                Some((self.dir, operation, self.scan))
+                Some((self.dir, operation, self.scan, source_changed))
             }
         }
     }
@@ -537,6 +553,13 @@ impl Settings {
                 MediaMessage::ToggleDirKind(id) => {
                     if let Some(dir) = self.directories.iter_mut().find(|dir| dir.dir.id == id) {
                         dir.toggle_kind();
+                    }
+
+                    Task::none()
+                }
+                MediaMessage::DirSource(id, source) => {
+                    if let Some(dir) = self.directories.iter_mut().find(|dir| dir.dir.id == id) {
+                        dir.select_source(source);
                     }
 
                     Task::none()
@@ -1002,7 +1025,12 @@ impl Settings {
                         return self.update_scroll();
                     }
 
-                    let dir = Directory::new(path, kind, true);
+                    let dir = Directory::new(
+                        path,
+                        kind,
+                        true,
+                        self.config.general.default_source.to_str().to_owned(),
+                    );
 
                     let dir = Dir::new(dir);
 
@@ -1629,7 +1657,7 @@ impl Settings {
         self,
     ) -> (
         Config,
-        impl Iterator<Item = (Directory, Option<Operation>, bool)>,
+        impl Iterator<Item = (Directory, Option<Operation>, bool, bool)>,
     ) {
         let directories = self.directories.into_iter().filter_map(|dir| dir.save());
         let config = self.config;
@@ -2284,15 +2312,32 @@ fn draw_media<'a>(
             })
             .align_y(Vertical::Center);
 
+            let source = table::column(table_header("Source").size(header_size), |dir: &Dir| {
+                let handle = picklist_handle(size);
+                let source = SourceSet::from_str(&dir.dir.source);
+                let id = dir.dir.id;
+
+                pick_list(Some(source), SourceSet::VARIANTS, |source| {
+                    source.to_str().to_owned()
+                })
+                .font(regular_font())
+                .on_select(move |source| MediaMessage::DirSource(id, source))
+                .handle(handle.clone())
+                .padding(LIST_PADDING)
+                .text_size(TEXT_SIZE)
+                .style(picklist_style)
+            })
+            .align_y(Vertical::Center);
+
             let path = table::column(table_header("Path").size(header_size), |dir: &Dir| {
-                let path = trim_path(Path::new(&dir.dir.path), 5);
+                let path = trim_path(Path::new(&dir.dir.path), 4);
 
                 let path = span(path)
                     .strikethrough(matches!(dir.operation, Operation::Delete))
                     .font(mono_font())
                     .size(size / RATIO);
 
-                rich_text([path]).on_link_click(|_: ()| MediaMessage::None)
+                container(rich_text([path]).on_link_click(|_: ()| MediaMessage::None)).clip(true)
             })
             .width(Length::Fill)
             .align_y(Vertical::Center);
@@ -2337,7 +2382,8 @@ fn draw_media<'a>(
             })
             .align_x(Horizontal::Center)
             .align_y(Vertical::Center);
-            table([kind, scan, path, last, add], directories)
+
+            table([kind, scan, source, path, last, add], directories)
         };
 
         expandable(top, dirs)
@@ -2528,7 +2574,7 @@ fn draw_metadata<'a>(
         let handle = picklist_handle(TEXT_SIZE);
         let label = label_maker("Default Source ");
 
-        let layouts = pick_list(Some(default_source), SourceSet::VARIANTS, |source| {
+        let sources = pick_list(Some(default_source), SourceSet::VARIANTS, |source| {
             source.to_str().to_owned()
         })
         .font(regular_font())
@@ -2538,7 +2584,7 @@ fn draw_metadata<'a>(
         .text_size(TEXT_SIZE)
         .style(picklist_style);
 
-        row!(label, space::horizontal(), layouts).align_y(Vertical::Center)
+        row!(label, space::horizontal(), sources).align_y(Vertical::Center)
     };
 
     let content = column!(

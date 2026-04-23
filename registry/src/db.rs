@@ -62,6 +62,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 9,
         sql: include_str!("../../resources/db/migrations/9.sql"),
     },
+    Migration {
+        version: 10,
+        sql: include_str!("../../resources/db/migrations/10.sql"),
+    },
 ];
 
 pub struct Database {
@@ -889,7 +893,7 @@ impl Database {
 
     pub fn toggle_directories(
         &mut self,
-        directories: Vec<(Directory, Operation)>,
+        directories: Vec<(Directory, Operation, bool)>,
     ) -> rusqlite::Result<bool> {
         if directories.is_empty() {
             return Ok(false);
@@ -899,10 +903,10 @@ impl Database {
         let mut updates = vec![];
         let mut deletes = vec![];
 
-        for (dir, operation) in directories {
+        for (dir, operation, source_changed) in directories {
             match operation {
                 Operation::Insert => inserts.push(dir),
-                Operation::Update => updates.push(dir),
+                Operation::Update => updates.push((dir, source_changed)),
                 Operation::Delete => deletes.push(dir),
             }
         }
@@ -912,12 +916,12 @@ impl Database {
         let mut rows = 0;
 
         if !inserts.is_empty() {
-            let mut vars = "(?, ?, ?, ?),".repeat(inserts.len());
+            let mut vars = "(?, ?, ?, ?, ?),".repeat(inserts.len());
             // Remove trailing comma
             vars.pop();
 
             let insert = format!(
-                "INSERT OR IGNORE INTO directory (id, path, active, media_type) VALUES {vars}"
+                "INSERT OR IGNORE INTO directory (id, path, active, media_type, source) VALUES {vars}"
             );
 
             let mut params = vec![];
@@ -927,6 +931,7 @@ impl Database {
                 params.push(ToSqlOutput::from(dir.path));
                 params.push(ToSqlOutput::from(dir.active));
                 params.push(ToSqlOutput::from(dir.media_type));
+                params.push(ToSqlOutput::from(dir.source));
             }
 
             let params = params
@@ -938,15 +943,15 @@ impl Database {
         }
 
         if !updates.is_empty() {
-            let vars = repeat(updates.len());
-            let sql = "UPDATE OR IGNORE directory SET path=:path, active=:active, media_type=:type WHERE id=:id";
+            let sql = "UPDATE OR IGNORE directory SET path=:path, active=:active, media_type=:type, source=:source WHERE id=:id";
 
             let mut params = Vec::with_capacity(updates.len());
-            let delete_movies = format!("DELETE FROM movie where directory in ({vars})");
-            let delete_shows = format!("DELETE FROM tv_show where directory in ({vars})");
 
-            for dir in updates {
-                params.push(ToSqlOutput::from(dir.id));
+            for (dir, source_changed) in updates {
+                if !source_changed {
+                    params.push(ToSqlOutput::from(dir.id));
+                }
+
                 rows += trans.execute(
                     sql,
                     &[
@@ -954,17 +959,24 @@ impl Database {
                         (":path", &ToSqlOutput::from(dir.path)),
                         (":active", &ToSqlOutput::from(dir.active)),
                         (":type", &ToSqlOutput::from(dir.media_type)),
+                        (":source", &ToSqlOutput::from(dir.source)),
                     ],
                 )?;
             }
 
-            let params = params
-                .iter()
-                .map(|param| param as &dyn ToSql)
-                .collect::<Vec<_>>();
+            if params.len() > 0 {
+                let vars = repeat(params.len());
+                let delete_movies = format!("DELETE FROM movie where directory in ({vars})");
+                let delete_shows = format!("DELETE FROM tv_show where directory in ({vars})");
 
-            rows += trans.execute(&delete_movies, params.as_slice())?;
-            rows += trans.execute(&delete_shows, params.as_slice())?;
+                let params = params
+                    .iter()
+                    .map(|param| param as &dyn ToSql)
+                    .collect::<Vec<_>>();
+
+                rows += trans.execute(&delete_movies, params.as_slice())?;
+                rows += trans.execute(&delete_shows, params.as_slice())?;
+            }
         }
 
         if !deletes.is_empty() {
