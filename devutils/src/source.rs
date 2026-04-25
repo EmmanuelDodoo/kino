@@ -11,7 +11,7 @@ use rusqlite::{
     Row,
     types::{ToSqlOutput, ValueRef},
 };
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -51,6 +51,8 @@ impl SourceSet {
             "Tmdb" => Self::Tmdb,
             "TMDB" => Self::Tmdb,
             "None" => Self::None,
+            "NONE" => Self::None,
+            Self::NONE => Self::None,
             _ => Self::None,
         }
     }
@@ -65,10 +67,9 @@ impl SourceSet {
     pub fn from_row(row: &Row<'_>, column: &str) -> rusqlite::Result<Self> {
         let name = row.get::<_, Option<String>>(column)?;
 
-        match name.as_deref() {
-            Some(Self::TMDB) => Ok(Self::Tmdb),
-            _ => Ok(Self::None),
-        }
+        let source = name.as_deref().map(Self::from_str).unwrap_or(Self::None);
+
+        Ok(source)
     }
 
     pub fn merge(self, other: Self) -> Self {
