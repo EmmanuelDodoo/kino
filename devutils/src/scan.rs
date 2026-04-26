@@ -26,7 +26,7 @@ static SEASON_REG: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Cannot create season regex")
 });
 static EPISODE_REG: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?<=[^a-zA-Z][e|E])\s?\d{1,3}|(?<=[e|E][p|P][i|I][s|S]|[o|O][d|D][e|E])\s?\d{1,3}|(?<=\dx)\s?\d{1,3}")
+    Regex::new(r"(?<=[e|E])\s?\d{1,3}|(?<=[e|E][p|P][i|I][s|S][o|O][d|D][e|E])\s?\d{1,3}|(?<=\dx)\s?\d{1,3}|^\d{1,3}(?=\s)")
         .expect("Cannot create episode regex")
 });
 

@@ -63,7 +63,7 @@ As part of the scanning process, video and folder names are sanitized using mult
 
 ### Episodes
 
-- `"(?<=[^a-zA-Z][e|E])\s?\d{1,3}|(?<=[e|E][p|P][i|I][s|S]|[o|O][d|D][e|E])\s?\d{1,3}|(?<=\dx)\s?\d{1,3}`: Find episode number
+- `(?<=[e|E])\s?\d{1,3}|(?<=[e|E][p|P][i|I][s|S][o|O][d|D][e|E])\s?\d{1,3}|(?<=\dx)\s?\d{1,3}|^\d{1,3}(?=\s)`: Find episode number
 
 ### Movies
 
