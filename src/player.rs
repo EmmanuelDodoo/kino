@@ -1362,7 +1362,7 @@ impl Manager {
         .width(Length::Fill)
         .align_y(Vertical::Center);
 
-        let content: Element<'_, ManagerMessage> = if self.show_controls {
+        let content: Element<'_, ManagerMessage> = if self.show_controls || self.is_eos() {
             content.into()
         } else {
             space::horizontal().height(35).into()
@@ -1648,7 +1648,7 @@ impl Manager {
             .spacing(8)
             .width(Length::Fill);
 
-        let content: Element<'_, ManagerMessage> = if self.show_controls {
+        let content: Element<'_, ManagerMessage> = if self.show_controls || self.is_eos() {
             content.into()
         } else {
             space::horizontal().height(75).into()
@@ -1892,6 +1892,12 @@ impl Manager {
             State::Ready { player, .. } => Some(player),
             _ => None,
         }
+    }
+
+    fn is_eos(&self) -> bool {
+        self.player()
+            .map(|player| player.video.eos())
+            .unwrap_or_default()
     }
 
     fn play_toggle(&mut self, now: Option<Instant>) -> Task<Message> {
