@@ -578,7 +578,8 @@ async fn execute(
                         ));
                     };
 
-                    insert_movie(db, *id, &movie, rating).map_err(|err| err.to_string())?;
+                    insert_movie(db, request.id, *id, &movie, rating)
+                        .map_err(|err| err.to_string())?;
                     request.status = Status::Image;
                     request.poster = movie.poster_path;
                     *backdrop = movie.backdrop_path;
@@ -591,7 +592,8 @@ async fn execute(
                         ));
                     };
 
-                    insert_show(db, *id, &show, rating).map_err(|err| err.to_string())?;
+                    insert_show(db, request.id, *id, &show, rating)
+                        .map_err(|err| err.to_string())?;
                     request.status = Status::Image;
                     request.poster = show.poster_path;
                     *backdrop = show.backdrop_path;
@@ -606,7 +608,8 @@ async fn execute(
                         ));
                     };
 
-                    insert_season(db, *id, &season, rating).map_err(|err| err.to_string())?;
+                    insert_season(db, request.id, *id, &season, rating)
+                        .map_err(|err| err.to_string())?;
                     request.status = Status::Image;
                     request.poster = season.poster_path;
                 }
@@ -625,7 +628,8 @@ async fn execute(
                         ));
                     };
 
-                    insert_episode(db, *id, &episode, rating).map_err(|err| err.to_string())?;
+                    insert_episode(db, request.id, *id, &episode, rating)
+                        .map_err(|err| err.to_string())?;
                     request.status = Status::Image;
                     request.poster = episode.still_path;
                 }
@@ -669,7 +673,8 @@ async fn execute(
                     ));
                 }
 
-                insert_movie_image(db, *id, poster, backdrop).map_err(|err| err.to_string())?;
+                insert_movie_image(db, request.id, *id, poster, backdrop)
+                    .map_err(|err| err.to_string())?;
                 request.status = Status::Done;
             }
             Media::Show { id, backdrop, name } => {
@@ -709,7 +714,8 @@ async fn execute(
                     ));
                 }
 
-                insert_show_image(db, *id, poster, backdrop).map_err(|err| err.to_string())?;
+                insert_show_image(db, request.id, *id, poster, backdrop)
+                    .map_err(|err| err.to_string())?;
                 request.status = Status::Done;
             }
             Media::Season { id, parent, number } => {
@@ -733,7 +739,7 @@ async fn execute(
                     ));
                 }
 
-                insert_season_image(db, *id, poster).map_err(|err| err.to_string())?;
+                insert_season_image(db, request.id, *id, poster).map_err(|err| err.to_string())?;
                 request.status = Status::Done;
             }
             Media::Episode {
@@ -760,7 +766,7 @@ async fn execute(
                     ));
                 }
 
-                insert_episode_image(db, *id, poster).map_err(|err| err.to_string())?;
+                insert_episode_image(db, request.id, *id, poster).map_err(|err| err.to_string())?;
                 request.status = Status::Done;
             }
         },
@@ -782,11 +788,12 @@ async fn execute(
 
 fn insert_movie(
     db: &Database,
+    request: RequestId,
     id: MovieId,
     movie: &TMDBMovie,
     rating: bool,
 ) -> rusqlite::Result<()> {
-    let sql = "UPDATE movie SET tags=:tags, duration=:duration, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
+    let sql = "UPDATE movie SET tags=:tags, duration=:duration, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id AND request=:request";
 
     let mut statement = db.prepare_cached(sql)?;
 
@@ -821,6 +828,7 @@ fn insert_movie(
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
         (":tags", &ToSqlOutput::from(tags)),
         (":overview", &ToSqlOutput::from(overview)),
         (":release", &ToSqlOutput::from(release_date)),
@@ -832,8 +840,14 @@ fn insert_movie(
     Ok(())
 }
 
-fn insert_show(db: &Database, id: ShowId, show: &TMDBShow, rating: bool) -> rusqlite::Result<()> {
-    let sql = "UPDATE tv_show SET  tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id";
+fn insert_show(
+    db: &Database,
+    request: RequestId,
+    id: ShowId,
+    show: &TMDBShow,
+    rating: bool,
+) -> rusqlite::Result<()> {
+    let sql = "UPDATE tv_show SET  tags=:tags, synopsis=:overview, release=:release, name=:name, rating=:rating WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let TMDBShow {
@@ -863,6 +877,7 @@ fn insert_show(db: &Database, id: ShowId, show: &TMDBShow, rating: bool) -> rusq
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
         (":tags", &ToSqlOutput::from(tags)),
         (":overview", &ToSqlOutput::from(overview)),
         (":release", &ToSqlOutput::from(first_air_date)),
@@ -875,12 +890,12 @@ fn insert_show(db: &Database, id: ShowId, show: &TMDBShow, rating: bool) -> rusq
 
 fn insert_season(
     db: &Database,
+    request: RequestId,
     id: SeasonId,
     season: &TMDBSeason,
     rating: bool,
 ) -> rusqlite::Result<()> {
-    let sql =
-        "UPDATE season SET  synopsis=:overview, release=:release, rating=:rating WHERE id=:id";
+    let sql = "UPDATE season SET  synopsis=:overview, release=:release, rating=:rating WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let TMDBSeason {
@@ -902,6 +917,7 @@ fn insert_season(
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
         (":overview", &ToSqlOutput::from(overview)),
         (":release", &ToSqlOutput::from(air_date)),
         (":rating", rating),
@@ -912,11 +928,12 @@ fn insert_season(
 
 fn insert_episode(
     db: &Database,
+    request: RequestId,
     id: EpisodeId,
     episode: &TMDBEpisode,
     rating: bool,
 ) -> rusqlite::Result<()> {
-    let sql = "UPDATE episode SET  synopsis=:overview, duration=:duration, release=:release, name=:name, rating=:rating WHERE id=:id";
+    let sql = "UPDATE episode SET  synopsis=:overview, duration=:duration, release=:release, name=:name, rating=:rating WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let TMDBEpisode {
@@ -943,6 +960,7 @@ fn insert_episode(
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
         (":overview", &ToSqlOutput::from(overview)),
         (":release", &ToSqlOutput::from(air_date)),
         (":name", &ToSqlOutput::from(name)),
@@ -955,11 +973,12 @@ fn insert_episode(
 
 fn insert_movie_image(
     db: &Database,
+    request: RequestId,
     id: MovieId,
     poster: Option<String>,
     backdrop: Option<String>,
 ) -> rusqlite::Result<()> {
-    let sql = "UPDATE movie SET  poster=:poster, backdrop=:backdrop, generate_poster=:generate_poster, fetched=TRUE WHERE id=:id";
+    let sql = "UPDATE movie SET  poster=:poster, backdrop=:backdrop, generate_poster=:generate_poster, fetched=TRUE WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let poster = match poster {
@@ -981,6 +1000,7 @@ fn insert_movie_image(
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
         (":poster", &poster),
         (":backdrop", &backdrop),
         (":generate_poster", &ToSqlOutput::from(false)),
@@ -991,11 +1011,13 @@ fn insert_movie_image(
 
 fn insert_show_image(
     db: &Database,
+    request: RequestId,
     id: ShowId,
     poster: Option<String>,
     backdrop: Option<String>,
 ) -> rusqlite::Result<()> {
-    let sql = "UPDATE tv_show SET  poster=:poster, backdrop=:backdrop WHERE id=:id";
+    let sql =
+        "UPDATE tv_show SET  poster=:poster, backdrop=:backdrop WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let poster = match poster {
@@ -1017,6 +1039,7 @@ fn insert_show_image(
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
         (":poster", &poster),
         (":backdrop", &backdrop),
     ])?;
@@ -1026,35 +1049,11 @@ fn insert_show_image(
 
 fn insert_season_image(
     db: &Database,
+    request: RequestId,
     id: SeasonId,
     poster: Option<String>,
 ) -> rusqlite::Result<()> {
-    let sql = "UPDATE season SET poster=:poster WHERE id=:id";
-    let mut statement = db.prepare_cached(sql)?;
-
-    let poster = match poster {
-        Some(poster) => {
-            let poster = ToSqlOutput::from(poster);
-            if let Err(error) = db.execute(IMAGE_SQL, &[(":path", &poster)]) {
-                tracing::error!("Could not insert into image table. Error\n{error}")
-            };
-
-            poster
-        }
-        None => ToSqlOutput::Owned(Value::Null),
-    };
-
-    statement.execute(&[(":id", &ToSqlOutput::from(id)), (":poster", &poster)])?;
-
-    Ok(())
-}
-
-fn insert_episode_image(
-    db: &Database,
-    id: EpisodeId,
-    poster: Option<String>,
-) -> rusqlite::Result<()> {
-    let sql = "UPDATE episode SET poster=:poster, generate_poster=:generate_poster, fetched=TRUE WHERE id=:id";
+    let sql = "UPDATE season SET poster=:poster WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let poster = match poster {
@@ -1071,6 +1070,37 @@ fn insert_episode_image(
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
+        (":poster", &poster),
+    ])?;
+
+    Ok(())
+}
+
+fn insert_episode_image(
+    db: &Database,
+    request: RequestId,
+    id: EpisodeId,
+    poster: Option<String>,
+) -> rusqlite::Result<()> {
+    let sql = "UPDATE episode SET poster=:poster, generate_poster=:generate_poster, fetched=TRUE WHERE id=:id AND request=:request";
+    let mut statement = db.prepare_cached(sql)?;
+
+    let poster = match poster {
+        Some(poster) => {
+            let poster = ToSqlOutput::from(poster);
+            if let Err(error) = db.execute(IMAGE_SQL, &[(":path", &poster)]) {
+                tracing::error!("Could not insert into image table. Error\n{error}")
+            };
+
+            poster
+        }
+        None => ToSqlOutput::Owned(Value::Null),
+    };
+
+    statement.execute(&[
+        (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
         (":poster", &poster),
         (":generate_poster", &ToSqlOutput::from(false)),
     ])?;
