@@ -8,3 +8,5 @@ license.workspace = true
 glib.workspace = true
 gstreamer.workspace = true
 rusqlite.workspace = true
+tracing.workspace = true
+anyhow = "1.0.102"

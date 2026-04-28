@@ -1,106 +1,103 @@
-#![allow(dead_code)]
-use std::fmt::{self, Display};
+pub use anyhow::{Context, Error, Result, anyhow, bail};
+use std::fmt::Display;
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub trait ContextLog<T, E>: Context<T, E> {
+    fn ctx_log<C>(self, context: C) -> Option<T>
+    where
+        C: Display + Send + Sync + 'static;
 
-#[derive(Debug)]
-pub enum Error {
-    GStreamerError(GStreamerError),
-    ThumbnailEmptyVideo,
-    IO(std::io::Error),
-    Database(rusqlite::Error),
-    Raw(String),
+    fn with_ctx_log<C, F>(self, f: F) -> Option<T>
+    where
+        C: Display + Send + Sync + 'static,
+        F: FnOnce() -> C;
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+pub trait Log {
+    type Output;
+
+    fn log_err(self) -> Self::Output;
+
+    fn log_ctx<C>(self, context: C) -> Self::Output
+    where
+        C: Display + Send + Sync + 'static;
+
+    fn with_ctx_log<C, F>(self, f: F) -> Self::Output
+    where
+        C: Display + Send + Sync + 'static,
+        F: FnOnce() -> C;
+}
+
+impl<T> Log for std::result::Result<T, anyhow::Error> {
+    type Output = Option<T>;
+
+    fn log_err(self) -> Self::Output {
         match self {
-            Self::GStreamerError(error) => error.fmt(f),
-            Self::IO(error) => error.fmt(f),
-            Self::Database(error) => error.fmt(f),
-            Self::Raw(error) => error.fmt(f),
-            Self::ThumbnailEmptyVideo => write!(f, "Tried creating a thumbnail for an empty Video"),
+            Ok(x) => Some(x),
+            Err(error) => {
+                error.log_err();
+                None
+            }
         }
     }
-}
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::GStreamerError(error) => error.source(),
-            Self::IO(error) => error.source(),
-            Self::Database(error) => error.source(),
-            Self::Raw(_) => None,
-            Self::ThumbnailEmptyVideo => None,
-        }
+    fn log_ctx<C>(self, context: C) -> Self::Output
+    where
+        C: Display + Send + Sync + 'static,
+    {
+        self.context(context).log_err()
+    }
+
+    fn with_ctx_log<C, F>(self, f: F) -> Self::Output
+    where
+        C: Display + Send + Sync + 'static,
+        F: FnOnce() -> C,
+    {
+        self.with_context(f).log_err()
     }
 }
 
-impl From<std::io::Error> for Error {
-    fn from(value: std::io::Error) -> Self {
-        Self::IO(value)
+impl Log for anyhow::Error {
+    type Output = Self;
+
+    fn log_err(self) -> Self::Output {
+        tracing::error!("{self:?}\n");
+        self
+    }
+
+    fn log_ctx<C>(self, context: C) -> Self::Output
+    where
+        C: Display + Send + Sync + 'static,
+    {
+        let new = self.context(context);
+        new.log_err()
+    }
+
+    fn with_ctx_log<C, F>(self, f: F) -> Self::Output
+    where
+        C: Display + Send + Sync + 'static,
+        F: FnOnce() -> C,
+    {
+        let context = f();
+        self.log_ctx(context)
     }
 }
 
-impl From<rusqlite::Error> for Error {
-    fn from(value: rusqlite::Error) -> Self {
-        Self::Database(value)
+impl<T, E> ContextLog<T, E> for std::result::Result<T, E>
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    fn ctx_log<C>(self, context: C) -> Option<T>
+    where
+        C: Display + Send + Sync + 'static,
+    {
+        self.context(context).log_err()
     }
-}
 
-impl From<String> for Error {
-    fn from(value: String) -> Self {
-        Self::Raw(value)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum GStreamerError {
-    Glib(glib::Error),
-    BoolError(glib::BoolError),
-    StateChangeError(gstreamer::StateChangeError),
-}
-
-impl From<GStreamerError> for Error {
-    fn from(value: GStreamerError) -> Self {
-        Self::GStreamerError(value)
-    }
-}
-
-impl From<glib::Error> for GStreamerError {
-    fn from(value: glib::Error) -> Self {
-        Self::Glib(value)
-    }
-}
-
-impl From<glib::BoolError> for GStreamerError {
-    fn from(value: glib::BoolError) -> Self {
-        Self::BoolError(value)
-    }
-}
-
-impl From<gstreamer::StateChangeError> for GStreamerError {
-    fn from(value: gstreamer::StateChangeError) -> Self {
-        Self::StateChangeError(value)
-    }
-}
-
-impl Display for GStreamerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Glib(error) => error.fmt(f),
-            Self::BoolError(error) => error.fmt(f),
-            Self::StateChangeError(error) => error.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for GStreamerError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Glib(error) => error.source(),
-            Self::BoolError(error) => error.source(),
-            Self::StateChangeError(error) => error.source(),
-        }
+    fn with_ctx_log<C, F>(self, f: F) -> Option<T>
+    where
+        C: Display + Send + Sync + 'static,
+        F: FnOnce() -> C,
+    {
+        self.with_context(f).log_err()
     }
 }

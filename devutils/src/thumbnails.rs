@@ -1,11 +1,11 @@
-use core::error::{Error, GStreamerError, Result};
+use core::error::{Context, ContextLog, Result, anyhow};
 
+pub use super::Image;
 use glib::object::Cast;
 use gstreamer::{
     self as gst,
     prelude::{ElementExt, ElementExtManual, GstBinExt},
 };
-pub use super::Image;
 
 /// Far faster at generating multiple thumbnails than
 /// [`iced_video_player::Video::thumbnails`].
@@ -23,46 +23,50 @@ pub struct ThumbnailGenerator {
 
 impl Drop for ThumbnailGenerator {
     fn drop(&mut self) {
-        if let Err(err) = self.pipeline.set_state(gst::State::Null) {
-            tracing::error!("Error droping ThumbnailGenerator: \n{err}");
-        }
+        let _ = self
+            .pipeline
+            .set_state(gst::State::Null)
+            .with_ctx_log(|| "Error dropping ThumbnailGenerator");
     }
 }
 
 impl ThumbnailGenerator {
     pub fn new(path: url::Url, width: i32, height: i32, downscale: u32) -> Result<Self> {
-        gst::init().map_err(GStreamerError::Glib)?;
+        gst::init().context("ThumbnailGenerator gstreamer init")?;
 
         let template = format!(
             "urisourcebin uri=\"{}\" ! decodebin ! videoconvert ! videoscale ! appsink name=sink drop=true caps=video/x-raw,format=NV12,pixel-aspect-ratio=1/1",
             path.as_str()
         );
         let pipeline = gst::parse::launch(template.as_ref())
-            .map_err(GStreamerError::Glib)?
+            .context("ThumbnailGenerator launch failed")?
             .downcast::<gst::Pipeline>()
-            .map_err(|_| Error::Raw("Could not downcast thumbnail pipeline".to_owned()))?;
+            .map_err(|_| anyhow!("ThumbnailGenerator pipeline downcast failed"))?;
 
-        let sink = pipeline.by_name("sink").expect("Missing appsink");
+        let sink = pipeline
+            .by_name("sink")
+            .ok_or(anyhow!("ThumbnailGenerator new missing appsink"))?;
         let sink = sink
             .downcast::<gstreamer_app::AppSink>()
-            .map_err(|_| Error::Raw("Could not downcast thumbnail appsink".to_owned()))?;
+            .map_err(|_| anyhow!("ThumbnailGenerator appsink downcast failed"))?;
 
         pipeline
             .set_state(gst::State::Paused)
-            .map_err(GStreamerError::StateChangeError)?;
+            .context("ThumbnailGenerator set pipeline state to Paused")?;
 
         // Wait until preroll (pipeline ready to process)
         let (res, _, _) = pipeline.state(gst::ClockTime::NONE);
-        if let Err(err) = res {
-            tracing::error!("{err:?}");
-        }
+
+        res.context("ThumbnailGenerator preroll waiting")?;
 
         let duration = pipeline
             .query_duration::<gst::ClockTime>()
-            .ok_or(Error::ThumbnailEmptyVideo)?;
+            .ok_or(anyhow!("ThumbnailGenerator empty video"))?;
 
         Ok(Self {
-            bus: pipeline.bus().expect("Missing thumbnail pipeline bus"),
+            bus: pipeline.bus().ok_or(anyhow!(
+                "ThumbnailGenerator new missing thumbnail pipeline bus"
+            ))?,
             pipeline,
             sink,
             width,
@@ -75,22 +79,21 @@ impl ThumbnailGenerator {
     fn sample(&self, position: gst::ClockTime) -> Result<gstreamer::Sample> {
         self.pipeline
             .set_state(gst::State::Paused)
-            .map_err(GStreamerError::StateChangeError)?;
+            .context("ThumbnailGenerator sample generation pipeline state change to Pause")?;
 
         // Wait until preroll (pipeline ready to process)
         let (res, _, _) = self.pipeline.state(gst::ClockTime::NONE);
-        if let Err(err) = res {
-            tracing::error!("{err:?}");
-        }
+
+        res.context("ThumbnailGenerator preroll waiting")?;
 
         self.pipeline
             .seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT, position)
-            .map_err(GStreamerError::BoolError)?;
+            .context("ThumbnailGenerator sample generation seeking")?;
 
         Ok(self
             .sink
             .pull_preroll()
-            .map_err(GStreamerError::BoolError)?)
+            .context("ThumbnailGenerator sample generation preroll pulling")?)
     }
 
     fn frame<'a>(
@@ -106,8 +109,12 @@ impl ThumbnailGenerator {
                 .map(|meta| meta.stride()[0] as u32)
         });
 
-        let buffer = sample.buffer().expect("Could get sample buffer");
-        let frame = buffer.map_readable().map_err(GStreamerError::BoolError)?;
+        let buffer = sample
+            .buffer()
+            .ok_or(anyhow!("ThumbnailGenerator frame get sample buffer"))?;
+        let frame = buffer
+            .map_readable()
+            .context("ThumbnailGenerator frame readable buffer map")?;
 
         while let Some(msg) = self.bus.pop() {
             if let gst::MessageView::Error(error) = msg.view() {

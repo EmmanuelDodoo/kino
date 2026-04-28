@@ -1,3 +1,4 @@
+use core::{Context, ContextLog, Error, Log, anyhow, variants};
 use iced::{
     Element, Length, Padding, Size, Subscription, Task, Theme,
     advanced::graphics::futures::MaybeSend,
@@ -33,7 +34,6 @@ use crate::utils::{
     modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo,
 };
 pub use comment::*;
-use core::{Error, variants};
 use devutils::thumbnails::{Image, ThumbnailGenerator};
 pub use playlist::*;
 use registry::models::{
@@ -444,7 +444,7 @@ impl Manager {
     pub fn update(&mut self, message: ManagerMessage, now: Instant) -> Task<Message> {
         match message {
             ManagerMessage::None => Task::none(),
-            ManagerMessage::Error(error) => Message::error(error).tasked(),
+            ManagerMessage::Error(error) => Message::error(error, true).tasked(),
             ManagerMessage::Video(is_next, player) => {
                 let mut player = Arc::try_unwrap(player).unwrap();
 
@@ -471,7 +471,8 @@ impl Manager {
                             10
                         };
                         let path = url::Url::from_file_path(path.canonicalize().unwrap()).unwrap();
-                        let generator = ThumbnailGenerator::new(path, width, height, 8)?;
+                        let generator = ThumbnailGenerator::new(path, width, height, 8)
+                            .log_ctx("Thumbnail generation")?;
 
                         let range = 1..=num;
                         let mut rng = rand::thread_rng();
@@ -489,45 +490,39 @@ impl Manager {
                             let position = duration * (idx as f64 / num as f64);
 
                             if generate_poster && idx == rng {
-                                let (img, pst) = match generator.generate_with_poster(position) {
-                                    Ok(items) => items,
-                                    Err(error) => {
-                                        tracing::error!("Thumbnail generation error.\n{error}");
-                                        continue;
-                                    }
+                                let Some((img, pst)) =
+                                    generator.generate_with_poster(position).with_ctx_log(|| {
+                                        format!("Thumbnail generation with poster at {position}")
+                                    })
+                                else {
+                                    continue;
                                 };
 
                                 imgs.push(convert(img));
                                 poster = Some(pst);
                             } else {
-                                match generator.generate(position) {
-                                    Ok(img) => imgs.push(convert(img)),
-                                    Err(error) => {
-                                        tracing::error!("Thumbnail generation error.\n{error}");
-                                        continue;
-                                    }
-                                }
+                                let Some(img) = generator
+                                    .generate(position)
+                                    .with_ctx_log(|| format!("Thumbnail generation at {position}"))
+                                else {
+                                    continue;
+                                };
+
+                                imgs.push(convert(img));
                             }
                         }
 
                         drop(generator);
 
-                        Ok::<_, Error>((id, imgs, poster))
+                        Ok::<_, Error>((id, imgs, poster)).log_ctx("Thumbnail generation error")
                     }),
-                    move |res| match res {
-                        Ok(Ok((id, thumbnails, poster))) => ManagerMessage::Thumbnail {
+                    move |res| match res.ctx_log("Thumbnail generation join error").flatten() {
+                        Some((id, thumbnails, poster)) => ManagerMessage::Thumbnail {
                             id,
                             thumbnails,
                             poster,
                         },
-                        Ok(Err(error)) => {
-                            tracing::error!("Thumbnail generation error.\n{error}");
-                            ManagerMessage::None
-                        }
-                        Err(error) => {
-                            tracing::error!("Thumbnail generation error.\n{error}");
-                            ManagerMessage::None
-                        }
+                        None => ManagerMessage::None,
                     },
                 );
 
@@ -658,7 +653,7 @@ impl Manager {
                 };
 
                 if let Err(msg) = player.seek_release(false) {
-                    return Task::done(Message::error(msg));
+                    return Task::done(Message::error(msg, true));
                 }
 
                 Task::none()
@@ -847,7 +842,7 @@ impl Manager {
                             }
 
                             let Ok(amt) = amt.parse::<f64>() else {
-                                let msg = Message::error(format!("Invalid input: {amt}"));
+                                let msg = Message::error(format!("Invalid input: {amt}"), true);
                                 return Task::done(msg);
                             };
 
@@ -863,7 +858,7 @@ impl Manager {
                             }
 
                             let Ok(amt) = amt.parse::<f64>() else {
-                                let msg = Message::error(format!("Invalid input: {amt}"));
+                                let msg = Message::error(format!("Invalid input: {amt}"), true);
                                 return Task::done(msg);
                             };
 
@@ -879,7 +874,7 @@ impl Manager {
                             }
 
                             let Ok(amt) = amt.parse::<f64>() else {
-                                let msg = Message::error(format!("Invalid input: {amt}"));
+                                let msg = Message::error(format!("Invalid input: {amt}"), true);
                                 return Task::done(msg);
                             };
 
@@ -895,7 +890,7 @@ impl Manager {
                             }
 
                             let Ok(amt) = amt.parse::<f64>() else {
-                                let msg = Message::error(format!("Invalid input: {amt}"));
+                                let msg = Message::error(format!("Invalid input: {amt}"), true);
                                 return Task::done(msg);
                             };
 
@@ -911,7 +906,7 @@ impl Manager {
                             }
 
                             let Ok(span) = span.parse::<u64>() else {
-                                let msg = Message::error(format!("Invalid input: {span}"));
+                                let msg = Message::error(format!("Invalid input: {span}"), true);
                                 return Task::done(msg);
                             };
 
@@ -1003,7 +998,7 @@ impl Manager {
                             }
 
                             let Ok(size) = size.parse::<u32>() else {
-                                let msg = Message::error(format!("Invalid input: {size}"));
+                                let msg = Message::error(format!("Invalid input: {size}"), true);
                                 return Task::done(msg);
                             };
 
@@ -1062,7 +1057,7 @@ impl Manager {
                             }
 
                             let Ok(input) = input.trim().parse::<f32>() else {
-                                return Message::error("Invalid input").tasked();
+                                return Message::error("Invalid input", true).tasked();
                             };
 
                             config.subtitle_offset = input;
@@ -1148,23 +1143,23 @@ impl Manager {
                                 let position = match url.parse::<u64>() {
                                     Ok(position) => position,
                                     Err(error) => {
-                                        let msg = Message::error(error);
+                                        let msg = Message::error(error, true);
                                         return msg.tasked();
                                     }
                                 };
 
                                 player.position = position as f64;
                                 if let Err(msg) = player.seek_release(false) {
-                                    return Task::done(Message::error(msg));
+                                    return Task::done(Message::error(msg, true));
                                 }
                             }
                             Ok(url) => {
                                 if let Err(error) = open::that(url.as_str()) {
-                                    return Message::error(error).tasked();
+                                    return Message::error(error, true).tasked();
                                 }
                             }
                             Err(error) => {
-                                return Message::error(error).tasked();
+                                return Message::error(error, true).tasked();
                             }
                         }
 
@@ -1947,7 +1942,7 @@ impl Manager {
 
         if video.eos() && is_paused {
             if let Err(error) = video.seek(Duration::from_secs(0), false) {
-                return Message::error(error).tasked();
+                return Message::error(error, true).tasked();
             }
 
             *position = 0.0;
@@ -2329,12 +2324,12 @@ impl Manager {
             let position = Duration::from_secs_f64(position);
 
             if let Err(error) = player.video.set_subtitle_url(&url) {
-                return Some(Message::error(error));
+                return Some(Message::error(error, true));
             };
 
             std::thread::sleep(std::time::Duration::from_millis(150));
             if let Err(error) = player.video.seek(position, false) {
-                return Some(Message::error(error));
+                return Some(Message::error(error, true));
             };
 
             None
@@ -2343,13 +2338,16 @@ impl Manager {
         let set_uri = |player: &mut Player, uri: PathBuf| {
             let path = match uri.canonicalize() {
                 Ok(subtitles) => subtitles,
-                Err(error) => return Some(Message::error(error)),
+                Err(error) => return Some(Message::error(error, true)),
             };
 
             let url = match url::Url::from_file_path(path) {
                 Ok(url) => url,
                 Err(_) => {
-                    return Some(Message::error("Cannot generate url from subtitle path"));
+                    return Some(Message::error(
+                        "Cannot generate url from subtitle path",
+                        true,
+                    ));
                 }
             };
 
@@ -2750,22 +2748,23 @@ fn load_video<Message: 'static + MaybeSend>(
                         let path: &std::path::Path = path.as_ref();
                         let path = path
                             .canonicalize()
-                            .inspect_err(|error| tracing::error!("Video Subtitle error \n{error}"))
-                            .ok()
+                            .with_context(|| {
+                                format!("Loading saved subtitle path at {}", path.display())
+                            })
                             .and_then(|path| {
-                                url::Url::from_file_path(path)
-                                    .inspect_err(|_| {
-                                        tracing::error!(
-                                            "Video Subtitle error. Cannot create Url from path"
-                                        )
-                                    })
-                                    .ok()
-                            });
+                                url::Url::from_file_path(&path).map_err(|_| {
+                                    anyhow!(
+                                        "Cannot create url from subtitle path at {}",
+                                        path.display()
+                                    )
+                                })
+                            })
+                            .log_err();
 
-                        if let Some(url) = path.as_ref()
-                            && let Err(error) = video.set_subtitle_url(url)
-                        {
-                            tracing::error!("Video Subtitle error \n{error}")
+                        if let Some(url) = path.as_ref() {
+                            video
+                                .set_subtitle_url(url)
+                                .ctx_log("Setting video subtitle url");
                         }
                     }
                 }

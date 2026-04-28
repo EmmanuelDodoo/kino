@@ -4,24 +4,21 @@ use image::{
 };
 
 use super::{Color, Image};
+use core::error::{Context, Log, Result};
 use registry::db;
 use registry::models;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_POSTER_PATH: &[u8] = include_bytes!("../../resources/images/default_poster.png");
 
-fn open(path: &str) -> Option<DynamicImage> {
+fn open(path: &str) -> Result<DynamicImage> {
     ImageReader::open(path)
         .and_then(|reader| reader.with_guessed_format())
-        .inspect_err(|error| tracing::error!("Image opening error on {path}. Error\n{error}"))
-        .ok()
+        .with_context(|| format!("Opening image at {path}"))
         .and_then(|reader| {
             reader
                 .decode()
-                .inspect_err(|error| {
-                    tracing::error!("Image opening error on {path}. Error\n{error}")
-                })
-                .ok()
+                .with_context(|| format!("Decoding iamge at {path}"))
         })
 }
 
@@ -32,16 +29,9 @@ pub fn default_poster() -> Option<Image> {
 
     let img = ImageReader::new(default)
         .with_guessed_format()
-        .inspect_err(|error| tracing::error!("Default poster opening error. Error\n{error}"))
-        .ok()
-        .and_then(|reader| {
-            reader
-                .decode()
-                .inspect_err(|error| {
-                    tracing::error!("Default poster opening error. Error\n{error}")
-                })
-                .ok()
-        })?;
+        .context("Default poster opening")
+        .and_then(|reader| reader.decode().context("Decoding default poster "))
+        .ok()?;
 
     let img = img.to_rgba8();
 
@@ -53,7 +43,10 @@ pub fn default_poster() -> Option<Image> {
 }
 
 pub fn collage(paths: impl Iterator<Item = String>, width: u32, height: u32) -> Option<Image> {
-    let imgs: Vec<DynamicImage> = paths.filter_map(|path| open(&path)).take(4).collect();
+    let imgs: Vec<DynamicImage> = paths
+        .filter_map(|path| open(&path).log_err())
+        .take(4)
+        .collect();
 
     if imgs.is_empty() {
         return None;
@@ -252,7 +245,7 @@ fn adaptive_sample_color_compl(img: &DynamicImage) -> (Color, Color) {
 }
 
 pub fn sample_complement(path: &str) -> Option<(Color, Color)> {
-    let img = open(path);
+    let img = open(path).log_err();
 
     img.as_ref().map(adaptive_sample_color_compl)
 }

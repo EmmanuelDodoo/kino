@@ -423,7 +423,7 @@ impl Settings {
                     }
 
                     let Ok(interval) = interval.parse::<u64>() else {
-                        let msg = Message::error(format!("Invalid input: {interval}"));
+                        let msg = Message::error(format!("Invalid input: {interval}"), true);
                         return Task::done(msg);
                     };
 
@@ -455,7 +455,7 @@ impl Settings {
                     }
 
                     let Ok(searches) = searches.parse::<i32>() else {
-                        let msg = Message::error(format!("Invalid input: {searches}"));
+                        let msg = Message::error(format!("Invalid input: {searches}"), true);
                         return Task::done(msg);
                     };
 
@@ -481,7 +481,7 @@ impl Settings {
                     }
 
                     let Ok(recents) = recents.parse::<i32>() else {
-                        let msg = Message::error(format!("Invalid input: {recents}"));
+                        let msg = Message::error(format!("Invalid input: {recents}"), true);
                         return Task::done(msg);
                     };
 
@@ -522,7 +522,7 @@ impl Settings {
                     }
 
                     let Ok(depth) = depth.parse::<u8>() else {
-                        let msg = Message::error(format!("Invalid input: {depth}"));
+                        let msg = Message::error(format!("Invalid input: {depth}"), true);
                         return Task::done(msg);
                     };
 
@@ -623,7 +623,7 @@ impl Settings {
                     }
 
                     let Ok(interval) = interval.parse::<u64>() else {
-                        let msg = Message::error(format!("Invalid input: {interval}"));
+                        let msg = Message::error(format!("Invalid input: {interval}"), true);
                         return Task::done(msg);
                     };
 
@@ -669,7 +669,7 @@ impl Settings {
                     }
 
                     let Ok(amt) = amt.parse::<f64>() else {
-                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
 
@@ -695,7 +695,7 @@ impl Settings {
                     }
 
                     let Ok(amt) = amt.parse::<f64>() else {
-                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
 
@@ -721,7 +721,7 @@ impl Settings {
                     }
 
                     let Ok(amt) = amt.parse::<f64>() else {
-                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
 
@@ -747,7 +747,7 @@ impl Settings {
                     }
 
                     let Ok(amt) = amt.parse::<f64>() else {
-                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
 
@@ -799,7 +799,7 @@ impl Settings {
                     }
 
                     let Ok(interval) = interval.parse::<u32>() else {
-                        let msg = Message::error(format!("Invalid input: {interval}"));
+                        let msg = Message::error(format!("Invalid input: {interval}"), true);
                         return Task::done(msg);
                     };
 
@@ -825,7 +825,7 @@ impl Settings {
                     }
 
                     let Ok(amt) = amt.parse::<f64>() else {
-                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
 
@@ -850,7 +850,7 @@ impl Settings {
                     }
 
                     let Ok(amt) = amt.parse::<f64>() else {
-                        let msg = Message::error(format!("Invalid input: {amt}"));
+                        let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
 
@@ -875,7 +875,7 @@ impl Settings {
                     }
 
                     let Ok(span) = span.parse::<u64>() else {
-                        let msg = Message::error(format!("Invalid input: {span}"));
+                        let msg = Message::error(format!("Invalid input: {span}"), true);
                         return Task::done(msg);
                     };
 
@@ -951,7 +951,7 @@ impl Settings {
                     }
 
                     let Ok(size) = size.parse::<u32>() else {
-                        let msg = Message::error(format!("Invalid input: {size}"));
+                        let msg = Message::error(format!("Invalid input: {size}"), true);
                         return Task::done(msg);
                     };
 
@@ -1126,7 +1126,7 @@ impl Settings {
 
                 match open::that(path) {
                     Ok(_) => Task::none(),
-                    Err(error) => Task::done(Message::error(error)),
+                    Err(error) => Task::done(Message::error(error, true)),
                 }
             }
             SettingsMessage::OpenConfig => {
@@ -1136,7 +1136,7 @@ impl Settings {
 
                 match open::that(path) {
                     Ok(_) => Task::none(),
-                    Err(error) => Task::done(Message::error(error)),
+                    Err(error) => Task::done(Message::error(error, true)),
                 }
             }
         }

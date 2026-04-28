@@ -82,6 +82,12 @@ impl InsertId {
     }
 }
 
+impl std::fmt::Display for InsertId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl From<InsertId> for ToSqlOutput<'_> {
     fn from(value: InsertId) -> Self {
         ToSqlOutput::from(value.0.to_string())
@@ -870,6 +876,12 @@ impl DeleteId {
 impl From<DeleteId> for ToSqlOutput<'_> {
     fn from(value: DeleteId) -> Self {
         ToSqlOutput::from(value.0.to_string())
+    }
+}
+
+impl std::fmt::Display for DeleteId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 

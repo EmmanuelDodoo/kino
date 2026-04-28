@@ -1,14 +1,14 @@
+use crate::filter::{self, Filter, search::SearchFilter};
 use crate::models::{
     Audio, AudioId, CollectionId, Comment, CommentId, Directory, DirectoryId, EpisodeId, MovieId,
     SearchItem, SeasonId, ShowId, Subtitle, SubtitleId, Video, VideoId, VideoInfo,
     collection::{self, ItemId, Items},
 };
-
-use crate::filter::{self, Filter, search::SearchFilter};
 use crate::sort::{self, Sort};
+use core::error::Context;
 
 use rusqlite::{
-    Connection, Result, Row, ToSql, params_from_iter,
+    Connection, Row, ToSql, params_from_iter,
     types::{ToSqlOutput, Value},
 };
 use std::ops::Deref;
@@ -1480,7 +1480,7 @@ pub struct Query<'a> {
 }
 
 impl<'a> Query<'a> {
-    pub fn execute(self, db: &impl Deref<Target = Connection>) -> Result<Success, Failure<'a>> {
+    pub fn execute(self, db: &impl Deref<Target = Connection>) -> core::error::Result<Success> {
         let Self {
             sql,
             params,
@@ -1489,36 +1489,17 @@ impl<'a> Query<'a> {
             op,
         } = self;
 
-        match db.prepare_cached(sql) {
-            Ok(mut statement) => match statement.execute(params.as_slice()) {
-                Ok(rows) => Ok(Success {
-                    id,
-                    table,
-                    op,
-                    rows,
-                }),
-                Err(error) => Err(Failure {
-                    query: Query {
-                        id,
-                        table,
-                        sql,
-                        params,
-                        op,
-                    },
-                    error: Box::new(error),
-                }),
-            },
-            Err(error) => Err(Failure {
-                query: Query {
-                    id,
-                    table,
-                    sql,
-                    params,
-                    op,
-                },
-                error: Box::new(error),
-            }),
-        }
+        let rows = db
+            .prepare_cached(sql)
+            .and_then(|mut statement| statement.execute(params.as_slice()))
+            .with_context(|| format!("Failed query {:?} on {:?}", op, table))?;
+
+        Ok(Success {
+            id,
+            table,
+            op,
+            rows,
+        })
     }
 }
 
@@ -1538,57 +1519,6 @@ impl Success {
             self.table,
             self.rows
         )
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Failure<'a> {
-    pub query: Query<'a>,
-    pub error: Box<rusqlite::Error>,
-}
-
-impl<'a> Failure<'a> {
-    pub fn log(&self) {
-        tracing::warn!("Failed {:?} on {:?}", self.query.op, self.query.table)
-    }
-}
-
-#[derive(Debug)]
-/// The accumulated results of executing a [`Batch`].
-pub struct BatchResult<'a> {
-    pub successes: Vec<Success>,
-    pub failures: Vec<Failure<'a>>,
-}
-
-impl BatchResult<'_> {
-    pub fn empty() -> Self {
-        Self {
-            successes: vec![],
-            failures: vec![],
-        }
-    }
-
-    pub fn merge(&mut self, other: Self) {
-        self.successes.extend(other.successes);
-        self.failures.extend(other.failures);
-    }
-
-    pub fn has_failures(&self) -> bool {
-        !self.failures.is_empty()
-    }
-
-    pub fn has_successes(&self) -> bool {
-        !self.successes.is_empty()
-    }
-
-    pub fn log(&self) {
-        for success in &self.successes {
-            success.log()
-        }
-
-        for failed in &self.failures {
-            failed.log()
-        }
     }
 }
 

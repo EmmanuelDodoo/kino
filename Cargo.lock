@@ -733,9 +733,11 @@ dependencies = [
 name = "core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "glib",
  "gstreamer",
  "rusqlite",
+ "tracing",
 ]
 
 [[package]]

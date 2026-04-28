@@ -1,3 +1,4 @@
+use core::error::{Context, ContextLog, bail, Error, Log, Result};
 use registry::db::{Database, Query};
 use registry::models::tmdb::{Media, Request, RequestId, Status};
 use registry::models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId};
@@ -187,16 +188,12 @@ async fn search_item(auth: &str, snippet: impl AsRef<str>, movie: bool) -> Optio
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| {
-            tracing::error!("TMDB Search fetch error on {}.\n Error {error}", snippet)
-        })
-        .ok()?
+        .ctx_log(format!(
+            "TMDB search error on {snippet}. Failed to send request"
+        ))?
         .json()
         .await
-        .inspect_err(|error| {
-            tracing::error!("TMDB Search fetch error on {}.\n Error {error}", snippet)
-        })
-        .ok()?;
+        .ctx_log(format!("TMDB search json conversion error on {snippet}"))?;
 
     response.results.first().cloned()
 }
@@ -209,12 +206,13 @@ async fn get_movie(auth: &str, id: TMDBId) -> Option<TMDBMovie> {
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| tracing::error!("Get TMDB movie error on {}.\n Error {error}", id.id))
-        .ok()?
+        .ctx_log(format!(
+            "Get TMDB movie error on {}. Failed to send request",
+            id.id
+        ))?
         .json()
         .await
-        .inspect_err(|error| tracing::error!("Get TMDB movie error on {}.\n Error {error}", id.id))
-        .ok()?;
+        .ctx_log(format!("Get TMDB movie json conversion error on {}", id.id))?;
 
     Some(response)
 }
@@ -227,12 +225,13 @@ async fn get_show(auth: &str, id: TMDBId) -> Option<TMDBShow> {
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| tracing::error!("Get TMDB show error on {}.\n Error {error}", id.id))
-        .ok()?
+        .ctx_log(format!(
+            "Get TMDB show error on {}. Failed to send request",
+            id.id
+        ))?
         .json()
         .await
-        .inspect_err(|error| tracing::error!("Get TMDB show error on {}.\n Error {error}", id.id))
-        .ok()?;
+        .ctx_log(format!("Get TMDB show json conversion error on {}", id.id))?;
 
     Some(response)
 }
@@ -248,12 +247,16 @@ async fn get_season(auth: &str, show: TMDBId, number: u32) -> Option<TMDBSeason>
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| tracing::error!("Get TMDB season error.\n Error {error}"))
-        .ok()?
+        .ctx_log(format!(
+            "Get TMDB season error on show: {} season: {}. Failed to send request",
+            show.id, number
+        ))?
         .json()
         .await
-        .inspect_err(|error| tracing::error!("Get TMDB season error.\n Error {error}"))
-        .ok()?;
+        .ctx_log(format!(
+            "Get TMDB season json conversion error on show: {} season: {}",
+            show.id, number
+        ))?;
 
     Some(response)
 }
@@ -273,12 +276,16 @@ async fn get_episode(auth: &str, show: TMDBId, season: u32, number: u32) -> Opti
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| tracing::error!("Get TMDB episode error.\n Error {error}"))
-        .ok()?
+        .ctx_log(format!(
+            "Get TMDB episode error on show: {} season: {season} episode: {number}. Failed to send request",
+            show.id, 
+        ))?
         .json()
         .await
-        .inspect_err(|error| tracing::error!("Get TMDB episode error.\n Error {error}"))
-        .ok()?;
+        .ctx_log(format!(
+            "Get TMDB episode json conversion error on show: {} season: {season} episode: {number}",
+            show.id, 
+        ))?;
 
     Some(response)
 }
@@ -322,13 +329,8 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .inspect_err(|error| {
-            tracing::error!(
-                "TMDB Image download error on {}: Error \n{error}",
-                path.display()
-            )
-        })
-        .ok();
+        .ctx_log(format!("TMDB image download error on {}: Failed to send request", path.display()));
+        
 
     let Some(bytes) = bytes else {
         return false;
@@ -337,26 +339,14 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
     let Some(bytes) = bytes
         .bytes()
         .await
-        .inspect_err(|error| {
-            tracing::error!(
-                "TMDB Image download error on {}: Error \n{error}",
-                path.display()
-            )
-        })
-        .ok()
+        .ctx_log(format!("TMDB image download error on {}. Failed to read image bytes", path.display()))
     else {
         return false;
     };
 
     let Some(file) = File::create(path)
         .await
-        .inspect_err(|error| {
-            tracing::error!(
-                "TMDB Image download error on {}: Error \n{error}",
-                path.display()
-            )
-        })
-        .ok()
+        .ctx_log(format!("TMDB image download error on {}. Failed to create output file", path.display()))
     else {
         return false;
     };
@@ -365,13 +355,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
     if writer
         .write(bytes.deref())
         .await
-        .inspect_err(|error| {
-            tracing::error!(
-                "TMDB Image download error on {}: Error \n{error}",
-                path.display()
-            )
-        })
-        .ok()
+        .ctx_log(format!("TMDB image download error on {}. Failed to write to output file ", path.display()))
         .is_none()
     {
         return false;
@@ -379,13 +363,7 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
     if writer
         .flush()
         .await
-        .inspect_err(|error| {
-            tracing::error!(
-                "TMDB Image download error on {}: Error \n{error}",
-                path.display()
-            )
-        })
-        .ok()
+        .ctx_log(format!("TMDB image download error on {}. Failed to flush to output file ", path.display()))
         .is_none()
     {
         return false;
@@ -425,12 +403,8 @@ pub async fn run(
     interval: Duration,
 ) {
     tracing::debug!("Starting up TMDB fetcher instance");
-    let mut db = match Database::open(db) {
-        Ok(db) => db,
-        Err(error) => {
-            tracing::error!("TMDB fetcher Db Error \n{error}");
-            return;
-        }
+    let Some(mut db) = Database::open(db).ctx_log(format!("TMDB fetcher DB opening error")) else {
+        return;
     };
 
     let img_config = async |auth: &str| {
@@ -439,12 +413,7 @@ pub async fn run(
         } else {
             get_config(&auth)
                 .await
-                .inspect_err(|error| {
-                    tracing::error!(
-                        "\nGetting TMDB image config with auth {auth} failed. \nError{error}\n",
-                    )
-                })
-                .ok()
+                .ctx_log(format!("Getting TMDB image config with auth: {auth} failed"))
         }
     };
 
@@ -482,8 +451,7 @@ pub async fn run(
         };
 
         let requests = get_requests(&db, retry_limit, limit)
-            .inspect_err(|error| tracing::error!("Failed to get TMDB requests. \n{error}"))
-            .ok()
+            .ctx_log(format!("Failed to get TMDB requests"))
             .unwrap_or_default();
 
         for mut request in requests {
@@ -498,18 +466,13 @@ pub async fn run(
                 &mut request,
             )
             .await
+                .with_context(|| format!("TMDB request execution error on retry {}", request.retry))
             {
-                tracing::error!(
-                    "TMDB request execution error on retry {}. \n{error}",
-                    request.retry
-                );
+                tracing::error!("{error:#}");
                 request.retry += 1;
             };
 
-            if let Err(error) = request.update().execute(&db) {
-                tracing::error!("TMDB request update error.\n{}", error.error)
-            }
-        }
+             request.update().execute(&db).log_ctx("TMDB request update");        }
 
         time::sleep(interval).await;
     }
@@ -524,16 +487,15 @@ async fn execute(
     rating: bool,
     depth: u8,
     request: &mut Request,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     if depth == 0 {
         return Ok(());
     }
 
+    // todo: Not quite right. As it stands, the retry will be increased again after the return
+    // probably better to just return a () or something
     if request.retry >= retry_limit {
-        return Err(format!(
-            "TMDB Retry limit reached at {} for {}",
-            request.retry, request.id
-        ));
+        bail!("TMDB Retry limit reached at {} for {}", request.retry, request.id);
     }
 
     match request.status {
@@ -541,75 +503,81 @@ async fn execute(
         Status::Searching => match &request.media {
             Media::Movie { name, .. } => {
                 let Some(search): Option<TMDBId> = search_item(auth, name, true).await else {
-                    return Err(format!(
+                    bail!(
                         "Could not find TMDB movie {name} request: {}",
                         request.id
-                    ));
+                    )
                 };
                 request.tmdb_id = Some(search.id);
                 request.status = Status::Data;
             }
             Media::Show { name, .. } => {
                 let Some(search): Option<TMDBId> = search_item(auth, name, false).await else {
-                    return Err(format!(
+                    bail!(
                         "Could not find TMDB show {name} request: {}",
                         request.id
-                    ));
+                    )
                 };
                 request.tmdb_id = Some(search.id);
                 request.status = Status::Data;
             }
-            _ => return Err("Cannot TMDB search season/episode".to_string()),
+            _ => {
+                bail!("Cannot TMDB search season/episode")
+            }
+            
         },
         Status::Data => {
             let Some(tmdb) = request.tmdb_id.map(|id| TMDBId { id }) else {
-                return Err(format!(
+                bail!(
                     "Tried to get data with null TMDB ID. Request {}",
                     request.id
-                ));
+                );
             };
 
             match &mut request.media {
                 Media::Movie { id, backdrop, name } => {
                     let Some(movie): Option<TMDBMovie> = get_movie(auth, tmdb).await else {
-                        return Err(format!(
+                        bail!(
                             "Could not get TMDB movie {name} data. Request: {}",
                             request.id
-                        ));
+                        );
                     };
 
                     insert_movie(db, request.id, *id, &movie, rating)
-                        .map_err(|err| err.to_string())?;
+                        .with_context( || format!("Inserting TMDB movie {name}. Request: {}", request.id))?
+                        ;
                     request.status = Status::Image;
                     request.poster = movie.poster_path;
                     *backdrop = movie.backdrop_path;
                 }
                 Media::Show { id, backdrop, name } => {
                     let Some(show): Option<TMDBShow> = get_show(auth, tmdb).await else {
-                        return Err(format!(
+                        bail!(
                             "Could not get TMDB show {name} data. Request: {}",
                             request.id
-                        ));
+                        );
                     };
 
                     insert_show(db, request.id, *id, &show, rating)
-                        .map_err(|err| err.to_string())?;
+                        .with_context( || format!("Inserting TMDB show {name}. Request: {}", request.id))?
+                        ;
                     request.status = Status::Image;
                     request.poster = show.poster_path;
                     *backdrop = show.backdrop_path;
                 }
-                Media::Season { id, number, parent } => {
+                Media::Season { id, number, .. } => {
                     let Some(season): Option<TMDBSeason> =
                         get_season(auth, tmdb, *number as u32).await
                     else {
-                        return Err(format!(
-                            "Could not get TMDB season {number} data. Request: {}, Parent: {parent}",
+                        bail!(
+                            "Could not get TMDB season {number} data. Request: {}",
                             request.id
-                        ));
+                        );
                     };
 
                     insert_season(db, request.id, *id, &season, rating)
-                        .map_err(|err| err.to_string())?;
+                        .with_context( || format!("Inserting TMDB season {number}. Request: {}", request.id))?
+                        ;
                     request.status = Status::Image;
                     request.poster = season.poster_path;
                 }
@@ -617,19 +585,20 @@ async fn execute(
                     id,
                     season,
                     number,
-                    parent,
+                    ..
                 } => {
                     let Some(episode): Option<TMDBEpisode> =
                         get_episode(auth, tmdb, *season as u32, *number as u32).await
                     else {
-                        return Err(format!(
-                            "Could not get TMDB episode {number} data. Request: {}, Parent: {parent}",
+                        bail!(
+                            "Could not get TMDB episode {number} data. Request: {}",
                             request.id
-                        ));
+                        );
                     };
 
                     insert_episode(db, request.id, *id, &episode, rating)
-                        .map_err(|err| err.to_string())?;
+                        .with_context( || format!("Inserting TMDB season {number}. Request: {}", request.id))?
+                        ;
                     request.status = Status::Image;
                     request.poster = episode.still_path;
                 }
@@ -667,14 +636,15 @@ async fn execute(
                 };
 
                 if poster.is_none() && backdrop.is_none() {
-                    return Err(format!(
+                    bail!(
                         "Could not download movie {name} images. Request: {}",
                         request.id
-                    ));
+                    );
                 }
 
                 insert_movie_image(db, request.id, *id, poster, backdrop)
-                    .map_err(|err| err.to_string())?;
+                        .with_context( || format!("Inserting TMDB movie {name} image. Request: {}", request.id))?
+                    ;
                 request.status = Status::Done;
             }
             Media::Show { id, backdrop, name } => {
@@ -708,17 +678,18 @@ async fn execute(
                 };
 
                 if poster.is_none() && backdrop.is_none() {
-                    return Err(format!(
+                    bail!(
                         "Could not download show {name} images. Request: {}",
                         request.id
-                    ));
+                    );
                 }
 
                 insert_show_image(db, request.id, *id, poster, backdrop)
-                    .map_err(|err| err.to_string())?;
+                        .with_context( || format!("Inserting TMDB show {name} image. Request: {}", request.id))?
+                    ;
                 request.status = Status::Done;
             }
-            Media::Season { id, parent, number } => {
+            Media::Season { id,  number, .. } => {
                 let poster = match &request.poster {
                     Some(poster) => {
                         let poster_path = poster_path(&images_path, id);
@@ -733,17 +704,19 @@ async fn execute(
                     None => None,
                 };
                 if poster.is_none() {
-                    return Err(format!(
-                        "Could not download season {number} poster. Request: {}, Parent: {parent}",
+                    bail!(
+                        "Could not download season {number} poster. Request: {}",
                         request.id
-                    ));
+                    )
                 }
 
-                insert_season_image(db, request.id, *id, poster).map_err(|err| err.to_string())?;
+                insert_season_image(db, request.id, *id, poster)
+                        .with_context( || format!("Inserting TMDB season {number} image. Request: {}", request.id))?
+                    ;
                 request.status = Status::Done;
             }
             Media::Episode {
-                id, parent, number, ..
+                id,  number, ..
             } => {
                 let poster = match &request.poster {
                     Some(poster) => {
@@ -760,13 +733,15 @@ async fn execute(
                 };
 
                 if poster.is_none() {
-                    return Err(format!(
-                        "Could not download episode {number} poster. Request: {}, Parent: {parent}",
+                    bail!(
+                        "Could not download episode {number} poster. Request: {}",
                         request.id
-                    ));
+                    )
                 }
 
-                insert_episode_image(db, request.id, *id, poster).map_err(|err| err.to_string())?;
+                insert_episode_image(db, request.id, *id, poster)
+                        .with_context( || format!("Inserting TMDB episode {number} image. Request: {}", request.id))?
+                    ;
                 request.status = Status::Done;
             }
         },
@@ -977,16 +952,16 @@ fn insert_movie_image(
     id: MovieId,
     poster: Option<String>,
     backdrop: Option<String>,
-) -> rusqlite::Result<()> {
+) -> Result<()> {
     let sql = "UPDATE movie SET  poster=:poster, backdrop=:backdrop, generate_poster=:generate_poster, fetched=TRUE WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let poster = match poster {
         Some(poster) => {
             let poster = ToSqlOutput::from(poster);
-            if let Err(error) = db.execute(IMAGE_SQL, &[(":path", &poster)]) {
-                tracing::error!("Could not insert into image table. Error\n{error}")
-            };
+             db.execute(IMAGE_SQL, &[(":path", &poster)]).with_ctx_log(|| {
+                 format!("Insert movie {id} poster image")
+             });
 
             poster
         }
@@ -1015,7 +990,7 @@ fn insert_show_image(
     id: ShowId,
     poster: Option<String>,
     backdrop: Option<String>,
-) -> rusqlite::Result<()> {
+) -> Result<()> {
     let sql =
         "UPDATE tv_show SET  poster=:poster, backdrop=:backdrop WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
@@ -1023,9 +998,9 @@ fn insert_show_image(
     let poster = match poster {
         Some(poster) => {
             let poster = ToSqlOutput::from(poster);
-            if let Err(error) = db.execute(IMAGE_SQL, &[(":path", &poster)]) {
-                tracing::error!("Could not insert into image table. Error\n{error}")
-            };
+             db.execute(IMAGE_SQL, &[(":path", &poster)])
+                 .with_ctx_log(|| format!("Insert show {id} poster iamge"))
+             ;
 
             poster
         }
@@ -1052,16 +1027,14 @@ fn insert_season_image(
     request: RequestId,
     id: SeasonId,
     poster: Option<String>,
-) -> rusqlite::Result<()> {
+) -> Result<()> {
     let sql = "UPDATE season SET poster=:poster WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let poster = match poster {
         Some(poster) => {
             let poster = ToSqlOutput::from(poster);
-            if let Err(error) = db.execute(IMAGE_SQL, &[(":path", &poster)]) {
-                tracing::error!("Could not insert into image table. Error\n{error}")
-            };
+             db.execute(IMAGE_SQL, &[(":path", &poster)]).with_ctx_log(|| format!("Insert season {id} poster image"));
 
             poster
         }
@@ -1089,9 +1062,7 @@ fn insert_episode_image(
     let poster = match poster {
         Some(poster) => {
             let poster = ToSqlOutput::from(poster);
-            if let Err(error) = db.execute(IMAGE_SQL, &[(":path", &poster)]) {
-                tracing::error!("Could not insert into image table. Error\n{error}")
-            };
+             db.execute(IMAGE_SQL, &[(":path", &poster)]).with_ctx_log(|| format!("Insert episode {id} poster image"));
 
             poster
         }

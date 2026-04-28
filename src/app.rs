@@ -13,7 +13,7 @@ use crate::home::{Home, HomeMessage, shared};
 use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
 use crate::settings::{Settings, SettingsMessage};
 use crate::utils::{Action, Config, KeyPress, Layout, Screen, icons, typo};
-use core::Error;
+use core::{Context, Error, Log, anyhow};
 use registry::db::{self, Query};
 use registry::{
     filter::{self, FilterMode, SearchFilter},
@@ -69,8 +69,8 @@ pub enum Message {
     Exit(window::Id),
     WindowId(Option<window::Id>),
     CloseToast(usize),
-    PushToast(String, toast::Status),
-    PushToasts(Vec<(String, toast::Status)>),
+    PushToast(String, toast::Status, bool),
+    PushToasts(Vec<(String, toast::Status, bool)>),
     Home(HomeMessage),
     Player(PlayerMessage),
     Settings(SettingsMessage),
@@ -156,16 +156,16 @@ impl Message {
         }
     }
 
-    pub fn error(error: impl std::fmt::Display) -> Self {
-        Message::PushToast(error.to_string(), toast::Status::Error)
+    pub fn error(error: impl std::fmt::Display, log: bool) -> Self {
+        Message::PushToast(error.to_string(), toast::Status::Error, log)
     }
 
     pub fn warn(warning: impl std::fmt::Display) -> Self {
-        Message::PushToast(warning.to_string(), toast::Status::Warn)
+        Message::PushToast(warning.to_string(), toast::Status::Warn, true)
     }
 
     pub fn success(message: impl std::fmt::Display) -> Self {
-        Message::PushToast(message.to_string(), toast::Status::Success)
+        Message::PushToast(message.to_string(), toast::Status::Success, true)
     }
 
     pub fn tasked(self) -> Task<Self> {
@@ -208,7 +208,7 @@ impl App {
         let load_errors = Task::done(Message::PushToasts(
             errors
                 .into_iter()
-                .map(|error| (error, toast::Status::Error))
+                .map(|error| (error, toast::Status::Error, true))
                 .collect(),
         ));
 
@@ -326,7 +326,7 @@ impl App {
 
                 match self.config.save() {
                     Ok(_) => stats.chain(Task::done(Message::Exit(id))),
-                    Err(error) => stats.chain(Task::done(Message::error(error))),
+                    Err(error) => stats.chain(Task::done(Message::error(error, true))),
                 }
             }
             Message::Exit(id) => {
@@ -343,14 +343,14 @@ impl App {
                 tracing::debug!("Failed to get available fonts. \n{error:?}");
                 Task::none()
             }
-            Message::PushToast(message, status) => {
-                self.push_toast(toast::Toast::new(message, status));
+            Message::PushToast(message, status, log) => {
+                self.push_toast(toast::Toast::new(message, status), log);
                 Task::none()
             }
             Message::PushToasts(toasts) => {
                 let toasts = toasts
                     .into_iter()
-                    .map(|(message, status)| toast::Toast::new(message, status));
+                    .map(|(message, status, log)| (toast::Toast::new(message, status), log));
 
                 self.push_toasts(toasts);
 
@@ -379,13 +379,12 @@ impl App {
                 settings.update(ssg)
             }
             Message::Query(query) => {
-                let _todo = match query.execute(&self.db) {
-                    Ok(suc) => {
-                        tracing::debug!("{suc:?}");
-                        suc
-                    }
+                match query.execute(&self.db) {
+                    Ok(suc) => suc.log(),
                     Err(error) => {
-                        let msg = Message::error(error.error);
+                        let msg = Message::error(error.to_string(), false);
+                        error.log_err();
+
                         return Task::done(msg);
                     }
                 };
@@ -415,14 +414,15 @@ impl App {
                     MediaUpdateKind::Refetch(source) => match source.refetch(id) {
                         Some(query) => {
                             match query.execute(&self.db) {
-                                Ok(todo) => {
-                                    tracing::debug!("{todo:?}");
+                                Ok(succ) => {
+                                    succ.log();
                                     let msg = Message::success("Refetch queued").tasked();
                                     return Task::batch([self.home.content_refresh(), msg]);
                                 }
                                 Err(error) => {
                                     // todo
-                                    let msg = Message::error(error.error);
+                                    let msg = Message::error(error.to_string(), false);
+                                    error.log_err();
 
                                     return Task::done(msg);
                                 }
@@ -453,14 +453,15 @@ impl App {
                         match query {
                             Some(query) => {
                                 match query.execute(&self.db) {
-                                    Ok(todo) => {
-                                        tracing::debug!("{todo:?}");
+                                    Ok(succ) => {
+                                        succ.log();
                                         let msg = Message::success("Refetch queued").tasked();
                                         return Task::batch([self.home.content_refresh(), msg]);
                                     }
                                     Err(error) => {
                                         // todo
-                                        let msg = Message::error(error.error);
+                                        let msg = Message::error(error.to_string(), false);
+                                        error.log_err();
 
                                         return Task::done(msg);
                                     }
@@ -474,14 +475,14 @@ impl App {
                 };
 
                 match query.execute(&self.db) {
-                    Ok(todo) => {
-                        tracing::debug!("{todo:?}");
+                    Ok(succ) => {
+                        succ.log();
                         self.home.content_refresh()
                     }
                     Err(error) => {
                         // todo
-                        let msg = Message::error(error.error);
-
+                        let msg = Message::error(error.to_string(), false);
+                        error.log_err();
                         Task::done(msg)
                     }
                 }
@@ -492,7 +493,7 @@ impl App {
                 let items = match self.db.get_collection_items(id) {
                     Ok(items) => items,
                     Err(error) => {
-                        let msg = Message::error(error);
+                        let msg = Message::error(error, true);
                         return Task::done(msg);
                     }
                 }
@@ -597,7 +598,7 @@ impl App {
                                 collections
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -615,7 +616,7 @@ impl App {
                                     shows
                                 }
                                 Err(error) => {
-                                    let msg = Message::error(error);
+                                    let msg = Message::error(error, true);
                                     return Task::done(msg);
                                 }
                             };
@@ -641,7 +642,7 @@ impl App {
                                     movies
                                 }
                                 Err(error) => {
-                                    let msg = Message::error(error);
+                                    let msg = Message::error(error, true);
                                     return Task::done(msg);
                                 }
                             };
@@ -667,7 +668,7 @@ impl App {
                                     movies
                                 }
                                 Err(error) => {
-                                    let msg = Message::error(error);
+                                    let msg = Message::error(error, true);
                                     return Task::done(msg);
                                 }
                             };
@@ -679,7 +680,7 @@ impl App {
                                     shows
                                 }
                                 Err(error) => {
-                                    let msg = Message::error(error);
+                                    let msg = Message::error(error, true);
                                     return Task::done(msg);
                                 }
                             };
@@ -710,7 +711,7 @@ impl App {
                                 show
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -724,7 +725,7 @@ impl App {
                                 seasons
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -751,7 +752,7 @@ impl App {
                                 season
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -769,7 +770,7 @@ impl App {
                                 episodes
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -795,7 +796,7 @@ impl App {
                                 episode
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -812,7 +813,7 @@ impl App {
                                 movie
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -830,7 +831,7 @@ impl App {
                                 collections
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -844,7 +845,7 @@ impl App {
                                 collection
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -859,7 +860,7 @@ impl App {
                                     triggers
                                 }
                                 Err(error) => {
-                                    return Message::error(error).tasked();
+                                    return Message::error(error, true).tasked();
                                 }
                             };
 
@@ -873,7 +874,7 @@ impl App {
                                     triggers
                                 }
                                 Err(error) => {
-                                    return Message::error(error).tasked();
+                                    return Message::error(error, true).tasked();
                                 }
                             };
 
@@ -898,7 +899,7 @@ impl App {
                                 items
                             }
                             Err(error) => {
-                                let msg = Message::error(error);
+                                let msg = Message::error(error, true);
                                 return Task::done(msg);
                             }
                         };
@@ -954,7 +955,7 @@ impl App {
                         dirs
                     }
                     Err(error) => {
-                        let msg = Message::error(error);
+                        let msg = Message::error(error, true);
                         return Task::done(msg);
                     }
                 };
@@ -981,7 +982,7 @@ impl App {
                         comments
                     }
                     Err(error) => {
-                        let msg = Message::error(error);
+                        let msg = Message::error(error, true);
                         return Task::done(msg);
                     }
                 };
@@ -998,13 +999,11 @@ impl App {
             Message::SaveComments(comments) => {
                 for comment in comments {
                     let query = comment.insert();
-                    match query.execute(&self.db) {
-                        Ok(succ) => {
-                            tracing::debug!("{succ:?}");
-                        }
-                        Err(fail) => {
-                            tracing::error!("{fail:?}");
-                        }
+                    if let Some(succ) = query
+                        .execute(&self.db)
+                        .with_ctx_log(|| format!("Video Comment {} saving ", comment.id))
+                    {
+                        succ.log()
                     }
                 }
 
@@ -1022,7 +1021,7 @@ impl App {
                         items
                     }
                     Err(error) => {
-                        let msg = Message::error(error);
+                        let msg = Message::error(error, true);
                         return Task::done(msg);
                     }
                 };
@@ -1036,7 +1035,7 @@ impl App {
                         memberships
                     }
                     Err(error) => {
-                        let msg = Message::error(error);
+                        let msg = Message::error(error, true);
                         return Task::done(msg);
                     }
                 };
@@ -1066,7 +1065,7 @@ impl App {
                             memberships
                         }
                         Err(error) => {
-                            let msg = Message::error(error);
+                            let msg = Message::error(error, true);
                             return Task::done(msg);
                         }
                     };
@@ -1077,7 +1076,7 @@ impl App {
                 let msg = match self.db.toggle_membership(item, collections) {
                     Ok(true) => Message::success("Collections Updated!"),
                     Ok(false) => Message::None,
-                    Err(error) => Message::error(error),
+                    Err(error) => Message::error(error, true),
                 };
 
                 let refresh = self.home.content_refresh();
@@ -1093,22 +1092,22 @@ impl App {
                             tracing::debug!("Updated {id:?} last watched");
                             Task::none()
                         }
-                        Err(error) => Task::done(Message::error(error)),
+                        Err(error) => Task::done(Message::error(error, true)),
                     },
                     VideoId::Episode(id) => match self.db.last_watched_episode(id, now) {
                         Ok(_) => {
                             tracing::debug!("Updated {id:?} last watched");
                             Task::none()
                         }
-                        Err(error) => Task::done(Message::error(error)),
+                        Err(error) => Task::done(Message::error(error, true)),
                     },
                 }
             }
             Message::VideoStats(item) => {
                 for sub in item.subtitles {
-                    if let Err(error) = sub.insert().execute(&self.db) {
-                        tracing::error!("Saving subtitle {} failed. \n{}", sub.id, error.error);
-                    }
+                    sub.insert()
+                        .execute(&self.db)
+                        .with_ctx_log(|| format!("Video Stats saving subtitle {} ", sub.id));
                 }
 
                 match self.db.update_video_stats(
@@ -1122,7 +1121,7 @@ impl App {
                     Ok(_) => {
                         tracing::debug!("Updated {:?} statistics", item.id);
                     }
-                    Err(error) => return Task::done(Message::error(error)),
+                    Err(error) => return Task::done(Message::error(error, true)),
                 }
 
                 Task::none()
@@ -1134,7 +1133,7 @@ impl App {
                         random
                     }
                     Err(error) => {
-                        let msg = Message::error(error);
+                        let msg = Message::error(error, true);
                         return Task::done(msg);
                     }
                 };
@@ -1182,7 +1181,7 @@ impl App {
                 let dir = match self.db.toggle_directories(dirs) {
                     Ok(true) => Message::success("Directories Updated!").tasked(),
                     Ok(false) => Message::None.tasked(),
-                    Err(error) => Message::error(error).tasked(),
+                    Err(error) => Message::error(error, true).tasked(),
                 };
 
                 let home_task = if !scans.is_empty() {
@@ -1239,7 +1238,7 @@ impl App {
                 let dirs = match self.db.get_directories() {
                     Ok(dirs) => dirs,
                     Err(error) => {
-                        return Task::done(Message::error(error));
+                        return Task::done(Message::error(error, true));
                     }
                 };
 
@@ -1274,7 +1273,7 @@ impl App {
                         rows
                     }
                     Err(error) => {
-                        return Task::done(Message::error(error));
+                        return Task::done(Message::error(error, true));
                     }
                 };
 
@@ -1296,88 +1295,90 @@ impl App {
                 let mut fails = vec![];
 
                 for (trigger, roe) in inserts {
-                    match trigger.insert().execute(&self.db) {
+                    match trigger
+                        .insert()
+                        .execute(&self.db)
+                        .with_context(|| format!("InsertTrigger {} insertion ", trigger.id))
+                    {
                         Ok(succ) => {
-                            tracing::debug!("{succ:?}");
+                            succ.log();
                             succs.push(succ);
                         }
                         Err(fail) => {
-                            tracing::error!("{fail:?}");
-                            fails.push((
-                                format!("{} error.\n{}", trigger.name, fail.error),
-                                toast::Status::Error,
-                            ))
+                            fails.push((fail.to_string(), toast::Status::Error, false));
+                            fail.log_err();
                         }
                     };
 
-                    match trigger.save(&self.db) {
+                    match trigger
+                        .save(&self.db)
+                        .with_context(|| format!("InsertTrigger {} saving", trigger.id))
+                    {
                         Ok(_) => {
-                            tracing::debug!("{} saved", trigger.name)
+                            tracing::debug!("{} saved", trigger.id)
                         }
-                        Err(error) => {
-                            tracing::error!("Trigger {} save {error:?}", trigger.name);
-                            fails.push((
-                                format!("{} save error.\n{}", trigger.name, error),
-                                toast::Status::Error,
-                            ))
+                        Err(fail) => {
+                            fails.push((fail.to_string(), toast::Status::Error, false));
+                            fail.log_err();
                         }
                     }
 
                     if roe {
-                        match trigger.run_on_existing(&mut self.db) {
+                        match trigger
+                            .run_on_existing(&mut self.db)
+                            .with_context(|| format!("InsertTrigger {} ROE", trigger.id))
+                        {
                             Ok(_) => {
                                 tracing::debug!("{} run-on-existing successful", trigger.name)
                             }
-                            Err(error) => {
-                                tracing::error!("{error:?}");
-                                fails.push((
-                                    format!("{} run-on-existing error.\n{}", trigger.name, error),
-                                    toast::Status::Error,
-                                ))
+                            Err(fail) => {
+                                fails.push((fail.to_string(), toast::Status::Error, false));
+                                fail.log_err();
                             }
                         }
                     }
                 }
 
                 for (trigger, roe) in deletes {
-                    match trigger.insert().execute(&self.db) {
+                    match trigger
+                        .insert()
+                        .execute(&self.db)
+                        .with_context(|| format!("DeleteTrigger {} insertion", trigger.id))
+                    {
                         Ok(succ) => {
-                            tracing::debug!("{succ:?}");
+                            succ.log();
                             succs.push(succ);
                         }
                         Err(fail) => {
-                            tracing::error!("{fail:?}");
-                            fails.push((
-                                format!("{} error.\n{}", trigger.name, fail.error),
-                                toast::Status::Error,
-                            ))
+                            fails.push((fail.to_string(), toast::Status::Error, false));
+                            fail.log_err();
                         }
                     };
 
-                    match trigger.save(&self.db) {
+                    match trigger
+                        .save(&self.db)
+                        .with_context(|| format!("DeleteTrigger {} save", trigger.id))
+                    {
                         Ok(_) => {
                             tracing::debug!("{} saved", trigger.name)
                         }
-                        Err(error) => {
-                            tracing::error!("Trigger {} save {error:?}", trigger.name);
-                            fails.push((
-                                format!("{} save error.\n{}", trigger.name, error),
-                                toast::Status::Error,
-                            ))
+                        Err(fail) => {
+                            fails.push((fail.to_string(), toast::Status::Error, false));
+                            fail.log_err();
                         }
                     }
 
                     if roe {
-                        match trigger.run_on_existing(&mut self.db) {
+                        match trigger
+                            .run_on_existing(&mut self.db)
+                            .with_context(|| format!("DeleteTrigger {} ROE", trigger.id))
+                        {
                             Ok(_) => {
                                 tracing::debug!("{} run-on-existing successful", trigger.name)
                             }
-                            Err(error) => {
-                                tracing::error!("{error:?}");
-                                fails.push((
-                                    format!("{} run-on-existing error.\n{}", trigger.name, error),
-                                    toast::Status::Error,
-                                ))
+                            Err(fail) => {
+                                fails.push((fail.to_string(), toast::Status::Error, false));
+                                fail.log_err();
                             }
                         }
                     }
@@ -1385,32 +1386,34 @@ impl App {
 
                 for trigger in removed_inserts {
                     let name = trigger.name.clone();
-                    match trigger.remove(&self.db) {
+                    let id = trigger.id;
+                    match trigger
+                        .remove(&self.db)
+                        .with_context(|| format!("InsertTrigger {id} remove"))
+                    {
                         Ok(_) => {
                             tracing::debug!("{} removed", name);
                         }
-                        Err(error) => {
-                            tracing::error!("Trigger {} remove {error:?}", name);
-                            fails.push((
-                                format!("{} remove error.\n{}", name, error),
-                                toast::Status::Error,
-                            ))
+                        Err(fail) => {
+                            fails.push((fail.to_string(), toast::Status::Error, false));
+                            fail.log_err();
                         }
                     }
                 }
 
                 for trigger in removed_deletes {
                     let name = trigger.name.clone();
-                    match trigger.remove(&self.db) {
+                    let id = trigger.id;
+                    match trigger
+                        .remove(&self.db)
+                        .with_context(|| format!("DeleteTrigger {id} remove"))
+                    {
                         Ok(_) => {
                             tracing::debug!("{} removed", name);
                         }
-                        Err(error) => {
-                            tracing::error!("Trigger {} remove {error:?}", name);
-                            fails.push((
-                                format!("{} remove error.\n{}", name, error),
-                                toast::Status::Error,
-                            ))
+                        Err(fail) => {
+                            fails.push((fail.to_string(), toast::Status::Error, false));
+                            fail.log_err();
                         }
                     }
                 }
@@ -1431,13 +1434,13 @@ impl App {
             Message::RemoveCollection(id) => match self.db.remove_collection(id) {
                 Ok(rows) if rows > 0 => Message::success("Collection Deleted").tasked(),
                 Ok(_) => Task::none(),
-                Err(error) => Message::error(error).tasked(),
+                Err(error) => Message::error(error, true).tasked(),
             },
             Message::RemoveCollectionItems { collection, items } => {
                 match self.db.remove_collection_items(collection, items) {
                     Ok(rows) if rows > 0 => Message::success("Collection Items removed").tasked(),
                     Ok(_) => Task::none(),
-                    Err(error) => Message::error(error).tasked(),
+                    Err(error) => Message::error(error, true).tasked(),
                 }
             }
             Message::PlaylistSave(playlist) => {
@@ -1449,10 +1452,13 @@ impl App {
                     Collection::new(name, None, CollectionView::Shown, Some(icon), None);
 
                 match query.execute(&self.db) {
-                    Ok(suc) => {
-                        tracing::debug!("{suc:?}");
+                    Ok(succ) => succ.log(),
+                    Err(error) => {
+                        let msg = Message::error(error.to_string(), false).tasked();
+                        error.log_err();
+
+                        return msg;
                     }
-                    Err(error) => return Message::error(error.error).tasked(),
                 };
 
                 match self.db.insert_collection_items(new.id, playlist.origins) {
@@ -1460,7 +1466,7 @@ impl App {
                         tracing::debug!("Inserted {rows} playlist collection items");
                         Message::success("Saved Playlist").tasked()
                     }
-                    Err(error) => Message::error(error).tasked(),
+                    Err(error) => Message::error(error, true).tasked(),
                 }
             }
             Message::GeneratedPoster { id, img } => {
@@ -1572,23 +1578,25 @@ impl App {
         tasks
     }
 
-    fn push_toast(&mut self, toast: toast::Toast) {
+    fn push_toast(&mut self, toast: toast::Toast, log: bool) {
         use toast::Status;
         use tracing::{debug, error, info, warn};
 
-        match toast.status {
-            Status::Info => info!(toast.message),
-            Status::Warn => warn!(toast.message),
-            Status::Success => debug!(toast.message),
-            Status::Error => error!(toast.message),
+        if log {
+            match toast.status {
+                Status::Info => info!(toast.message),
+                Status::Warn => warn!(toast.message),
+                Status::Success => debug!(toast.message),
+                Status::Error => error!(toast.message),
+            }
         }
 
         self.toasts.push(toast);
     }
 
-    fn push_toasts(&mut self, toasts: impl Iterator<Item = toast::Toast>) {
-        for toast in toasts {
-            self.push_toast(toast)
+    fn push_toasts(&mut self, toasts: impl Iterator<Item = (toast::Toast, bool)>) {
+        for (toast, log) in toasts {
+            self.push_toast(toast, log)
         }
     }
 
@@ -1620,13 +1628,21 @@ impl App {
 
         let (valid, invalid): (Vec<_>, Vec<_>) = items
             .into_iter()
-            .map(|item| match item.path.try_exists() {
-                Ok(true) => Ok(item),
-                Ok(false) => Err(Error::Raw(format!(
-                    "{} does not exist",
-                    item.path.to_string_lossy()
-                ))),
-                Err(error) => Err(Error::IO(error)),
+            .map(|item| {
+                match item.path.try_exists() {
+                    Ok(true) => Ok(item),
+                    Ok(false) => {
+                        let err = anyhow!(
+                            "Play item {} at path {} does not exist",
+                            item.id,
+                            item.path.display()
+                        );
+
+                        Err(err)
+                    }
+                    Err(error) => Err(error.into()),
+                }
+                .with_context(|| format!("Play season {season} items "))
             })
             .partition(Result::is_ok);
 
@@ -1682,10 +1698,12 @@ impl App {
                     tracing::debug!("Movie {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
                 } else {
-                    Err(Error::Raw(format!(
-                        "{} does not exist",
+                    let err = anyhow!(
+                        "Play movie {} at path {} does not exist",
+                        item.id,
                         item.path.display()
-                    )))
+                    );
+                    Err(err)
                 }
             }
             ItemId::Episode(id) => {
@@ -1694,10 +1712,12 @@ impl App {
                     tracing::debug!("Episode {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
                 } else {
-                    Err(Error::Raw(format!(
-                        "{} does not exist",
+                    let err = anyhow!(
+                        "Play episode {} at path {} does not exist",
+                        item.id,
                         item.path.display()
-                    )))
+                    );
+                    Err(err)
                 }
             }
             ItemId::Season(id) => self.play_season(id, None),
@@ -1713,21 +1733,22 @@ impl App {
             let (item_playlist, invalid_paths) = match self.play_item(item) {
                 Ok(list) => list,
                 Err(error) => {
-                    let msg = (error.to_string(), toast::Status::Error);
+                    let msg = (error.to_string(), toast::Status::Error, false);
                     errors.push(msg);
+                    error.log_err();
                     continue;
                 }
             };
             if item_playlist.is_empty() {
                 let invalids = invalid_paths
                     .into_iter()
-                    .map(|message| (message, toast::Status::Error));
+                    .map(|message| (message, toast::Status::Error, false));
 
                 errors.extend(invalids)
             } else {
                 let invalids = invalid_paths
                     .into_iter()
-                    .map(|message| (message, toast::Status::Warn));
+                    .map(|message| (message, toast::Status::Warn, false));
                 errors.extend(invalids);
                 playlist = playlist.merge(item_playlist, flip)
             }
@@ -1810,11 +1831,6 @@ fn scan_task(
                 preferred_audio,
             )
         },
-        |(batch, res)| {
-            if let Some(batch) = batch {
-                batch.log()
-            }
-            Message::ScanComplete(res)
-        },
+        Message::ScanComplete,
     )
 }

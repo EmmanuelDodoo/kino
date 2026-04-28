@@ -1216,12 +1216,13 @@ impl Home {
                     TMDBMessage::Submit => {
                         let tmdb_id = match value.parse::<u32>() {
                             Ok(tmdb_id) => tmdb_id,
-                            Err(error) => return Task::done(Message::error(error)),
+                            Err(error) => return Task::done(Message::error(error, true)),
                         };
 
                         if !(*top_level) && tmdb_id == 0 {
                             return Task::done(Message::error(
                                 "Cannot have a 0 season/episode number",
+                                true,
                             ));
                         }
 
@@ -1773,7 +1774,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<u64>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -1804,7 +1805,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<f32>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -1837,7 +1838,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<u32>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -1916,7 +1917,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<f32>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -1949,7 +1950,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<u32>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -2154,7 +2155,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<u64>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -2185,7 +2186,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<f32>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -2218,7 +2219,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<u32>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -2297,7 +2298,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<f32>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -2330,7 +2331,7 @@ impl Home {
                                 let new = new.trim();
 
                                 let Ok(new) = new.parse::<u32>() else {
-                                    let msg = Message::error(format!("Invalid input: {new}"));
+                                    let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
 
@@ -2447,7 +2448,7 @@ impl Home {
                         }
 
                         let Ok(number) = number.parse::<u32>() else {
-                            let msg = Message::error(format!("Invalid input: {number}"));
+                            let msg = Message::error(format!("Invalid input: {number}"), true);
                             return Task::done(msg);
                         };
 
@@ -2483,7 +2484,7 @@ impl Home {
                         }
 
                         let Ok(minutes) = minutes.parse::<u64>() else {
-                            let msg = Message::error(format!("Invalid input: {minutes}"));
+                            let msg = Message::error(format!("Invalid input: {minutes}"), true);
                             return Task::done(msg);
                         };
 
@@ -2518,7 +2519,7 @@ impl Home {
                         }
 
                         let Ok(hours) = hours.parse::<u64>() else {
-                            let msg = Message::error(format!("Invalid input: {hours}"));
+                            let msg = Message::error(format!("Invalid input: {hours}"), true);
                             return Task::done(msg);
                         };
 
@@ -2551,7 +2552,7 @@ impl Home {
                         }
 
                         let Ok(year) = year.parse::<i32>() else {
-                            let msg = Message::error(format!("Invalid input: {year}"));
+                            let msg = Message::error(format!("Invalid input: {year}"), true);
                             return Task::done(msg);
                         };
 
