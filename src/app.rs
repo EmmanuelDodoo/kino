@@ -1105,7 +1105,7 @@ impl App {
             }
             Message::VideoStats(item) => {
                 for sub in item.subtitles {
-                    sub.insert()
+                    sub.save()
                         .execute(&self.db)
                         .with_ctx_log(|| format!("Video Stats saving subtitle {} ", sub.id));
                 }

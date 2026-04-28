@@ -114,6 +114,57 @@ impl Subtitle {
     }
 
     pub fn insert<'a>(&self) -> Query<'a> {
+        let sql = "INSERT INTO subtitle (id, video, media_type, kind, path, title, lang, removed, sub_offset) VALUES (:id, :video, :media_type, :kind, :path, :title, :lang, :removed, :sub_offset) ON CONFLICT DO NOTHING";
+
+        let Self {
+            id,
+            video,
+            kind,
+            title,
+            lang,
+            offset,
+        } = &self;
+
+        let media_type = video.name_str().to_owned();
+
+        let (kind, path, removed) = match kind {
+            SubtitleKind::Embedded => (
+                ToSqlOutput::from("embedded".to_owned()),
+                ToSqlOutput::Owned(Value::Null),
+                ToSqlOutput::from(false),
+            ),
+            SubtitleKind::Loaded { path, removed } => {
+                let path = path.display().to_string();
+                (
+                    ToSqlOutput::from("loaded".to_owned()),
+                    ToSqlOutput::from(path),
+                    ToSqlOutput::from(*removed),
+                )
+            }
+        };
+
+        let params = vec![
+            (":id", ToSqlOutput::from(*id)),
+            (":video", ToSqlOutput::from(*video)),
+            (":media_type", ToSqlOutput::from(media_type)),
+            (":kind", kind),
+            (":path", path),
+            (":removed", removed),
+            (":title", ToSqlOutput::from(title.clone())),
+            (":lang", ToSqlOutput::from(lang.clone())),
+            (":sub_offset", ToSqlOutput::from(*offset)),
+        ];
+
+        Query {
+            id: self.id.0,
+            table: Table::Subtitle,
+            sql,
+            params,
+            op: Operation::Insert,
+        }
+    }
+
+    pub fn save<'a>(&self) -> Query<'a> {
         let sql = "INSERT INTO subtitle (id, video, media_type, kind, path, title, lang, removed, sub_offset) VALUES (:id, :video, :media_type, :kind, :path, :title, :lang, :removed, :sub_offset) ON CONFLICT(id) DO UPDATE SET sub_offset=:sub_offset";
 
         let Self {
