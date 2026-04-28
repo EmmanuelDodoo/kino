@@ -19,7 +19,7 @@ devutils = { path = "devutils/", version = "0.1.0" }
 fancy-regex = "0.16"
 glib = "0.20"  # gobject traits and error type
 gstreamer = "0.23"
-iced = { git = "https://github.com/iced-rs/iced", rev = "4f02d83", features = [
+iced = { git = "https://github.com/iced-rs/iced", rev = "4e0bdcf", features = [
   "advanced",
   "canvas",
   "highlighter",
