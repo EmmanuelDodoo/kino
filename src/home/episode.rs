@@ -135,8 +135,8 @@ impl EpisodePage {
 
             let title = title(episode.media.name());
 
-            let duration = duration(&episode.media);
-            let rating = button(ratings(&episode.media, true))
+            let duration = duration(episode.media.duration_full());
+            let rating = button(ratings(episode.media.rating(), true))
                 .on_press(EpisodePageMessage {
                     id,
                     message: Message::Rate(episode.media.rating()),

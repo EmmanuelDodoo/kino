@@ -334,8 +334,8 @@ impl ShowPage {
 
             let title = title(show.media.name());
 
-            let duration = duration(&show.media);
-            let rating = button(ratings(&show.media, true))
+            let duration = duration(show.media.duration_full());
+            let rating = button(ratings(show.media.rating(), true))
                 .on_press(ShowPageMessage {
                     id,
                     message: Message::Rate(show.media.rating()),

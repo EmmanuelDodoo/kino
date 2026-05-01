@@ -135,8 +135,8 @@ impl MoviePage {
 
             let title = title(movie.media.name());
 
-            let duration = duration(&movie.media);
-            let rating = button(ratings(&movie.media, true))
+            let duration = duration(movie.media.duration_full());
+            let rating = button(ratings(movie.media.rating(), true))
                 .on_press(MoviePageMessage {
                     id,
                     message: Message::Rate(movie.media.rating()),
