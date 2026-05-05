@@ -220,7 +220,7 @@ impl MoviePage {
                 //     column!(comments).spacing(8.0).width(width).into()
                 // }
                 Tab::Data => data_tab(
-                    &movie.media,
+                    movie.media.as_ref(),
                     width,
                     Message::Rename(movie.media.name().to_owned()),
                     Message::Refetch(source),

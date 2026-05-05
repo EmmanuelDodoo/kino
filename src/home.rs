@@ -536,21 +536,21 @@ enum State {
     Collections(Vec<CollectionThumbnail>),
     Wishlist(Vec<WishThumbnail>),
     Movie {
-        movie: Thumbnail<Movie>,
+        movie: Box<Thumbnail<Movie>>,
         memberships: Vec<SimpleCollection>,
     },
     Show {
-        show: Thumbnail<Show>,
+        show: Box<Thumbnail<Show>>,
         memberships: Vec<SimpleCollection>,
         seasons: Vec<Thumbnail<Season>>,
     },
     Season {
-        season: Thumbnail<Season>,
+        season: Box<Thumbnail<Season>>,
         memberships: Vec<SimpleCollection>,
         episodes: Vec<Thumbnail<Episode>>,
     },
     Episode {
-        episode: Thumbnail<Episode>,
+        episode: Box<Thumbnail<Episode>>,
         memberships: Vec<SimpleCollection>,
     },
     Collection {
@@ -4599,7 +4599,7 @@ impl Home {
         let memberships = Message::FetchMemberships(show.media.id.into());
 
         self.state = State::Show {
-            show,
+            show: Box::new(show),
             seasons,
             memberships: vec![],
         };
@@ -4611,7 +4611,7 @@ impl Home {
         let memberships = Message::FetchMemberships(movie.media.id.into());
 
         self.state = State::Movie {
-            movie,
+            movie: Box::new(movie),
             memberships: vec![],
         };
 
@@ -4631,7 +4631,7 @@ impl Home {
         let memberships = Message::FetchMemberships(season.media.id.into());
 
         self.state = State::Season {
-            season,
+            season: Box::new(season),
             episodes,
             memberships: vec![],
         };
@@ -4643,7 +4643,7 @@ impl Home {
         let memberships = Message::FetchMemberships(episode.media.id.into());
 
         self.state = State::Episode {
-            episode,
+            episode: Box::new(episode),
             memberships: vec![],
         };
 

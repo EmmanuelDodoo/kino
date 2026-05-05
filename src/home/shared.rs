@@ -453,7 +453,7 @@ pub struct Thumbnail<T: Media> {
     float: Animation<bool>,
     _tasks: task::Handle,
     hovered: bool,
-    pub media: T,
+    pub media: Box<T>,
 }
 
 impl<T: Media + 'static> Thumbnail<T> {
@@ -516,7 +516,7 @@ impl<T: Media + 'static> Thumbnail<T> {
             sample_text,
             sample_color,
             backdrop,
-            media,
+            media: Box::new(media),
             hovered: false,
             _tasks: handle,
         };
@@ -677,7 +677,7 @@ impl<T: Media + 'static> Thumbnail<T> {
         let icon_inter = self.icon.interpolate(0.0, 1.0, now);
 
         let overlay = card_overlay(
-            &self.media,
+            self.media.as_ref(),
             on_add,
             on_play,
             self.sample_text,

@@ -512,7 +512,7 @@ impl ShowPage {
                     Layout::Compact => self.compact(now, thumbnails),
                 },
                 Tab::Data => data_tab(
-                    &show.media,
+                    show.media.as_ref(),
                     width,
                     Message::Rename(show.media.name().to_owned()),
                     Message::Refetch(source),

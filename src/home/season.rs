@@ -497,7 +497,7 @@ impl SeasonPage {
                     Layout::Compact => self.compact(now, thumbnails),
                 },
                 Tab::Data => data_tab(
-                    &season.media,
+                    season.media.as_ref(),
                     width,
                     Message::Rename(season.media.name().to_owned()),
                     Message::Refetch(source),

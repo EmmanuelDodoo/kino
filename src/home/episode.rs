@@ -208,7 +208,7 @@ impl EpisodePage {
                 //     column!(comments).spacing(8.0).width(width).into()
                 // }
                 Tab::Data => data_tab(
-                    &episode.media,
+                    episode.media.as_ref(),
                     width,
                     Message::Rename(episode.media.name().to_owned()),
                     Message::Refetch(source),
