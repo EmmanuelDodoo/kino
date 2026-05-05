@@ -127,7 +127,7 @@ pub struct CollectionConfig {
 }
 
 impl CollectionConfig {
-    pub fn update(self, collection: &mut Collection) {
+    pub fn update(&mut self, collection: &mut Collection) {
         let Self {
             id: _id,
             name,
@@ -139,7 +139,7 @@ impl CollectionConfig {
             empty_name: _empty_name,
         } = self;
 
-        collection.name = name;
+        collection.name = name.clone();
         let description = description.text();
         if description.is_empty() {
             collection.description = None;
@@ -147,8 +147,8 @@ impl CollectionConfig {
             collection.description = Some(description);
         }
         collection.icon = Some(icon.to_u32());
-        collection.theme = theme;
-        collection.view = view;
+        collection.theme = theme.clone();
+        collection.view = view.clone();
     }
 
     pub fn from_collection(collection: &Collection) -> (Self, widget::Id) {
@@ -524,6 +524,48 @@ pub enum View {
     WishDrawer(WishId),
 }
 
+#[derive(Debug)]
+pub enum ViewState {
+    None,
+    Animating { view: View, opening: bool },
+    Done(View),
+}
+
+impl ViewState {
+    fn as_ref(&self) -> Option<&View> {
+        match self {
+            Self::Done(view) | Self::Animating { view, .. } => Some(view),
+            Self::None => None,
+        }
+    }
+
+    fn as_mut(&mut self) -> Option<&mut View> {
+        match self {
+            Self::Done(view) | Self::Animating { view, .. } => Some(view),
+            Self::None => None,
+        }
+    }
+
+    fn is_selection(&self) -> bool {
+        match self {
+            Self::Done(View::Selection(_))
+            | Self::Animating {
+                view: View::Selection(_),
+                ..
+            } => true,
+            _ => false,
+        }
+    }
+
+    fn view(&self) -> Option<(&View, bool)> {
+        match self {
+            Self::Done(done) => Some((done, true)),
+            Self::Animating { view, opening } => Some((view, *opening)),
+            Self::None => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 enum State {
     Loading,
@@ -599,6 +641,7 @@ pub enum HomeMessage {
     OpenView(ViewMessage),
     AddCollection(ItemId, CollectionId),
     CloseView,
+    ViewAnimated,
     Play(ItemId),
     PlayCollection { id: CollectionId, items: Items },
     ToggleLayout,
@@ -632,7 +675,7 @@ pub struct Home {
     show_sorts: bool,
     show_filters: bool,
 
-    view: Option<View>,
+    view: ViewState,
 
     scroll: Scroll,
 
@@ -689,7 +732,7 @@ impl Home {
             state: State::Loading,
             scroll: Scroll::new(),
             collections: Vec::default(),
-            view: None,
+            view: ViewState::None,
             recent_limit,
             scanning: false,
             focused: None,
@@ -869,7 +912,7 @@ impl Home {
             }
             HomeMessage::OpenView(view) => {
                 self.unfocus(now);
-                match view {
+                let (view, msg) = match view {
                     ViewMessage::CollectionConfig => {
                         let State::Collection { collection, .. } = &self.state else {
                             return Task::none();
@@ -878,10 +921,10 @@ impl Home {
                         let (config, name_input) =
                             CollectionConfig::from_collection(&collection.collection);
 
-                        self.view = Some(View::CollectionConfig(config));
+                        let view = View::CollectionConfig(config);
                         let focus = operation::focus(name_input);
 
-                        Task::batch([focus, self.update_page_scroll()])
+                        (view, Task::batch([focus, self.update_page_scroll()]))
                     }
                     ViewMessage::CollectionTriggers => {
                         let State::Collection {
@@ -894,7 +937,7 @@ impl Home {
                             return Task::none();
                         };
 
-                        self.view = Some(View::CollectionTriggers {
+                        let view = View::CollectionTriggers {
                             id: collection.collection.id,
                             view_inserts: true,
                             itriggers: itriggers
@@ -941,9 +984,9 @@ impl Home {
                                 .collect(),
                             removed_inserts: vec![],
                             removed_deletes: vec![],
-                        });
+                        };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
                     ViewMessage::Add(item) => {
                         let state = CollectionAddState {
@@ -951,40 +994,46 @@ impl Home {
                             selected: HashSet::new(),
                             initial: HashSet::new(),
                         };
-                        self.view = Some(View::CollectionAdd(state));
+                        let view = View::CollectionAdd(state);
 
-                        Task::done(Message::FetchMembershipIds(item))
+                        (view, Task::done(Message::FetchMembershipIds(item)))
                     }
-                    ViewMessage::AddToCollection(id) => self.toggle_search(Some(id), now),
-                    ViewMessage::Search => self.toggle_search(None, now),
+                    ViewMessage::AddToCollection(id) => return self.toggle_search(Some(id), now),
+                    ViewMessage::Search => return self.toggle_search(None, now),
                     ViewMessage::Rating(id, rating) => {
                         let rating = Rating::Value(rating.unwrap_or_default());
-                        self.view = Some(View::Rating { id, rating });
+                        let view = View::Rating { id, rating };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
                     ViewMessage::Rename { id, old } => {
                         let input = widget::Id::unique();
-                        self.view = Some(View::Rename {
+                        let view = View::Rename {
                             id,
                             empty: old.is_empty(),
                             input: input.clone(),
                             value: old.clone(),
                             old,
-                        });
+                        };
 
-                        Task::batch([self.update_page_scroll(), operation::focus(input)])
+                        (
+                            view,
+                            Task::batch([self.update_page_scroll(), operation::focus(input)]),
+                        )
                     }
                     ViewMessage::Synopsis { id, old } => {
                         let editor = widget::Id::unique();
 
-                        self.view = Some(View::Synopsis {
+                        let view = View::Synopsis {
                             id,
                             editor: editor.clone(),
                             content: text_editor::Content::with_text(&old),
-                        });
+                        };
 
-                        Task::batch([self.update_page_scroll(), operation::focus(editor)])
+                        (
+                            view,
+                            Task::batch([self.update_page_scroll(), operation::focus(editor)]),
+                        )
                     }
                     ViewMessage::TMDBId {
                         id,
@@ -992,27 +1041,30 @@ impl Home {
                         source,
                     } => {
                         let input = widget::Id::unique();
-                        self.view = Some(View::TMDBId {
+                        let view = View::TMDBId {
                             id,
                             input: input.clone(),
                             value: String::new(),
                             top_level,
                             source,
-                        });
+                        };
 
-                        Task::batch([self.update_page_scroll(), operation::focus(input)])
+                        (
+                            view,
+                            Task::batch([self.update_page_scroll(), operation::focus(input)]),
+                        )
                     }
                     ViewMessage::RemoveMedia { id, name } => {
-                        self.view = Some(View::RemoveMedia { id, name });
+                        let view = View::RemoveMedia { id, name };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
                     ViewMessage::RemoveCollection { id, name } => {
-                        self.view = Some(View::RemoveCollection { id, name });
+                        let view = View::RemoveCollection { id, name };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
-                    ViewMessage::Selection => self.selection(now),
+                    ViewMessage::Selection => return self.selection(now),
                     ViewMessage::Wish(wish) => {
                         let (view, input) = match wish {
                             Some(id) => {
@@ -1033,24 +1085,34 @@ impl Home {
                             None => WishNewState::new(default_sauce),
                         };
 
-                        self.view = Some(View::WishNew(view));
+                        let view = View::WishNew(view);
 
-                        Task::batch([self.update_page_scroll(), operation::focus(input)])
+                        (
+                            view,
+                            Task::batch([self.update_page_scroll(), operation::focus(input)]),
+                        )
                     }
                     ViewMessage::WishModal(id) => {
-                        self.view = Some(View::WishDrawer(id));
+                        let view = View::WishDrawer(id);
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
                     ViewMessage::RemoveWish { id, name } => {
-                        self.view = Some(View::RemoveWish { id, name });
+                        let view = View::RemoveWish { id, name };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
-                }
+                };
+
+                self.view = ViewState::Animating {
+                    view,
+                    opening: true,
+                };
+
+                msg
             }
             HomeMessage::CollectionConfig(csg) => {
-                let Some(View::CollectionConfig(mut config)) = self.view.take() else {
+                let Some(View::CollectionConfig(config)) = self.view.as_mut() else {
                     return Task::none();
                 };
 
@@ -1069,15 +1131,12 @@ impl Home {
                         config.icon = icon;
                     }
                     ConfigMessage::Save if config.id.is_some() => {
-                        let close_view = self.close_view(true, now);
-
                         let State::Collection { collection, .. } = &mut self.state else {
                             return Task::none();
                         };
 
                         if config.empty_name {
                             let focus = operation::focus(config.name_input.clone());
-                            self.view = Some(View::CollectionConfig(config));
                             return focus;
                         }
 
@@ -1096,13 +1155,13 @@ impl Home {
                         sort_collections(&mut self.collections);
 
                         let query = collection.collection.save();
+                        let close_view = self.close_view(true, now);
 
                         return Task::batch([Task::done(Message::Query(query)), close_view]);
                     }
                     ConfigMessage::Save => {
                         if config.empty_name {
                             let focus = operation::focus(config.name_input.clone());
-                            self.view = Some(View::CollectionConfig(config));
                             return focus;
                         }
 
@@ -1115,7 +1174,7 @@ impl Home {
                             id: _unused1,
                             name_input: _unused2,
                             empty_name: _empty_name,
-                        } = config;
+                        } = config.clone();
 
                         let description = description.text();
                         let description = if description.is_empty() {
@@ -1171,8 +1230,6 @@ impl Home {
                         ]);
                     }
                 }
-
-                self.view = Some(View::CollectionConfig(config));
 
                 Task::none()
             }
@@ -1430,7 +1487,7 @@ impl Home {
                 }
             }
             HomeMessage::CollectionAdd(csg) => {
-                let Some(View::CollectionAdd(mut state)) = self.view.take() else {
+                let Some(View::CollectionAdd(state)) = self.view.as_mut() else {
                     return Task::none();
                 };
 
@@ -1442,7 +1499,6 @@ impl Home {
                             state.selected.insert(id);
                         }
 
-                        self.view = Some(View::CollectionAdd(state));
                         Task::none()
                     }
                     CollectionAddMessage::Save => {
@@ -1465,10 +1521,13 @@ impl Home {
 
                         new.extend(remove);
 
-                        Task::done(Message::ToggleMembership {
-                            item: state.item,
-                            collections: new,
-                        })
+                        Task::batch([
+                            Task::done(Message::ToggleMembership {
+                                item: state.item,
+                                collections: new,
+                            }),
+                            self.close_view(true, now),
+                        ])
                     }
                 }
             }
@@ -1624,7 +1683,7 @@ impl Home {
                 }
             }
             HomeMessage::Selection(ssg) => {
-                let Some(View::Selection(mut selected)) = self.view.take() else {
+                let Some(View::Selection(selected)) = self.view.as_mut() else {
                     return Task::none();
                 };
 
@@ -1675,8 +1734,6 @@ impl Home {
                             }
                             _ => {}
                         }
-
-                        self.view = Some(View::Selection(selected));
 
                         self.update_page_scroll()
                     }
@@ -2798,6 +2855,21 @@ impl Home {
                 }
             }
             HomeMessage::CloseView => self.close_view(true, now),
+            HomeMessage::ViewAnimated => {
+                match std::mem::replace(&mut self.view, ViewState::None) {
+                    ViewState::None => {}
+                    ViewState::Done(done) => {
+                        self.view = ViewState::Done(done);
+                    }
+                    ViewState::Animating { view, opening } => {
+                        if opening {
+                            self.view = ViewState::Done(view);
+                        }
+                    }
+                }
+
+                self.update_page_scroll()
+            }
             HomeMessage::Back => self.back(now, false),
             HomeMessage::Forward => self.forward(now),
             HomeMessage::ToggleLayout => self.layout_toggle(),
@@ -2976,7 +3048,11 @@ impl Home {
             HomeMessage::NewCollection => {
                 let (config, name_input) = CollectionConfig::new();
 
-                self.view = Some(View::CollectionConfig(config));
+                let view = View::CollectionConfig(config);
+                self.view = ViewState::Animating {
+                    view,
+                    opening: true,
+                };
                 let focus = operation::focus(name_input);
 
                 Task::batch([focus, self.update_page_scroll()])
@@ -2984,7 +3060,7 @@ impl Home {
             HomeMessage::Random => Task::done(Message::Random),
             HomeMessage::RefreshContent => self.content_refresh(),
             HomeMessage::Play(item) => {
-                if matches!(self.view, Some(View::Selection(_))) {
+                if self.view.is_selection() {
                     Message::Home(HomeMessage::Selection(SelectionMessage::Select(item))).tasked()
                 } else if self.command {
                     let selection =
@@ -3004,7 +3080,7 @@ impl Home {
                 Task::done(Message::PlayCollectionItems { id, items })
             }
             HomeMessage::WishHovered(id, is_hovered) => {
-                let is_hovered = is_hovered && !matches!(self.view, Some(View::Selection(_)));
+                let is_hovered = is_hovered && !self.view.is_selection();
 
                 let State::Wishlist(wishlist) = &mut self.state else {
                     return Task::none();
@@ -3021,7 +3097,7 @@ impl Home {
                 Task::none()
             }
             HomeMessage::Hovered(id, is_hovered) => {
-                let is_hovered = is_hovered && !matches!(self.view, Some(View::Selection(_)));
+                let is_hovered = is_hovered && !self.view.is_selection();
 
                 match (&mut self.state, id) {
                     (State::Loading, _)
@@ -3125,11 +3201,14 @@ impl Home {
                 Task::none()
             }
             HomeMessage::AddCollection(item, collection) => {
-                self.view = None;
-                Task::done(Message::ToggleMembership {
+                let close_view = self.close_view(true, now);
+                // self.view = None;
+                let toggle = Task::done(Message::ToggleMembership {
                     item,
                     collections: vec![(collection, true)],
-                })
+                });
+
+                Task::batch([close_view, toggle])
             }
             HomeMessage::WishCompletion(id) => {
                 let State::Wishlist(wishlist) = &mut self.state else {
@@ -3156,7 +3235,7 @@ impl Home {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let searching = match &self.view {
+        let searching = match self.view.as_ref() {
             Some(View::Search(state, _)) => state.last_edit.is_some(),
             _ => false,
         };
@@ -4130,54 +4209,68 @@ impl Home {
         )
         .style(styles::container::bb);
 
-        fn default<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Element<'a, HomeMessage> {
-            modal(content, empty())
-                .passthrough(true)
-                .toggle(false)
-                .into()
+        fn modalize<'a>(
+            content: impl Into<Element<'a, HomeMessage>>,
+            overlay: impl Into<Element<'a, HomeMessage>>,
+            toggle: bool,
+        ) -> modal::Modal<'a, HomeMessage> {
+            modal(content, overlay)
+                .toggle(toggle)
+                .on_toggle_complete(HomeMessage::ViewAnimated)
+                .position(modal::Position::Center)
+                .on_blur(HomeMessage::CloseView)
         }
 
-        match &self.view {
+        fn default<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Element<'a, HomeMessage> {
+            modalize(content, empty(), false).passthrough(true).into()
+        }
+
+        match self.view.view() {
             None => default(content),
-            Some(view) => {
-                let overlay: Element<'_, HomeMessage> = match view {
-                    View::CollectionConfig(config) => draw_config(config),
-                    View::Search(state, None) => {
-                        draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true)
-                    }
-                    View::Search(state, Some(collection)) => draw_search(
+            Some((view, toggle)) => {
+                let modalize = |overlay| modalize(content, overlay, toggle);
+
+                match view {
+                    View::CollectionConfig(config) => modalize(draw_config(config)).right(),
+                    View::Search(state, None) => modalize(draw_search(
+                        state,
+                        |id| HomeMessage::Goto(id.into()),
+                        theme,
+                        true,
+                    )),
+                    View::Search(state, Some(collection)) => modalize(draw_search(
                         state,
                         |item| HomeMessage::AddCollection(item, *collection),
                         theme,
                         false,
-                    ),
-                    View::CollectionAdd(state) => draw_collection_add(
+                    )),
+                    View::CollectionAdd(state) => modalize(draw_collection_add(
                         state,
                         self.collections.iter(),
                         self.collections.is_empty(),
-                    ),
-                    View::Rating { rating, .. } => draw_rating(rating),
+                    )),
+                    View::Rating { rating, .. } => modalize(draw_rating(rating)),
                     View::Rename {
                         input,
                         old,
                         value,
                         empty,
                         ..
-                    } => draw_rename(input, old, value, *empty),
+                    } => modalize(draw_rename(input, old, value, *empty)),
                     View::Synopsis {
                         editor, content, ..
-                    } => draw_synopsis(editor, content),
+                    } => modalize(draw_synopsis(editor, content)),
                     View::TMDBId {
                         input,
                         value,
                         top_level,
                         ..
-                    } => draw_tmdb(input, value, *top_level),
+                    } => modalize(draw_tmdb(input, value, *top_level)),
                     View::RemoveMedia { name, .. } => {
-                        draw_delete_confirm(name, HomeMessage::RemoveMedia)
+                        modalize(draw_delete_confirm(name, HomeMessage::RemoveMedia))
                     }
                     View::RemoveCollection { name, .. } => {
-                        draw_delete_confirm(name, HomeMessage::RemoveCollection)
+                        modalize(draw_delete_confirm(name, HomeMessage::RemoveCollection))
                     }
                     View::CollectionTriggers {
                         itriggers,
@@ -4186,45 +4279,40 @@ impl Home {
                         id: _id,
                         removed_inserts: _removed_inserts,
                         removed_deletes: _removed_deletes,
-                    } => draw_collection_triggers(*view_inserts, itriggers, dtriggers),
+                    } => modalize(draw_collection_triggers(
+                        *view_inserts,
+                        itriggers,
+                        dtriggers,
+                    ))
+                    .right(),
                     View::Selection(selected) => {
                         let selection = container(draw_selection(selected.len()))
                             .style(styles::container::dark);
 
-                        return modal(content, selection)
-                            .toggle(true)
+                        modalize(selection.into())
                             .passthrough(true)
-                            .position(modal::Position::Right)
-                            .into();
+                            .blur_alpha(0.1)
+                            .right()
                     }
-                    View::WishNew(state) => draw_wishlist(state),
+                    View::WishNew(state) => modalize(draw_wishlist(state)),
                     View::WishDrawer(id) => {
                         let State::Wishlist(wishlist) = &self.state else {
-                            return default(content);
+                            return modalize(empty()).toggle(false).passthrough(true).into();
                         };
 
                         let Some(wish) = wishlist.iter().find(|wish| wish.item.id == *id) else {
-                            return default(content);
+                            return modalize(empty()).toggle(false).passthrough(true).into();
                         };
 
                         let overlay = draw_wish(wish, now);
 
-                        return modal(content, overlay)
-                            .toggle(true)
-                            .on_blur(HomeMessage::CloseView)
-                            .position(modal::Position::Right)
-                            .into();
+                        modalize(overlay).right()
                     }
                     View::RemoveWish { name, .. } => {
-                        draw_delete_confirm(name, HomeMessage::RemoveWish)
+                        modalize(draw_delete_confirm(name, HomeMessage::RemoveWish))
                     }
-                };
-
-                modal(content, overlay)
-                    .toggle(true)
-                    .position(modal::Position::Center)
-                    .on_blur(HomeMessage::CloseView)
-                    .into()
+                }
+                .into()
             }
         }
     }
@@ -4385,30 +4473,34 @@ impl Home {
         Task::done(Message::Layout(self.layout))
     }
 
-    fn close_view(&mut self, selected: bool, now: Instant) -> Task<Message> {
+    fn close_view(&mut self, clear_selection: bool, now: Instant) -> Task<Message> {
         let scroll = self.update_page_scroll();
         self.unfocus(now);
 
-        match self.view.take() {
-            Some(View::Selection(items)) if selected => {
-                self.view = Some(View::Selection(items));
-                self.command = false;
+        if !clear_selection {
+            self.command = self.view.is_selection();
+            return scroll;
+        }
 
-                let clear = HomeMessage::Selection(SelectionMessage::Cancel);
+        self.command = false;
 
-                Task::batch([scroll, Message::Home(clear).tasked()])
+        match std::mem::replace(&mut self.view, ViewState::None) {
+            ViewState::None => {}
+            ViewState::Animating { view, .. } => {
+                self.view = ViewState::Animating {
+                    view,
+                    opening: false,
+                };
             }
-            Some(View::Selection(items)) => {
-                self.command = true;
-                self.view = Some(View::Selection(items));
-
-                scroll
-            }
-            _ => {
-                self.command = false;
-                scroll
+            ViewState::Done(view) => {
+                self.view = ViewState::Animating {
+                    view,
+                    opening: false,
+                };
             }
         }
+
+        return scroll;
     }
 
     pub fn goto(&mut self, kind: PageKind, now: Instant) -> Task<Message> {
@@ -4513,7 +4605,10 @@ impl Home {
     }
 
     fn selection(&mut self, now: Instant) -> Task<Message> {
-        self.view = Some(View::Selection(vec![]));
+        self.view = ViewState::Animating {
+            view: View::Selection(vec![]),
+            opening: true,
+        };
         self.unfocus(now);
 
         self.update_page_scroll()
@@ -4538,7 +4633,7 @@ impl Home {
         mut movies: Vec<Thumbnail<Movie>>,
         mut shows: Vec<Thumbnail<Show>>,
     ) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4565,7 +4660,7 @@ impl Home {
     }
 
     pub fn fetched_shows(&mut self, mut shows: Vec<Thumbnail<Show>>) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut shows {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4576,7 +4671,7 @@ impl Home {
     }
 
     pub fn fetched_movies(&mut self, mut movies: Vec<Thumbnail<Movie>>) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4590,7 +4685,7 @@ impl Home {
         show: Thumbnail<Show>,
         mut seasons: Vec<Thumbnail<Season>>,
     ) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut seasons {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4623,7 +4718,7 @@ impl Home {
         season: Thumbnail<Season>,
         mut episodes: Vec<Thumbnail<Episode>>,
     ) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut episodes {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4692,7 +4787,7 @@ impl Home {
         let task = task.map(|task| Message::Home(HomeMessage::CollectionTask(task)));
         let scroll = self.update_page_scroll();
 
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4903,7 +4998,10 @@ impl Home {
             text_input: text_input.clone(),
         };
 
-        self.view = Some(View::Search(state, collection));
+        self.view = ViewState::Animating {
+            view: View::Search(state, collection),
+            opening: true,
+        };
 
         let focus = operation::focus(text_input);
 

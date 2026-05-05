@@ -107,10 +107,10 @@ impl<'a, Message, Theme, Renderer> Modal<'a, Message, Theme, Renderer> {
             width: Length::Fill,
             height: Length::Fill,
             position: Position::default(),
-            duration: Duration::from_millis(250),
+            duration: Duration::from_millis(150),
             easing: Easing::EaseInOut,
             toggle: true,
-            alpha: 0.25,
+            alpha: 0.0,
             on_blur: None,
             on_toggle_complete: None,
             passthrough: false,
@@ -164,6 +164,31 @@ impl<'a, Message, Theme, Renderer> Modal<'a, Message, Theme, Renderer> {
     pub fn passthrough(mut self, passthrough: bool) -> Self {
         self.passthrough = passthrough;
         self
+    }
+
+    /// Sets the postion to [`Position::Left`]
+    pub fn left(self) -> Self {
+        self.position(Position::Left)
+    }
+
+    /// Sets the postion to [`Position::Right`]
+    pub fn right(self) -> Self {
+        self.position(Position::Right)
+    }
+
+    /// Sets the postion to [`Position::Top`]
+    pub fn top(self) -> Self {
+        self.position(Position::Top)
+    }
+
+    /// Sets the postion to [`Position::Bottom`]
+    pub fn bottom(self) -> Self {
+        self.position(Position::Bottom)
+    }
+
+    /// Sets the postion to [`Position::Center`]
+    pub fn center(self) -> Self {
+        self.position(Position::Center)
     }
 
     /// Sets the message produced when the blur is clicked while the modal is
