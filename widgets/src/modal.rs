@@ -107,7 +107,7 @@ impl<'a, Message, Theme, Renderer> Modal<'a, Message, Theme, Renderer> {
             width: Length::Fill,
             height: Length::Fill,
             position: Position::default(),
-            duration: Duration::from_millis(500),
+            duration: Duration::from_millis(250),
             easing: Easing::EaseInOut,
             toggle: true,
             alpha: 0.25,

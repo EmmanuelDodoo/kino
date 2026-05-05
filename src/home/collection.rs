@@ -3,7 +3,7 @@ use super::{
 };
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, empty, styles};
+use crate::utils::{self, Layout, Scroll, empty, styles};
 use iced::{Border, Padding};
 use iced::{
     Element, Length, Task,
@@ -834,29 +834,10 @@ fn btn<'a>(
 
 fn delete_btn<'a>(
     id: CollectionId,
-    label: &'static str,
+    label: &'a str,
     message: Message,
 ) -> Button<'a, CollectionMessage> {
-    button(
-        row!(
-            icon(DELETE).size(P).style(|theme| {
-                text::Style {
-                    color: Some(theme.palette().danger.base.color),
-                }
-            }),
-            sized_medium(label, H7)
-        )
-        .spacing(10.0)
-        .align_y(Vertical::Center),
-    )
-    .padding([6, 12])
-    .on_press(CollectionMessage { id, message })
-    .style(|theme, status| {
-        let default = styles::button::subtlest(theme, status);
-        let border = default.border.rounded(5);
-
-        button::Style { border, ..default }
-    })
+    utils::delete_btn(label).on_press(CollectionMessage { id, message })
 }
 
 fn add(id: CollectionId, item: ItemId) -> CollectionMessage {

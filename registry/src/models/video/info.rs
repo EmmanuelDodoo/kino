@@ -148,7 +148,7 @@ impl VideoInfo {
             interlaced,
             dar_num,
             dar_denom,
-            stream
+            stream,
         } = &self;
 
         let media_type = video.name_str().to_owned();

@@ -1,5 +1,5 @@
 use iced::font::{Family, Font, Stretch, Style, Weight};
-use iced::widget::text::{self, Text};
+use iced::widget::text::{self, Ellipsis, Text};
 
 static INTER: &[u8] = include_bytes!("../../resources/fonts/Inter-Regular.ttf");
 const INTER_NAME: &str = "Inter";
@@ -127,31 +127,31 @@ pub fn medium_font() -> Font {
 }
 
 pub fn mono<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
-    Text::new(text).size(P).font(mono_font())
+    Text::new(text).size(P).font(mono_font()).ellipsis(Ellipsis::End)
 }
 
 pub fn display<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
-    Text::new(text).size(H2).font(display_font())
+    Text::new(text).size(H2).font(display_font()).ellipsis(Ellipsis::End)
 }
 
 pub fn mono_bold<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
-    Text::new(text).size(P).font(mono_bold_font())
+    Text::new(text).size(P).font(mono_bold_font()).ellipsis(Ellipsis::End)
 }
 
 pub fn sized_bold<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
-    Text::new(text).size(size).font(bold_font())
+    Text::new(text).size(size).font(bold_font()).ellipsis(Ellipsis::End)
 }
 
 pub fn sized_medium<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
-    Text::new(text).size(size).font(medium_font())
+    Text::new(text).size(size).font(medium_font()).ellipsis(Ellipsis::End)
 }
 
 pub fn sized_italic<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
-    Text::new(text).size(size).font(italic_font())
+    Text::new(text).size(size).font(italic_font()).ellipsis(Ellipsis::End)
 }
 
 pub fn sized_regular<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
-    Text::new(text).size(size).font(regular_font())
+    Text::new(text).size(size).font(regular_font()).ellipsis(Ellipsis::End)
 }
 
 pub fn regular<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {

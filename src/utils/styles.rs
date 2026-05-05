@@ -474,3 +474,57 @@ pub mod button {
         }
     }
 }
+
+pub mod text_input {
+    use super::*;
+    use widget::text_input::{Status, Style, default};
+
+    pub fn required(invalid: bool) -> impl Fn(&Theme, Status) -> Style {
+        move |theme: &Theme, status| {
+            let error = theme.palette().danger.strong.color;
+            let default = default(theme, status);
+            let border = default.border.rounded(5.0);
+            let border = if invalid && matches!(status, text_input::Status::Focused { .. }) {
+                border.color(error)
+            } else {
+                border
+            };
+
+            text_input::Style { border, ..default }
+        }
+    }
+}
+
+pub mod pick_list {
+    use super::*;
+    use widget::pick_list::{self, Status, Style};
+
+    pub fn default(theme: &Theme, status: Status) -> Style {
+        let palette = theme.palette();
+        let pair = palette.background.weakest;
+
+        let active = Style {
+            text_color: pair.text,
+            background: pair.color.into(),
+            handle_color: pair.text,
+            placeholder_color: palette.secondary.base.color,
+            border: iced::Border {
+                radius: 2.0.into(),
+                width: 1.0,
+                color: palette.background.strong.color,
+            },
+        };
+
+        match status {
+            Status::Active => active,
+            Status::Disabled => pick_list::default(theme, status),
+            Status::Hovered | Status::Opened { .. } => Style {
+                border: iced::Border {
+                    color: palette.primary.strong.color,
+                    ..active.border
+                },
+                ..active
+            },
+        }
+    }
+}

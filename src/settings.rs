@@ -1739,7 +1739,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
         let label = sized_bold("Media type: ", size).width(100.0);
 
         let lst = pick_list(Some(*kind), MediaType::ALL, ToString::to_string)
-            .style(picklist_style)
+            .style(styles::pick_list::default)
             .font(regular_font())
             .on_select(|kind| SettingsMessage::FolderSelection(FolderSelectionMessage::Kind(kind)))
             .padding([2, 5])
@@ -1840,7 +1840,7 @@ fn draw_capture_key<'a>(
         let (lst, set): (Element<'_, SettingsMessage>, bool) = match action {
             KeyAction::General(selected) => (
                 pick_list(*selected, HomeAction::VARIANTS, ToString::to_string)
-                    .style(picklist_style)
+                    .style(styles::pick_list::default)
                     .font(regular_font())
                     .on_select(|action| {
                         SettingsMessage::KeyAction(KeyAction::General(Some(action)))
@@ -1853,7 +1853,7 @@ fn draw_capture_key<'a>(
             ),
             KeyAction::Video(selected) => (
                 pick_list(*selected, PlayerAction::VARIANTS, ToString::to_string)
-                    .style(picklist_style)
+                    .style(styles::pick_list::default)
                     .on_select(|action| SettingsMessage::KeyAction(KeyAction::Video(Some(action))))
                     .font(regular_font())
                     .handle(picklist_handle(size))
@@ -1864,7 +1864,7 @@ fn draw_capture_key<'a>(
             ),
             KeyAction::Settings(selected) => (
                 pick_list(*selected, SettingsAction::VARIANTS, ToString::to_string)
-                    .style(picklist_style)
+                    .style(styles::pick_list::default)
                     .font(regular_font())
                     .on_select(|action| {
                         SettingsMessage::KeyAction(KeyAction::Settings(Some(action)))
@@ -2212,7 +2212,7 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
             .handle(handle.clone())
             .padding(LIST_PADDING)
             .text_size(TEXT_SIZE)
-            .style(picklist_style);
+            .style(styles::pick_list::default);
 
         row!(label, space::horizontal(), layouts).align_y(Vertical::Center)
     };
@@ -2228,7 +2228,7 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
             .handle(handle.clone())
             .padding(LIST_PADDING)
             .text_size(TEXT_SIZE)
-            .style(picklist_style);
+            .style(styles::pick_list::default);
 
         row!(label, space::horizontal(), theme).align_y(Vertical::Center)
     };
@@ -2322,10 +2322,10 @@ fn draw_media<'a>(
                 })
                 .font(regular_font())
                 .on_select(move |source| MediaMessage::DirSource(id, source))
-                .handle(handle.clone())
+                .handle(handle)
                 .padding(LIST_PADDING)
                 .text_size(TEXT_SIZE)
-                .style(picklist_style)
+                .style(styles::pick_list::default)
             })
             .align_y(Vertical::Center);
 
@@ -2582,7 +2582,7 @@ fn draw_metadata<'a>(
         .handle(handle.clone())
         .padding(LIST_PADDING)
         .text_size(TEXT_SIZE)
-        .style(picklist_style);
+            .style(styles::pick_list::default);
 
         row!(label, space::horizontal(), sources).align_y(Vertical::Center)
     };
@@ -3034,37 +3034,6 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
     .spacing(SECTION_SPACING);
 
     section("Video Quality", content)
-}
-
-fn picklist_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
-    use pick_list::{Status, Style};
-
-    let palette = theme.palette();
-    let pair = palette.background.weakest;
-
-    let active = Style {
-        text_color: pair.text,
-        background: pair.color.into(),
-        handle_color: pair.text,
-        placeholder_color: palette.secondary.base.color,
-        border: Border {
-            radius: 2.0.into(),
-            width: 1.0,
-            color: palette.background.strong.color,
-        },
-    };
-
-    match status {
-        Status::Active => active,
-        Status::Disabled => pick_list::default(theme, status),
-        Status::Hovered | Status::Opened { .. } => Style {
-            border: Border {
-                color: palette.primary.strong.color,
-                ..active.border
-            },
-            ..active
-        },
-    }
 }
 
 fn horizontal_rule<'a, Message: 'a>() -> Element<'a, Message> {

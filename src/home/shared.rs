@@ -99,7 +99,7 @@ pub fn ratings<'a, Message: 'a>(rating: Option<f32>, show_text: bool) -> Element
                 .align_y(Vertical::Center);
 
             let ratings = if show_text {
-                let text = sized_medium(format!("{rating:.1}"), H8).style(color);
+                let text = sized_medium(format!("{rating:.1}"), H8).style(color).line_height(1.0);
                 row!(text, ratings)
             } else {
                 row!(ratings)
@@ -575,43 +575,7 @@ impl<T: Media + 'static> Thumbnail<T> {
         height: impl Into<Length>,
         now: Instant,
     ) -> Element<'a, Message> {
-        let width = width.into();
-        let height = height.into();
-
-        let view = move |handle: &Handle| {
-            image(handle)
-                .border_radius(IMAGE_RADIUS)
-                .height(height)
-                .width(width)
-                .content_fit(ContentFit::Cover)
-        };
-
-        let empty = move || {
-            container(empty())
-                .height(height)
-                .width(width)
-                .style(move |theme| {
-                    let default = styles::container::dark(theme);
-                    let border = default.border.rounded(IMAGE_RADIUS);
-
-                    container::Style { border, ..default }
-                })
-        };
-
-        match &self.poster {
-            Image::Ready {
-                allocation,
-                fade_in,
-            } => view(allocation.handle())
-                .opacity(fade_in.interpolate(0.0, 1.0, now))
-                .scale(fade_in.interpolate(1.2, 1.0, now))
-                .into(),
-            Image::Loading => empty().into(),
-            Image::Default => match DEFAULT_POSTER.as_ref() {
-                Some(handle) => view(handle).into(),
-                _ => empty().into(),
-            },
-        }
+        image_poster(&self.poster, width, height,ContentFit::Cover, now)
     }
 
     pub fn backdrop<'a, Message: 'a>(
@@ -1783,4 +1747,50 @@ pub fn float_animation() -> Animation<bool> {
     Animation::new(false)
         .duration(iced::time::Duration::from_millis(150))
         .easing(Easing::EaseInOut)
+}
+
+pub fn image_poster<'a, Message: 'a>(
+    poster: &'a Image,
+    width: impl Into<Length>,
+    height: impl Into<Length>,
+    fit: ContentFit,
+    now: Instant,
+) -> Element<'a, Message> {
+    let width = width.into();
+    let height = height.into();
+
+    let view = move |handle: &Handle| {
+        image(handle)
+            .border_radius(IMAGE_RADIUS)
+            .height(height)
+            .width(width)
+            .content_fit(fit)
+    };
+
+    let empty = move || {
+        container(empty())
+            .height(height)
+            .width(width)
+            .style(move |theme| {
+                let default = styles::container::dark(theme);
+                let border = default.border.rounded(IMAGE_RADIUS);
+
+                container::Style { border, ..default }
+            })
+    };
+
+    match poster {
+        Image::Ready {
+            allocation,
+            fade_in,
+        } => view(allocation.handle())
+            .opacity(fade_in.interpolate(0.0, 1.0, now))
+            .scale(fade_in.interpolate(1.2, 1.0, now))
+            .into(),
+        Image::Loading => empty().into(),
+        Image::Default => match DEFAULT_POSTER.as_ref() {
+            Some(handle) => view(handle).into(),
+            _ => empty().into(),
+        },
+    }
 }

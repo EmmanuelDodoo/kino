@@ -9,7 +9,7 @@ use iced::{
 };
 use tokio::sync::mpsc;
 
-use crate::home::{Home, HomeMessage, shared};
+use crate::home::{Home, HomeMessage, WishThumbnailTask, shared};
 use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
 use crate::settings::{Settings, SettingsMessage};
 use crate::utils::{Action, Config, KeyPress, Layout, Screen, icons, typo};
@@ -21,11 +21,14 @@ use registry::{
 };
 use shared::ThumbnailTask;
 
-use devutils::{scan, source};
+use devutils::{
+    scan,
+    source::{self, SourceId, SourceSet},
+};
 use registry::models::{
     self, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode, EpisodeId,
     ItemId, Media, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Video,
-    VideoId, collection,
+    VideoId, Wish, WishId, WishKind, collection,
     collection::{
         Items,
         triggers::{DeleteTrigger, InsertTrigger},
@@ -39,6 +42,7 @@ pub enum FetchId {
     Shows,
     Movies,
     CollectionsSimple,
+    Wishlist,
     Collections,
     Movie(MovieId),
     Show(ShowId),
@@ -52,15 +56,39 @@ pub enum MediaUpdateKind {
     Rating(f32),
     Name(String),
     Synopsis(String),
-    Refetch(source::SourceSet),
+    Refetch(SourceSet),
     Remove,
-    TMDBId { id: u32, source: source::SourceSet },
+    TMDBId { id: u32, source: SourceSet },
 }
 
 #[derive(Clone, Debug)]
 pub struct MediaUpdate {
     pub id: ItemId,
     pub kind: MediaUpdateKind,
+}
+
+#[derive(Clone, Debug)]
+pub enum WishMessage {
+    New {
+        name: String,
+        kind: WishKind,
+        source: SourceSet,
+        source_id: Option<SourceId>,
+    },
+    Update {
+        wish: WishId,
+        name: String,
+        kind: WishKind,
+        source: SourceSet,
+        prev_source: Option<SourceSet>,
+        source_id: Option<SourceId>,
+    },
+    SetCompletion {
+        wish: WishId,
+        completed: bool,
+    },
+
+    Delete(WishId),
 }
 
 #[derive(Clone, Debug)]
@@ -125,6 +153,7 @@ pub enum Message {
     ShowTask(ThumbnailTask<Show>),
     SeasonTask(ThumbnailTask<Season>),
     EpisodeTask(ThumbnailTask<Episode>),
+    WishTask(WishThumbnailTask),
     Triggers {
         inserts: Vec<(InsertTrigger, bool)>,
         deletes: Vec<(DeleteTrigger, bool)>,
@@ -142,6 +171,7 @@ pub enum Message {
         img: devutils::Image,
     },
     AvailableFonts(Result<Vec<Family>, iced::font::Error>),
+    Wish(WishMessage),
     None,
 }
 
@@ -363,7 +393,9 @@ impl App {
 
                 Task::none()
             }
-            Message::Home(hsg) => self.home.update(hsg, now),
+            Message::Home(hsg) => self
+                .home
+                .update(hsg, self.config.general.default_source, now),
             Message::Player(psg) => {
                 let Some(player) = self.player.as_mut() else {
                     return Task::none();
@@ -942,6 +974,20 @@ impl App {
 
                         Task::batch([home_task, samples])
                     }
+                    FetchId::Wishlist => {
+                        let wishlist = match self.db.get_wishlist(Wish::from_row) {
+                            Ok(wish) => {
+                                tracing::debug!("Fetched {} Wish items", wish.len());
+                                wish
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error, true);
+                                return Task::done(msg);
+                            }
+                        };
+
+                        self.home.fetched_wishlist(wishlist)
+                    }
                 }
             }
             Message::FetchDirectories => {
@@ -1285,6 +1331,7 @@ impl App {
             Message::EpisodeTask(ThumbnailTask { id, kind }) => {
                 self.home.episode_task(id, kind, now)
             }
+            Message::WishTask(task) => self.home.wish_task(task, now),
             Message::Triggers {
                 inserts,
                 deletes,
@@ -1480,6 +1527,191 @@ impl App {
                     devutils::image_ops::save_generated_poster(id, img, db, path);
                 })
                 .discard()
+            }
+            Message::Wish(wsg) => {
+                //
+                match wsg {
+                    WishMessage::New {
+                        name,
+                        kind,
+                        source,
+                        source_id,
+                    } => {
+                        let source_str = source.to_str().to_owned();
+                        let wish = Wish::new(name.clone(), kind.clone(), source_str);
+                        let wish_id = wish.id;
+
+                        match wish
+                            .insert()
+                            .execute(&self.db)
+                            .with_context(|| "Failed to insert new wishlist item")
+                        {
+                            Ok(succ) => succ.log(),
+                            Err(error) => {
+                                let msg = Message::error(error.to_string(), false);
+                                error.log_err();
+
+                                return Task::done(msg);
+                            }
+                        }
+
+                        if let Some((query, id)) = source.wish_request(wish_id, name, kind)
+                            && let Some(succ) = query.execute(&self.db).with_ctx_log(|| {
+                                format!("Failed to insert wish {wish_id} request {id}")
+                            })
+                        {
+                            succ.log();
+                            if let Some(succ) = Wish::set_source_request(
+                                wish_id,
+                                source.to_str().to_owned(),
+                                id.clone(),
+                            )
+                            .execute(&self.db)
+                            .with_ctx_log(|| {
+                                format!("Failed to update wish {wish_id} source request {id}")
+                            }) {
+                                succ.log()
+                            }
+                        };
+
+                        if let Some(source_id) = source_id
+                            && let Some(query) = source.set_wish_source_id(wish_id, source_id)
+                            && let Some(succ) = query.execute(&self.db).with_ctx_log(|| {
+                                format!(
+                                    "Failed to update wish {wish_id} source {} id {}",
+                                    source.to_str(),
+                                    source_id.to_str()
+                                )
+                            })
+                        {
+                            succ.log()
+                        }
+
+                        Message::Fetch {
+                            id: FetchId::Wishlist,
+                            filters: filter::Filter::none(),
+                            sort: sort::Sort::default(),
+                            limit: None,
+                            offset: None,
+                        }
+                        .tasked()
+                    }
+                    WishMessage::Update {
+                        wish,
+                        name,
+                        kind,
+                        source,
+                        prev_source,
+                        source_id,
+                    } => {
+                        let update = Wish::update(
+                            wish,
+                            name.clone(),
+                            kind.clone(),
+                            source.to_str().to_owned(),
+                        );
+
+                        match update
+                            .execute(&self.db)
+                            .with_context(|| "Failed to update wishlist item")
+                        {
+                            Ok(succ) => succ.log(),
+                            Err(error) => {
+                                let msg = Message::error(error.to_string(), false);
+                                error.log_err();
+
+                                return Task::done(msg);
+                            }
+                        }
+
+                        if let Some(prev_source) = prev_source {
+                            if let Some(query) = prev_source.delete_wish(wish)
+                                && let Some(succ) = query.execute(&self.db).with_ctx_log(|| {
+                                    format!("Failed to delete previous wish {wish} source")
+                                })
+                            {
+                                succ.log();
+                            }
+
+                            if let Some((query, request)) = source.wish_request(wish, name, kind)
+                                && let Some(succ) = query.execute(&self.db).with_ctx_log(|| {
+                                    format!("Failed to delete previous wish {wish} source")
+                                })
+                            {
+                                succ.log();
+                                if let Some(succ) = Wish::set_source_request(
+                                    wish,
+                                    source.to_str().to_owned(),
+                                    request.clone(),
+                                )
+                                .execute(&self.db)
+                                .with_ctx_log(|| {
+                                    format!("Failed to update wish {wish} source request {request}")
+                                }) {
+                                    succ.log()
+                                }
+                            }
+                        }
+
+                        if let Some(source_id) = source_id
+                            && let Some(query) = source.set_wish_source_id(wish, source_id)
+                            && let Some(succ) = query.execute(&self.db).with_ctx_log(|| {
+                                format!(
+                                    "Failed to update wish {wish} source {} id {}",
+                                    source.to_str(),
+                                    source_id.to_str()
+                                )
+                            })
+                        {
+                            succ.log()
+                        }
+
+                        Task::batch([
+                            Message::success("Wish Updated!").tasked(),
+                            self.home.content_refresh(),
+                        ])
+                    }
+                    WishMessage::SetCompletion { wish, completed } => {
+                        match Wish::set_completion(wish, completed)
+                            .execute(&self.db)
+                            .context("Failed to update wish completion")
+                            .with_context(|| {
+                                format!("Failed to update wish {wish} completion {completed}")
+                            }) {
+                            Ok(succ) => {
+                                succ.log();
+                                Message::success("Updated Wish!").tasked()
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error.to_string(), false);
+                                error.log_err();
+
+                                return Task::done(msg);
+                            }
+                        }
+                    }
+                    WishMessage::Delete(wish) => {
+                        match Wish::delete(wish)
+                            .execute(&self.db)
+                            .context("Failed to delete wish")
+                            .with_context(|| format!("Failed to delete wish {wish}"))
+                        {
+                            Ok(succ) => {
+                                succ.log();
+                                Task::batch([
+                                    Message::success("Deleted Wish!").tasked(),
+                                    self.home.content_refresh(),
+                                ])
+                            }
+                            Err(error) => {
+                                let msg = Message::error(error.to_string(), false);
+                                error.log_err();
+
+                                return Task::done(msg);
+                            }
+                        }
+                    }
+                }
             }
         }
     }

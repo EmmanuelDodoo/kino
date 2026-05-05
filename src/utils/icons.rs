@@ -123,6 +123,7 @@ pub const STATS: char = '\u{e862}';
 
 pub const ELLIPSIS_VER: char = '\u{e800}';
 pub const ELLIPSIS_HOR: char = '\u{e839}';
+pub const CHECK: char = '\u{e86a}';
 
 pub const PIN: char = '\u{e844}';
 pub const EDIT: char = '\u{e846}';

@@ -12,6 +12,7 @@ pub mod seasons;
 pub mod shows;
 pub mod tmdb;
 pub mod video;
+pub mod wish;
 
 pub use collection::ItemId;
 pub use collection::{Collection, CollectionId, CollectionView, SimpleCollection};
@@ -22,6 +23,7 @@ pub use movies::*;
 pub use seasons::*;
 pub use shows::*;
 pub use video::*;
+pub use wish::*;
 
 use crate::db::{Operation, Query, Table};
 
@@ -80,23 +82,7 @@ pub trait Media {
 
     /// Duration in `(hrs) hours (mins) minutes` format.
     fn duration_full(&self) -> String {
-        let duration = self.duration();
-
-        if duration < 60 {
-            return format!("{duration} seconds");
-        }
-
-        let hrs = duration / 3600;
-        let hrs = if hrs > 0 {
-            format!("{hrs}:")
-        } else {
-            String::default()
-        };
-
-        let mins = (duration % 3600) / 60;
-        let secs = (duration % 3600) % 60;
-
-        format!("{hrs}{mins:02}:{secs:02}")
+        duration_full(self.duration())
     }
 
     /// Duration in the `(hrs)h (mins)m` format.
@@ -467,4 +453,23 @@ pub fn datetime_to_sql<'a>(datetime: &DateTime<Local>) -> ToSqlOutput<'a> {
         .to_string();
 
     ToSqlOutput::from(str_date)
+}
+
+/// Duration in `(hrs) hours (mins) minutes` format.
+pub fn duration_full(duration: u64) -> String {
+    if duration < 60 {
+        return format!("{duration} seconds");
+    }
+
+    let hrs = duration / 3600;
+    let hrs = if hrs > 0 {
+        format!("{hrs}:")
+    } else {
+        String::default()
+    };
+
+    let mins = (duration % 3600) / 60;
+    let secs = (duration % 3600) % 60;
+
+    format!("{hrs}{mins:02}:{secs:02}")
 }
