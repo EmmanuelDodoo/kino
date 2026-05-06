@@ -4625,6 +4625,11 @@ impl Home {
             HomeAction::Back => self.back(now, false),
             HomeAction::Forward => self.forward(now),
             HomeAction::SelectionStart => self.selection(now),
+            HomeAction::WishNew => {
+                let new = Message::Home(HomeMessage::OpenView(ViewMessage::Wish(None))).tasked();
+
+                self.goto(PageKind::Wishlist, now).chain(new)
+            }
         }
     }
 

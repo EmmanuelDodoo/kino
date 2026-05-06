@@ -365,6 +365,7 @@ variants! {
         SearchToggle,
         Back,
         Forward,
+        WishNew,
         SelectionStart,
     }
 }
@@ -381,6 +382,7 @@ impl HomeAction {
             Self::Back => "Navigates back to the previous page",
             Self::Forward => "Navigates forward to the next page",
             Self::SelectionStart => "Enters selection mode, adding clicked media to a new playlist",
+            Self::WishNew => "Navigates to the wishlist page and opens the new wishlist dialog",
         }
     }
 }
@@ -400,6 +402,7 @@ impl std::fmt::Display for HomeAction {
                 Self::CloseModal => "Close Modal",
                 Self::SettingsOpen => "Settings Open",
                 Self::SelectionStart => "Selection Start",
+                Self::WishNew => "Wish New",
             }
         )
     }

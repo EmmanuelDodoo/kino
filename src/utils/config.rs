@@ -1544,6 +1544,10 @@ mod keys {
                 key(Key::Character("p".into()), None),
                 HomeAction::SelectionStart,
             ),
+            (
+                key(Key::Character("w".into()), Some(KeyModifier::Shift)),
+                HomeAction::WishNew,
+            ),
         ]
         .into_iter()
     }

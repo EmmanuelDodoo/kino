@@ -16,6 +16,7 @@ This document describes the available application actions in Kino. Actions are p
 |  SearchToggle  | Opens the search dialog                            |
 |      Back      | Navigates back to the previous page                |
 |    Forward     | Navigates forward to the next page                 |
+|    WishNew     | Navigates to the wishlist page and opens the new wishlist dialog                |
 |    SelectionStart     | Enters selection mode, adding clicked media to a new playlist                 |
 
 ## Player Actions
