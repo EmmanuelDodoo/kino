@@ -250,31 +250,36 @@ impl State {
 
         match position {
             Position::Left => {
-                let interpolation = animation.interpolate(-1.0, 0.0, self.now);
+                let interpolation = animation.interpolate(-1.1, 0.1, self.now);
+                let interpolation = interpolation.clamp(-1.0, 0.0);
                 let diff = content.width * interpolation;
 
                 Vector::new(diff, 0.0)
             }
             Position::Right => {
-                let interpolation = animation.interpolate(1.0, 0.0, self.now);
+                let interpolation = animation.interpolate(1.1, -0.1, self.now);
+                let interpolation = interpolation.clamp(0.0, 1.0);
                 let diff = content.width * interpolation;
 
                 Vector::new(diff, 0.0)
             }
             Position::Top => {
-                let interpolation = animation.interpolate(-1.0, 0.0, self.now);
+                let interpolation = animation.interpolate(-1.1, 0.1, self.now);
+                let interpolation = interpolation.clamp(-1.0, 0.0);
                 let diff = content.height * interpolation;
 
                 Vector::new(0.0, diff)
             }
             Position::Bottom => {
-                let interpolation = animation.interpolate(1.0, 0.0, self.now);
+                let interpolation = animation.interpolate(1.1, -0.1, self.now);
+                let interpolation = interpolation.clamp(0.0, 1.0);
                 let diff = content.height * interpolation;
 
                 Vector::new(0.0, diff)
             }
             Position::Center => {
-                let interpolation = animation.interpolate(1.0, 0.0, self.now);
+                let interpolation = animation.interpolate(1.1, -0.1, self.now);
+                let interpolation = interpolation.clamp(0.0, 1.0);
                 let position = content.position();
 
                 let x_diff = position.x + (content.width * 0.5);
@@ -294,7 +299,11 @@ impl State {
         };
 
         match position {
-            Position::Center => animation.interpolate(0.0, 1.0, self.now),
+            Position::Center => {
+                let interpolation = animation.interpolate(-0.1, 1.1, self.now);
+
+                interpolation.clamp(0.0, 1.0)
+            }
             _ => 1.0,
         }
     }
@@ -455,7 +464,6 @@ where
         let content_layout = layout.child(1);
 
         if state.animation_value() {
-
             self.content.as_widget_mut().update(
                 &mut tree.children[1],
                 event,
