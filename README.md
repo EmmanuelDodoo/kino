@@ -41,13 +41,13 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 
 - [x] Subtitle syncing
 
-- [ ] Mini player mode
-
-- [ ] Wishlist support
+- [x] Wishlist support
 
 - [ ] Support for multiple metadata scrappers
 
 - [ ] One-off video playback (without adding to library)
+
+- [ ] Mini player mode
 
 ## Installation
 

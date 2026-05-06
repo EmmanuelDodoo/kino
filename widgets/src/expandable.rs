@@ -33,7 +33,6 @@ pub struct Expandable<'a, Message, Theme = iced::Theme, Renderer = iced::Rendere
 }
 
 impl<'a, Message, Theme, Renderer> Expandable<'a, Message, Theme, Renderer> {
-
     /// Create a new [`Expandable`] widget with the given root and content.
     pub fn new(
         root: impl Into<Element<'a, Message, Theme, Renderer>>,

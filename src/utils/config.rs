@@ -1,10 +1,10 @@
 use super::{Action, HomeAction, Layout, PlayerAction, Screen, SettingsAction};
 use core::variants;
+use devutils::source::SourceSet;
 pub use keys::{KeyModifier, KeyPress, KeyStore};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};
 pub use subtitles::SubtitleDescription;
-use devutils::source::SourceSet;
 
 variants! {
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -1543,6 +1543,10 @@ mod keys {
             (
                 key(Key::Character("p".into()), None),
                 HomeAction::SelectionStart,
+            ),
+            (
+                key(Key::Character("w".into()), Some(KeyModifier::Shift)),
+                HomeAction::WishNew,
             ),
         ]
         .into_iter()

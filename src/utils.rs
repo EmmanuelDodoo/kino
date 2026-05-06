@@ -22,6 +22,30 @@ pub fn save_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message> 
     iced::widget::button(typo::medium("Save")).style(styles::button::primary)
 }
 
+pub fn delete_btn<'a, Message: 'a + Clone>(label: &'a str) -> iced::widget::Button<'a, Message> {
+    use iced::widget::{button, row, text};
+
+    button(
+        row!(
+            icons::icon(icons::DELETE).size(typo::P).style(|theme| {
+                text::Style {
+                    color: Some(theme.palette().danger.base.color),
+                }
+            }),
+            typo::sized_medium(label, typo::H7)
+        )
+        .spacing(10.0)
+        .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding([6, 12])
+    .style(|theme, status| {
+        let default = styles::button::subtlest(theme, status);
+        let border = default.border.rounded(5);
+
+        button::Style { border, ..default }
+    })
+}
+
 pub fn cancel_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message> {
     iced::widget::button(typo::medium("Cancel")).style(styles::button::secondary)
 }
@@ -341,6 +365,7 @@ variants! {
         SearchToggle,
         Back,
         Forward,
+        WishNew,
         SelectionStart,
     }
 }
@@ -357,6 +382,7 @@ impl HomeAction {
             Self::Back => "Navigates back to the previous page",
             Self::Forward => "Navigates forward to the next page",
             Self::SelectionStart => "Enters selection mode, adding clicked media to a new playlist",
+            Self::WishNew => "Navigates to the wishlist page and opens the new wishlist dialog",
         }
     }
 }
@@ -376,6 +402,7 @@ impl std::fmt::Display for HomeAction {
                 Self::CloseModal => "Close Modal",
                 Self::SettingsOpen => "Settings Open",
                 Self::SelectionStart => "Selection Start",
+                Self::WishNew => "Wish New",
             }
         )
     }

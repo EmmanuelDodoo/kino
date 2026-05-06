@@ -9,6 +9,7 @@ use super::movies::{Movies, MoviesMessage};
 use super::season::{SeasonPage, SeasonPageMessage};
 use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
+use super::wishlist::{Wishlist, WishlistMessage};
 use registry::models::{CollectionId, EpisodeId, ItemId, MovieId, SeasonId, ShowId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
@@ -17,6 +18,7 @@ pub enum PageKind {
     Shows,
     Movies,
     Collections,
+    Wishlist,
     Episode(EpisodeId),
     Movie(MovieId),
     Show(ShowId),
@@ -42,6 +44,7 @@ pub enum Page {
     Movies(Movies),
     Comments(()),
     Collections(Collections),
+    Wishlist(Wishlist),
     Collection {
         collection: CollectionPage,
         id: CollectionId,
@@ -156,6 +159,13 @@ impl Page {
         }
     }
 
+    pub fn wishlist_update(&mut self, message: WishlistMessage) -> Option<HomeMessage> {
+        match self {
+            Self::Wishlist(wishlist) => wishlist.update(message),
+            _ => None,
+        }
+    }
+
     pub fn show_tools(&self) -> bool {
         match self {
             Self::Movies(_) => true,
@@ -167,6 +177,7 @@ impl Page {
             Self::Season { page, .. } => page.show_tools(),
             Self::Show { page, .. } => page.show_tools(),
             Self::Home => false,
+            Self::Wishlist(_) => false,
             _ => todo!(),
         }
     }
@@ -180,6 +191,7 @@ impl Page {
             Self::Show { page, .. } => page.update_scroll(),
             Self::Season { page, .. } => page.update_scroll(),
             Self::Movie { .. } | Self::Episode { .. } | Self::Home => Task::none(),
+            Self::Wishlist(wishlist) => wishlist.update_scroll(),
             _ => todo!(),
         }
     }

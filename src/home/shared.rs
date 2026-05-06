@@ -63,8 +63,8 @@ pub fn tab_synopsis<'a, Message: 'a + Clone>(synopsis: &'a str) -> Element<'a, M
         .into()
 }
 
-pub fn duration<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
-    let duration = sized_medium(media.duration_full(), H8);
+pub fn duration<'a, Message: 'a>(duration: String) -> Element<'a, Message> {
+    let duration = sized_medium(duration, H8);
     let icon = icon(HOURGLASS).size(H8);
 
     row!(icon, duration)
@@ -73,14 +73,14 @@ pub fn duration<'a, T: Media, Message: 'a>(media: &T) -> Element<'a, Message> {
         .into()
 }
 
-pub fn ratings<'a, T: Media, Message: 'a>(media: &T, show_text: bool) -> Element<'a, Message> {
+pub fn ratings<'a, Message: 'a>(rating: Option<f32>, show_text: bool) -> Element<'a, Message> {
     let size = H7;
     let color = |theme: &Theme| -> text::Style {
         let color = theme.palette().primary.strong.color;
         text::Style { color: Some(color) }
     };
 
-    match media.rating() {
+    match rating {
         Some(value) => {
             let rating = (value * 10.0).round() / 10.0;
 
@@ -99,7 +99,7 @@ pub fn ratings<'a, T: Media, Message: 'a>(media: &T, show_text: bool) -> Element
                 .align_y(Vertical::Center);
 
             let ratings = if show_text {
-                let text = sized_medium(format!("{rating:.1}"), H8).style(color);
+                let text = sized_medium(format!("{rating:.1}"), H8).style(color).line_height(1.0);
                 row!(text, ratings)
             } else {
                 row!(ratings)
@@ -116,8 +116,8 @@ pub fn ratings<'a, T: Media, Message: 'a>(media: &T, show_text: bool) -> Element
     }
 }
 
-fn progress_icon<T: Media>(media: &T) -> char {
-    match media.progress() {
+fn progress_icon(progress: f32) -> char {
+    match progress {
         ..0.15 => PROGRESS_10,
         0.15..0.3 => PROGRESS_20,
         0.3..0.5 => PROGRESS_40,
@@ -128,12 +128,12 @@ fn progress_icon<T: Media>(media: &T) -> char {
     }
 }
 
-pub fn progress<'a, T: Media, Message: 'a>(
-    media: &T,
+pub fn progress<'a, Message: 'a>(
+    progress: f32,
     color: Option<Color>,
     primary: bool,
 ) -> Element<'a, Message> {
-    let progress = (media.progress() * 1000.0).round() / 10.0;
+    let progress = (progress * 1000.0).round() / 10.0;
     let text = mono_bold(format!("{}%", progress))
         .size(H8)
         .style(move |theme: &Theme| {
@@ -150,7 +150,7 @@ pub fn progress<'a, T: Media, Message: 'a>(
             }
         });
 
-    let progress = progress_icon(media);
+    let progress = progress_icon(progress);
     let icon = icon(progress).size(H6).style(move |theme: &Theme| {
         if color.is_some() {
             text::Style { color }
@@ -171,9 +171,9 @@ pub fn progress<'a, T: Media, Message: 'a>(
         .into()
 }
 
-pub fn add_labelled<'a, T: Media, Message: 'a + Clone>(
-    media: &T,
-    on_press: impl Fn(T::Id) -> Message + 'a,
+pub fn add_labelled<'a, T, Message: 'a + Clone>(
+    id: T,
+    on_press: impl Fn(T) -> Message + 'a,
 ) -> Element<'a, Message> {
     let icon = icon(BOOKMARK).size(P);
 
@@ -181,12 +181,12 @@ pub fn add_labelled<'a, T: Media, Message: 'a + Clone>(
 
     mouse_area(row!(icon, label).align_y(Vertical::Center).spacing(6.0))
         .interaction(mouse::Interaction::Pointer)
-        .on_press((on_press)(media.id()))
+        .on_press((on_press)(id))
         .into()
 }
 
-pub fn synopsis<'a, T: Media, Message: 'a>(media: &'a T) -> Element<'a, Message> {
-    container(regular(media.synopsis()))
+pub fn synopsis<'a, Message: 'a>(synopsis: &'a str) -> Element<'a, Message> {
+    container(regular(synopsis).ellipsis(text::Ellipsis::End))
         .clip(true)
         .max_height(44.0)
         .into()
@@ -394,13 +394,10 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
 
 pub fn float<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,
-    float: &'a Animation<bool>,
+    interpolation: f32,
     color: Option<Color>,
-    now: Instant,
 ) -> Element<'a, Message> {
     use iced::{Color, Shadow};
-
-    let interpolation = float.interpolate(0.0, 1.0, now);
 
     let blur_radius = interpolation * 20.0;
     let scale = 1.0 + (0.05 * interpolation);
@@ -435,7 +432,7 @@ pub struct ThumbnailTask<T: Media> {
 }
 
 #[derive(Debug, Clone)]
-enum Image {
+pub enum Image {
     Ready {
         allocation: Allocation,
         fade_in: Animation<bool>,
@@ -456,7 +453,7 @@ pub struct Thumbnail<T: Media> {
     float: Animation<bool>,
     _tasks: task::Handle,
     hovered: bool,
-    pub media: T,
+    pub media: Box<T>,
 }
 
 impl<T: Media + 'static> Thumbnail<T> {
@@ -512,20 +509,14 @@ impl<T: Media + 'static> Thumbnail<T> {
 
         let new = Self {
             selected: false,
-            background: Animation::new(false)
-                .duration(iced::time::Duration::from_millis(200))
-                .easing(Easing::EaseInOut),
-            icon: Animation::new(false)
-                .duration(iced::time::Duration::from_millis(100))
-                .easing(Easing::EaseOut),
-            float: Animation::new(false)
-                .duration(iced::time::Duration::from_millis(150))
-                .easing(Easing::EaseInOut),
+            background: background_animation(),
+            icon: icon_animation(),
+            float: float_animation(),
             poster,
             sample_text,
             sample_color,
             backdrop,
-            media,
+            media: Box::new(media),
             hovered: false,
             _tasks: handle,
         };
@@ -584,43 +575,7 @@ impl<T: Media + 'static> Thumbnail<T> {
         height: impl Into<Length>,
         now: Instant,
     ) -> Element<'a, Message> {
-        let width = width.into();
-        let height = height.into();
-
-        let view = move |handle: &Handle| {
-            image(handle)
-                .border_radius(IMAGE_RADIUS)
-                .height(height)
-                .width(width)
-                .content_fit(ContentFit::Cover)
-        };
-
-        let empty = move || {
-            container(empty())
-                .height(height)
-                .width(width)
-                .style(move |theme| {
-                    let default = styles::container::dark(theme);
-                    let border = default.border.rounded(IMAGE_RADIUS);
-
-                    container::Style { border, ..default }
-                })
-        };
-
-        match &self.poster {
-            Image::Ready {
-                allocation,
-                fade_in,
-            } => view(allocation.handle())
-                .opacity(fade_in.interpolate(0.0, 1.0, now))
-                .scale(fade_in.interpolate(1.2, 1.0, now))
-                .into(),
-            Image::Loading => empty().into(),
-            Image::Default => match DEFAULT_POSTER.as_ref() {
-                Some(handle) => view(handle).into(),
-                _ => empty().into(),
-            },
-        }
+        image_poster(&self.poster, width, height,ContentFit::Cover, now)
     }
 
     pub fn backdrop<'a, Message: 'a>(
@@ -686,109 +641,28 @@ impl<T: Media + 'static> Thumbnail<T> {
         on_play: impl Fn(T::Id) -> Message + 'a,
         unique: impl Fn(&T) -> Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let title = marquee(self.media.name())
-            .toggle(self.hovered)
-            .size(H6)
-            .font(medium_font())
-            .height(24.0);
-
-        let ratings = ratings(&self.media, true);
-
-        let synopsis = synopsis(&self.media);
-
         let unique = unique(&self.media);
 
-        let bottom = row!(
-            progress(&self.media, None, false),
-            duration(&self.media),
-            unique,
-            space::horizontal(),
-            add_labelled(&self.media, on_add)
-        )
-        .spacing(20.0)
-        .align_y(Vertical::Center)
-        .width(Length::Fill);
-
-        let details = row!(column!(title, ratings, synopsis, bottom).spacing(10))
-            .height(Length::Fill)
-            .align_y(Vertical::Center);
-
-        let details = container(details)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding([5, 10]);
-
-        let img = container(self.poster_helper(1.0, now)).width(LIST_WIDTH * 1.75);
-        let img = mouse_area(img)
-            .interaction(iced::mouse::Interaction::Pointer)
-            .on_press((on_play)(self.media.id()));
-
-        let overlay = {
-            let size = H1 * 1.5;
-
-            let factor = self.icon.interpolate(0.0, 1.0, now);
-            let play = icon(PLAY)
-                .size(size)
-                .align_x(Horizontal::Center)
-                .height(size)
-                .style(move |_| {
-                    let color = Color::WHITE.scale_alpha(factor);
-                    text::Style { color: Some(color) }
-                });
-
-            let factor = self.background.interpolate(0.0, 1.0, now);
-            let play = center(play)
-                .width(factor * size)
-                .height(factor * size)
-                .style(move |theme| {
-                    let default = styles::container::dark(theme);
-                    let background = default
-                        .background
-                        .map(|background| background.scale_alpha(factor));
-                    let border = default.border.rounded(IMAGE_RADIUS);
-
-                    container::Style {
-                        border,
-                        background,
-                        ..default
-                    }
-                });
-
-            row!(space::horizontal(), play, space::horizontal())
-                .height(Length::Fill)
-                .width(Length::Fill)
-                .align_y(Vertical::Center)
+        let background_inter = self.background.interpolate(0.0, 1.0, now);
+        let icon_inter = self.icon.interpolate(0.0, 1.0, now);
+        let list = List {
+            selected: self.selected,
+            poster: &self.poster,
+            item: self.media.id(),
+            title: list_title(self.media.name(), self.hovered),
+            ratings: Some(ratings(self.media.rating(), true)),
+            synopsis: Some(synopsis(self.media.synopsis())),
+            bottom: Some(list_bottom(
+                self.media.id(),
+                self.media.progress(),
+                self.media.duration_full(),
+                unique,
+                on_add,
+            )),
+            overlay: Some(list_overlay(icon_inter, background_inter)),
         };
 
-        let img = stack![img, overlay];
-
-        let content = row!(img, details)
-            .align_y(Vertical::Center)
-            .height(LIST_HEIGHT);
-
-        let selected = self.selected;
-        let content = button(content)
-            .padding(10)
-            .style(move |theme, status| {
-                let default = styles::button::subtlest(theme, status);
-                let border = default.border.rounded(IMAGE_RADIUS);
-                let border = if selected {
-                    border
-                        .width(SELECTED_WIDTH)
-                        .color(theme.palette().primary.strong.color)
-                } else {
-                    border
-                };
-
-                button::Style { border, ..default }
-            })
-            .on_press((on_select)(self.media.id()));
-
-        let content = mouse_area(content)
-            .on_exit((on_hover)(self.media.id(), false))
-            .on_enter((on_hover)(self.media.id(), true));
-
-        content.into()
+        list.view(now, on_select, on_hover, on_play)
     }
 
     pub fn card<'a, Message: 'a + Clone>(
@@ -799,137 +673,33 @@ impl<T: Media + 'static> Thumbnail<T> {
         on_hover: impl Fn(T::Id, bool) -> Message + 'a,
         on_play: impl Fn(T::Id) -> Message + 'a,
     ) -> Element<'a, Message> {
-        let padding = [3, 6];
-        let sample = self.sample_text;
+        let background_inter = self.background.interpolate(0.0, 1.0, now);
+        let icon_inter = self.icon.interpolate(0.0, 1.0, now);
 
-        let color = move |theme: &Theme| {
-            if sample.is_some() {
-                text::Style { color: sample }
-            } else {
-                text::Style {
-                    color: Some(theme.palette().primary.strong.text),
-                }
-            }
+        let overlay = card_overlay(
+            self.media.as_ref(),
+            on_add,
+            on_play,
+            self.sample_text,
+            background_inter,
+            icon_inter,
+        );
+
+        let card = Card {
+            sample_color: self.sample_color,
+            background_inter,
+            selected: self.selected,
+            item: self.media.id(),
+            poster: &self.poster,
+            title: card_title(self.media.name(), self.hovered),
+            details: Some(card_details(self.media.rating(), self.media.release_year())),
+            overlay: Some(overlay),
+            float_anim: Some(&self.float),
         };
 
-        let top = {
-            let progress = progress(&self.media, sample, true);
-            let add = mouse_area(icon(BOOKMARK).size(H4).style(color))
-                .on_press((on_add)(self.media.id()));
+        let on_select = move |arg: T::Id| Some((on_select)(arg));
 
-            container(
-                row!(progress, space::horizontal(), add)
-                    .padding(padding)
-                    .width(Length::Fill)
-                    .align_y(Vertical::Center),
-            )
-        };
-
-        let details = {
-            let title = marquee(self.media.name())
-                .size(P)
-                .font(medium_font())
-                .toggle(self.hovered);
-            let title = container(title).max_height(20.0).clip(true);
-            let ratings = ratings(&self.media, true);
-            let release = {
-                let release = sized_medium(self.media.release_year(), H8);
-                let icon = icon(CALENDAR).size(H7);
-
-                row!(icon, release).align_y(Vertical::Center).spacing(3.0)
-            };
-
-            let details = row!(ratings, space::horizontal(), release)
-                .width(Length::Fill)
-                .align_y(Vertical::Center);
-
-            container(column!(title, details).width(Length::Fill).spacing(4.0)).padding(padding)
-        };
-
-        let bottom = {
-            let duration = sized_medium(self.media.duration_full(), H8).style(color);
-            row!(space::horizontal(), duration)
-                .align_y(Vertical::Center)
-                .padding(padding)
-        };
-
-        let background_interpolation = self.background.interpolate(0.0, 1.0, now);
-        let play = {
-            let size = CARD_HEIGHT * 0.135;
-
-            let icon_interpolation = self.icon.interpolate(0.0, 1.0, now);
-            let play = icon(PLAY)
-                .size(size)
-                .align_x(Horizontal::Center)
-                .height(size)
-                .style(move |_| {
-                    let color = Color::WHITE.scale_alpha(icon_interpolation);
-                    text::Style { color: Some(color) }
-                });
-
-            let play = center(play)
-                .width(size * background_interpolation)
-                .height(size * background_interpolation)
-                .style(move |theme| {
-                    let default = styles::container::dark(theme);
-                    let background = default
-                        .background
-                        .map(|background| background.scale_alpha(background_interpolation));
-                    let border = default.border.rounded(IMAGE_RADIUS);
-
-                    container::Style {
-                        border,
-                        background,
-                        ..default
-                    }
-                });
-
-            row!(space::horizontal(), play, space::horizontal())
-                .height(Length::Fill)
-                .width(Length::Fill)
-                .align_y(Vertical::Center)
-        };
-
-        let overlay = mouse_area(
-            column!(top, space::vertical(), play, space::vertical(), bottom)
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .on_press((on_play)(self.media.id()));
-
-        let img = self.poster_helper(1.0 + (background_interpolation * 0.05), now);
-
-        let content = stack![img, overlay].width(CARD_WIDTH).height(Length::Fill);
-
-        let selected = self.selected;
-        let content = container(column!(content, details))
-            .padding(4)
-            .width(CARD_WIDTH)
-            .height(CARD_HEIGHT)
-            .style(move |theme| {
-                let default = styles::container::bw3(theme);
-                let border = default.border.rounded(IMAGE_RADIUS);
-
-                let border = if selected {
-                    border
-                        .width(SELECTED_WIDTH)
-                        .color(theme.palette().primary.strong.color)
-                } else {
-                    border
-                };
-
-                container::Style { border, ..default }
-            });
-
-        let content = float(content, &self.float, self.sample_color, now);
-
-        let content = mouse_area(content)
-            .interaction(mouse::Interaction::Pointer)
-            .on_press((on_select)(self.media.id()))
-            .on_exit((on_hover)(self.media.id(), false))
-            .on_enter((on_hover)(self.media.id(), true));
-
-        content.into()
+        card.view(now, on_select, on_hover)
     }
 
     pub fn compact<'a, Message: 'a + Clone>(
@@ -940,113 +710,20 @@ impl<T: Media + 'static> Thumbnail<T> {
         on_hover: impl Fn(T::Id, bool) -> Message + 'a,
         on_play: impl Fn(T::Id) -> Message + 'a,
     ) -> Element<'a, Message> {
-        let width = 56.0;
-        let size = H7;
+        let id = self.media.id();
 
-        let img: Element<'a, Message> = {
-            let view = move |handle: &Handle| {
-                image(handle)
-                    .border_radius(IMAGE_RADIUS)
-                    .width(width)
-                    .height(width)
-                    .content_fit(ContentFit::Cover)
-            };
-
-            let empty = || {
-                container(empty())
-                    .width(width)
-                    .height(width)
-                    .style(styles::container::dark)
-            };
-
-            match &self.poster {
-                Image::Ready {
-                    allocation,
-                    fade_in,
-                } => view(allocation.handle())
-                    .opacity(fade_in.interpolate(0.0, 1.0, now))
-                    .scale(fade_in.interpolate(1.2, 1.0, now))
-                    .into(),
-                Image::Default => match DEFAULT_POSTER.as_ref() {
-                    Some(handle) => view(handle).into(),
-                    None => empty().into(),
-                },
-                Image::Loading => empty().into(),
-            }
+        let compact = Compact {
+            selected: self.selected,
+            poster: &self.poster,
+            item: id,
+            title: compact_title(self.media.name(), self.hovered),
+            ratings: ratings(self.media.rating(), false),
+            progress: Some(compact_progress(self.media.progress())),
+            duration: Some(compact_duration(self.media.duration_short())),
+            recent: Some(compact_recent(self.media.recent_short())),
         };
 
-        let img = button(img)
-            .style(styles::button::text)
-            .padding(0)
-            .on_press((on_play)(self.media.id()));
-
-        let name = marquee(self.media.name())
-            .toggle(self.hovered)
-            .size(P)
-            .font(medium_font())
-            .width(Length::Fill);
-
-        let name = container(name)
-            .clip(true)
-            .align_y(Vertical::Center)
-            .height(24.0);
-
-        let ratings = ratings(&self.media, false);
-
-        let progress = {
-            let progress = (self.media.progress() * 1000.0).round() / 10.0;
-            let text = mono_bold(format!("{}%", progress)).size(H7);
-
-            container(text)
-                .align_y(Vertical::Center)
-                .align_x(Horizontal::Right)
-                .width(32.0)
-        };
-
-        let duration = container(sized_medium(self.media.duration_short(), H7))
-            .width(72.0)
-            .height(24.0)
-            .align_x(Horizontal::Right)
-            .align_y(Vertical::Center);
-
-        let recent = self.media.recent_short().unwrap_or(String::from("--:--"));
-        let recent = container(sized_medium(recent, H7))
-            .height(24.0)
-            .width(100.0)
-            .align_x(Horizontal::Right)
-            .align_y(Vertical::Center);
-
-        let add = sized_button(ADD_COLLECTION, size * RATIO)
-            .on_press((on_add)(self.media.id()))
-            .padding(0);
-
-        let selected = self.selected;
-        let content = button(
-            row!(img, name, ratings, progress, duration, recent, add)
-                .spacing(20.0)
-                .align_y(Vertical::Center),
-        )
-        .padding([6, 6])
-        .on_press((on_select)(self.media.id()))
-        .style(move |theme, status| {
-            let default = styles::button::subtlest(theme, status);
-            let border = default.border.rounded(IMAGE_RADIUS);
-            let border = if selected {
-                border
-                    .width(SELECTED_WIDTH)
-                    .color(theme.palette().primary.strong.color)
-            } else {
-                border
-            };
-
-            button::Style { border, ..default }
-        });
-
-        let content = mouse_area(content)
-            .on_exit((on_hover)(self.media.id(), false))
-            .on_enter((on_hover)(self.media.id(), true));
-
-        content.into()
+        compact.view(now, (on_add)(id), (on_select)(id), on_hover, (on_play)(id))
     }
 }
 
@@ -1514,7 +1191,7 @@ impl Icon {
     }
 }
 
-fn to_color(color: devutils::Color) -> Color {
+pub fn to_color(color: devutils::Color) -> Color {
     Color::from_rgba8(color.0, color.1, color.2, color.3)
 }
 
@@ -1522,9 +1199,598 @@ fn to_handle(img: devutils::Image) -> Handle {
     Handle::from_rgba(img.width, img.height, bytes::Bytes::from(img.bytes))
 }
 
-fn fade_in(now: Instant) -> Animation<bool> {
+pub fn fade_in(now: Instant) -> Animation<bool> {
     Animation::new(false)
         .duration(Duration::from_millis(500))
         .easing(Easing::EaseInOut)
         .go(true, now)
+}
+
+pub struct Card<'a, T, Message> {
+    pub sample_color: Option<Color>,
+    pub background_inter: f32,
+    pub selected: bool,
+    pub item: T,
+    pub poster: &'a Image,
+    pub title: Element<'a, Message>,
+    pub details: Option<Element<'a, Message>>,
+    pub overlay: Option<Element<'a, Message>>,
+    pub float_anim: Option<&'a Animation<bool>>,
+}
+
+impl<'a, T: Copy, Message: 'a + Clone> Card<'a, T, Message> {
+    pub fn view(
+        self,
+        now: Instant,
+        on_select: impl Fn(T) -> Option<Message> + 'a,
+        on_hover: impl Fn(T, bool) -> Message + 'a,
+    ) -> Element<'a, Message> {
+        let overlay = self.overlay.unwrap_or(empty());
+
+        let details = match self.details {
+            Some(details) => {
+                column!(self.title, details)
+            }
+            None => {
+                column!(self.title)
+            }
+        }
+        .width(Length::Fill)
+        .spacing(4.0)
+        .padding([4, 6]);
+
+        let img = card_poster_helper(self.poster, 1.0 + (self.background_inter * 0.05), now);
+
+        let content = stack![img, overlay].width(CARD_WIDTH).height(Length::Fill);
+
+        let selected = self.selected;
+        let content = container(column!(content, details))
+            .padding(4)
+            .width(CARD_WIDTH)
+            .height(CARD_HEIGHT)
+            .style(move |theme| {
+                let default = styles::container::bw3(theme);
+                let border = default.border.rounded(IMAGE_RADIUS);
+
+                let border = if selected {
+                    border
+                        .width(SELECTED_WIDTH)
+                        .color(theme.palette().primary.strong.color)
+                } else {
+                    border
+                };
+
+                container::Style { border, ..default }
+            });
+
+        let content: Element<'_, Message> = match self.float_anim {
+            Some(float_anim) => {
+                let interpolation = float_anim.interpolate(0.0, 1.0, now);
+                float(content, interpolation, self.sample_color)
+            }
+            None => content.into(),
+        };
+
+        let content = mouse_area(content)
+            .on_exit((on_hover)(self.item, false))
+            .on_enter((on_hover)(self.item, true));
+
+        let content = match (on_select)(self.item) {
+            Some(message) => content
+                .on_press(message)
+                .interaction(mouse::Interaction::Pointer),
+            None => content,
+        };
+
+        content.into()
+    }
+}
+
+pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
+    media: &'a T,
+    on_add: impl Fn(T::Id) -> Message + 'a,
+    on_play: impl Fn(T::Id) -> Message + 'a,
+    sample_text: Option<Color>,
+    background_inter: f32,
+    icon_inter: f32,
+) -> Element<'a, Message> {
+    let padding = [3, 6];
+    let sample = sample_text;
+
+    let color = move |theme: &Theme| {
+        if sample.is_some() {
+            text::Style { color: sample }
+        } else {
+            text::Style {
+                color: Some(theme.palette().primary.strong.text),
+            }
+        }
+    };
+
+    let top = {
+        let progress = progress(media.progress(), sample, true);
+        let add = mouse_area(icon(BOOKMARK).size(H4).style(color)).on_press((on_add)(media.id()));
+
+        container(
+            row!(progress, space::horizontal(), add)
+                .padding(padding)
+                .width(Length::Fill)
+                .align_y(Vertical::Center),
+        )
+    };
+
+    let bottom = {
+        let duration = sized_medium(media.duration_full(), H8).style(color);
+        row!(space::horizontal(), duration)
+            .align_y(Vertical::Center)
+            .padding(padding)
+    };
+
+    let play = {
+        let size = CARD_HEIGHT * 0.135;
+
+        let play = icon(PLAY)
+            .size(size)
+            .align_x(Horizontal::Center)
+            .height(size)
+            .style(move |_| {
+                let color = Color::WHITE.scale_alpha(icon_inter);
+                text::Style { color: Some(color) }
+            });
+
+        let play = center(play)
+            .width(size * background_inter)
+            .height(size * background_inter)
+            .style(move |theme| {
+                let default = styles::container::dark(theme);
+                let background = default
+                    .background
+                    .map(|background| background.scale_alpha(background_inter));
+                let border = default.border.rounded(IMAGE_RADIUS);
+
+                container::Style {
+                    border,
+                    background,
+                    ..default
+                }
+            });
+
+        row!(space::horizontal(), play, space::horizontal())
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .align_y(Vertical::Center)
+    };
+
+    mouse_area(
+        column!(top, space::vertical(), play, space::vertical(), bottom)
+            .width(Length::Fill)
+            .height(Length::Fill),
+    )
+    .on_press((on_play)(media.id()))
+    .into()
+}
+
+pub fn card_title<'a, Message: 'a>(title: &'a str, hovered: bool) -> Element<'a, Message> {
+    let title = marquee(title).size(P).font(medium_font()).toggle(hovered);
+    container(title).max_height(20.0).clip(true).into()
+}
+
+pub fn card_details<'a, Message: 'a>(rating: Option<f32>, release: String) -> Element<'a, Message> {
+    let ratings = ratings(rating, true);
+    let release = {
+        let release = sized_medium(release, H8);
+        let icon = icon(CALENDAR).size(H7);
+
+        row!(icon, release).align_y(Vertical::Center).spacing(3.0)
+    };
+
+    row!(ratings, space::horizontal(), release)
+        .width(Length::Fill)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+pub fn card_poster_helper<'a, Message: 'a>(
+    poster: &'a Image,
+    scale: f32,
+    now: Instant,
+) -> Element<'a, Message> {
+    let scale = if matches!(poster, Image::Ready { .. }) {
+        scale
+    } else {
+        1.0
+    };
+
+    let view = move |handle: &Handle| {
+        image(handle)
+            .border_radius(IMAGE_RADIUS)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .scale(scale)
+            .content_fit(ContentFit::Fill)
+    };
+
+    let empty = || {
+        container(empty())
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(styles::container::dark)
+    };
+
+    match poster {
+        Image::Ready {
+            allocation,
+            fade_in,
+        } => view(allocation.handle())
+            .opacity(fade_in.interpolate(0.0, 1.0, now))
+            .scale(scale * fade_in.interpolate(1.15, 1.0, now))
+            .into(),
+        Image::Loading => empty().into(),
+        Image::Default => match DEFAULT_POSTER.as_ref() {
+            Some(handle) => view(handle).into(),
+            _ => empty().into(),
+        },
+    }
+}
+
+pub struct List<'a, T, Message> {
+    pub selected: bool,
+    pub poster: &'a Image,
+    pub item: T,
+    pub title: Element<'a, Message>,
+    pub ratings: Option<Element<'a, Message>>,
+    pub synopsis: Option<Element<'a, Message>>,
+    pub bottom: Option<Element<'a, Message>>,
+    pub overlay: Option<Element<'a, Message>>,
+}
+
+impl<'a, T: Copy, Message: 'a + Clone> List<'a, T, Message> {
+    pub fn view(
+        self,
+        now: Instant,
+        on_select: impl Fn(T) -> Message + 'a,
+        on_hover: impl Fn(T, bool) -> Message + 'a,
+        on_play: impl Fn(T) -> Message + 'a,
+    ) -> Element<'a, Message> {
+        let details = row!(
+            column!(
+                self.title,
+                self.ratings.unwrap_or_else(empty),
+                self.synopsis.unwrap_or_else(empty),
+                self.bottom.unwrap_or_else(empty)
+            )
+            .spacing(10)
+        )
+        .height(Length::Fill)
+        .align_y(Vertical::Center);
+
+        let details = container(details)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding([5, 10]);
+
+        let img = container(card_poster_helper(self.poster, 1.0, now)).width(LIST_WIDTH * 1.75);
+        let img = mouse_area(img)
+            .interaction(iced::mouse::Interaction::Pointer)
+            .on_press((on_play)(self.item));
+
+        let img: Element<'_, Message> = match self.overlay {
+            Some(overlay) => stack![img, overlay].into(),
+            None => img.into(),
+        };
+
+        let content = row!(img, details)
+            .align_y(Vertical::Center)
+            .height(LIST_HEIGHT);
+
+        let selected = self.selected;
+        let content = button(content)
+            .padding(10)
+            .style(move |theme, status| {
+                let default = styles::button::subtlest(theme, status);
+                let border = default.border.rounded(IMAGE_RADIUS);
+                let border = if selected {
+                    border
+                        .width(SELECTED_WIDTH)
+                        .color(theme.palette().primary.strong.color)
+                } else {
+                    border
+                };
+
+                button::Style { border, ..default }
+            })
+            .on_press((on_select)(self.item));
+
+        let content = mouse_area(content)
+            .on_exit((on_hover)(self.item, false))
+            .on_enter((on_hover)(self.item, true));
+
+        content.into()
+    }
+}
+
+pub fn list_overlay<'a, Message: 'a + Clone>(
+    icon_inter: f32,
+    background_inter: f32,
+) -> Element<'a, Message> {
+    let size = H1 * 1.5;
+
+    let play = icon(PLAY)
+        .size(size)
+        .align_x(Horizontal::Center)
+        .height(size)
+        .style(move |_| {
+            let color = Color::WHITE.scale_alpha(icon_inter);
+            text::Style { color: Some(color) }
+        });
+
+    let play = center(play)
+        .width(background_inter * size)
+        .height(background_inter * size)
+        .style(move |theme| {
+            let default = styles::container::dark(theme);
+            let background = default
+                .background
+                .map(|background| background.scale_alpha(background_inter));
+            let border = default.border.rounded(IMAGE_RADIUS);
+
+            container::Style {
+                border,
+                background,
+                ..default
+            }
+        });
+
+    row!(space::horizontal(), play, space::horizontal())
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+pub fn list_title<'a, Message: 'a>(title: &'a str, hovered: bool) -> Element<'a, Message> {
+    marquee(title)
+        .toggle(hovered)
+        .size(H6)
+        .font(medium_font())
+        .height(24.0)
+        .into()
+}
+
+pub fn list_bottom<'a, T, Message: 'a + Clone>(
+    id: T,
+    progress: f32,
+    duration: String,
+    unique: Element<'a, Message>,
+    on_add: impl Fn(T) -> Message + 'a,
+) -> Element<'a, Message> {
+    row!(
+        self::progress(progress, None, false),
+        self::duration(duration),
+        unique,
+        space::horizontal(),
+        add_labelled(id, on_add)
+    )
+    .spacing(20.0)
+    .align_y(Vertical::Center)
+    .width(Length::Fill)
+    .into()
+}
+
+pub struct Compact<'a, T, Message> {
+    pub selected: bool,
+    pub poster: &'a Image,
+    pub item: T,
+    pub title: Element<'a, Message>,
+    pub ratings: Element<'a, Message>,
+    pub progress: Option<Element<'a, Message>>,
+    pub duration: Option<Element<'a, Message>>,
+    pub recent: Option<Element<'a, Message>>,
+}
+
+impl<'a, T: Copy, Message: 'a + Clone> Compact<'a, T, Message> {
+    pub fn view(
+        self,
+        now: Instant,
+        on_add: Message,
+        on_select: Message,
+        on_hover: impl Fn(T, bool) -> Message + 'a,
+        on_play: Message,
+    ) -> Element<'a, Message> {
+        let img = compact_poster(self.poster, now, on_play);
+        let name = self.title;
+        let ratings = self.ratings;
+        let progress = self.progress.unwrap_or_else(empty);
+        let duration = self.duration.unwrap_or_else(empty);
+        let recent = self.recent.unwrap_or_else(empty);
+
+        let add = sized_button(ADD_COLLECTION, H7 * RATIO)
+            .on_press(on_add)
+            .padding(0);
+
+        let selected = self.selected;
+        let content = button(
+            row!(img, name, ratings, progress, duration, recent, add)
+                .spacing(20.0)
+                .align_y(Vertical::Center),
+        )
+        .padding([6, 6])
+        .on_press(on_select)
+        .style(move |theme, status| {
+            let default = styles::button::subtlest(theme, status);
+            let border = default.border.rounded(IMAGE_RADIUS);
+            let border = if selected {
+                border
+                    .width(SELECTED_WIDTH)
+                    .color(theme.palette().primary.strong.color)
+            } else {
+                border
+            };
+
+            button::Style { border, ..default }
+        });
+        let content = mouse_area(content)
+            .on_exit((on_hover)(self.item, false))
+            .on_enter((on_hover)(self.item, true));
+
+        content.into()
+    }
+}
+
+pub fn compact_poster<'a, Message: 'a + Clone>(
+    poster: &'a Image,
+    now: Instant,
+    on_play: Message,
+) -> Element<'a, Message> {
+    let width = 56.0;
+
+    let img: Element<'a, Message> = {
+        let view = move |handle: &Handle| {
+            image(handle)
+                .border_radius(IMAGE_RADIUS)
+                .width(width)
+                .height(width)
+                .content_fit(ContentFit::Cover)
+        };
+
+        let empty = || {
+            container(empty())
+                .width(width)
+                .height(width)
+                .style(styles::container::dark)
+        };
+
+        match poster {
+            Image::Ready {
+                allocation,
+                fade_in,
+            } => view(allocation.handle())
+                .opacity(fade_in.interpolate(0.0, 1.0, now))
+                .scale(fade_in.interpolate(1.2, 1.0, now))
+                .into(),
+            Image::Default => match DEFAULT_POSTER.as_ref() {
+                Some(handle) => view(handle).into(),
+                None => empty().into(),
+            },
+            Image::Loading => empty().into(),
+        }
+    };
+
+    button(img)
+        .style(styles::button::text)
+        .padding(0)
+        .on_press(on_play)
+        .into()
+}
+
+pub fn compact_title<'a, Message: 'a + Clone>(
+    title: &'a str,
+    hovered: bool,
+) -> Element<'a, Message> {
+    let name = marquee(title)
+        .toggle(hovered)
+        .size(P)
+        .font(medium_font())
+        .width(Length::Fill);
+
+    container(name)
+        .clip(true)
+        .align_y(Vertical::Center)
+        .height(24.0)
+        .into()
+}
+
+pub fn compact_progress<'a, Message: 'a>(progress: f32) -> Element<'a, Message> {
+    let progress = (progress * 1000.0).round() / 10.0;
+    let text = mono_bold(format!("{}%", progress)).size(H7);
+
+    container(text)
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Right)
+        .width(32.0)
+        .into()
+}
+
+pub fn compact_duration<'a, Message: 'a>(duration: String) -> Element<'a, Message> {
+    container(sized_medium(duration, H7))
+        .width(72.0)
+        .height(24.0)
+        .align_x(Horizontal::Right)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+pub fn compact_recent<'a, Message: 'a>(recent: Option<String>) -> Element<'a, Message> {
+    let recent = recent.unwrap_or(String::from("--:--"));
+
+    container(sized_medium(recent, H7))
+        .height(24.0)
+        .width(100.0)
+        .align_x(Horizontal::Right)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+pub fn background_animation() -> Animation<bool> {
+    Animation::new(false)
+        .duration(iced::time::Duration::from_millis(200))
+        .easing(Easing::EaseInOut)
+}
+
+pub fn icon_animation() -> Animation<bool> {
+    Animation::new(false)
+        .duration(iced::time::Duration::from_millis(100))
+        .easing(Easing::EaseOut)
+}
+
+pub fn float_animation() -> Animation<bool> {
+    Animation::new(false)
+        .duration(iced::time::Duration::from_millis(150))
+        .easing(Easing::EaseInOut)
+}
+
+pub fn image_poster<'a, Message: 'a>(
+    poster: &'a Image,
+    width: impl Into<Length>,
+    height: impl Into<Length>,
+    fit: ContentFit,
+    now: Instant,
+) -> Element<'a, Message> {
+    let width = width.into();
+    let height = height.into();
+
+    let view = move |handle: &Handle| {
+        image(handle)
+            .border_radius(IMAGE_RADIUS)
+            .height(height)
+            .width(width)
+            .content_fit(fit)
+    };
+
+    let empty = move || {
+        container(empty())
+            .height(height)
+            .width(width)
+            .style(move |theme| {
+                let default = styles::container::dark(theme);
+                let border = default.border.rounded(IMAGE_RADIUS);
+
+                container::Style { border, ..default }
+            })
+    };
+
+    match poster {
+        Image::Ready {
+            allocation,
+            fade_in,
+        } => view(allocation.handle())
+            .opacity(fade_in.interpolate(0.0, 1.0, now))
+            .scale(fade_in.interpolate(1.2, 1.0, now))
+            .into(),
+        Image::Loading => empty().into(),
+        Image::Default => match DEFAULT_POSTER.as_ref() {
+            Some(handle) => view(handle).into(),
+            _ => empty().into(),
+        },
+    }
 }

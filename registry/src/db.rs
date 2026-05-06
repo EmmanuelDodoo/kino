@@ -66,6 +66,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 10,
         sql: include_str!("../../resources/db/migrations/10.sql"),
     },
+    Migration {
+        version: 11,
+        sql: include_str!("../../resources/db/migrations/11.sql"),
+    },
 ];
 
 pub struct Database {
@@ -1002,6 +1006,17 @@ impl Database {
         Ok(rows > 0)
     }
 
+    pub fn get_wishlist<T>(
+        &self,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
+        let sql = "SELECT image.main as poster_main, image.accent as poster_accent, image.path as poster_path, wish.* FROM wish LEFT JOIN image ON wish.poster = image.path WHERE NOT removed ORDER BY completed";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        statement.query_map([], map)?.collect()
+    }
+
     pub fn search<T>(
         &self,
         term: String,
@@ -1457,7 +1472,7 @@ pub(crate) enum Table {
     Subtitle,
     Collection,
     // CollectionItem,
-    // WatchList,
+    Wishlist,
     InsertTrigger,
     DeleteTrigger,
     TMDBRequest,

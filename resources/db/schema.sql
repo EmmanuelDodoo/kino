@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 10;
+PRAGMA user_version = 11;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -25,9 +25,11 @@ CREATE TABLE tmdb (
 	name			TEXT,
 	number			INTEGER DEFAULT 0,
 	backdrop		TEXT,
+	wish_type		TEXT,
 
 	FOREIGN KEY (parent) REFERENCES tmdb(id) ON DELETE CASCADE,
-	CHECK ( media_type IN ('movie', 'show', 'season', 'episode'))
+	CHECK ( wish_type IN ('movie', 'show', 'season', 'episode')),
+	CHECK ( media_type IN ('movie', 'show', 'season', 'episode', 'wish'))
 );
 
 CREATE TABLE tv_show ( 
@@ -153,6 +155,30 @@ CREATE TABLE movie (
 );
 
 CREATE INDEX idx_movie_directory ON movie ( directory );
+
+CREATE TABLE wish (
+	id                   TEXT NOT NULL  PRIMARY KEY  ,
+	media_type	     TEXT NOT NULL,
+	created_at           DATETIME  DEFAULT CURRENT_TIMESTAMP   ,
+	name                 TEXT NOT NULL    ,
+	poster               TEXT     ,
+	synopsis             TEXT  DEFAULT '<empty synopsis>'   ,
+	release              TEXT NOT NULL    ,
+	rating               FLOAT(2, 1)     ,
+	removed		     BOOLEAN DEFAULT FALSE,
+	completed	     BOOLEAN DEFAULT FALSE,
+	request		     TEXT,
+	source		     TEXT NOT NULL DEFAULT 'none',
+
+	duration             INTEGER DEFAULT 0   ,
+	count                INTEGER DEFAULT 0   ,
+	season_number        INTEGER DEFAULT 0   ,
+	episode_number       INTEGER DEFAULT 0   ,
+	tags                 TEXT DEFAULT '' ,
+
+	CHECK ( media_type IN ('movie', 'show', 'season', 'episode')),
+	UNIQUE (media_type, name, season_number, episode_number)
+);
 
 CREATE TABLE comment ( 
 	id                   TEXT NOT NULL  PRIMARY KEY  ,
@@ -555,6 +581,26 @@ BEGIN
 	UPDATE tmdb SET name=NEW.name, status=1, retry=0 WHERE media_id = NEW.id;
 END;
 
+CREATE TRIGGER tmdb_wish_name_update AFTER UPDATE OF name ON wish
+BEGIN
+	UPDATE tmdb SET name=NEW.name, status=1, retry=0 WHERE media_id=NEW.id AND NEW.source ='tmdb';
+END;
+
+CREATE TRIGGER tmdb_wish_season_update AFTER UPDATE OF season_number ON wish
+BEGIN
+	UPDATE tmdb SET number=NEW.season_number, status=1, retry=0 WHERE media_id=NEW.id AND NEW.source ='tmdb';
+END;
+
+CREATE TRIGGER tmdb_wish_episode_update AFTER UPDATE OF episode_number ON wish
+BEGIN
+	UPDATE tmdb SET backdrop=NEW.episode_number, status=1, retry=0 WHERE media_id=NEW.id AND NEW.source ='tmdb';
+END;
+
+CREATE TRIGGER tmdb_wish_media_update AFTER UPDATE OF media_type ON wish
+BEGIN
+	UPDATE tmdb SET wish_type =NEW.media_type, status=1, retry=0 WHERE media_id=NEW.id AND NEW.source='tmdb';
+END;
+
 CREATE TRIGGER tmdb_movie_delete AFTER DELETE ON movie
 BEGIN
 	DELETE FROM tmdb WHERE media_id = OLD.id;
@@ -573,6 +619,11 @@ END;
 CREATE TRIGGER tmdb_episode_delete AFTER DELETE ON episode
 BEGIN
 	DELETE FROM tmdb WHERE media_id = OLD.id;
+END;
+
+CREATE TRIGGER tmdb_wish_delete AFTER DELETE ON wish
+BEGIN
+	DELETE FROM tmdb WHERE media_id=OLD.id;
 END;
 
 CREATE TRIGGER item_movie_delete_tr AFTER DELETE ON movie

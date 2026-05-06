@@ -46,7 +46,7 @@ use utils::icons::*;
 use utils::typo;
 use utils::typo::*;
 use utils::{Layout, cancel_btn, empty, save_btn, styles, tooltip};
-use widgets::menu;
+use widgets::{menu, modal};
 
 // fn test_main() -> iced::Result {
 #[rustfmt::skip]
@@ -144,6 +144,11 @@ impl BootFn<App, app::Message> for BootMode {
 enum Message {
     Family(font::Family),
     Fonts(Result<Vec<font::Family>, font::Error>),
+    Left,
+    Right,
+    Top,
+    Bottom,
+    Center,
     None,
 }
 
@@ -151,6 +156,11 @@ struct Playground {
     now: Instant,
     selected: Option<font::Family>,
     state: combo_box::State<font::Family>,
+    left: bool,
+    right: bool,
+    top: bool,
+    bottom: bool,
+    center: bool,
 }
 
 impl Playground {
@@ -160,17 +170,25 @@ impl Playground {
         let new = Self {
             now,
             selected: None,
+            left: false,
+            right: false,
+            top: false,
+            center: false,
+            bottom: false,
             state: combo_box::State::new(vec![]),
         };
 
-        (new, font::list().map(Message::Fonts))
+        (new, Task::none())
     }
 
     fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
         self.now = now;
 
         match message {
-            Message::None => Task::none(),
+            Message::None => {
+                println!("Received None");
+                Task::none()
+            }
             Message::Fonts(Ok(fams)) => {
                 self.state = combo_box::State::new(fams);
                 Task::none()
@@ -183,25 +201,136 @@ impl Playground {
                 self.selected = Some(family);
                 Task::none()
             }
+            Message::Left => {
+                self.left = !self.left;
+                Task::none()
+            }
+            Message::Right => {
+                self.right = !self.right;
+                Task::none()
+            }
+            Message::Top => {
+                self.top = !self.top;
+                Task::none()
+            }
+            Message::Bottom => {
+                self.bottom = !self.bottom;
+                Task::none()
+            }
+            Message::Center => {
+                self.center = !self.center;
+                Task::none()
+            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let content = "Something to test kino";
+        // let content = "Something to test kino";
 
-        let default = display(content).size(P);
-        let other = text(content)
-            .font(self.selected.unwrap_or_default())
-            .size(P);
+        // let default = display(content).size(P);
+        // let other = text(content)
+        //     .font(self.selected.unwrap_or_default())
+        //     .size(P);
+        //
+        // let selection =
+        //     combo_box(&self.state, "", self.selected.as_ref(), Message::Family).width(250);
+        //
+        // let content = column!(default, other).spacing(10);
+        //
+        // let content = column!(selection, content).spacing(20);
+        //
+        // let content = center_x(content);
 
-        let selection =
-            combo_box(&self.state, "", self.selected.as_ref(), Message::Family).width(250);
+        // let content = center(bold("Center"))
+        //     .style(|_| container::background(color!(216, 80, 57)))
+        //     .height(400)
+        //     .width(400);
+        //
+        // let base = center_y(button(bold("Center")).on_press(Message::Center));
+        //
+        // // let content = widgets::modal(base, content)
+        // //     .position(modal::Position::Center)
+        // //     .toggle(self.center)
+        // //     .on_blur(Message::Center);
+        //
+        // let center = container(
+        //     widgets::modal(base, content)
+        //         .position(modal::Position::Center)
+        //         .toggle(self.center)
+        //         .on_blur(Message::Center),
+        // )
+        // .height(800)
+        // .style(|_| container::background(color!(45, 100, 120)));
+        //
+        // let content = widget::center(bold("Bottom"))
+        //     .style(|_| container::background(color!(216, 80, 57)))
+        //     .height(400)
+        //     .width(400);
+        // let base = center_y(button(bold("Bottom")).on_press(Message::Bottom));
+        //
+        // let bottom = container(
+        //     modal(base, content)
+        //         .position(modal::Position::Bottom)
+        //         .toggle(self.bottom)
+        //         .on_blur(Message::Bottom),
+        // )
+        // .height(800)
+        // .style(|_| container::background(color!(100, 120, 45)));
+        //
+        // let content = widget::center(bold("Top"))
+        //     .style(|_| container::background(color!(216, 80, 57)))
+        //     .height(400)
+        //     .width(400);
+        // let base = center_y(button(bold("Top")).on_press(Message::Top));
+        //
+        // let top = container(
+        //     modal(base, content)
+        //         .position(modal::Position::Top)
+        //         .toggle(self.top)
+        //         .on_blur(Message::Top),
+        // )
+        // .height(800)
+        // .style(|_| container::background(color!(120, 45, 100)));
+        //
+        // let content = widget::center(bold("Left"))
+        //     .style(|_| container::background(color!(216, 80, 57)))
+        //     .height(400)
+        //     .width(400);
+        // let base = center_y(button(bold("Left")).on_press(Message::Left));
+        //
+        // let left = container(
+        //     widgets::modal(base, content)
+        //         .position(modal::Position::Left)
+        //         .toggle(self.left)
+        //         .on_blur(Message::Left),
+        // )
+        // .height(800)
+        // .style(|_| container::background(color!(100, 45, 120)));
 
-        let content = column!(default, other).spacing(10);
+        let content = widget::center(bold("Right"))
+            .style(|_| container::background(color!(216, 80, 57)))
+            .height(400)
+            .width(400);
+        let base = center_y(button(bold("Right")).on_press(Message::Right));
 
-        let content = column!(selection, content).spacing(20);
+        let right = container(
+            widgets::modal(base, content)
+                .toggle(self.right)
+                .position(modal::Position::Right)
+                .on_toggle_complete(Message::None)
+                .passthrough(true)
+                .on_blur(Message::Right),
+        )
+        .height(800)
+        .style(|_| container::background(color!(45, 120, 120)));
 
-        let content = center_x(content);
+        // let content = column!(top, right, bottom, left, center);
+        //
+        // let content = scrollable(content).spacing(10);
+
+        // let content = row!("test with a longer string ", container(content).width(100).height(100));
+
+        let content = container(right).padding([10, 10]);
 
         content.into()
     }
@@ -211,6 +340,6 @@ impl Playground {
     }
 
     fn theme(&self) -> Option<Theme> {
-        Some(Theme::Dracula)
+        Some(Theme::CatppuccinLatte)
     }
 }

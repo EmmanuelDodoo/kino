@@ -41,3 +41,9 @@
 <div align="center">
     <img src="showcase/throbbers.gif", width="300px" alt="Throbbers"/> 
 </div>
+
+##  Modal & Drawer 
+
+<div align="center">
+    <img src="showcase/modal.gif", width="300px" alt="Modal"/> 
+</div>

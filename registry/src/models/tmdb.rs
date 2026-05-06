@@ -2,7 +2,7 @@ use rusqlite::types::{ToSqlOutput, Value};
 use rusqlite::{Result, Row};
 use uuid::Uuid;
 
-use super::{EpisodeId, ItemId, MovieId, SeasonId, ShowId};
+use super::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -76,6 +76,14 @@ impl From<Status> for ToSqlOutput<'_> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum WishType {
+    Movie,
+    Show,
+    Season(u16),
+    Episode { season: u16, number: u16 },
+}
+
 #[derive(Debug, Clone)]
 pub enum Media {
     Movie {
@@ -99,6 +107,11 @@ pub enum Media {
         season: u16,
         number: u16,
     },
+    Wish {
+        id: WishId,
+        name: String,
+        kind: WishType,
+    },
 }
 
 impl Media {
@@ -107,27 +120,27 @@ impl Media {
 
         match media_type.as_str() {
             "movie" => {
-                let id = MovieId::from_collection(&row)?;
+                let id = MovieId::from_collection(row)?;
                 let name = row.get::<_, String>("name")?;
                 let backdrop = row.get::<_, Option<String>>("backdrop")?;
                 Ok(Self::Movie { id, name, backdrop })
             }
             "show" => {
-                let id = ShowId::from_collection(&row)?;
+                let id = ShowId::from_collection(row)?;
                 let name = row.get::<_, String>("name")?;
                 let backdrop = row.get::<_, Option<String>>("backdrop")?;
 
                 Ok(Self::Show { id, name, backdrop })
             }
             "season" => {
-                let id = SeasonId::from_collection(&row)?;
+                let id = SeasonId::from_collection(row)?;
                 let parent = RequestId::from_parent(row)?;
                 let number = row.get::<_, u16>("number")?;
 
                 Ok(Self::Season { id, parent, number })
             }
             "episode" => {
-                let id = EpisodeId::from_collection(&row)?;
+                let id = EpisodeId::from_collection(row)?;
                 let parent = RequestId::from_parent(row)?;
                 let number = row.get::<_, u16>("number")?;
                 let season = row
@@ -141,6 +154,32 @@ impl Media {
                     season,
                     number,
                 })
+            }
+            "wish" => {
+                let id = WishId::from_collection(row)?;
+                let name = row.get::<_, String>("name")?;
+                let kind = row.get_ref("wish_type")?.as_str()?;
+
+                let kind = match kind {
+                    "movie" => WishType::Movie,
+                    "show" => WishType::Show,
+                    "season" => {
+                        let number = row.get::<_, u16>("number")?;
+                        WishType::Season(number)
+                    }
+                    "episode" => {
+                        let season = row.get::<_, u16>("number")?;
+                        let number = row
+                            .get::<_, String>("backdrop")?
+                            .parse::<u16>()
+                            .expect("Wish episode stored in backdrop column");
+
+                        WishType::Episode { season, number }
+                    }
+                    _ => unreachable!("Invalid tmdb wish request media"),
+                };
+
+                Ok(Self::Wish { id, name, kind })
             }
             _ => unreachable!("Invalid tmdb request media"),
         }
@@ -173,6 +212,10 @@ impl Media {
             season,
             number,
         }
+    }
+
+    pub fn new_wish(id: WishId, name: String, kind: WishType) -> Self {
+        Self::Wish { id, kind, name }
     }
 }
 
@@ -217,7 +260,7 @@ impl Request {
             poster,
         } = self;
 
-        let sql = "INSERT INTO tmdb (id, tmdb_id, media_type, media_id, status, retry, poster, parent, name, number, backdrop) VALUES (:id, :tmdb_id, :media_type, :media_id, :status, :retry, :poster, :parent, :name, :number, :backdrop)";
+        let sql = "INSERT INTO tmdb (id, tmdb_id, media_type, media_id, status, retry, poster, parent, name, number, backdrop, wish_type) VALUES (:id, :tmdb_id, :media_type, :media_id, :status, :retry, :poster, :parent, :name, :number, :backdrop, :wish_type)";
 
         let null = ToSqlOutput::Owned(Value::Null);
 
@@ -232,7 +275,7 @@ impl Request {
             .map(|poster| ToSqlOutput::from(poster))
             .unwrap_or(null.clone());
 
-        let (media_type, media_id, name, backdrop, parent, number) = match media {
+        let (media_type, media_id, name, backdrop, parent, number, wish) = match media {
             Media::Movie { id, name, backdrop } => {
                 let media = ToSqlOutput::from("movie".to_owned());
                 let id = ToSqlOutput::from(*id);
@@ -242,7 +285,15 @@ impl Request {
                     .map(|backdrop| ToSqlOutput::from(backdrop))
                     .unwrap_or(null.clone());
 
-                (media, id, name, backdrop, null.clone(), null.clone())
+                (
+                    media,
+                    id,
+                    name,
+                    backdrop,
+                    null.clone(),
+                    null.clone(),
+                    null.clone(),
+                )
             }
             Media::Show { id, name, backdrop } => {
                 let media = ToSqlOutput::from("show".to_owned());
@@ -253,7 +304,15 @@ impl Request {
                     .map(|backdrop| ToSqlOutput::from(backdrop))
                     .unwrap_or(null.clone());
 
-                (media, id, name, backdrop, null.clone(), null.clone())
+                (
+                    media,
+                    id,
+                    name,
+                    backdrop,
+                    null.clone(),
+                    null.clone(),
+                    null.clone(),
+                )
             }
             Media::Season { id, parent, number } => {
                 let media = ToSqlOutput::from("season".to_owned());
@@ -261,7 +320,15 @@ impl Request {
                 let parent = ToSqlOutput::from(*parent);
                 let number = ToSqlOutput::from(*number);
 
-                (media, id, null.clone(), null.clone(), parent, number)
+                (
+                    media,
+                    id,
+                    null.clone(),
+                    null.clone(),
+                    parent,
+                    number,
+                    null.clone(),
+                )
             }
             Media::Episode {
                 id,
@@ -275,7 +342,45 @@ impl Request {
                 let number = ToSqlOutput::from(*number);
                 let season = ToSqlOutput::from(*season);
 
-                (media, id, season, null.clone(), parent, number)
+                (
+                    media,
+                    id,
+                    season,
+                    null.clone(),
+                    parent,
+                    number,
+                    null.clone(),
+                )
+            }
+            Media::Wish { id, name, kind } => {
+                let media = ToSqlOutput::from("wish".to_owned());
+                let id = ToSqlOutput::from(*id);
+                let name = ToSqlOutput::from(name.clone());
+
+                let (backdrop, parent, number, kind) = match kind {
+                    WishType::Movie => {
+                        let kind = ToSqlOutput::from("movie".to_owned());
+                        (null.clone(), null.clone(), null.clone(), kind)
+                    }
+                    WishType::Show => {
+                        let kind = ToSqlOutput::from("show".to_owned());
+                        (null.clone(), null.clone(), null.clone(), kind)
+                    }
+                    WishType::Season(number) => {
+                        let kind = ToSqlOutput::from("season".to_owned());
+                        let number = ToSqlOutput::from(number.to_string());
+                        (null.clone(), null, number, kind)
+                    }
+                    WishType::Episode { season, number } => {
+                        let kind = ToSqlOutput::from("episode".to_owned());
+                        let season = ToSqlOutput::from(season.to_string());
+                        let episode = ToSqlOutput::from(number.to_string());
+
+                        (episode, null, season, kind)
+                    }
+                };
+
+                (media, id, name, backdrop, parent, number, kind)
             }
         };
 
@@ -291,6 +396,7 @@ impl Request {
             (":parent", parent),
             (":name", name),
             (":number", number),
+            (":wish_type", wish),
         ];
 
         Query {
@@ -344,7 +450,11 @@ impl Request {
 
                 backdrop
             }
-            Media::Season { .. } | Media::Episode { .. } => null,
+            Media::Wish {
+                kind: WishType::Episode { number, .. },
+                ..
+            } => ToSqlOutput::from(number.to_string()),
+            Media::Season { .. } | Media::Episode { .. } | Media::Wish { .. } => null,
         };
 
         let params = vec![
@@ -447,11 +557,43 @@ impl Request {
         }
     }
 
+    pub fn update_wish_tmdb<'a>(wish: WishId, id: u32) -> Query<'a> {
+        let sql = "UPDATE tmdb SET tmdb_id=:tmdb_id, status=:status, retry=0 WHERE media_id=:id AND media_type='wish'";
+
+        let status = Status::Data;
+        let params = [
+            (":id", ToSqlOutput::from(wish)),
+            (":tmdb_id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: wish.0,
+            table: Table::TMDBRequest,
+            op: Operation::Update,
+            sql,
+            params: params.to_vec(),
+        }
+    }
+
+    pub fn delete_wish<'a>(wish: WishId) -> Query<'a> {
+        let sql = "DELETE FROM tmdb WHERE media_id=:id AND media_type='wish'";
+        let params = vec![(":id", ToSqlOutput::from(wish))];
+
+        Query {
+            id: wish.0,
+            table: Table::TMDBRequest,
+            op: Operation::Delete,
+            sql,
+            params,
+        }
+    }
+
     pub fn new(media: Media) -> Self {
-        let status = if matches!(media, Media::Movie { .. } | Media::Show { .. }) {
-            Status::Searching
-        } else {
+        let status = if matches!(media, Media::Season { .. } | Media::Episode { .. }) {
             Status::Waiting
+        } else {
+            Status::Searching
         };
 
         Self {

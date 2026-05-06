@@ -1,7 +1,9 @@
 use super::{
     CollectionAddMessage, CollectionAddState, CollectionConfig, ConfigMessage, HomeMessage,
     LogicMessage, Rating, RatingMessage, RenameMessage, SearchMessage, SearchState,
-    SelectionMessage, SimpleCollection, SynopsisMessage, TMDBMessage, TriggerMessage, shared::Icon,
+    SelectionMessage, SimpleCollection, SynopsisMessage, TMDBMessage, TriggerMessage,
+    WishKindSelection, WishNewState, WishThumbnail, WishViewMessage,
+    shared::{IMAGE_RADIUS, Icon, Image, image_poster},
     view_unicode,
 };
 use crate::utils::{
@@ -13,10 +15,14 @@ use registry::models::collection::{
     triggers::{self, Comparison, DeleteTrigger, InsertTrigger},
 };
 
+use registry::models::WishKind;
+
+use devutils::source::SourceSet;
 use iced::{
-    Element, Length, Padding, Theme,
+    Color, Element, Length, Padding, Theme,
     alignment::{Horizontal, Vertical},
-    mouse,
+    color, mouse,
+    time::Instant,
     widget::{
         self, bottom_right, button, center, checkbox, column, container, grid, mouse_area,
         pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
@@ -64,26 +70,15 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let label = bold("Name");
 
         let value = config.name.as_str();
-        let is_empty = config.empty_name;
+        let input_style = styles::text_input::required(config.empty_name);
 
         let input = text_input("", value)
             .id(config.name_input.clone())
-            .on_input(move |input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
+            .on_input(|input| HomeMessage::CollectionConfig(ConfigMessage::Name(input)))
             .on_submit(HomeMessage::CollectionConfig(ConfigMessage::Save))
             .font(regular_font())
             .padding(padding)
-            .style(move |theme: &Theme, status| {
-                let error = theme.palette().danger.strong.color;
-                let default = text_input::default(theme, status);
-                let border = default.border.rounded(radius);
-                let border = if is_empty && matches!(status, text_input::Status::Focused { .. }) {
-                    border.color(error)
-                } else {
-                    border
-                };
-
-                text_input::Style { border, ..default }
-            })
+            .style(input_style)
             .width(Length::Fill);
 
         column!(label, input).spacing(2)
@@ -734,7 +729,9 @@ pub fn draw_insert_trigger<'a>(
             .width(88.0)
             .on_select(move |media| TriggerMessage::MediaInsert(id, media))
             .padding([2, 5])
+            .style(styles::pick_list::default)
             .handle(picklist_handle(text_size))
+            .padding([5, 10])
             .font(regular_font())
             .text_size(text_size);
 
@@ -874,6 +871,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::LastComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -898,6 +896,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::DurationComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -923,6 +922,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::ProgressComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -948,6 +948,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::WatchComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -973,6 +974,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::ReleaseComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -997,6 +999,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::RatingComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1022,6 +1025,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::CommentComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1142,10 +1146,12 @@ pub fn draw_delete_trigger<'a>(
 
         let pick = pick_list(Some(trigger.media), options, ToString::to_string)
             .width(88.0)
+            .style(styles::pick_list::default)
             .on_select(move |media| TriggerMessage::MediaDelete(id, media))
             .padding([2, 5])
             .handle(picklist_handle(text_size))
             .font(regular_font())
+            .padding([5, 10])
             .text_size(text_size);
 
         row!(label, space::horizontal(), pick).align_y(Vertical::Center)
@@ -1276,6 +1282,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::LastComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1300,6 +1307,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .on_select(LogicMessage::DurationComp)
+                .style(styles::pick_list::default)
                 .padding(pick_padding)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1325,6 +1333,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::ProgressComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1350,6 +1359,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::WatchComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1375,6 +1385,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::ReleaseComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1399,6 +1410,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::RatingComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1424,6 +1436,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
+                .style(styles::pick_list::default)
                 .on_select(LogicMessage::CommentComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1503,7 +1516,7 @@ pub fn draw_selection<'a>(items: usize) -> Element<'a, HomeMessage> {
     )
     .align_y(Vertical::Center)
     .align_x(Horizontal::Center)
-    .padding([12, 16])
+    .padding([40, 20])
     .style(|theme| {
         let default = styles::container::transparent(theme);
         let border = default.border.rounded(5.0);
@@ -1519,7 +1532,188 @@ pub fn draw_selection<'a>(items: usize) -> Element<'a, HomeMessage> {
     })
     .into();
 
-    bottom_right(content.map(HomeMessage::Selection))
-        .padding([40, 20])
+    content.map(HomeMessage::Selection)
+}
+
+pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
+    let width = 550;
+    let height = 325;
+    let size = P;
+    let padding = Padding::from([6, 6]);
+
+    let name = {
+        let name = match state.kind {
+            WishKindSelection::Movie => "Movie name",
+            _ => "Show name",
+        };
+        let is_root = matches!(
+            state.kind,
+            WishKindSelection::Show | WishKindSelection::Movie
+        );
+
+        let label = medium(name);
+
+        let input_style = styles::text_input::required(state.invalid_name());
+
+        let input = text_input("", state.name())
+            .id(state.name_input.clone())
+            .on_input(|input| HomeMessage::WishViewMessage(WishViewMessage::Name(input)))
+            .on_submit_maybe(is_root.then_some(HomeMessage::WishViewMessage(WishViewMessage::Save)))
+            .font(regular_font())
+            .padding(padding)
+            .style(input_style)
+            .width(Length::Fill);
+
+        column!(label, input).spacing(3)
+    };
+
+    let extra = match state.kind {
+        WishKindSelection::Show | WishKindSelection::Movie => empty(),
+        WishKindSelection::Season => {
+            let label = medium("Season number:");
+            let input_style = styles::text_input::required(state.invalid_season());
+
+            let input = text_input("", state.season())
+                .id(state.season_input.clone())
+                .on_input(|input| HomeMessage::WishViewMessage(WishViewMessage::Season(input)))
+                .align_x(Horizontal::Right)
+                .font(regular_font())
+                .size(P)
+                .padding([4, 6])
+                .style(input_style)
+                .width(40.0);
+
+            row!(label, input)
+                .spacing(12.0)
+                .align_y(Vertical::Center)
+                .into()
+        }
+        WishKindSelection::Episode => {
+            let padding = [4, 6];
+
+            let season = {
+                let label = medium("Season number:");
+                let input_style = styles::text_input::required(state.invalid_season());
+
+                let input = text_input("", state.season())
+                    .id(state.season_input.clone())
+                    .on_input(|input| HomeMessage::WishViewMessage(WishViewMessage::Season(input)))
+                    .font(regular_font())
+                    .align_x(Horizontal::Right)
+                    .size(P)
+                    .padding(padding)
+                    .style(input_style)
+                    .width(40.0);
+
+                row!(label, input).spacing(12.0).align_y(Vertical::Center)
+            };
+
+            let episode = {
+                let label = medium("Episode number:");
+                let input_style = styles::text_input::required(state.invalid_episode());
+
+                let input = text_input("", state.episode())
+                    .id(state.episode_input.clone())
+                    .on_input(|input| HomeMessage::WishViewMessage(WishViewMessage::Episode(input)))
+                    .size(P)
+                    .align_x(Horizontal::Right)
+                    .font(regular_font())
+                    .padding(padding)
+                    .style(input_style)
+                    .width(40.0);
+
+                row!(label, input).spacing(12.0).align_y(Vertical::Center)
+            };
+
+            row!(season, episode)
+                .spacing(40)
+                .align_y(Vertical::Center)
+                .into()
+        }
+    };
+
+    let source = {
+        let label = medium("Source:");
+        let handle = picklist_handle(size);
+
+        let source = pick_list(Some(state.source), SourceSet::VARIANTS, |source| {
+            source.to_str().to_owned()
+        })
+        .style(styles::pick_list::default)
+        .font(regular_font())
+        .on_select(|kind| HomeMessage::WishViewMessage(WishViewMessage::Source(kind)))
+        .handle(handle)
+        .padding([5, 10])
+        .text_size(size);
+
+        row!(label, space::horizontal(), source)
+            .spacing(40.0)
+            .align_y(Vertical::Center)
+    };
+
+    let kind = {
+        let label = medium("Media Type:");
+        let handle = picklist_handle(size);
+
+        let kind = pick_list(Some(state.kind), WishKindSelection::VARIANTS, |kind| {
+            match kind {
+                WishKindSelection::Movie => "Movie",
+                WishKindSelection::Show => "Show",
+                WishKindSelection::Season => "Season",
+                WishKindSelection::Episode => "Episode",
+            }
+            .to_owned()
+        })
+        .style(styles::pick_list::default)
+        .font(regular_font())
+        .on_select(|kind| HomeMessage::WishViewMessage(WishViewMessage::Kind(kind)))
+        .handle(handle)
+        .padding([5, 10])
+        .text_size(size);
+
+        row!(label, space::horizontal(), kind)
+            .spacing(40.0)
+            .align_y(Vertical::Center)
+    };
+
+    let id = {
+        let label = medium("Source Id (optional):");
+
+        let input = text_input("", &state.source_id)
+            .on_input(|input| HomeMessage::WishViewMessage(WishViewMessage::SourceId(input)))
+            .align_x(Horizontal::Right)
+            .font(regular_font())
+            .size(P)
+            .padding([4, 6])
+            .width(80.0);
+
+        row!(label, space::horizontal(), input).align_y(Vertical::Center)
+    };
+
+    let actions = {
+        let save = save_btn().on_press(HomeMessage::WishViewMessage(WishViewMessage::Save));
+
+        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+
+        column!(row!(save, cancel).spacing(80))
+            .align_x(Horizontal::Center)
+            .width(Length::Fill)
+    };
+
+    let content = column!(name, extra, kind, source, id).spacing(16.0);
+
+    let content = column!(content, actions).spacing(20.0);
+
+    modal_container(content)
+        .width(width)
+        .max_height(height)
+        .into()
+}
+
+pub fn draw_wish<'a>(wish: &'a WishThumbnail, now: Instant) -> Element<'a, HomeMessage> {
+    modal_container(wish.modal(now).map(HomeMessage::Wishlist))
+        .width(450)
+        .padding([8, 12])
+        .align_y(Vertical::Top)
         .into()
 }

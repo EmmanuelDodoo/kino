@@ -1,7 +1,7 @@
 use core::variants;
 use registry::{
     db::Query,
-    models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId},
+    models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId, WishKind},
 };
 use reqwest::{
     Client, ClientBuilder,
@@ -125,6 +125,18 @@ impl SourceSet {
         }
     }
 
+    pub fn wish_request<'a>(
+        &self,
+        id: WishId,
+        name: String,
+        kind: WishKind,
+    ) -> Option<(Query<'a>, String)> {
+        match self {
+            Self::None => None,
+            Self::Tmdb => tmdb::TMDB::wish_request(id, name, kind),
+        }
+    }
+
     pub fn refetch<'a>(&self, id: impl Into<ItemId>) -> Option<Query<'a>> {
         match self {
             Self::None => None,
@@ -152,6 +164,27 @@ impl SourceSet {
             Self::Tmdb => tmdb::TMDB::delete(id),
         }
     }
+
+    pub fn set_wish_source_id<'a>(&self, wish: WishId, id: SourceId) -> Option<Query<'a>> {
+        match self {
+            Self::None => None,
+            Self::Tmdb => tmdb::TMDB::set_wish_id(id, wish),
+        }
+    }
+
+    pub fn delete_wish<'a>(&self, wish: WishId) -> Option<Query<'a>> {
+        match self {
+            Self::None => None,
+            Self::Tmdb => tmdb::TMDB::delete_wish(wish),
+        }
+    }
+
+    pub fn source_id(&self, s: &str) -> Option<SourceId> {
+        match self {
+            Self::None => None,
+            Self::Tmdb => tmdb::TMDB::source_id(s),
+        }
+    }
 }
 
 impl From<SourceSet> for ToSqlOutput<'_> {
@@ -163,8 +196,23 @@ impl From<SourceSet> for ToSqlOutput<'_> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SourceId {
+    None,
+    Tmdb(u32),
+}
+
+impl SourceId {
+    pub fn to_str(&self) -> String {
+        match self {
+            Self::None => "none".to_owned(),
+            Self::Tmdb(id) => id.to_string(),
+        }
+    }
+}
+
 /// Guidelines for what's expected from sources
-pub trait Source {
+pub trait SourceImpl {
     type Id<'a>: Clone + Copy + Into<rusqlite::types::ToSqlOutput<'a>>;
 
     fn id<'a>(row: &rusqlite::Row<'_>, column: &str) -> rusqlite::Result<Self::Id<'a>>;
@@ -188,54 +236,17 @@ pub trait Source {
         number: u16,
     ) -> Option<(Query<'a>, String)>;
 
+    fn wish_request<'a>(id: WishId, name: String, kind: WishKind) -> Option<(Query<'a>, String)>;
+
     fn refetch<'a>(id: impl Into<ItemId>) -> Option<Query<'a>>;
 
     fn delete<'a>(id: impl Into<ItemId>) -> Option<Query<'a>>;
-}
 
-impl Source for () {
-    type Id<'a> = rusqlite::types::Null;
+    fn set_wish_id<'a>(id: SourceId, wish: WishId) -> Option<Query<'a>>;
 
-    fn id<'a>(_row: &rusqlite::Row<'_>, _column: &str) -> rusqlite::Result<Self::Id<'a>> {
-        Ok(rusqlite::types::Null)
-    }
+    fn delete_wish<'a>(wish: WishId) -> Option<Query<'a>>;
 
-    fn id_from_str<'a>(_s: &str) -> Self::Id<'a> {
-        rusqlite::types::Null
-    }
-
-    fn movie_request<'a>(_id: MovieId, _name: String) -> Option<(Query<'a>, String)> {
-        None
-    }
-
-    fn show_request<'a>(_id: ShowId, _name: String) -> Option<(Query<'a>, String)> {
-        None
-    }
-
-    fn season_request<'a>(
-        _id: SeasonId,
-        _parent: Self::Id<'a>,
-        _number: u16,
-    ) -> Option<(Query<'a>, String)> {
-        None
-    }
-
-    fn episode_request<'a>(
-        _id: EpisodeId,
-        _parent: Self::Id<'a>,
-        _number: u16,
-        _season: u16,
-    ) -> Option<(Query<'a>, String)> {
-        None
-    }
-
-    fn refetch<'a>(_id: impl Into<ItemId>) -> Option<Query<'a>> {
-        None
-    }
-
-    fn delete<'a>(_id: impl Into<ItemId>) -> Option<Query<'a>> {
-        None
-    }
+    fn source_id(s: &str) -> Option<SourceId>;
 }
 
 pub(crate) fn poster_path<P: AsRef<Path>, Id: std::fmt::Display>(path: &P, id: &Id) -> PathBuf {

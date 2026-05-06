@@ -135,8 +135,8 @@ impl EpisodePage {
 
             let title = title(episode.media.name());
 
-            let duration = duration(&episode.media);
-            let rating = button(ratings(&episode.media, true))
+            let duration = duration(episode.media.duration_full());
+            let rating = button(ratings(episode.media.rating(), true))
                 .on_press(EpisodePageMessage {
                     id,
                     message: Message::Rate(episode.media.rating()),
@@ -208,7 +208,7 @@ impl EpisodePage {
                 //     column!(comments).spacing(8.0).width(width).into()
                 // }
                 Tab::Data => data_tab(
-                    &episode.media,
+                    episode.media.as_ref(),
                     width,
                     Message::Rename(episode.media.name().to_owned()),
                     Message::Refetch(source),

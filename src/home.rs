@@ -1,3 +1,4 @@
+use core::variants;
 use iced::{
     Element, Length, Padding, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
@@ -24,29 +25,37 @@ mod season;
 mod series;
 pub mod shared;
 mod shows;
+mod wishlist;
 
 use crate::app::{MediaUpdate, MediaUpdateKind};
 use devutils::source::SourceSet;
 use draws::*;
 use registry::models::{
     Collection, CollectionId, CollectionView, Episode, EpisodeId, Media, Movie, MovieId, Season,
-    SeasonId, Show, ShowId, SimpleCollection,
+    SeasonId, Show, ShowId, SimpleCollection, Wish, WishId, WishKind,
     collection::{
         ItemId, Items,
         triggers::{self, Comparison, DeleteId, DeleteTrigger, InsertId, InsertTrigger, Logic},
     },
+    wish,
 };
 use registry::{
     filter::{self, Filter, SearchFilter},
     sort::{Sort, SortKind},
 };
 
-use crate::app::{FetchId, Message};
+use crate::app::{FetchId, Message, WishMessage};
 use crate::utils::{
-    HomeAction, Layout, Scroll, empty, icons,
+    HomeAction,
+    Layout,
+    Scroll,
+    empty,
+    icons,
     icons::*,
-    modal::{self, modal},
-    picklist_handle, styles, tooltip,
+    // modal::{self, modal},
+    picklist_handle,
+    styles,
+    tooltip,
     typo::*,
 };
 
@@ -64,7 +73,9 @@ use shared::{
 };
 use shows::{TvShows, TvShowsMessage};
 use widgets::menu::{Position, menu};
-use widgets::{marquee, throbber};
+use widgets::{marquee, modal, throbber};
+pub use wishlist::WishThumbnailTask;
+use wishlist::{WishThumbnail, Wishlist, WishlistMessage};
 
 const SIDE_ICON_SPACING: f32 = 8.0;
 
@@ -116,7 +127,7 @@ pub struct CollectionConfig {
 }
 
 impl CollectionConfig {
-    pub fn update(self, collection: &mut Collection) {
+    pub fn update(&mut self, collection: &mut Collection) {
         let Self {
             id: _id,
             name,
@@ -128,7 +139,7 @@ impl CollectionConfig {
             empty_name: _empty_name,
         } = self;
 
-        collection.name = name;
+        collection.name = name.clone();
         let description = description.text();
         if description.is_empty() {
             collection.description = None;
@@ -136,8 +147,8 @@ impl CollectionConfig {
             collection.description = Some(description);
         }
         collection.icon = Some(icon.to_u32());
-        collection.theme = theme;
-        collection.view = view;
+        collection.theme = theme.clone();
+        collection.view = view.clone();
     }
 
     pub fn from_collection(collection: &Collection) -> (Self, widget::Id) {
@@ -301,9 +312,132 @@ pub enum SelectionMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum WishViewMessage {
+    Name(String),
+    Kind(WishKindSelection),
+    Source(SourceSet),
+    Season(String),
+    Episode(String),
+    SourceId(String),
+    Save,
+}
+
+variants! {
+#[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum WishKindSelection {
+        Movie,
+        Show,
+        Season,
+        Episode,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WishNewState {
+    id: Option<WishId>,
+    name: String,
+    season: String,
+    season_num: Option<u16>,
+    episode: String,
+    episode_num: Option<u16>,
+    pub kind: WishKindSelection,
+    pub name_input: widget::Id,
+    pub season_input: widget::Id,
+    pub episode_input: widget::Id,
+    pub source: SourceSet,
+    pub source_id: String,
+}
+
+impl WishNewState {
+    fn new(source: SourceSet) -> (Self, widget::Id) {
+        let name = widget::Id::unique();
+
+        (
+            Self {
+                id: None,
+                name: String::default(),
+                season: String::default(),
+                episode: String::default(),
+                season_num: None,
+                episode_num: None,
+                kind: WishKindSelection::Movie,
+                name_input: name.clone(),
+                season_input: widget::Id::unique(),
+                episode_input: widget::Id::unique(),
+                source,
+                source_id: String::default(),
+            },
+            name,
+        )
+    }
+
+    fn edit(wish: &Wish) -> (Self, widget::Id) {
+        let name_input = widget::Id::unique();
+
+        let source = SourceSet::from_str(&wish.source);
+        let (kind, season_num, episode_num) = match &wish.kind {
+            wish::WishKind::Movie { .. } => (WishKindSelection::Movie, None, None),
+            wish::WishKind::Show { .. } => (WishKindSelection::Show, None, None),
+            wish::WishKind::Season { number, .. } => {
+                (WishKindSelection::Season, Some(*number), None)
+            }
+            wish::WishKind::Episode { season, number, .. } => {
+                (WishKindSelection::Episode, Some(*season), Some(*number))
+            }
+        };
+
+        let season = season_num.map(|num| num.to_string()).unwrap_or_default();
+        let episode = episode_num.map(|num| num.to_string()).unwrap_or_default();
+
+        (
+            Self {
+                id: Some(wish.id),
+                name: wish.name.clone(),
+                season,
+                episode,
+                season_num,
+                episode_num,
+                kind,
+                name_input: name_input.clone(),
+                season_input: widget::Id::unique(),
+                episode_input: widget::Id::unique(),
+                source,
+                source_id: String::default(),
+            },
+            name_input,
+        )
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn season(&self) -> &str {
+        &self.season
+    }
+
+    pub fn episode(&self) -> &str {
+        &self.episode
+    }
+
+    pub fn invalid_name(&self) -> bool {
+        self.name.trim().is_empty()
+    }
+
+    pub fn invalid_episode(&self) -> bool {
+        self.episode_num.is_none() || self.episode.trim().is_empty()
+    }
+
+    pub fn invalid_season(&self) -> bool {
+        self.season_num.is_none() || self.season.trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig,
     CollectionTriggers,
+    Wish(Option<WishId>),
     Add(ItemId),
     AddToCollection(CollectionId),
     Search,
@@ -329,7 +463,12 @@ pub enum ViewMessage {
         id: CollectionId,
         name: String,
     },
+    RemoveWish {
+        id: WishId,
+        name: String,
+    },
     Selection,
+    WishModal(WishId),
 }
 
 #[derive(Debug)]
@@ -368,6 +507,10 @@ pub enum View {
         id: CollectionId,
         name: String,
     },
+    RemoveWish {
+        id: WishId,
+        name: String,
+    },
     CollectionTriggers {
         id: CollectionId,
         view_inserts: bool,
@@ -377,6 +520,50 @@ pub enum View {
         removed_deletes: Vec<DeleteTrigger>,
     },
     Selection(Vec<ItemId>),
+    WishNew(WishNewState),
+    WishDrawer(WishId),
+}
+
+#[derive(Debug)]
+pub enum ViewState {
+    None,
+    Animating { view: View, opening: bool },
+    Done(View),
+}
+
+impl ViewState {
+    fn as_ref(&self) -> Option<&View> {
+        match self {
+            Self::Done(view) | Self::Animating { view, .. } => Some(view),
+            Self::None => None,
+        }
+    }
+
+    fn as_mut(&mut self) -> Option<&mut View> {
+        match self {
+            Self::Done(view) | Self::Animating { view, .. } => Some(view),
+            Self::None => None,
+        }
+    }
+
+    fn is_selection(&self) -> bool {
+        match self {
+            Self::Done(View::Selection(_))
+            | Self::Animating {
+                view: View::Selection(_),
+                ..
+            } => true,
+            _ => false,
+        }
+    }
+
+    fn view(&self) -> Option<(&View, bool)> {
+        match self {
+            Self::Done(done) => Some((done, true)),
+            Self::Animating { view, opening } => Some((view, *opening)),
+            Self::None => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -389,22 +576,23 @@ enum State {
     Shows(Vec<Thumbnail<Show>>),
     Movies(Vec<Thumbnail<Movie>>),
     Collections(Vec<CollectionThumbnail>),
+    Wishlist(Vec<WishThumbnail>),
     Movie {
-        movie: Thumbnail<Movie>,
+        movie: Box<Thumbnail<Movie>>,
         memberships: Vec<SimpleCollection>,
     },
     Show {
-        show: Thumbnail<Show>,
+        show: Box<Thumbnail<Show>>,
         memberships: Vec<SimpleCollection>,
         seasons: Vec<Thumbnail<Season>>,
     },
     Season {
-        season: Thumbnail<Season>,
+        season: Box<Thumbnail<Season>>,
         memberships: Vec<SimpleCollection>,
         episodes: Vec<Thumbnail<Episode>>,
     },
     Episode {
-        episode: Thumbnail<Episode>,
+        episode: Box<Thumbnail<Episode>>,
         memberships: Vec<SimpleCollection>,
     },
     Collection {
@@ -428,6 +616,7 @@ pub enum HomeMessage {
     Shows(TvShowsMessage),
     Collection(CollectionMessage),
     Collections(CollectionsMessage),
+    Wishlist(WishlistMessage),
     MoviePage(MoviePageMessage),
     EpisodePage(EpisodePageMessage),
     ShowPage(ShowPageMessage),
@@ -437,6 +626,7 @@ pub enum HomeMessage {
     Back,
     Forward,
     CollectionConfig(ConfigMessage),
+    WishViewMessage(WishViewMessage),
     RemoveCollection,
     RemoveCollectionItems(CollectionId, Items),
     SearchMessage(SearchMessage),
@@ -451,6 +641,7 @@ pub enum HomeMessage {
     OpenView(ViewMessage),
     AddCollection(ItemId, CollectionId),
     CloseView,
+    ViewAnimated,
     Play(ItemId),
     PlayCollection { id: CollectionId, items: Items },
     ToggleLayout,
@@ -460,6 +651,9 @@ pub enum HomeMessage {
     Scroll(scrollable::Viewport),
     RefreshContent,
     Hovered(ItemId, bool),
+    WishHovered(WishId, bool),
+    WishCompletion(WishId),
+    RemoveWish,
     CollectionTask(CollectionTask),
     Trigger(TriggerMessage),
 }
@@ -481,7 +675,7 @@ pub struct Home {
     show_sorts: bool,
     show_filters: bool,
 
-    view: Option<View>,
+    view: ViewState,
 
     scroll: Scroll,
 
@@ -538,7 +732,7 @@ impl Home {
             state: State::Loading,
             scroll: Scroll::new(),
             collections: Vec::default(),
-            view: None,
+            view: ViewState::None,
             recent_limit,
             scanning: false,
             focused: None,
@@ -547,43 +741,70 @@ impl Home {
     }
 
     fn unfocus(&mut self, now: Instant) {
-        let Some(id) = self.focused.take() else {
-            return;
-        };
-
-        match (id, &mut self.state) {
-            (_, State::Loading) => {}
-            (ItemId::Show(id), State::Recent { shows, .. })
-            | (ItemId::Show(id), State::Shows(shows))
-            | (ItemId::Show(id), State::Collection { shows, .. }) => {
-                if let Some(item) = shows.iter_mut().find(|show| show.media.id() == id) {
-                    item.go_mut(false, now);
+        match &mut self.state {
+            State::Collection {
+                shows,
+                movies,
+                seasons,
+                episodes,
+                ..
+            } => {
+                for show in shows {
+                    show.go_mut(false, now);
+                }
+                for movie in movies {
+                    movie.go_mut(false, now)
+                }
+                for episode in episodes {
+                    episode.go_mut(false, now)
+                }
+                for season in seasons {
+                    season.go_mut(false, now)
                 }
             }
-            (ItemId::Movie(id), State::Recent { movies, .. })
-            | (ItemId::Movie(id), State::Movies(movies))
-            | (ItemId::Movie(id), State::Collection { movies, .. }) => {
-                if let Some(item) = movies.iter_mut().find(|movie| movie.media.id() == id) {
-                    item.go_mut(false, now);
+            State::Recent { shows, movies } => {
+                for show in shows {
+                    show.go_mut(false, now);
+                }
+                for movie in movies {
+                    movie.go_mut(false, now)
                 }
             }
-            (ItemId::Season(id), State::Show { seasons, .. })
-            | (ItemId::Season(id), State::Collection { seasons, .. }) => {
-                if let Some(item) = seasons.iter_mut().find(|season| season.media.id() == id) {
-                    item.go_mut(false, now);
+            State::Shows(shows) => {
+                for show in shows {
+                    show.go_mut(false, now);
                 }
             }
-            (ItemId::Episode(id), State::Season { episodes, .. })
-            | (ItemId::Episode(id), State::Collection { episodes, .. }) => {
-                if let Some(item) = episodes.iter_mut().find(|episode| episode.media.id() == id) {
-                    item.go_mut(false, now);
+            State::Movies(movies) => {
+                for movie in movies {
+                    movie.go_mut(false, now)
+                }
+            }
+            State::Show { seasons, .. } => {
+                for season in seasons {
+                    season.go_mut(false, now)
+                }
+            }
+            State::Season { episodes, .. } => {
+                for episode in episodes {
+                    episode.go_mut(false, now)
+                }
+            }
+            State::Wishlist(wishlist) => {
+                for wish in wishlist {
+                    wish.go_mut(false, now);
                 }
             }
             _ => {}
         }
     }
 
-    pub fn update(&mut self, message: HomeMessage, now: Instant) -> Task<Message> {
+    pub fn update(
+        &mut self,
+        message: HomeMessage,
+        default_sauce: SourceSet,
+        now: Instant,
+    ) -> Task<Message> {
         match message {
             HomeMessage::None => Task::none(),
             HomeMessage::Settings => {
@@ -635,6 +856,15 @@ impl Home {
                     .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
+            HomeMessage::Wishlist(message) => {
+                let Some(page) = self.current_page_mut() else {
+                    return Task::none();
+                };
+
+                page.wishlist_update(message)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
+                    .unwrap_or_default()
+            }
             HomeMessage::MoviePage(message) => {
                 let Some(page) = self.current_page_mut() else {
                     return Task::none();
@@ -682,7 +912,7 @@ impl Home {
             }
             HomeMessage::OpenView(view) => {
                 self.unfocus(now);
-                match view {
+                let (view, msg) = match view {
                     ViewMessage::CollectionConfig => {
                         let State::Collection { collection, .. } = &self.state else {
                             return Task::none();
@@ -691,10 +921,10 @@ impl Home {
                         let (config, name_input) =
                             CollectionConfig::from_collection(&collection.collection);
 
-                        self.view = Some(View::CollectionConfig(config));
+                        let view = View::CollectionConfig(config);
                         let focus = operation::focus(name_input);
 
-                        Task::batch([focus, self.update_page_scroll()])
+                        (view, Task::batch([focus, self.update_page_scroll()]))
                     }
                     ViewMessage::CollectionTriggers => {
                         let State::Collection {
@@ -707,7 +937,7 @@ impl Home {
                             return Task::none();
                         };
 
-                        self.view = Some(View::CollectionTriggers {
+                        let view = View::CollectionTriggers {
                             id: collection.collection.id,
                             view_inserts: true,
                             itriggers: itriggers
@@ -754,9 +984,9 @@ impl Home {
                                 .collect(),
                             removed_inserts: vec![],
                             removed_deletes: vec![],
-                        });
+                        };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
                     ViewMessage::Add(item) => {
                         let state = CollectionAddState {
@@ -764,40 +994,46 @@ impl Home {
                             selected: HashSet::new(),
                             initial: HashSet::new(),
                         };
-                        self.view = Some(View::CollectionAdd(state));
+                        let view = View::CollectionAdd(state);
 
-                        Task::done(Message::FetchMembershipIds(item))
+                        (view, Task::done(Message::FetchMembershipIds(item)))
                     }
-                    ViewMessage::AddToCollection(id) => self.toggle_search(Some(id), now),
-                    ViewMessage::Search => self.toggle_search(None, now),
+                    ViewMessage::AddToCollection(id) => return self.toggle_search(Some(id), now),
+                    ViewMessage::Search => return self.toggle_search(None, now),
                     ViewMessage::Rating(id, rating) => {
                         let rating = Rating::Value(rating.unwrap_or_default());
-                        self.view = Some(View::Rating { id, rating });
+                        let view = View::Rating { id, rating };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
                     ViewMessage::Rename { id, old } => {
                         let input = widget::Id::unique();
-                        self.view = Some(View::Rename {
+                        let view = View::Rename {
                             id,
                             empty: old.is_empty(),
                             input: input.clone(),
                             value: old.clone(),
                             old,
-                        });
+                        };
 
-                        Task::batch([self.update_page_scroll(), operation::focus(input)])
+                        (
+                            view,
+                            Task::batch([self.update_page_scroll(), operation::focus(input)]),
+                        )
                     }
                     ViewMessage::Synopsis { id, old } => {
                         let editor = widget::Id::unique();
 
-                        self.view = Some(View::Synopsis {
+                        let view = View::Synopsis {
                             id,
                             editor: editor.clone(),
                             content: text_editor::Content::with_text(&old),
-                        });
+                        };
 
-                        Task::batch([self.update_page_scroll(), operation::focus(editor)])
+                        (
+                            view,
+                            Task::batch([self.update_page_scroll(), operation::focus(editor)]),
+                        )
                     }
                     ViewMessage::TMDBId {
                         id,
@@ -805,31 +1041,78 @@ impl Home {
                         source,
                     } => {
                         let input = widget::Id::unique();
-                        self.view = Some(View::TMDBId {
+                        let view = View::TMDBId {
                             id,
                             input: input.clone(),
                             value: String::new(),
                             top_level,
                             source,
-                        });
+                        };
 
-                        Task::batch([self.update_page_scroll(), operation::focus(input)])
+                        (
+                            view,
+                            Task::batch([self.update_page_scroll(), operation::focus(input)]),
+                        )
                     }
                     ViewMessage::RemoveMedia { id, name } => {
-                        self.view = Some(View::RemoveMedia { id, name });
+                        let view = View::RemoveMedia { id, name };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
                     ViewMessage::RemoveCollection { id, name } => {
-                        self.view = Some(View::RemoveCollection { id, name });
+                        let view = View::RemoveCollection { id, name };
 
-                        self.update_page_scroll()
+                        (view, self.update_page_scroll())
                     }
-                    ViewMessage::Selection => self.selection(),
-                }
+                    ViewMessage::Selection => return self.selection(now),
+                    ViewMessage::Wish(wish) => {
+                        let (view, input) = match wish {
+                            Some(id) => {
+                                let State::Wishlist(wishlist) = &self.state else {
+                                    return Task::none();
+                                };
+
+                                let Some(wish) = wishlist
+                                    .iter()
+                                    .find(|wish| wish.item.id == id)
+                                    .map(|wish| wish.item.as_ref())
+                                else {
+                                    return Task::none();
+                                };
+
+                                WishNewState::edit(wish)
+                            }
+                            None => WishNewState::new(default_sauce),
+                        };
+
+                        let view = View::WishNew(view);
+
+                        (
+                            view,
+                            Task::batch([self.update_page_scroll(), operation::focus(input)]),
+                        )
+                    }
+                    ViewMessage::WishModal(id) => {
+                        let view = View::WishDrawer(id);
+
+                        (view, self.update_page_scroll())
+                    }
+                    ViewMessage::RemoveWish { id, name } => {
+                        let view = View::RemoveWish { id, name };
+
+                        (view, self.update_page_scroll())
+                    }
+                };
+
+                self.view = ViewState::Animating {
+                    view,
+                    opening: true,
+                };
+
+                msg
             }
             HomeMessage::CollectionConfig(csg) => {
-                let Some(View::CollectionConfig(mut config)) = self.view.take() else {
+                let Some(View::CollectionConfig(config)) = self.view.as_mut() else {
                     return Task::none();
                 };
 
@@ -848,15 +1131,12 @@ impl Home {
                         config.icon = icon;
                     }
                     ConfigMessage::Save if config.id.is_some() => {
-                        let close_view = self.close_view(true);
-
                         let State::Collection { collection, .. } = &mut self.state else {
                             return Task::none();
                         };
 
                         if config.empty_name {
                             let focus = operation::focus(config.name_input.clone());
-                            self.view = Some(View::CollectionConfig(config));
                             return focus;
                         }
 
@@ -875,13 +1155,13 @@ impl Home {
                         sort_collections(&mut self.collections);
 
                         let query = collection.collection.save();
+                        let close_view = self.close_view(true, now);
 
                         return Task::batch([Task::done(Message::Query(query)), close_view]);
                     }
                     ConfigMessage::Save => {
                         if config.empty_name {
                             let focus = operation::focus(config.name_input.clone());
-                            self.view = Some(View::CollectionConfig(config));
                             return focus;
                         }
 
@@ -894,7 +1174,7 @@ impl Home {
                             id: _unused1,
                             name_input: _unused2,
                             empty_name: _empty_name,
-                        } = config;
+                        } = config.clone();
 
                         let description = description.text();
                         let description = if description.is_empty() {
@@ -911,7 +1191,7 @@ impl Home {
                         self.collections.push(simple);
                         sort_collections(&mut self.collections);
 
-                        let close_view = self.close_view(true);
+                        let close_view = self.close_view(true, now);
 
                         let collection = self.fetched_collection(
                             new,
@@ -951,9 +1231,171 @@ impl Home {
                     }
                 }
 
-                self.view = Some(View::CollectionConfig(config));
-
                 Task::none()
+            }
+            HomeMessage::WishViewMessage(wsg) => {
+                let Some(View::WishNew(state)) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match wsg {
+                    WishViewMessage::Name(name) => {
+                        state.name = name;
+                        Task::none()
+                    }
+                    WishViewMessage::Kind(kind) => {
+                        state.kind = kind;
+                        Task::none()
+                    }
+                    WishViewMessage::Source(source) => {
+                        state.source = source;
+                        Task::none()
+                    }
+                    WishViewMessage::SourceId(id) => {
+                        state.source_id = id;
+                        Task::none()
+                    }
+                    WishViewMessage::Season(season) => {
+                        state.season = season;
+                        let value = state.season.trim();
+
+                        match value.parse::<u16>() {
+                            Ok(value) => {
+                                state.season_num = Some(value);
+                                Task::none()
+                            }
+                            Err(error) => {
+                                state.season_num = None;
+                                let focus = operation::focus(state.season_input.clone());
+                                let msg = Message::error(error, true).tasked();
+
+                                Task::batch([focus, msg])
+                            }
+                        }
+                    }
+                    WishViewMessage::Episode(episode) => {
+                        state.episode = episode;
+                        let value = state.episode.trim();
+
+                        match value.parse::<u16>() {
+                            Ok(value) => {
+                                state.episode_num = Some(value);
+                                Task::none()
+                            }
+                            Err(error) => {
+                                state.episode_num = None;
+                                let focus = operation::focus(state.episode_input.clone());
+                                let msg = Message::error(error, true).tasked();
+
+                                Task::batch([focus, msg])
+                            }
+                        }
+                    }
+                    WishViewMessage::Save => {
+                        let wish_kind = || match state.kind {
+                            WishKindSelection::Movie => Ok(WishKind::movie()),
+                            WishKindSelection::Show => Ok(WishKind::show()),
+                            WishKindSelection::Season => {
+                                let Some(season) = state.season_num else {
+                                    let msg =
+                                        Message::error("Invalid season number", false).tasked();
+                                    let focus = operation::focus(state.season_input.clone());
+
+                                    return Err(Task::batch([focus, msg]));
+                                };
+
+                                Ok(WishKind::season(season))
+                            }
+                            WishKindSelection::Episode => {
+                                let Some(season) = state.season_num else {
+                                    let msg =
+                                        Message::error("Invalid season number", false).tasked();
+                                    let focus = operation::focus(state.season_input.clone());
+
+                                    return Err(Task::batch([focus, msg]));
+                                };
+
+                                let Some(episode) = state.episode_num else {
+                                    let msg =
+                                        Message::error("Invalid episode number", false).tasked();
+                                    let focus = operation::focus(state.episode_input.clone());
+
+                                    return Err(Task::batch([focus, msg]));
+                                };
+
+                                Ok(WishKind::episode(season, episode))
+                            }
+                        };
+
+                        match state.id {
+                            Some(id) => {
+                                let State::Wishlist(wishlist) = &self.state else {
+                                    return Task::none();
+                                };
+
+                                let Some(wish) = wishlist
+                                    .iter()
+                                    .find(|wish| wish.item.id == id)
+                                    .map(|wish| wish.item.as_ref())
+                                else {
+                                    return Task::none();
+                                };
+
+                                let kind = match wish_kind() {
+                                    Ok(kind) => kind,
+                                    Err(error) => {
+                                        return error;
+                                    }
+                                };
+
+                                let prev_source = (state.source.to_str() != wish.source)
+                                    .then(|| SourceSet::from_str(&wish.source));
+
+                                let source_id = state.source.source_id(&state.source_id);
+
+                                let msg = Message::Wish(WishMessage::Update {
+                                    wish: id,
+                                    name: state.name().to_owned(),
+                                    kind,
+                                    source: state.source,
+                                    prev_source,
+                                    source_id,
+                                })
+                                .tasked();
+
+                                Task::batch([msg, self.close_view(true, now)])
+                            }
+                            None => {
+                                if state.invalid_name() {
+                                    let msg = Message::error("Invalid name", false).tasked();
+                                    let focus = operation::focus(state.name_input.clone());
+
+                                    return Task::batch([focus, msg]);
+                                }
+
+                                let kind = match wish_kind() {
+                                    Ok(kind) => kind,
+                                    Err(error) => {
+                                        return error;
+                                    }
+                                };
+
+                                let source = state.source;
+                                let source_id = state.source.source_id(&state.source_id);
+                                let wish = Message::Wish(WishMessage::New {
+                                    name: state.name.clone(),
+                                    source,
+                                    kind,
+                                    source_id,
+                                })
+                                .tasked();
+                                let close = self.close_view(true, now);
+
+                                Task::batch([close, wish])
+                            }
+                        }
+                    }
+                }
             }
             HomeMessage::RemoveCollection => {
                 self.unfocus(now);
@@ -973,7 +1415,7 @@ impl Home {
                 let old = self.collections.remove(index);
                 let remove = Message::RemoveCollection(old.id).tasked();
 
-                Task::batch([remove, self.back(now, true), self.close_view(true)])
+                Task::batch([remove, self.back(now, true), self.close_view(true, now)])
             }
             HomeMessage::RemoveCollectionItems(collection, items) => {
                 self.unfocus(now);
@@ -1045,7 +1487,7 @@ impl Home {
                 }
             }
             HomeMessage::CollectionAdd(csg) => {
-                let Some(View::CollectionAdd(mut state)) = self.view.take() else {
+                let Some(View::CollectionAdd(state)) = self.view.as_mut() else {
                     return Task::none();
                 };
 
@@ -1057,7 +1499,6 @@ impl Home {
                             state.selected.insert(id);
                         }
 
-                        self.view = Some(View::CollectionAdd(state));
                         Task::none()
                     }
                     CollectionAddMessage::Save => {
@@ -1080,10 +1521,13 @@ impl Home {
 
                         new.extend(remove);
 
-                        Task::done(Message::ToggleMembership {
-                            item: state.item,
-                            collections: new,
-                        })
+                        Task::batch([
+                            Task::done(Message::ToggleMembership {
+                                item: state.item,
+                                collections: new,
+                            }),
+                            self.close_view(true, now),
+                        ])
                     }
                 }
             }
@@ -1121,7 +1565,7 @@ impl Home {
                             kind: MediaUpdateKind::Rating(value),
                         });
 
-                        let close = self.close_view(true);
+                        let close = self.close_view(true, now);
 
                         Task::batch([Task::done(msg), close])
                     }
@@ -1138,7 +1582,7 @@ impl Home {
                             kind: MediaUpdateKind::Rating(value),
                         });
 
-                        let close = self.close_view(true);
+                        let close = self.close_view(true, now);
 
                         Task::batch([Task::done(msg), close])
                     }
@@ -1170,7 +1614,7 @@ impl Home {
                             id: *id,
                             kind: MediaUpdateKind::Name(value.clone()),
                         });
-                        let close = self.close_view(true);
+                        let close = self.close_view(true, now);
 
                         Task::batch([Task::done(msg), close])
                     }
@@ -1188,7 +1632,7 @@ impl Home {
                             kind: MediaUpdateKind::Synopsis(content.text()),
                         });
 
-                        Task::batch([Task::done(msg), self.close_view(true)])
+                        Task::batch([Task::done(msg), self.close_view(true, now)])
                     }
                     SynopsisMessage::Action(action) => {
                         content.perform(action);
@@ -1234,12 +1678,12 @@ impl Home {
                             },
                         });
 
-                        Task::batch([Task::done(msg), self.close_view(true)])
+                        Task::batch([Task::done(msg), self.close_view(true, now)])
                     }
                 }
             }
             HomeMessage::Selection(ssg) => {
-                let Some(View::Selection(mut selected)) = self.view.take() else {
+                let Some(View::Selection(selected)) = self.view.as_mut() else {
                     return Task::none();
                 };
 
@@ -1291,14 +1735,13 @@ impl Home {
                             _ => {}
                         }
 
-                        self.view = Some(View::Selection(selected));
-
                         self.update_page_scroll()
                     }
                     SelectionMessage::Cancel => {
                         match &mut self.state {
                             State::Loading
                             | State::Collections(_)
+                            | State::Wishlist(_)
                             | State::Movie { .. }
                             | State::Episode { .. } => {}
                             State::Recent { movies, shows } => {
@@ -1352,13 +1795,13 @@ impl Home {
                             }
                         }
 
-                        self.close_view(true)
+                        self.close_view(true, now)
                     }
                     SelectionMessage::Play => {
                         let play = selected.to_vec();
                         let play = Message::PlayItems(play).tasked();
 
-                        Task::batch([play, self.close_view(true)])
+                        Task::batch([play, self.close_view(true, now)])
                     }
                 }
             }
@@ -1382,7 +1825,16 @@ impl Home {
 
                 let remove = Task::done(msg);
 
-                Task::batch([self.back(now, true), remove, self.close_view(true)])
+                Task::batch([self.back(now, true), remove, self.close_view(true, now)])
+            }
+            HomeMessage::RemoveWish => {
+                let Some(View::RemoveWish { id, .. }) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                let msg = Message::Wish(WishMessage::Delete(*id)).tasked();
+
+                Task::batch([msg, self.close_view(true, now)])
             }
             HomeMessage::Trigger(tsg) => {
                 let Some(View::CollectionTriggers {
@@ -2396,13 +2848,28 @@ impl Home {
                         }
                         .tasked();
 
-                        let close_view = self.close_view(true);
+                        let close_view = self.close_view(true, now);
 
                         Task::batch([close_view, msg])
                     }
                 }
             }
-            HomeMessage::CloseView => self.close_view(true),
+            HomeMessage::CloseView => self.close_view(true, now),
+            HomeMessage::ViewAnimated => {
+                match std::mem::replace(&mut self.view, ViewState::None) {
+                    ViewState::None => {}
+                    ViewState::Done(done) => {
+                        self.view = ViewState::Done(done);
+                    }
+                    ViewState::Animating { view, opening } => {
+                        if opening {
+                            self.view = ViewState::Done(view);
+                        }
+                    }
+                }
+
+                self.update_page_scroll()
+            }
             HomeMessage::Back => self.back(now, false),
             HomeMessage::Forward => self.forward(now),
             HomeMessage::ToggleLayout => self.layout_toggle(),
@@ -2581,7 +3048,11 @@ impl Home {
             HomeMessage::NewCollection => {
                 let (config, name_input) = CollectionConfig::new();
 
-                self.view = Some(View::CollectionConfig(config));
+                let view = View::CollectionConfig(config);
+                self.view = ViewState::Animating {
+                    view,
+                    opening: true,
+                };
                 let focus = operation::focus(name_input);
 
                 Task::batch([focus, self.update_page_scroll()])
@@ -2589,7 +3060,7 @@ impl Home {
             HomeMessage::Random => Task::done(Message::Random),
             HomeMessage::RefreshContent => self.content_refresh(),
             HomeMessage::Play(item) => {
-                if matches!(self.view, Some(View::Selection(_))) {
+                if self.view.is_selection() {
                     Message::Home(HomeMessage::Selection(SelectionMessage::Select(item))).tasked()
                 } else if self.command {
                     let selection =
@@ -2601,21 +3072,39 @@ impl Home {
 
                     selection.chain(selected)
                 } else {
-                    let close_view = self.close_view(true);
+                    let close_view = self.close_view(true, now);
                     Task::batch([Task::done(Message::PlayItem(item)), close_view])
                 }
             }
             HomeMessage::PlayCollection { id, items } => {
                 Task::done(Message::PlayCollectionItems { id, items })
             }
+            HomeMessage::WishHovered(id, is_hovered) => {
+                let is_hovered = is_hovered && !self.view.is_selection();
+
+                let State::Wishlist(wishlist) = &mut self.state else {
+                    return Task::none();
+                };
+
+                let Some(wish) = wishlist.iter_mut().find(|wish| wish.item.id == id) else {
+                    return Task::none();
+                };
+
+                wish.go_mut(is_hovered, now);
+                // todo
+                self.focused.take();
+
+                Task::none()
+            }
             HomeMessage::Hovered(id, is_hovered) => {
-                let is_hovered = is_hovered && !matches!(self.view, Some(View::Selection(_)));
+                let is_hovered = is_hovered && !self.view.is_selection();
 
                 match (&mut self.state, id) {
                     (State::Loading, _)
                     | (State::Episode { .. }, _)
                     | (State::Movie { .. }, _)
                     | (State::Collections(_), _) => Task::none(),
+                    (State::Wishlist(_), _) => Task::none(),
                     (State::Recent { shows, .. }, ItemId::Show(id)) => {
                         if let Some(show) = shows.iter_mut().find(|show| show.media.id == id) {
                             show.go_mut(is_hovered, now);
@@ -2712,17 +3201,41 @@ impl Home {
                 Task::none()
             }
             HomeMessage::AddCollection(item, collection) => {
-                self.view = None;
-                Task::done(Message::ToggleMembership {
+                let close_view = self.close_view(true, now);
+                // self.view = None;
+                let toggle = Task::done(Message::ToggleMembership {
                     item,
                     collections: vec![(collection, true)],
+                });
+
+                Task::batch([close_view, toggle])
+            }
+            HomeMessage::WishCompletion(id) => {
+                let State::Wishlist(wishlist) = &mut self.state else {
+                    return Task::none();
+                };
+
+                let Some(wish) = wishlist
+                    .iter_mut()
+                    .find(|wish| wish.item.id == id)
+                    .map(|wish| wish.item.as_mut())
+                else {
+                    return Task::none();
+                };
+
+                wish.completed = !wish.completed;
+
+                Message::Wish(WishMessage::SetCompletion {
+                    wish: id,
+                    completed: wish.completed,
                 })
+                .tasked()
             }
         }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let searching = match &self.view {
+        let searching = match self.view.as_ref() {
             Some(View::Search(state, _)) => state.last_edit.is_some(),
             _ => false,
         };
@@ -2858,6 +3371,15 @@ impl Home {
             .height(Length::Fill);
 
         let bottom = column!(
+            icon_button(
+                icons::TODO,
+                "Wishlist",
+                HomeMessage::Goto(PageKind::Wishlist),
+                self.current_page()
+                    .map(Page::is_collections)
+                    .unwrap_or_default(),
+                None
+            ),
             icon_button(
                 icons::LIBRARY,
                 "Collections",
@@ -3494,6 +4016,7 @@ impl Home {
             State::Episode { episode, .. } => (episode.media.name(), 0),
             State::Loading => ("Loading", 0),
             State::Collections(collections) => ("Collections", collections.len()),
+            State::Wishlist(wishlist) => ("Wishlist", wishlist.len()),
             State::Collection {
                 collection,
                 itriggers: _itriggers,
@@ -3605,6 +4128,10 @@ impl Home {
                 .map(HomeMessage::Collections),
             // todo: Needed?
             (State::Collections(_), None) => center("Loading").into(),
+            (State::Wishlist(_), None) => center("Loading").into(),
+            (State::Wishlist(wishlist), Some(Page::Wishlist(page))) => {
+                page.view(wishlist.iter(), now).map(HomeMessage::Wishlist)
+            }
             (
                 State::Episode {
                     episode,
@@ -3682,47 +4209,68 @@ impl Home {
         )
         .style(styles::container::bb);
 
-        match &self.view {
-            None => content.into(),
-            Some(view) => {
-                let overlay: Element<'_, HomeMessage> = match view {
-                    View::CollectionConfig(config) => draw_config(config),
-                    View::Search(state, None) => {
-                        draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true)
-                    }
-                    View::Search(state, Some(collection)) => draw_search(
+        fn modalize<'a>(
+            content: impl Into<Element<'a, HomeMessage>>,
+            overlay: impl Into<Element<'a, HomeMessage>>,
+            toggle: bool,
+        ) -> modal::Modal<'a, HomeMessage> {
+            modal(content, overlay)
+                .toggle(toggle)
+                .on_toggle_complete(HomeMessage::ViewAnimated)
+                .position(modal::Position::Center)
+                .on_blur(HomeMessage::CloseView)
+        }
+
+        fn default<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Element<'a, HomeMessage> {
+            modalize(content, empty(), false).passthrough(true).into()
+        }
+
+        match self.view.view() {
+            None => default(content),
+            Some((view, toggle)) => {
+                let modalize = |overlay| modalize(content, overlay, toggle);
+
+                match view {
+                    View::CollectionConfig(config) => modalize(draw_config(config)).right(),
+                    View::Search(state, None) => modalize(draw_search(
+                        state,
+                        |id| HomeMessage::Goto(id.into()),
+                        theme,
+                        true,
+                    )),
+                    View::Search(state, Some(collection)) => modalize(draw_search(
                         state,
                         |item| HomeMessage::AddCollection(item, *collection),
                         theme,
                         false,
-                    ),
-                    View::CollectionAdd(state) => draw_collection_add(
+                    )),
+                    View::CollectionAdd(state) => modalize(draw_collection_add(
                         state,
                         self.collections.iter(),
                         self.collections.is_empty(),
-                    ),
-                    View::Rating { rating, .. } => draw_rating(rating),
+                    )),
+                    View::Rating { rating, .. } => modalize(draw_rating(rating)),
                     View::Rename {
                         input,
                         old,
                         value,
                         empty,
                         ..
-                    } => draw_rename(input, old, value, *empty),
+                    } => modalize(draw_rename(input, old, value, *empty)),
                     View::Synopsis {
                         editor, content, ..
-                    } => draw_synopsis(editor, content),
+                    } => modalize(draw_synopsis(editor, content)),
                     View::TMDBId {
                         input,
                         value,
                         top_level,
                         ..
-                    } => draw_tmdb(input, value, *top_level),
+                    } => modalize(draw_tmdb(input, value, *top_level)),
                     View::RemoveMedia { name, .. } => {
-                        draw_delete_confirm(name, HomeMessage::RemoveMedia)
+                        modalize(draw_delete_confirm(name, HomeMessage::RemoveMedia))
                     }
                     View::RemoveCollection { name, .. } => {
-                        draw_delete_confirm(name, HomeMessage::RemoveCollection)
+                        modalize(draw_delete_confirm(name, HomeMessage::RemoveCollection))
                     }
                     View::CollectionTriggers {
                         itriggers,
@@ -3731,15 +4279,40 @@ impl Home {
                         id: _id,
                         removed_inserts: _removed_inserts,
                         removed_deletes: _removed_deletes,
-                    } => draw_collection_triggers(*view_inserts, itriggers, dtriggers),
+                    } => modalize(draw_collection_triggers(
+                        *view_inserts,
+                        itriggers,
+                        dtriggers,
+                    ))
+                    .right(),
                     View::Selection(selected) => {
-                        let selection = draw_selection(selected.len());
+                        let selection = container(draw_selection(selected.len()))
+                            .style(styles::container::dark);
 
-                        return modal::transparent(content, selection);
+                        modalize(selection.into())
+                            .passthrough(true)
+                            .blur_alpha(0.1)
+                            .right()
                     }
-                };
+                    View::WishNew(state) => modalize(draw_wishlist(state)),
+                    View::WishDrawer(id) => {
+                        let State::Wishlist(wishlist) = &self.state else {
+                            return modalize(empty()).toggle(false).passthrough(true).into();
+                        };
 
-                modal(content, overlay, HomeMessage::CloseView)
+                        let Some(wish) = wishlist.iter().find(|wish| wish.item.id == *id) else {
+                            return modalize(empty()).toggle(false).passthrough(true).into();
+                        };
+
+                        let overlay = draw_wish(wish, now);
+
+                        modalize(overlay).right()
+                    }
+                    View::RemoveWish { name, .. } => {
+                        modalize(draw_delete_confirm(name, HomeMessage::RemoveWish))
+                    }
+                }
+                .into()
             }
         }
     }
@@ -3762,6 +4335,7 @@ impl Home {
             State::Collections(collections) => collections
                 .iter()
                 .any(|collection| collection.is_animating(now)),
+            State::Wishlist(wishlist) => wishlist.iter().any(|wish| wish.is_animating(now)),
             State::Movie { movie, .. } => movie.is_animating(now),
             State::Episode { episode, .. } => episode.is_animating(now),
             State::Collection {
@@ -3863,6 +4437,7 @@ impl Home {
             State::Episode { episode, .. } => (FetchId::Episode(episode.media.id), None),
             State::Movie { movie, .. } => (FetchId::Movie(movie.media.id), None),
             State::Collections(_) => (FetchId::Collections, None),
+            State::Wishlist(_) => (FetchId::Wishlist, None),
             State::Collection { collection, .. } => {
                 (FetchId::Collection(collection.collection.id), None)
             }
@@ -3898,29 +4473,34 @@ impl Home {
         Task::done(Message::Layout(self.layout))
     }
 
-    fn close_view(&mut self, selected: bool) -> Task<Message> {
+    fn close_view(&mut self, clear_selection: bool, now: Instant) -> Task<Message> {
         let scroll = self.update_page_scroll();
+        self.unfocus(now);
 
-        match self.view.take() {
-            Some(View::Selection(items)) if selected => {
-                self.view = Some(View::Selection(items));
-                self.command = false;
+        if !clear_selection {
+            self.command = self.view.is_selection();
+            return scroll;
+        }
 
-                let clear = HomeMessage::Selection(SelectionMessage::Cancel);
+        self.command = false;
 
-                Task::batch([scroll, Message::Home(clear).tasked()])
+        match std::mem::replace(&mut self.view, ViewState::None) {
+            ViewState::None => {}
+            ViewState::Animating { view, .. } => {
+                self.view = ViewState::Animating {
+                    view,
+                    opening: false,
+                };
             }
-            Some(View::Selection(items)) => {
-                self.command = true;
-                self.view = Some(View::Selection(items));
-
-                scroll
-            }
-            _ => {
-                self.command = false;
-                scroll
+            ViewState::Done(view) => {
+                self.view = ViewState::Animating {
+                    view,
+                    opening: false,
+                };
             }
         }
+
+        return scroll;
     }
 
     pub fn goto(&mut self, kind: PageKind, now: Instant) -> Task<Message> {
@@ -3928,10 +4508,10 @@ impl Home {
         if let Some(current) = self.current_page
             && current == kind
         {
-            return self.close_view(false);
+            return self.close_view(false, now);
         }
 
-        let close_view = self.close_view(false);
+        let close_view = self.close_view(false, now);
 
         if let Some(old) = self.current_page.replace(kind) {
             self.backward.push(old)
@@ -4012,13 +4592,24 @@ impl Home {
 
                 task.map(|csg| Message::Home(HomeMessage::Collections(csg)))
             }
+
+            PageKind::Wishlist => {
+                let (wishlist, tasks) = Wishlist::boot();
+                self.pages.insert(kind, Page::Wishlist(wishlist));
+
+                tasks.map(|wsg| Message::Home(HomeMessage::Wishlist(wsg)))
+            }
         };
 
         Task::batch([msg, close_view, task])
     }
 
-    fn selection(&mut self) -> Task<Message> {
-        self.view = Some(View::Selection(vec![]));
+    fn selection(&mut self, now: Instant) -> Task<Message> {
+        self.view = ViewState::Animating {
+            view: View::Selection(vec![]),
+            opening: true,
+        };
+        self.unfocus(now);
 
         self.update_page_scroll()
     }
@@ -4030,10 +4621,15 @@ impl Home {
             HomeAction::RefreshContent => self.content_refresh(),
             HomeAction::Refresh => self.refresh(),
             HomeAction::SearchToggle => self.toggle_search(None, now),
-            HomeAction::CloseModal => self.close_view(true),
+            HomeAction::CloseModal => self.close_view(true, now),
             HomeAction::Back => self.back(now, false),
             HomeAction::Forward => self.forward(now),
-            HomeAction::SelectionStart => self.selection(),
+            HomeAction::SelectionStart => self.selection(now),
+            HomeAction::WishNew => {
+                let new = Message::Home(HomeMessage::OpenView(ViewMessage::Wish(None))).tasked();
+
+                self.goto(PageKind::Wishlist, now).chain(new)
+            }
         }
     }
 
@@ -4042,7 +4638,7 @@ impl Home {
         mut movies: Vec<Thumbnail<Movie>>,
         mut shows: Vec<Thumbnail<Show>>,
     ) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4069,7 +4665,7 @@ impl Home {
     }
 
     pub fn fetched_shows(&mut self, mut shows: Vec<Thumbnail<Show>>) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut shows {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4080,7 +4676,7 @@ impl Home {
     }
 
     pub fn fetched_movies(&mut self, mut movies: Vec<Thumbnail<Movie>>) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4094,7 +4690,7 @@ impl Home {
         show: Thumbnail<Show>,
         mut seasons: Vec<Thumbnail<Season>>,
     ) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut seasons {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4103,7 +4699,7 @@ impl Home {
         let memberships = Message::FetchMemberships(show.media.id.into());
 
         self.state = State::Show {
-            show,
+            show: Box::new(show),
             seasons,
             memberships: vec![],
         };
@@ -4115,7 +4711,7 @@ impl Home {
         let memberships = Message::FetchMemberships(movie.media.id.into());
 
         self.state = State::Movie {
-            movie,
+            movie: Box::new(movie),
             memberships: vec![],
         };
 
@@ -4127,7 +4723,7 @@ impl Home {
         season: Thumbnail<Season>,
         mut episodes: Vec<Thumbnail<Episode>>,
     ) -> Task<Message> {
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut episodes {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4135,7 +4731,7 @@ impl Home {
         let memberships = Message::FetchMemberships(season.media.id.into());
 
         self.state = State::Season {
-            season,
+            season: Box::new(season),
             episodes,
             memberships: vec![],
         };
@@ -4147,7 +4743,7 @@ impl Home {
         let memberships = Message::FetchMemberships(episode.media.id.into());
 
         self.state = State::Episode {
-            episode,
+            episode: Box::new(episode),
             memberships: vec![],
         };
 
@@ -4168,6 +4764,19 @@ impl Home {
         Task::batch([task, scroll])
     }
 
+    pub fn fetched_wishlist(&mut self, wishlist: Vec<Wish>) -> Task<Message> {
+        let (wishlist, tasks): (Vec<_>, Vec<_>) =
+            wishlist.into_iter().map(WishThumbnail::new).unzip();
+
+        self.state = State::Wishlist(wishlist);
+
+        let task = Task::batch(tasks).map(Message::WishTask);
+
+        let scroll = self.update_page_scroll();
+
+        Task::batch([task, scroll])
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn fetched_collection(
         &mut self,
@@ -4183,7 +4792,7 @@ impl Home {
         let task = task.map(|task| Message::Home(HomeMessage::CollectionTask(task)));
         let scroll = self.update_page_scroll();
 
-        if let Some(View::Selection(selected)) = &self.view {
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.media.id.into());
             }
@@ -4341,6 +4950,19 @@ impl Home {
         Task::none()
     }
 
+    pub fn wish_task(&mut self, task: WishThumbnailTask, now: Instant) -> Task<Message> {
+        match &mut self.state {
+            State::Wishlist(wishlist) => {
+                if let Some(wish) = wishlist.iter_mut().find(|wish| wish.item.id == task.id) {
+                    wish.task(task.kind, now)
+                }
+            }
+            _ => {}
+        }
+
+        Task::none()
+    }
+
     pub fn load(&mut self) -> Task<Message> {
         let Some(View::Search(state, _)) = self.view.as_mut() else {
             return Task::none();
@@ -4381,7 +5003,10 @@ impl Home {
             text_input: text_input.clone(),
         };
 
-        self.view = Some(View::Search(state, collection));
+        self.view = ViewState::Animating {
+            view: View::Search(state, collection),
+            opening: true,
+        };
 
         let focus = operation::focus(text_input);
 
@@ -4465,6 +5090,7 @@ fn fetch_kind(
         PageKind::Shows => FetchId::Shows,
         PageKind::Movies => FetchId::Movies,
         PageKind::Collections => FetchId::Collections,
+        PageKind::Wishlist => FetchId::Wishlist,
         PageKind::Show(id) => FetchId::Show(id),
         PageKind::Season(id) => FetchId::Season(id),
         PageKind::Episode(id) => FetchId::Episode(id),

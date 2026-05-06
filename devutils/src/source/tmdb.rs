@@ -1,7 +1,7 @@
-use core::error::{Context, ContextLog, bail, Error, Log, Result};
+use core::error::{Context, ContextLog, Error, Log, Result, bail};
 use registry::db::{Database, Query};
-use registry::models::tmdb::{Media, Request, RequestId, Status};
-use registry::models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId};
+use registry::models::tmdb::{Media, Request, RequestId, Status, WishType};
+use registry::models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId, wish};
 use rusqlite::types::{ToSqlOutput, Value};
 use serde::Deserialize;
 use std::ops::Deref;
@@ -12,15 +12,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
 use tokio::time;
 
-use super::{CLIENT, IMAGE_SQL, Source, backdrop_path, poster_path};
-
-#[derive(Debug)]
-pub struct Data {
-    pub auth: String,
-    pub auth_rx: mpsc::Receiver<String>,
-    pub rating: bool,
-    pub rating_rx: mpsc::Receiver<bool>,
-}
+use super::{CLIENT, IMAGE_SQL, SourceId, SourceImpl, backdrop_path, poster_path};
 
 #[derive(Debug)]
 pub struct TMDB {}
@@ -35,7 +27,7 @@ impl TMDB {
     }
 }
 
-impl Source for TMDB {
+impl SourceImpl for TMDB {
     type Id<'a> = RequestId;
 
     fn id<'a>(row: &rusqlite::Row<'_>, column: &str) -> rusqlite::Result<Self::Id<'a>> {
@@ -83,12 +75,45 @@ impl Source for TMDB {
         Some((request.insert(), request.id.to_string()))
     }
 
+    fn wish_request<'a>(
+        id: WishId,
+        name: String,
+        kind: wish::WishKind,
+    ) -> Option<(Query<'a>, String)> {
+        let kind = match kind {
+            wish::WishKind::Movie { .. } => WishType::Movie,
+            wish::WishKind::Show { .. } => WishType::Show,
+            wish::WishKind::Season { number, .. } => WishType::Season(number),
+            wish::WishKind::Episode { season, number, .. } => WishType::Episode { season, number },
+        };
+
+        let media = Media::new_wish(id, name, kind);
+        let request = Request::new(media);
+
+        Some((request.insert(), request.id.to_string()))
+    }
+
     fn refetch<'a>(id: impl Into<ItemId>) -> Option<Query<'a>> {
         Some(Request::refetch(id))
     }
 
     fn delete<'a>(id: impl Into<ItemId>) -> Option<Query<'a>> {
         Some(Request::delete(id))
+    }
+
+    fn set_wish_id<'a>(id: SourceId, wish: WishId) -> Option<Query<'a>> {
+        match id {
+            SourceId::Tmdb(tmdb) => Some(Request::update_wish_tmdb(wish, tmdb)),
+            _ => None,
+        }
+    }
+
+    fn delete_wish<'a>(wish: WishId) -> Option<Query<'a>> {
+        Some(Request::delete_wish(wish))
+    }
+
+    fn source_id(s: &str) -> Option<SourceId> {
+        s.parse::<u32>().ok().map(SourceId::Tmdb)
     }
 }
 
@@ -130,6 +155,7 @@ struct TMDBShow {
     name: String,
     vote_average: f64,
     first_air_date: Option<String>,
+    number_of_seasons: Option<u16>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -138,7 +164,11 @@ struct TMDBSeason {
     overview: Option<String>,
     vote_average: f64,
     poster_path: Option<String>,
+    episodes: Vec<TMDBDummyEpisode>,
 }
+
+#[derive(Deserialize, Debug, Clone)]
+struct TMDBDummyEpisode {}
 
 #[derive(Deserialize, Debug, Clone)]
 struct TMDBEpisode {
@@ -269,22 +299,22 @@ async fn get_episode(auth: &str, show: TMDBId, season: u32, number: u32) -> Opti
 
     let response: TMDBEpisode = CLIENT
         .get(format!(
-            "https://api.themoviedb.org/3/tv/{}/season/{season}/episode/{number}",
-            show.id
+                "https://api.themoviedb.org/3/tv/{}/season/{season}/episode/{number}",
+                show.id
         ))
         .bearer_auth(auth)
         .send()
         .await
         .and_then(|res| res.error_for_status())
         .ctx_log(format!(
-            "Get TMDB episode error on show: {} season: {season} episode: {number}. Failed to send request",
-            show.id, 
+                "Get TMDB episode error on show: {} season: {season} episode: {number}. Failed to send request",
+                show.id,
         ))?
         .json()
         .await
         .ctx_log(format!(
-            "Get TMDB episode json conversion error on show: {} season: {season} episode: {number}",
-            show.id, 
+                "Get TMDB episode json conversion error on show: {} season: {season} episode: {number}",
+                show.id,
         ))?;
 
     Some(response)
@@ -329,25 +359,26 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
         .send()
         .await
         .and_then(|res| res.error_for_status())
-        .ctx_log(format!("TMDB image download error on {}: Failed to send request", path.display()));
-        
+        .ctx_log(format!(
+            "TMDB image download error on {}: Failed to send request",
+            path.display()
+        ));
 
     let Some(bytes) = bytes else {
         return false;
     };
 
-    let Some(bytes) = bytes
-        .bytes()
-        .await
-        .ctx_log(format!("TMDB image download error on {}. Failed to read image bytes", path.display()))
-    else {
+    let Some(bytes) = bytes.bytes().await.ctx_log(format!(
+        "TMDB image download error on {}. Failed to read image bytes",
+        path.display()
+    )) else {
         return false;
     };
 
-    let Some(file) = File::create(path)
-        .await
-        .ctx_log(format!("TMDB image download error on {}. Failed to create output file", path.display()))
-    else {
+    let Some(file) = File::create(path).await.ctx_log(format!(
+        "TMDB image download error on {}. Failed to create output file",
+        path.display()
+    )) else {
         return false;
     };
     let mut writer = BufWriter::new(file);
@@ -355,7 +386,10 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
     if writer
         .write(bytes.deref())
         .await
-        .ctx_log(format!("TMDB image download error on {}. Failed to write to output file ", path.display()))
+        .ctx_log(format!(
+            "TMDB image download error on {}. Failed to write to output file ",
+            path.display()
+        ))
         .is_none()
     {
         return false;
@@ -363,7 +397,10 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
     if writer
         .flush()
         .await
-        .ctx_log(format!("TMDB image download error on {}. Failed to flush to output file ", path.display()))
+        .ctx_log(format!(
+            "TMDB image download error on {}. Failed to flush to output file ",
+            path.display()
+        ))
         .is_none()
     {
         return false;
@@ -411,9 +448,9 @@ pub async fn run(
         if auth.trim().is_empty() {
             None
         } else {
-            get_config(&auth)
-                .await
-                .ctx_log(format!("Getting TMDB image config with auth: {auth} failed"))
+            get_config(&auth).await.ctx_log(format!(
+                "Getting TMDB image config with auth: {auth} failed"
+            ))
         }
     };
 
@@ -466,13 +503,14 @@ pub async fn run(
                 &mut request,
             )
             .await
-                .with_context(|| format!("TMDB request execution error on retry {}", request.retry))
+            .with_context(|| format!("TMDB request execution error on retry {}", request.retry))
             {
                 tracing::error!("{error:#}");
                 request.retry += 1;
             };
 
-             request.update().execute(&db).log_ctx("TMDB request update");        }
+            request.update().execute(&db).log_ctx("TMDB request update");
+        }
 
         time::sleep(interval).await;
     }
@@ -495,7 +533,11 @@ async fn execute(
     // todo: Not quite right. As it stands, the retry will be increased again after the return
     // probably better to just return a () or something
     if request.retry >= retry_limit {
-        bail!("TMDB Retry limit reached at {} for {}", request.retry, request.id);
+        bail!(
+            "TMDB Retry limit reached at {} for {}",
+            request.retry,
+            request.id
+        );
     }
 
     match request.status {
@@ -503,28 +545,50 @@ async fn execute(
         Status::Searching => match &request.media {
             Media::Movie { name, .. } => {
                 let Some(search): Option<TMDBId> = search_item(auth, name, true).await else {
-                    bail!(
-                        "Could not find TMDB movie {name} request: {}",
-                        request.id
-                    )
+                    bail!("Could not find TMDB movie {name} request: {}", request.id)
                 };
                 request.tmdb_id = Some(search.id);
                 request.status = Status::Data;
             }
             Media::Show { name, .. } => {
                 let Some(search): Option<TMDBId> = search_item(auth, name, false).await else {
-                    bail!(
-                        "Could not find TMDB show {name} request: {}",
-                        request.id
-                    )
+                    bail!("Could not find TMDB show {name} request: {}", request.id)
                 };
                 request.tmdb_id = Some(search.id);
                 request.status = Status::Data;
             }
+            Media::Wish {
+                id: _id,
+                name,
+                kind,
+            } => match kind {
+                WishType::Movie => {
+                    let Some(search): Option<TMDBId> = search_item(auth, name, true).await else {
+                        bail!(
+                            "Could not find TMDB wish movie {name} request: {}",
+                            request.id
+                        )
+                    };
+
+                    request.tmdb_id = Some(search.id);
+                    request.status = Status::Data;
+                }
+
+                WishType::Show | WishType::Season(_) | WishType::Episode { .. } => {
+                    let Some(search): Option<TMDBId> = search_item(auth, name, false).await else {
+                        bail!(
+                            "Could not find TMDB wish show {name} request: {}",
+                            request.id
+                        )
+                    };
+
+                    request.tmdb_id = Some(search.id);
+                    request.status = Status::Data;
+                }
+            },
             _ => {
                 bail!("Cannot TMDB search season/episode")
             }
-            
         },
         Status::Data => {
             let Some(tmdb) = request.tmdb_id.map(|id| TMDBId { id }) else {
@@ -543,9 +607,9 @@ async fn execute(
                         );
                     };
 
-                    insert_movie(db, request.id, *id, &movie, rating)
-                        .with_context( || format!("Inserting TMDB movie {name}. Request: {}", request.id))?
-                        ;
+                    insert_movie(db, request.id, *id, &movie, rating).with_context(|| {
+                        format!("Inserting TMDB movie {name}. Request: {}", request.id)
+                    })?;
                     request.status = Status::Image;
                     request.poster = movie.poster_path;
                     *backdrop = movie.backdrop_path;
@@ -558,9 +622,9 @@ async fn execute(
                         );
                     };
 
-                    insert_show(db, request.id, *id, &show, rating)
-                        .with_context( || format!("Inserting TMDB show {name}. Request: {}", request.id))?
-                        ;
+                    insert_show(db, request.id, *id, &show, rating).with_context(|| {
+                        format!("Inserting TMDB show {name}. Request: {}", request.id)
+                    })?;
                     request.status = Status::Image;
                     request.poster = show.poster_path;
                     *backdrop = show.backdrop_path;
@@ -575,17 +639,14 @@ async fn execute(
                         );
                     };
 
-                    insert_season(db, request.id, *id, &season, rating)
-                        .with_context( || format!("Inserting TMDB season {number}. Request: {}", request.id))?
-                        ;
+                    insert_season(db, request.id, *id, &season, rating).with_context(|| {
+                        format!("Inserting TMDB season {number}. Request: {}", request.id)
+                    })?;
                     request.status = Status::Image;
                     request.poster = season.poster_path;
                 }
                 Media::Episode {
-                    id,
-                    season,
-                    number,
-                    ..
+                    id, season, number, ..
                 } => {
                     let Some(episode): Option<TMDBEpisode> =
                         get_episode(auth, tmdb, *season as u32, *number as u32).await
@@ -596,12 +657,194 @@ async fn execute(
                         );
                     };
 
-                    insert_episode(db, request.id, *id, &episode, rating)
-                        .with_context( || format!("Inserting TMDB season {number}. Request: {}", request.id))?
-                        ;
+                    insert_episode(db, request.id, *id, &episode, rating).with_context(|| {
+                        format!("Inserting TMDB season {number}. Request: {}", request.id)
+                    })?;
                     request.status = Status::Image;
                     request.poster = episode.still_path;
                 }
+                Media::Wish { id, name, kind } => match kind {
+                    WishType::Movie => {
+                        let Some(movie): Option<TMDBMovie> = get_movie(auth, tmdb).await else {
+                            bail!(
+                                "Could not get TMDB wish movie {name} data. Request: {}",
+                                request.id
+                            );
+                        };
+
+                        let TMDBMovie {
+                            backdrop_path: _backdrop,
+                            genres,
+                            overview,
+                            poster_path,
+                            release_date,
+                            vote_average,
+                            title,
+                            runtime,
+                        } = movie;
+
+                        let duration = (runtime * 60) as u64;
+                        let tags = genres
+                            .into_iter()
+                            .map(|genre| genre.name)
+                            .collect::<Vec<_>>();
+
+                        let kind = wish::WishKind::Movie { duration, tags };
+
+                        insert_wish(
+                            db,
+                            request.id,
+                            *id,
+                            title,
+                            overview,
+                            release_date,
+                            vote_average,
+                            kind,
+                        )
+                        .with_context(|| {
+                            format!("Inserting TMDB wish movie {name}. Request: {}", request.id)
+                        })?;
+
+                        request.status = Status::Image;
+                        request.poster = poster_path;
+                    }
+                    WishType::Show => {
+                        let Some(show): Option<TMDBShow> = get_show(auth, tmdb).await else {
+                            bail!(
+                                "Could not get TMDB wish show {name} data. Request: {}",
+                                request.id
+                            );
+                        };
+
+                        let TMDBShow {
+                            backdrop_path: _backdrop,
+                            genres,
+                            overview,
+                            poster_path,
+                            name: title,
+                            vote_average,
+                            first_air_date,
+                            number_of_seasons,
+                        } = show;
+
+                        let tags = genres
+                            .into_iter()
+                            .map(|genre| genre.name)
+                            .collect::<Vec<_>>();
+
+                        let kind = wish::WishKind::Show {
+                            tags,
+                            seasons: number_of_seasons.unwrap_or_default(),
+                        };
+
+                        insert_wish(
+                            db,
+                            request.id,
+                            *id,
+                            title,
+                            overview,
+                            first_air_date,
+                            vote_average,
+                            kind,
+                        )
+                        .with_context(|| {
+                            format!("Inserting TMDB wish show {name}. Request: {}", request.id)
+                        })?;
+
+                        request.status = Status::Image;
+                        request.poster = poster_path;
+                    }
+                    WishType::Season(number) => {
+                        let Some(season): Option<TMDBSeason> =
+                            get_season(auth, tmdb, *number as u32).await
+                        else {
+                            bail!(
+                                "Could not get TMDB wish season {number} data. Request: {}",
+                                request.id
+                            );
+                        };
+
+                        let TMDBSeason {
+                            air_date,
+                            overview,
+                            vote_average,
+                            poster_path,
+                            episodes,
+                        } = season;
+
+                        let kind = wish::WishKind::Season {
+                            number: *number,
+                            episodes: episodes.len() as u16,
+                        };
+
+                        insert_wish(
+                            db,
+                            request.id,
+                            *id,
+                            name.clone(),
+                            overview,
+                            air_date,
+                            vote_average,
+                            kind,
+                        )
+                        .with_context(|| {
+                            format!(
+                                "Inserting TMDB wish season {number}. Request: {}",
+                                request.id
+                            )
+                        })?;
+                        request.status = Status::Image;
+                        request.poster = poster_path;
+                    }
+                    WishType::Episode { season, number } => {
+                        let Some(episode): Option<TMDBEpisode> =
+                            get_episode(auth, tmdb, *season as u32, *number as u32).await
+                        else {
+                            bail!(
+                                "Could not get TMDB wish episode {number} data. Request: {}",
+                                request.id
+                            );
+                        };
+
+                        let TMDBEpisode {
+                            air_date,
+                            name: _name,
+                            overview,
+                            still_path,
+                            vote_average,
+                            episode_number: _unused,
+                            runtime,
+                        } = episode;
+
+                        let duration = runtime
+                            .map(|runtime| (runtime * 60) as u64)
+                            .unwrap_or_default();
+
+                        let kind = wish::WishKind::Episode {
+                            season: *season,
+                            number: *number,
+                            duration,
+                        };
+                        insert_wish(
+                            db,
+                            request.id,
+                            *id,
+                            name.clone(),
+                            overview,
+                            air_date,
+                            vote_average,
+                            kind,
+                        )
+                        .with_context(|| {
+                            format!(
+                                "Inserting TMDB wish episode {number}. Request: {}",
+                                request.id
+                            )
+                        })?;
+                        request.status = Status::Image;
+                        request.poster = still_path;
+                    }
+                },
             }
         }
         Status::Image => match &request.media {
@@ -642,9 +885,9 @@ async fn execute(
                     );
                 }
 
-                insert_movie_image(db, request.id, *id, poster, backdrop)
-                        .with_context( || format!("Inserting TMDB movie {name} image. Request: {}", request.id))?
-                    ;
+                insert_movie_image(db, request.id, *id, poster, backdrop).with_context(|| {
+                    format!("Inserting TMDB movie {name} image. Request: {}", request.id)
+                })?;
                 request.status = Status::Done;
             }
             Media::Show { id, backdrop, name } => {
@@ -684,12 +927,12 @@ async fn execute(
                     );
                 }
 
-                insert_show_image(db, request.id, *id, poster, backdrop)
-                        .with_context( || format!("Inserting TMDB show {name} image. Request: {}", request.id))?
-                    ;
+                insert_show_image(db, request.id, *id, poster, backdrop).with_context(|| {
+                    format!("Inserting TMDB show {name} image. Request: {}", request.id)
+                })?;
                 request.status = Status::Done;
             }
-            Media::Season { id,  number, .. } => {
+            Media::Season { id, number, .. } => {
                 let poster = match &request.poster {
                     Some(poster) => {
                         let poster_path = poster_path(&images_path, id);
@@ -705,19 +948,20 @@ async fn execute(
                 };
                 if poster.is_none() {
                     bail!(
-                        "Could not download season {number} poster. Request: {}",
+                        "Could not download TMDB season {number} poster. Request: {}",
                         request.id
                     )
                 }
 
-                insert_season_image(db, request.id, *id, poster)
-                        .with_context( || format!("Inserting TMDB season {number} image. Request: {}", request.id))?
-                    ;
+                insert_season_image(db, request.id, *id, poster).with_context(|| {
+                    format!(
+                        "Inserting TMDB season {number} image. Request: {}",
+                        request.id
+                    )
+                })?;
                 request.status = Status::Done;
             }
-            Media::Episode {
-                id,  number, ..
-            } => {
+            Media::Episode { id, number, .. } => {
                 let poster = match &request.poster {
                     Some(poster) => {
                         let poster_path = poster_path(&images_path, id);
@@ -739,9 +983,40 @@ async fn execute(
                     )
                 }
 
-                insert_episode_image(db, request.id, *id, poster)
-                        .with_context( || format!("Inserting TMDB episode {number} image. Request: {}", request.id))?
-                    ;
+                insert_episode_image(db, request.id, *id, poster).with_context(|| {
+                    format!(
+                        "Inserting TMDB episode {number} image. Request: {}",
+                        request.id
+                    )
+                })?;
+                request.status = Status::Done;
+            }
+            Media::Wish { id, .. } => {
+                let poster = match &request.poster {
+                    Some(poster) => {
+                        let poster_path = poster_path(&images_path, id);
+                        let poster = download(auth, image_config, poster, true, &poster_path).await;
+
+                        if poster {
+                            Some(poster_path.display().to_string())
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
+                };
+
+                if poster.is_none() {
+                    bail!(
+                        "Could not download TMDB wish poster. Request: {}",
+                        request.id
+                    )
+                }
+
+                insert_wish_image(db, request.id, *id, poster).with_context(|| {
+                    format!("Inserting TMDB wish image. Request: {}", request.id)
+                })?;
+
                 request.status = Status::Done;
             }
         },
@@ -815,6 +1090,72 @@ fn insert_movie(
     Ok(())
 }
 
+fn insert_wish(
+    db: &Database,
+    request: RequestId,
+    id: WishId,
+    name: String,
+    synopsis: Option<String>,
+    release: Option<String>,
+    rating: f64,
+    wsh: wish::WishKind,
+) -> rusqlite::Result<()> {
+    let sql = "UPDATE wish SET name=:name, synopsis=:synopsis, rating=:rating, release=:release, tags=:tags, duration=:duration, count=:count WHERE id=:id AND request=:request";
+
+    let mut statement = db.prepare_cached(sql)?;
+
+    let release = release.unwrap_or("1970-01-01".to_owned());
+    let synopsis = synopsis.unwrap_or("<empty synopsis>".to_owned());
+    let rating = (rating / 10.0) * 5.0;
+
+    let name = ToSqlOutput::from(name);
+    let synopsis = ToSqlOutput::from(synopsis);
+    let release = ToSqlOutput::from(release);
+    let rating = ToSqlOutput::from(rating);
+    let null = ToSqlOutput::Owned(Value::Null);
+    let zero = ToSqlOutput::from(0);
+
+    let (duration, tags, count) = match wsh {
+        wish::WishKind::Movie { duration, tags } => {
+            let duration = i64::try_from(duration).expect("duration cannot be expressed as i64");
+            let duration = ToSqlOutput::from(duration);
+            let tags = ToSqlOutput::from(tags.join(","));
+            (duration, tags, zero)
+        }
+        wish::WishKind::Show { tags, seasons } => {
+            let tags = ToSqlOutput::from(tags.join(","));
+            let seasons = ToSqlOutput::from(seasons);
+
+            (zero, tags, seasons)
+        }
+        wish::WishKind::Season { episodes, .. } => {
+            let episodes = ToSqlOutput::from(episodes);
+
+            (zero, null, episodes)
+        }
+        wish::WishKind::Episode { duration, .. } => {
+            let duration = i64::try_from(duration).expect("duration cannot be expressed as i64");
+            let duration = ToSqlOutput::from(duration);
+
+            (duration, null, zero)
+        }
+    };
+
+    statement.execute(&[
+        (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
+        (":name", &name),
+        (":release", &release),
+        (":synopsis", &synopsis),
+        (":rating", &rating),
+        (":duration", &duration),
+        (":tags", &tags),
+        (":count", &count),
+    ])?;
+
+    Ok(())
+}
+
 fn insert_show(
     db: &Database,
     request: RequestId,
@@ -833,6 +1174,7 @@ fn insert_show(
         first_air_date,
         poster_path: _poster,
         backdrop_path: _backdrop,
+        number_of_seasons: _seasons,
     } = show;
 
     let tags = genres
@@ -878,6 +1220,7 @@ fn insert_season(
         overview,
         vote_average,
         poster_path: _poster,
+        episodes: _episodes,
     } = season;
 
     let rating_value = (vote_average / 10.0) * 5.0;
@@ -946,6 +1289,35 @@ fn insert_episode(
     Ok(())
 }
 
+fn insert_wish_image(
+    db: &Database,
+    request: RequestId,
+    id: WishId,
+    poster: Option<String>,
+) -> Result<()> {
+    let sql = "UPDATE wish SET poster=:poster WHERE id=:id AND request=:request";
+    let mut statement = db.prepare_cached(sql)?;
+
+    let poster = match poster {
+        Some(poster) => {
+            let poster = ToSqlOutput::from(poster);
+            db.execute(IMAGE_SQL, &[(":path", &poster)])
+                .with_ctx_log(|| format!("Insert wish {id} poster image"));
+
+            poster
+        }
+        None => ToSqlOutput::Owned(Value::Null),
+    };
+
+    statement.execute(&[
+        (":id", &ToSqlOutput::from(id)),
+        (":request", &ToSqlOutput::from(request)),
+        (":poster", &poster),
+    ])?;
+
+    Ok(())
+}
+
 fn insert_movie_image(
     db: &Database,
     request: RequestId,
@@ -959,9 +1331,8 @@ fn insert_movie_image(
     let poster = match poster {
         Some(poster) => {
             let poster = ToSqlOutput::from(poster);
-             db.execute(IMAGE_SQL, &[(":path", &poster)]).with_ctx_log(|| {
-                 format!("Insert movie {id} poster image")
-             });
+            db.execute(IMAGE_SQL, &[(":path", &poster)])
+                .with_ctx_log(|| format!("Insert movie {id} poster image"));
 
             poster
         }
@@ -998,9 +1369,8 @@ fn insert_show_image(
     let poster = match poster {
         Some(poster) => {
             let poster = ToSqlOutput::from(poster);
-             db.execute(IMAGE_SQL, &[(":path", &poster)])
-                 .with_ctx_log(|| format!("Insert show {id} poster iamge"))
-             ;
+            db.execute(IMAGE_SQL, &[(":path", &poster)])
+                .with_ctx_log(|| format!("Insert show {id} poster iamge"));
 
             poster
         }
@@ -1034,7 +1404,8 @@ fn insert_season_image(
     let poster = match poster {
         Some(poster) => {
             let poster = ToSqlOutput::from(poster);
-             db.execute(IMAGE_SQL, &[(":path", &poster)]).with_ctx_log(|| format!("Insert season {id} poster image"));
+            db.execute(IMAGE_SQL, &[(":path", &poster)])
+                .with_ctx_log(|| format!("Insert season {id} poster image"));
 
             poster
         }
@@ -1062,7 +1433,8 @@ fn insert_episode_image(
     let poster = match poster {
         Some(poster) => {
             let poster = ToSqlOutput::from(poster);
-             db.execute(IMAGE_SQL, &[(":path", &poster)]).with_ctx_log(|| format!("Insert episode {id} poster image"));
+            db.execute(IMAGE_SQL, &[(":path", &poster)])
+                .with_ctx_log(|| format!("Insert episode {id} poster image"));
 
             poster
         }

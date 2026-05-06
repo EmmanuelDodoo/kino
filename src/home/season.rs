@@ -333,8 +333,8 @@ impl SeasonPage {
             let separator = || Element::from(text("•").line_height(0.9).size(H4));
 
             let title = title(season.media.name());
-            let duration = duration(&season.media);
-            let rating = button(ratings(&season.media, true))
+            let duration = duration(season.media.duration_full());
+            let rating = button(ratings(season.media.rating(), true))
                 .on_press(SeasonPageMessage {
                     id,
                     message: Message::Rate(season.media.rating()),
@@ -497,7 +497,7 @@ impl SeasonPage {
                     Layout::Compact => self.compact(now, thumbnails),
                 },
                 Tab::Data => data_tab(
-                    &season.media,
+                    season.media.as_ref(),
                     width,
                     Message::Rename(season.media.name().to_owned()),
                     Message::Refetch(source),
