@@ -10,12 +10,11 @@ use iced::{
         widget::{self, tree},
     },
     animation::{Animation, Easing},
-    color,
     time::{Duration, Instant},
     window,
 };
 
-pub fn modal<'a, Message, Theme, Renderer>(
+pub fn modal<'a, Message, Theme: Catalog, Renderer>(
     base: impl Into<Element<'a, Message, Theme, Renderer>>,
     content: impl Into<Element<'a, Message, Theme, Renderer>>,
 ) -> Modal<'a, Message, Theme, Renderer> {
@@ -80,7 +79,10 @@ impl Position {
     }
 }
 
-pub struct Modal<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer> {
+pub struct Modal<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
+where
+    Theme: Catalog,
+{
     content: Element<'a, Message, Theme, Renderer>,
     base: Element<'a, Message, Theme, Renderer>,
     width: Length,
@@ -93,9 +95,13 @@ pub struct Modal<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer> {
     on_blur: Option<Message>,
     on_toggle_complete: Option<Message>,
     passthrough: bool,
+    class: Theme::Class<'a>,
 }
 
-impl<'a, Message, Theme, Renderer> Modal<'a, Message, Theme, Renderer> {
+impl<'a, Message, Theme, Renderer> Modal<'a, Message, Theme, Renderer>
+where
+    Theme: Catalog,
+{
     /// Creates a new modal with the given `base` element and modal content
     pub fn new(
         base: impl Into<Element<'a, Message, Theme, Renderer>>,
@@ -110,10 +116,11 @@ impl<'a, Message, Theme, Renderer> Modal<'a, Message, Theme, Renderer> {
             duration: Duration::from_millis(150),
             easing: Easing::EaseInOut,
             toggle: true,
-            alpha: 0.0,
+            alpha: 0.15,
             on_blur: None,
             on_toggle_complete: None,
             passthrough: false,
+            class: Theme::default(),
         }
     }
 
@@ -198,8 +205,22 @@ impl<'a, Message, Theme, Renderer> Modal<'a, Message, Theme, Renderer> {
         self
     }
 
+    /// Sets the message produced once the animation is finished.
     pub fn on_toggle_complete(mut self, message: Message) -> Self {
         self.on_toggle_complete = Some(message);
+        self
+    }
+
+    pub fn style(mut self, style: impl Fn(&Theme) -> Style + 'a) -> Self
+    where
+        Theme::Class<'a>: From<StyleFn<'a, Theme>>,
+    {
+        self.class = (Box::new(style) as StyleFn<'a, Theme>).into();
+        self
+    }
+
+    pub fn class(mut self, class: impl Into<Theme::Class<'a>>) -> Self {
+        self.class = class.into();
         self
     }
 }
@@ -328,6 +349,7 @@ impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
 where
     Message: Clone,
     Renderer: advanced::Renderer,
+    Theme: Catalog,
 {
     fn size(&self) -> Size<Length> {
         Size::new(self.width, self.height)
@@ -416,13 +438,15 @@ where
 
         if !state.done || state.animation_value() {
             let alpha = state.alpha(self.alpha);
+            let modal_style = theme.style(&self.class);
+            let blur_background = modal_style.blur.scale_alpha(alpha);
 
             renderer.fill_quad(
                 Quad {
                     bounds,
                     ..Default::default()
                 },
-                color!(0, 0, 0, alpha),
+                blur_background,
             );
 
             let content_layout = layout.child(1);
@@ -644,9 +668,44 @@ impl<'a, Message, Theme, Renderer> From<Modal<'a, Message, Theme, Renderer>>
 where
     Renderer: advanced::Renderer + 'a,
     Message: Clone + 'a,
-    Theme: 'a,
+    Theme: 'a + Catalog,
 {
     fn from(value: Modal<'a, Message, Theme, Renderer>) -> Self {
         Element::new(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+/// The Style for a modal
+pub struct Style {
+    /// The blur Background
+    pub blur: iced::Background,
+}
+
+pub trait Catalog {
+    type Class<'a>;
+
+    fn default<'a>() -> Self::Class<'a>;
+
+    fn style(&self, class: &Self::Class<'_>) -> Style;
+}
+
+pub type StyleFn<'a, Theme> = Box<dyn Fn(&Theme) -> Style + 'a>;
+
+pub fn default(theme: &iced::Theme) -> Style {
+    let color = theme.palette().background.weaker.text;
+
+    Style { blur: color.into() }
+}
+
+impl Catalog for iced::Theme {
+    type Class<'a> = StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(default)
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> Style {
+        class(self)
     }
 }
