@@ -96,6 +96,10 @@ impl Page {
         matches!(self, Self::Collections(_))
     }
 
+    pub fn is_wishlist(&self) -> bool {
+        matches!(self, Self::Wishlist(_))
+    }
+
     pub fn is_collection(&self, id: &CollectionId) -> bool {
         match self {
             Self::Collection { id: own, .. } => own == id,

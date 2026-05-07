@@ -3376,7 +3376,7 @@ impl Home {
                 "Wishlist",
                 HomeMessage::Goto(PageKind::Wishlist),
                 self.current_page()
-                    .map(Page::is_collections)
+                    .map(Page::is_wishlist)
                     .unwrap_or_default(),
                 None
             ),
