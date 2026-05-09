@@ -2029,6 +2029,10 @@ impl Manager {
     }
 
     fn previous_screen(&mut self) -> Task<Message> {
+        Task::done(Message::Back)
+    }
+
+    pub fn back(&mut self) -> Task<Message>{
         let eos = self
             .player()
             .map(|player| player.video.eos())
@@ -2037,7 +2041,7 @@ impl Manager {
         let stats = if eos { Task::none() } else { self.stats() };
 
         self.fullscreen_exit()
-            .chain(Task::batch([Task::done(Message::Back), stats]))
+            .chain(Task::batch([stats]))
     }
 
     fn seek_back(&mut self, shift: bool, now: Instant) -> Task<Message> {
