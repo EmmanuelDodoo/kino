@@ -38,6 +38,7 @@ use devutils::thumbnails::{Image, ThumbnailGenerator};
 pub use playlist::*;
 use registry::models::{
     self, Audio, CollectionId, CommentId, SimpleCollection, Subtitle, SubtitleKind, VideoId,
+    VideoInfo,
 };
 use typo::*;
 
@@ -168,6 +169,7 @@ variants! {
         Filters,
         Subtitles,
         Audio,
+        Info,
     }
 }
 
@@ -291,6 +293,7 @@ pub struct Player {
     watch_time: Duration,
     last_frame: Option<Instant>,
     subtitles: Option<String>,
+    file_size: u64,
 }
 
 impl Player {
@@ -1840,18 +1843,17 @@ impl Manager {
                 ManagerMessage::CloseView,
             ),
             Some(Modal::Config(config)) => {
-                let (subs, audio) = self
-                    .player()
-                    .map(|player| {
-                        (
-                            player.item.subtitles.as_slice(),
-                            player.item.audios.as_slice(),
-                        )
-                    })
-                    .unwrap_or_default();
+                let Some(player) = self.player() else {
+                    return empty();
+                };
+
+                let item = &player.item;
+                let subs = item.subtitles.as_slice();
+                let audio = item.audios.as_slice();
+
                 modal(
                     content,
-                    draw_config(&self.settings, config, subs, audio),
+                    draw_config(&self.settings, config, subs, audio, item, player.file_size),
                     ManagerMessage::CloseView,
                 )
             }
@@ -2032,7 +2034,7 @@ impl Manager {
         Task::done(Message::Back)
     }
 
-    pub fn back(&mut self) -> Task<Message>{
+    pub fn back(&mut self) -> Task<Message> {
         let eos = self
             .player()
             .map(|player| player.video.eos())
@@ -2040,8 +2042,7 @@ impl Manager {
 
         let stats = if eos { Task::none() } else { self.stats() };
 
-        self.fullscreen_exit()
-            .chain(Task::batch([stats]))
+        self.fullscreen_exit().chain(Task::batch([stats]))
     }
 
     fn seek_back(&mut self, shift: bool, now: Instant) -> Task<Message> {
@@ -2715,7 +2716,11 @@ fn load_video<Message: 'static + MaybeSend>(
 ) -> Task<Message> {
     Task::perform(
         tokio::task::spawn_blocking(move || {
-            let path = url::Url::from_file_path(item.path.canonicalize().unwrap()).unwrap();
+            let path = item.path.canonicalize().unwrap();
+            let file_size = std::fs::metadata(&path)
+                .map(|metadata| metadata.len())
+                .unwrap_or_default();
+            let path = url::Url::from_file_path(path).unwrap();
             let mut video = Video::new(&path).unwrap();
 
             let duration = video.duration().as_secs_f64();
@@ -2809,6 +2814,7 @@ fn load_video<Message: 'static + MaybeSend>(
             Arc::new(Player {
                 item,
                 video,
+                file_size,
                 thumbnails: vec![],
                 position,
                 is_dragging: false,
@@ -3636,7 +3642,7 @@ fn draw_audio<'a>(
     spacing: f32,
 ) -> Element<'a, AudioConfig> {
     let selection = {
-        let label = label_maker("Embedded Audio: ");
+        let label = label_maker("Audio: ");
 
         let handle = picklist_handle(size);
 
@@ -3659,11 +3665,134 @@ fn draw_audio<'a>(
     column!(selection).width(Length::Fill).spacing(12).into()
 }
 
+fn draw_info<'a>(
+    config: &'a Config,
+    item: &'a models::Video,
+    file_size: u64,
+    size: f32,
+) -> Element<'a, ConfigMessage> {
+    let info = |value: String| sized_regular(value, size / typo::RATIO);
+
+    let general = {
+        let title = sized_medium("General", size);
+
+        let kind = match item.id {
+            VideoId::Movie(_) => "movie",
+            VideoId::Episode(_) => "episode",
+        };
+
+        let kind = info(format!("Media type: {kind}"));
+
+        let file_size = {
+            let size = file_size as f64 / 1024.0f64.powi(3);
+            info(format!("Size: {size:.2} GB"))
+        };
+
+        let path = {
+            let path = trim_path(&item.path, 5);
+            let name = info("Path: ".to_string());
+            let path = marquee(path).size(size / typo::RATIO);
+
+            row!(name, path).spacing(2).align_y(Vertical::Center)
+        };
+
+        let info = column!(kind, path, file_size)
+            .spacing(4)
+            .padding(Padding::new(0.0).left(12));
+
+        column!(title, info).spacing(8)
+    };
+
+    // todo: Should reflect currently selected video
+    let video = item.videos.first();
+    let video = video.map(|video| {
+        let title = sized_medium("Video", size);
+
+        let codec = video
+            .codec
+            .as_deref()
+            .map(|codec| info(format!("Codec: {codec}")));
+
+        let bitrate = video.bitrate as f32 / 1000_000.0;
+        let bitrate = info(format!("Bitrate: {bitrate:.2} Mbps"));
+
+        let framerate = info(format!("Framerate: {:.1}", video.framerate));
+        let dimensions = info(format!("Dimensions: {}x{}", video.dar_num, video.dar_denom));
+
+        let info = column!(codec, bitrate, framerate, dimensions)
+            .spacing(4)
+            .padding(Padding::new(0.0).left(12));
+
+        column!(title, info).spacing(8)
+    });
+
+    let audio = config.selected_audio.as_ref().map(|audio| {
+        let title = sized_medium("Audio", size);
+
+        let codec = audio
+            .codec
+            .as_deref()
+            .map(|codec| info(format!("Codec: {codec}")));
+
+        let lang = audio
+            .lang
+            .as_deref()
+            .map(|lang| info(format!("Language: {lang}")));
+        let channels = info(format!("Channels: {}", audio.channels));
+
+        let sample = info(format!("Sample Rate: {} Hz", audio.sample_rate));
+
+        let bitrate = info(format!("Bitrate: {} kbps", audio.bitrate as f32 / 1000.0));
+
+        let info = column!(lang, codec, channels, sample, bitrate)
+            .spacing(4)
+            .padding(Padding::new(0.0).left(12));
+
+        column!(title, info).spacing(8)
+    });
+
+    let subtitle = config.selected_text.as_ref().map(|sub| {
+        let title = sized_medium("Subtitle", size);
+
+        let name = info(format!("Title: {}", sub.title));
+        let lang = info(format!("Language: {}", sub.lang));
+
+        let (kind, path) = match &sub.kind {
+            SubtitleKind::Embedded => ("Embedded", None),
+            SubtitleKind::Loaded { path, .. } => ("Loaded", Some(path)),
+        };
+
+        let kind = info(format!("Kind: {kind}"));
+
+        let path = path.map(|path| {
+            let name = info("Path: ".to_string());
+            let path = trim_path(&path, 3);
+            let path = marquee(path).size(size / typo::RATIO);
+
+            row!(name, path).spacing(2).align_y(Vertical::Center)
+        });
+
+        let info = column!(name, lang, kind, path)
+            .spacing(4)
+            .padding(Padding::new(0.0).left(12));
+
+        column!(title, info).spacing(8)
+    });
+
+    let content = column!(general, video, audio, subtitle).spacing(20);
+
+    let content = scrollable(content).spacing(5.0);
+
+    content.into()
+}
+
 fn draw_config<'a>(
     settings: &'a VideoSettings,
     config: &'a Config,
     subtitles: &'a [Subtitle],
     audio: &'a [Audio],
+    item: &'a models::Video,
+    file_size: u64,
 ) -> Element<'a, ManagerMessage> {
     // todo: Hardware volume, Aspect Ratio
     let size = H7;
@@ -3693,7 +3822,7 @@ fn draw_config<'a>(
         .into()
     });
 
-    let content: Element<'_, ConfigMessage> = match curr_tab {
+    let content = match curr_tab {
         ConfigTab::General => {
             draw_general(settings, size, padding, spacing).map(ConfigMessage::General)
         }
@@ -3703,6 +3832,7 @@ fn draw_config<'a>(
         ConfigTab::Audio => {
             draw_audio(config, audio, size, padding, spacing).map(ConfigMessage::Audio)
         }
+        ConfigTab::Info => draw_info(config, item, file_size, size),
     };
 
     let content = content.map(ManagerMessage::Config);
