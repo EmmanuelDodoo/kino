@@ -190,6 +190,12 @@ impl Message {
         Message::PushToast(error.to_string(), toast::Status::Error, log)
     }
 
+    pub fn anyhow(error: Error) -> Self {
+        let msg = Message::error(error.to_string(), false);
+        error.log_err();
+        msg
+    }
+
     pub fn warn(warning: impl std::fmt::Display) -> Self {
         Message::PushToast(warning.to_string(), toast::Status::Warn, true)
     }

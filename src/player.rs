@@ -1,4 +1,4 @@
-use core::{Context, ContextLog, Error, Log, anyhow, variants};
+use core::{Context, ContextLog, Error, Log, anyhow, error, variants};
 use iced::{
     Element, Length, Padding, Size, Subscription, Task, Theme,
     advanced::graphics::futures::MaybeSend,
@@ -335,7 +335,10 @@ enum State {
 
 #[derive(Debug, Clone)]
 pub enum ManagerMessage {
-    Video(bool, Arc<Player>),
+    Video {
+        is_next: bool,
+        video: Arc<error::Result<Player>>,
+    },
     Thumbnail {
         id: VideoId,
         thumbnails: Vec<image::Handle>,
@@ -403,7 +406,10 @@ impl Manager {
         fonts: Vec<iced::font::Family>,
     ) -> (Self, Task<ManagerMessage>) {
         let load_video = match playlist.current().cloned() {
-            Some(item) => load_video(item, |video| ManagerMessage::Video(false, video)),
+            Some(item) => load_video(item, |video| ManagerMessage::Video {
+                is_next: false,
+                video,
+            }),
             None => Task::none(),
         };
 
@@ -448,8 +454,17 @@ impl Manager {
         match message {
             ManagerMessage::None => Task::none(),
             ManagerMessage::Error(error) => Message::error(error, true).tasked(),
-            ManagerMessage::Video(is_next, player) => {
-                let mut player = Arc::try_unwrap(player).unwrap();
+            ManagerMessage::Video { is_next, video } => {
+                let player = Arc::try_unwrap(video).expect("Second player unwrap");
+
+                let mut player = match player {
+                    Ok(player) => player,
+                    Err(error) => {
+                        let msg = Message::anyhow(error);
+
+                        return Task::done(msg);
+                    }
+                };
 
                 let comments = Message::FetchComments(player.item.id).tasked();
 
@@ -473,9 +488,19 @@ impl Manager {
                         } else {
                             10
                         };
-                        let path = url::Url::from_file_path(path.canonicalize().unwrap()).unwrap();
+                        let path = path.canonicalize().with_context(|| {
+                            format!("Thumbnail path canonicalize on {}", path.display())
+                        })?;
+
+                        let path_ref = path.as_path();
+                        let path = url::Url::from_file_path(path_ref).map_err(|_| {
+                            anyhow!(
+                                "Thumbnail Url from path {} on video {id}",
+                                path_ref.display()
+                            )
+                        })?;
                         let generator = ThumbnailGenerator::new(path, width, height, 8)
-                            .log_ctx("Thumbnail generation")?;
+                            .with_context(|| format!("New ThumbnailGenerator for {id}"))?;
 
                         let range = 1..=num;
                         let mut rng = rand::thread_rng();
@@ -517,15 +542,23 @@ impl Manager {
 
                         drop(generator);
 
-                        Ok::<_, Error>((id, imgs, poster)).log_ctx("Thumbnail generation error")
+                        Ok::<_, Error>((id, imgs, poster))
+
+                        // temp.log_ctx("Thumbnail generation error")
                     }),
-                    move |res| match res.ctx_log("Thumbnail generation join error").flatten() {
-                        Some((id, thumbnails, poster)) => ManagerMessage::Thumbnail {
-                            id,
-                            thumbnails,
-                            poster,
-                        },
-                        None => ManagerMessage::None,
+                    move |res| {
+                        let res = res
+                            .with_context(|| format!("Thumbnail generation join error on {id}"))
+                            .flatten()
+                            .log_err();
+                        match res {
+                            Some((id, thumbnails, poster)) => ManagerMessage::Thumbnail {
+                                id,
+                                thumbnails,
+                                poster,
+                            },
+                            None => ManagerMessage::None,
+                        }
                     },
                 );
 
@@ -536,10 +569,11 @@ impl Manager {
                     let task = Task::done(Message::LastWatched(player.item.id));
                     apply_settings(&self.settings, &mut player);
 
-                    let awake = keep_awake().unwrap();
+                    let awake =
+                        keep_awake().with_ctx_log(|| format!("New KeepAwake on video {id}"));
 
                     self.state = State::Ready {
-                        awake: Some(awake),
+                        awake,
                         player: Box::new(player),
                         comments: BTreeMap::default(),
                         thumbnails_handle: Some(handle),
@@ -641,7 +675,10 @@ impl Manager {
                             .next_peek()
                             .cloned()
                             .map(|item| {
-                                load_video(item, |video| ManagerMessage::Video(true, video))
+                                load_video(item, |video| ManagerMessage::Video {
+                                    is_next: true,
+                                    video,
+                                })
                             })
                             .unwrap_or_default();
 
@@ -768,7 +805,8 @@ impl Manager {
                         } = &mut self.state
                         {
                             if awake.is_none() {
-                                *awake = Some(keep_awake().unwrap());
+                                *awake =
+                                    keep_awake().ctx_log("New KeepAwake after collection save");
                             }
 
                             player.video.set_paused(false);
@@ -802,7 +840,10 @@ impl Manager {
                     };
 
                     let load_video = match self.playlist.current().cloned() {
-                        Some(item) => load_video(item, |video| ManagerMessage::Video(false, video)),
+                        Some(item) => load_video(item, |video| ManagerMessage::Video {
+                            is_next: false,
+                            video,
+                        }),
                         None => Task::none(),
                     };
 
@@ -1937,7 +1978,7 @@ impl Manager {
         let is_paused = video.paused();
 
         if is_paused {
-            *awake = Some(keep_awake().unwrap());
+            *awake = keep_awake().ctx_log("New KeepAwake after play");
         } else {
             return Task::none();
         }
@@ -2052,16 +2093,24 @@ impl Manager {
             self.settings.seek_change_amt
         };
 
-        if let State::Ready { player, .. } = &mut self.state {
-            player.is_dragging = false;
+        let seek = match &mut self.state {
+            State::Ready { player, .. } => {
+                player.is_dragging = false;
 
-            player.last_frame.take();
-            player.position = (player.position - shift_amt).max(0.0);
-            player
-                .video
-                .seek(Duration::from_secs_f64(player.position), false)
-                .unwrap();
-        }
+                player.last_frame.take();
+                player.position = (player.position - shift_amt).max(0.0);
+
+                match player
+                    .video
+                    .seek(Duration::from_secs_f64(player.position), false)
+                    .context("Seeking back failed")
+                {
+                    Ok(_) => Task::none(),
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
+            _ => Task::none(),
+        };
 
         let indicator_amt = match self.indicator.as_ref().map(|ind| ind.kind) {
             Some(IndicatorKind::SeekBack(amt)) => amt - shift_amt,
@@ -2071,7 +2120,7 @@ impl Manager {
         let (indicator, task) = Indicator::new(IndicatorKind::SeekBack(indicator_amt), now);
         self.indicator = Some(indicator);
 
-        task.map(Message::Player)
+        Task::batch([task.map(Message::Player), seek])
     }
 
     fn seek_front(&mut self, shift: bool, now: Instant) -> Task<Message> {
@@ -2081,17 +2130,25 @@ impl Manager {
             self.settings.seek_change_amt
         };
 
-        if let State::Ready { player, .. } = &mut self.state {
-            player.is_dragging = false;
-            let duration = player.video.duration().as_secs_f64();
+        let seek = match &mut self.state {
+            State::Ready { player, .. } => {
+                player.is_dragging = false;
+                let duration = player.video.duration().as_secs_f64();
 
-            player.last_frame.take();
-            player.position = (player.position + shift_amt).min(duration);
-            player
-                .video
-                .seek(Duration::from_secs_f64(player.position), false)
-                .unwrap();
-        }
+                player.last_frame.take();
+                player.position = (player.position + shift_amt).min(duration);
+
+                match player
+                    .video
+                    .seek(Duration::from_secs_f64(player.position), false)
+                    .context("Seeking forward failed")
+                {
+                    Ok(_) => Task::none(),
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
+            _ => Task::none(),
+        };
 
         let indicator_amt = match self.indicator.as_ref().map(|ind| ind.kind) {
             Some(IndicatorKind::SeekFront(amt)) => amt + shift_amt,
@@ -2101,7 +2158,7 @@ impl Manager {
         let (indicator, task) = Indicator::new(IndicatorKind::SeekFront(indicator_amt), now);
         self.indicator = Some(indicator);
 
-        task.map(Message::Player)
+        Task::batch([task.map(Message::Player), seek])
     }
 
     fn volume_increase(&mut self, now: Instant) -> Task<Message> {
@@ -2155,32 +2212,54 @@ impl Manager {
     }
 
     fn speed_increase(&mut self) -> Task<Message> {
-        if let State::Ready { player, .. } = &mut self.state {
-            self.settings.speed += self.settings.speed_change_amt;
-            player.video.set_speed(self.settings.speed).unwrap();
+        match &mut self.state {
+            State::Ready { player, .. } => {
+                self.settings.speed += self.settings.speed_change_amt;
+                match player
+                    .video
+                    .set_speed(self.settings.speed)
+                    .context("Speed Increase Failed")
+                {
+                    Ok(_) => Task::none(),
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
+            _ => Task::none(),
         }
-
-        Task::none()
     }
 
     fn speed_decrease(&mut self) -> Task<Message> {
-        if let State::Ready { player, .. } = &mut self.state {
-            self.settings.speed -= self.settings.speed_change_amt;
-            player.video.set_speed(self.settings.speed).unwrap();
+        match &mut self.state {
+            State::Ready { player, .. } => {
+                self.settings.speed -= self.settings.speed_change_amt;
+                match player
+                    .video
+                    .set_speed(self.settings.speed)
+                    .context("Speed Decrease Failed")
+                {
+                    Ok(_) => Task::none(),
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
+            _ => Task::none(),
         }
-
-        Task::none()
     }
 
     fn speed_reset(&mut self) -> Task<Message> {
-        if let State::Ready { player, .. } = &mut self.state
-            && player.video.speed() != 1.0
-        {
-            self.settings.speed = 1.0;
-            player.video.set_speed(self.settings.speed).unwrap();
+        match &mut self.state {
+            State::Ready { player, .. } if player.video.speed() != 1.0 => {
+                self.settings.speed = 1.0;
+                match player
+                    .video
+                    .set_speed(self.settings.speed)
+                    .context("Speed Reset Failed")
+                {
+                    Ok(_) => Task::none(),
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
+            _ => Task::none(),
         }
-
-        Task::none()
     }
 
     fn subtitles_toggle(&mut self) -> Task<Message> {
@@ -2203,8 +2282,11 @@ impl Manager {
             AutoState::Idle => {
                 self.state = State::Loading;
 
-                let load = load_video(next.clone(), |video| ManagerMessage::Video(false, video))
-                    .map(Message::Player);
+                let load = load_video(next.clone(), |video| ManagerMessage::Video {
+                    is_next: false,
+                    video,
+                })
+                .map(Message::Player);
 
                 Task::batch([stats, load])
             }
@@ -2231,11 +2313,11 @@ impl Manager {
                 apply_settings(&self.settings, &mut player);
                 player.video.set_paused(false);
 
-                let awake = keep_awake().unwrap();
+                let awake = keep_awake().ctx_log("New KeepAwake after play next");
 
                 self.state = State::Ready {
                     player,
-                    awake: Some(awake),
+                    awake,
                     comments,
                     thumbnails_handle,
                 };
@@ -2261,8 +2343,9 @@ impl Manager {
         self.state = State::Loading;
         self.next = AutoState::Idle;
 
-        let load = load_video(previous.clone(), |video| {
-            ManagerMessage::Video(false, video)
+        let load = load_video(previous.clone(), |video| ManagerMessage::Video {
+            is_next: false,
+            video,
         })
         .map(Message::Player);
 
@@ -2449,8 +2532,9 @@ impl Manager {
         }
 
         if awake.is_none() {
-            *awake = Some(keep_awake().unwrap());
+            *awake = keep_awake().ctx_log("New KeepAwake after save config");
         }
+
         player.video.set_paused(false);
 
         Task::none()
@@ -2712,16 +2796,29 @@ impl Manager {
 
 fn load_video<Message: 'static + MaybeSend>(
     mut item: models::Video,
-    f: impl FnOnce(Arc<Player>) -> Message + 'static + MaybeSend,
+    f: impl FnOnce(Arc<error::Result<Player>>) -> Message + 'static + MaybeSend,
 ) -> Task<Message> {
+    let id = item.id;
+
     Task::perform(
         tokio::task::spawn_blocking(move || {
-            let path = item.path.canonicalize().unwrap();
+            let path_ref = item.path.as_path();
+
+            let path = item
+                .path
+                .canonicalize()
+                .with_context(|| format!("canonicalize video {id} path {}", path_ref.display()))?;
+
             let file_size = std::fs::metadata(&path)
                 .map(|metadata| metadata.len())
                 .unwrap_or_default();
-            let path = url::Url::from_file_path(path).unwrap();
-            let mut video = Video::new(&path).unwrap();
+
+            let path_ref = item.path.as_path();
+            let path = url::Url::from_file_path(path_ref)
+                .map_err(|_| anyhow!("Creating video {id} url from path {}", path_ref.display()))?;
+
+            let mut video =
+                Video::new(&path).with_context(|| format!("Creating Video player on {id}"))?;
 
             let duration = video.duration().as_secs_f64();
             let embedded = video.available_subtitles();
@@ -2803,7 +2900,9 @@ fn load_video<Message: 'static + MaybeSend>(
             };
             let position = (duration * progress as f64).round().clamp(0.0, duration);
 
-            video.seek(Duration::from_secs_f64(position), true).unwrap();
+            video
+                .seek(Duration::from_secs_f64(position), true)
+                .with_context(|| format!("Resuming at position {position} on {id}"))?;
 
             // todo: There is a race condition when resuming a video. I can't quite pinpoint where
             // so until I do, this is a temporary fix which seems to work.
@@ -2811,7 +2910,7 @@ fn load_video<Message: 'static + MaybeSend>(
 
             video.set_paused(true);
 
-            Arc::new(Player {
+            Ok(Arc::new(Player {
                 item,
                 video,
                 file_size,
@@ -2821,9 +2920,16 @@ fn load_video<Message: 'static + MaybeSend>(
                 watch_time: Duration::ZERO,
                 last_frame: None,
                 subtitles: None,
-            })
+            }))
         }),
-        move |res| f(res.unwrap()),
+        move |res| {
+            let res = res
+                .with_context(|| format!("Joining video {id}"))
+                .flatten()
+                .map(|player| Arc::try_unwrap(player).expect("First player unwrap"));
+
+            f(Arc::new(res))
+        },
     )
 }
 
@@ -2863,7 +2969,8 @@ fn apply_settings(settings: &VideoSettings, player: &mut Player) {
     }
 
     player.video.set_volume(*volume);
-    player.video.set_speed(*speed).unwrap();
+    let id = player.item.id;
+    player.video.set_speed(*speed).with_ctx_log(|| format!("Applying Video settings on {id}"));
     player.video.set_paused(!auto_start);
     player.video.set_gamma(*gamma);
     player.video.set_muted(*muted);
