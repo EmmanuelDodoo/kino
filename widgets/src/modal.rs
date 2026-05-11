@@ -200,8 +200,14 @@ where
 
     /// Sets the message produced when the blur is clicked while the modal is
     /// open
-    pub fn on_blur(mut self, message: Message) -> Self {
-        self.on_blur = Some(message);
+    pub fn on_blur(self, message: Message) -> Self {
+        self.on_blur_maybe(Some(message))
+    }
+
+    /// Sets the message produced when the blur is clicked while the modal is
+    /// open
+    pub fn on_blur_maybe(mut self, message: Option<Message>) -> Self {
+        self.on_blur = message;
         self
     }
 

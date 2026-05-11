@@ -3781,7 +3781,7 @@ fn draw_info<'a>(
 
     let content = column!(general, video, audio, subtitle).spacing(20);
 
-    let content = scrollable(content).spacing(5.0);
+    let content = scrollable(content).spacing(5.0).width(Length::Fill);
 
     content.into()
 }

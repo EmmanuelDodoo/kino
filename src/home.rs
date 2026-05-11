@@ -1800,6 +1800,9 @@ impl Home {
                     SelectionMessage::Play => {
                         let play = selected.to_vec();
                         let play = Message::PlayItems(play).tasked();
+                        // The modal widget tree state gets replaced faster than it's able
+                        // to complete the animation and publish the message. Hence:
+                        self.view = ViewState::None;
 
                         Task::batch([play, self.close_view(true, now)])
                     }
@@ -4291,6 +4294,7 @@ impl Home {
 
                         modalize(selection.into())
                             .passthrough(true)
+                            .on_blur_maybe(None)
                             .blur_alpha(0.1)
                             .right()
                     }
