@@ -4486,8 +4486,8 @@ impl Home {
         let scroll = self.update_page_scroll();
         self.unfocus(now);
 
-        if !clear_selection {
-            self.command = self.view.is_selection();
+        if !clear_selection && self.view.is_selection() {
+            self.command = true;
             return scroll;
         }
 
