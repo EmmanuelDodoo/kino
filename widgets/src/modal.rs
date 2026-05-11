@@ -91,7 +91,6 @@ where
     duration: Duration,
     easing: Easing,
     toggle: bool,
-    alpha: f32,
     on_blur: Option<Message>,
     on_toggle_complete: Option<Message>,
     passthrough: bool,
@@ -116,7 +115,6 @@ where
             duration: Duration::from_millis(150),
             easing: Easing::EaseInOut,
             toggle: true,
-            alpha: 0.15,
             on_blur: None,
             on_toggle_complete: None,
             passthrough: false,
@@ -157,12 +155,6 @@ where
     /// Toggles the modal
     pub fn toggle(mut self, toggle: bool) -> Self {
         self.toggle = toggle;
-        self
-    }
-
-    /// Sets the background blur when the modal is open
-    pub fn blur_alpha(mut self, alpha: f32) -> Self {
-        self.alpha = alpha;
         self
     }
 
@@ -335,11 +327,11 @@ impl State {
         }
     }
 
-    fn alpha(&self, alpha: f32) -> f32 {
+    fn alpha(&self) -> f32 {
         self.animation
             .as_ref()
-            .map(|animation| animation.interpolate(0.0, alpha, self.now))
-            .unwrap_or(alpha)
+            .map(|animation| animation.interpolate(0.0, 1.0, self.now))
+            .unwrap_or(1.0)
     }
 
     fn animation_value(&self) -> bool {
@@ -443,7 +435,7 @@ where
         );
 
         if !state.done || state.animation_value() {
-            let alpha = state.alpha(self.alpha);
+            let alpha = state.alpha();
             let modal_style = theme.style(&self.class);
             let blur_background = modal_style.blur.scale_alpha(alpha);
 
@@ -699,7 +691,7 @@ pub trait Catalog {
 pub type StyleFn<'a, Theme> = Box<dyn Fn(&Theme) -> Style + 'a>;
 
 pub fn default(theme: &iced::Theme) -> Style {
-    let color = theme.palette().background.weaker.text;
+    let color = theme.palette().background.weaker.text.scale_alpha(0.15);
 
     Style { blur: color.into() }
 }

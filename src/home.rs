@@ -4295,7 +4295,12 @@ impl Home {
                         modalize(selection.into())
                             .passthrough(true)
                             .on_blur_maybe(None)
-                            .blur_alpha(0.1)
+                            .style(|theme| {
+                                let default = modal::default(theme);
+                                let blur = default.blur.scale_alpha(0.2);
+
+                                modal::Style { blur, ..default }
+                            })
                             .right()
                     }
                     View::WishNew(state) => modalize(draw_wishlist(state)),
