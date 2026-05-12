@@ -1466,7 +1466,11 @@ impl Manager {
         let left = {
             let volume = slider(
                 0.0..=1.0,
-                self.settings.volume,
+                if self.settings.muted {
+                    0.0
+                } else {
+                    self.settings.volume
+                },
                 ManagerMessage::ChangeVolume,
             )
             .step(0.05)
@@ -2192,12 +2196,6 @@ impl Manager {
             let mute = !player.video.muted();
             player.video.set_muted(mute);
             self.settings.muted = mute;
-
-            if mute {
-                self.settings.volume = 0.0
-            } else {
-                self.settings.volume = player.video.volume()
-            }
         }
 
         let kind = if self.settings.muted {
@@ -2970,7 +2968,10 @@ fn apply_settings(settings: &VideoSettings, player: &mut Player) {
 
     player.video.set_volume(*volume);
     let id = player.item.id;
-    player.video.set_speed(*speed).with_ctx_log(|| format!("Applying Video settings on {id}"));
+    player
+        .video
+        .set_speed(*speed)
+        .with_ctx_log(|| format!("Applying Video settings on {id}"));
     player.video.set_paused(!auto_start);
     player.video.set_gamma(*gamma);
     player.video.set_muted(*muted);
