@@ -1249,7 +1249,7 @@ impl<'a, T: Copy, Message: 'a + Clone> Card<'a, T, Message> {
             .width(CARD_WIDTH)
             .height(CARD_HEIGHT)
             .style(move |theme| {
-                let default = styles::container::bw3(theme);
+                let default = styles::container::bb(theme);
                 let border = default.border.rounded(IMAGE_RADIUS);
 
                 let border = if selected {
