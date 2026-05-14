@@ -1,6 +1,6 @@
 use core::{Context, ContextLog, Error, Log, anyhow, error, variants};
 use iced::{
-    Element, Length, Padding, Size, Subscription, Task, Theme,
+    ContentFit, Element, Length, Padding, Size, Subscription, Task, Theme,
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
@@ -63,6 +63,7 @@ struct Config {
     background_color: String,
     subtitle_font: FontState,
     subtitle_offset: f32,
+    fit: ContentFit,
 }
 
 #[derive(Debug, Clone)]
@@ -194,6 +195,7 @@ pub enum GeneralConfig {
     SeekAmt(String),
     SeekShiftAmt(String),
     Span(String),
+    Fit(ContentFit),
 }
 
 #[derive(Debug, Clone)]
@@ -294,6 +296,7 @@ pub struct Player {
     last_frame: Option<Instant>,
     subtitles: Option<String>,
     file_size: u64,
+    fit: ContentFit,
 }
 
 impl Player {
@@ -956,6 +959,10 @@ impl Manager {
 
                             self.settings.comment_span = span;
 
+                            Task::none()
+                        }
+                        GeneralConfig::Fit(fit) => {
+                            config.fit = fit;
                             Task::none()
                         }
                     },
@@ -1709,13 +1716,19 @@ impl Manager {
     fn video_elem(&self) -> Element<'_, ManagerMessage> {
         match &self.state {
             State::Ready { player, .. } => {
+                let fit = match &self.modal {
+                    Some(Modal::Config(config)) => Some(config.fit),
+                    _ => None,
+                }
+                .unwrap_or(player.fit);
+
                 let video = container(
                     VideoPlayer::new(&player.video)
                         .width(Length::Fill)
                         .height(Length::Fill)
                         .on_click(handle_clicks)
                         .on_error(|error| ManagerMessage::Error(error.to_string()))
-                        .content_fit(iced::ContentFit::Contain)
+                        .content_fit(fit)
                         .on_end_of_stream(ManagerMessage::EndOfStream)
                         .on_new_frame(ManagerMessage::NewFrame)
                         .on_subtitle_text(ManagerMessage::Subs),
@@ -1898,7 +1911,15 @@ impl Manager {
 
                 modal(
                     content,
-                    draw_config(&self.settings, config, subs, audio, item, player.file_size),
+                    draw_config(
+                        &self.settings,
+                        config,
+                        subs,
+                        audio,
+                        item,
+                        player.file_size,
+                        config.fit,
+                    ),
                     ManagerMessage::CloseView,
                 )
             }
@@ -2401,8 +2422,10 @@ impl Manager {
             background_color: _background,
             subtitle_font: _subtitle,
             subtitle_offset,
+            fit,
         } = *config;
 
+        player.fit = fit;
         apply_settings(&self.settings, player);
 
         let set_loaded = |player: &mut Player, url: url::Url| {
@@ -2591,7 +2614,7 @@ impl Manager {
     }
 
     fn video_config(&mut self) -> Task<Message> {
-        let (selected_text, selected_audio, subtitle_uri) = if let State::Ready {
+        let (selected_text, selected_audio, subtitle_uri, fit) = if let State::Ready {
             player,
             awake,
             comments: _comments,
@@ -2618,9 +2641,9 @@ impl Manager {
                     .cloned()
             });
 
-            (current, audio, None)
+            (current, audio, None, Some(player.fit))
         } else {
-            (None, None, None)
+            (None, None, None, None)
         };
 
         let subtitle_offset = selected_text
@@ -2637,6 +2660,7 @@ impl Manager {
             background_color: format!("#{:08x}", self.settings.subtitles.background_color),
             subtitle_font: FontState::new(self.fonts.clone(), &self.settings.subtitles.font),
             subtitle_offset,
+            fit: fit.unwrap_or(ContentFit::Contain),
         })));
 
         Task::none()
@@ -2918,6 +2942,7 @@ fn load_video<Message: 'static + MaybeSend>(
                 watch_time: Duration::ZERO,
                 last_frame: None,
                 subtitles: None,
+                fit: ContentFit::Contain,
             }))
         }),
         move |res| {
@@ -3346,6 +3371,7 @@ fn draw_general<'a>(
     size: f32,
     padding: Padding,
     spacing: f32,
+    fit: ContentFit,
 ) -> Element<'a, GeneralConfig> {
     let input_width = 48;
     let volume_amt = {
@@ -3435,7 +3461,34 @@ fn draw_general<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
-    column!(volume_amt, speed_amt, seek_amt, seek_amt_shift, cspan)
+    let fit = {
+        let label = label_maker("Video Content Fit: ");
+
+        let handle = picklist_handle(size);
+
+        let pick = pick_list(
+            Some(fit),
+            [
+                ContentFit::Contain,
+                ContentFit::Cover,
+                ContentFit::Fill,
+                ContentFit::ScaleDown,
+                ContentFit::None,
+            ],
+            ToString::to_string,
+        )
+        .handle(handle)
+        .ellipsis(text::Ellipsis::End)
+        .on_select(GeneralConfig::Fit)
+        .padding(padding)
+        .text_size(size);
+
+        row!(label, space::horizontal(), pick)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    column!(fit, volume_amt, speed_amt, seek_amt, seek_amt_shift, cspan)
         .spacing(16)
         .into()
 }
@@ -3901,8 +3954,9 @@ fn draw_config<'a>(
     audio: &'a [Audio],
     item: &'a models::Video,
     file_size: u64,
+    fit: ContentFit,
 ) -> Element<'a, ManagerMessage> {
-    // todo: Hardware volume, Aspect Ratio
+    // todo: Hardware volume
     let size = H7;
     let padding = Padding::new(2.0).horizontal(5.0);
     let spacing = 8.0;
@@ -3932,7 +3986,7 @@ fn draw_config<'a>(
 
     let content = match curr_tab {
         ConfigTab::General => {
-            draw_general(settings, size, padding, spacing).map(ConfigMessage::General)
+            draw_general(settings, size, padding, spacing, fit).map(ConfigMessage::General)
         }
         ConfigTab::Filters => draw_filters(settings, size).map(ConfigMessage::Video),
         ConfigTab::Subtitles => draw_subs(settings, config, subtitles, size, padding, spacing)
