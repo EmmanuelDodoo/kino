@@ -15,7 +15,9 @@ use iced::{
         markdown, mouse_area, row, rule, scrollable, space, stack, text, tooltip as tp,
     },
 };
-use registry::models::{Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection};
+use registry::models::{
+    self, Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection,
+};
 use widgets::marquee;
 
 use std::sync::LazyLock;
@@ -99,7 +101,9 @@ pub fn ratings<'a, Message: 'a>(rating: Option<f32>, show_text: bool) -> Element
                 .align_y(Vertical::Center);
 
             let ratings = if show_text {
-                let text = sized_medium(format!("{rating:.1}"), H8).style(color).line_height(1.0);
+                let text = sized_medium(format!("{rating:.1}"), H8)
+                    .style(color)
+                    .line_height(1.0);
                 row!(text, ratings)
             } else {
                 row!(ratings)
@@ -441,6 +445,32 @@ pub enum Image {
     Default,
 }
 
+impl Image {
+    pub fn load(image: Option<&models::image::Image>) -> (Self, Task<ThumbnailTaskKind>) {
+        match image {
+            Some(poster) => {
+                let path = poster.path.display().to_string();
+
+                let sample = if poster.main.is_none() {
+                    Task::future(async move {
+                        sample_complement(&path).map(|(a, b)| (to_color(a), to_color(b)))
+                    })
+                    .and_then(move |(main, accent)| {
+                        Task::done(ThumbnailTaskKind::Samples { main, accent })
+                    })
+                } else {
+                    Task::none()
+                };
+
+                let images = image::allocate(poster.path.clone()).map(ThumbnailTaskKind::Image);
+
+                (Self::Loading, Task::batch([sample, images]))
+            }
+            None => (Self::Default, Task::none()),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Thumbnail<T: Media> {
     pub selected: bool,
@@ -460,49 +490,17 @@ impl<T: Media + 'static> Thumbnail<T> {
     pub fn new(media: T) -> (Self, Task<ThumbnailTask<T>>) {
         let id = media.id();
 
-        let task = match media.poster() {
-            Some(poster) => {
-                let path = poster.path.display().to_string();
-
-                let sample = if poster.main.is_none() {
-                    Task::future(async move {
-                        sample_complement(&path).map(|(a, b)| (to_color(a), to_color(b)))
-                    })
-                    .and_then(move |(main, accent)| {
-                        Task::done(ThumbnailTask {
-                            id,
-                            kind: ThumbnailTaskKind::Samples { main, accent },
-                        })
-                    })
-                } else {
-                    Task::none()
-                };
-
-                let images =
-                    image::allocate(poster.path.clone()).map(move |allocation| ThumbnailTask {
-                        id,
-                        kind: ThumbnailTaskKind::Image(allocation),
-                    });
-
-                Task::batch([sample, images])
-            }
-            None => Task::none(),
-        };
-
-        let (task, handle) = task.abortable();
+        let (poster, task) = Image::load(media.poster());
+        let (task, handle) = task.map(move |kind| ThumbnailTask { id, kind }).abortable();
         let handle = handle.abort_on_drop();
 
-        let mut sample_text = None;
-        let mut sample_color = None;
-
         //todo: Sample color is not great for current default poster
-        let poster = match media.poster() {
-            Some(poster) => {
-                sample_color = poster.get_main().map(to_color);
-                sample_text = poster.get_accent().map(to_color);
-                Image::Loading
-            }
-            None => Image::Default,
+        let (sample_color, sample_text) = match media.poster() {
+            Some(poster) => (
+                poster.get_main().map(to_color),
+                poster.get_accent().map(to_color),
+            ),
+            None => (None, None),
         };
 
         let backdrop = media.backdrop().map(Handle::from_path);
@@ -575,7 +573,7 @@ impl<T: Media + 'static> Thumbnail<T> {
         height: impl Into<Length>,
         now: Instant,
     ) -> Element<'a, Message> {
-        image_poster(&self.poster, width, height,ContentFit::Cover, now)
+        image_poster(&self.poster, width, height, ContentFit::Cover, now)
     }
 
     pub fn backdrop<'a, Message: 'a>(

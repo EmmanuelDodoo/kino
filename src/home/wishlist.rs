@@ -137,48 +137,18 @@ impl WishThumbnail {
     pub fn new(wish: Wish) -> (Self, Task<WishThumbnailTask>) {
         let id = wish.id;
 
-        let task = match wish.poster.as_ref() {
-            Some(poster) => {
-                let path = poster.path.display().to_string();
-
-                let sample = if poster.main.is_none() {
-                    Task::future(async move {
-                        sample_complement(&path).map(|(a, b)| (to_color(a), to_color(b)))
-                    })
-                    .and_then(move |(main, accent)| {
-                        Task::done(WishThumbnailTask {
-                            id,
-                            kind: ThumbnailTaskKind::Samples { main, accent },
-                        })
-                    })
-                } else {
-                    Task::none()
-                };
-
-                let images =
-                    image::allocate(poster.path.clone()).map(move |allocation| WishThumbnailTask {
-                        id,
-                        kind: ThumbnailTaskKind::Image(allocation),
-                    });
-
-                Task::batch([sample, images])
-            }
-            None => Task::none(),
-        };
-
-        let (task, handle) = task.abortable();
+        let (poster, task) = Image::load(wish.poster.as_ref());
+        let (task, handle) = task
+            .map(move |kind| WishThumbnailTask { id, kind })
+            .abortable();
         let handle = handle.abort_on_drop();
 
-        let mut sample_text = None;
-        let mut sample_color = None;
-
-        let poster = match wish.poster.as_ref() {
-            Some(poster) => {
-                sample_color = poster.get_main().map(to_color);
-                sample_text = poster.get_accent().map(to_color);
-                Image::Loading
-            }
-            None => Image::Default,
+        let (sample_color, sample_text) = match wish.poster.as_ref() {
+            Some(poster) => (
+                poster.get_main().map(to_color),
+                poster.get_accent().map(to_color),
+            ),
+            None => (None, None),
         };
 
         let new = Self {
