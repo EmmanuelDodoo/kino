@@ -70,6 +70,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 11,
         sql: include_str!("../../resources/db/migrations/11.sql"),
     },
+    Migration {
+        version: 12,
+        sql: include_str!("../../resources/db/migrations/12.sql"),
+    },
 ];
 
 pub struct Database {
@@ -403,9 +407,9 @@ impl Database {
         };
 
         let sql = if is_movie {
-            "SELECT movie.name, movie.id, movie.progress, movie.duration, movie.watch_count, movie.subtitle_id, movie.audio_id, movie.generate_poster, movie.fetched, movie.path, directory.path AS directory_path FROM movie JOIN directory ON movie.directory=directory.id WHERE movie.id=:id AND NOT movie.removed"
+            "SELECT movie.name, movie.id, movie.progress, movie.duration, movie.watch_count, movie.video_id, movie.subtitle_id, movie.audio_id, movie.generate_poster, movie.fetched, movie.path, directory.path AS directory_path FROM movie JOIN directory ON movie.directory=directory.id WHERE movie.id=:id AND NOT movie.removed"
         } else {
-            "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE episode.id=:id AND NOT episode.removed"
+            "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.video_id, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE episode.id=:id AND NOT episode.removed"
         };
 
         let mut statement = self.prepare_cached(sql)?;
@@ -443,7 +447,7 @@ impl Database {
             .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
-        let query = "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE NOT episode.removed";
+        let query = "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.video_id, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE NOT episode.removed";
 
         let sql =
             format!("{query} AND season.id=:season {filter} {sort} LIMIT :limit OFFSET :offset",);

@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 11;
+PRAGMA user_version = 12;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -108,6 +108,7 @@ CREATE TABLE episode (
 	episode_number       INT NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
 	fetched		     BOOLEAN DEFAULT FALSE,
+	video_id	     TEXT,
 	subtitle_id	     TEXT ,
 	audio_id	     TEXT,
 	removed		     BOOLEAN DEFAULT FALSE,
@@ -142,6 +143,7 @@ CREATE TABLE movie (
 	duration	     INTEGER NOT NULL DEFAULT 0,
 	comment_count	     INTEGER NOT NULL DEFAULT 0,
 	fetched		     BOOLEAN DEFAULT FALSE,
+	video_id	     TEXT,
 	subtitle_id	     TEXT,
 	audio_id	     TEXT,
 	removed		     BOOLEAN DEFAULT FALSE,
