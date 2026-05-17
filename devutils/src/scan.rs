@@ -8,7 +8,7 @@ use registry::models::{
     SeasonId, Show, ShowId, Subtitle, SubtitleId, VideoId, video,
 };
 use rusqlite::OptionalExtension;
-use rusqlite::types::{ToSqlOutput, Value, ValueRef};
+use rusqlite::types::{ToSqlOutput, ValueRef};
 use std::collections::HashMap;
 use std::path::{MAIN_SEPARATOR_STR, Path, PathBuf};
 use std::sync::LazyLock;
@@ -1318,8 +1318,6 @@ fn save_video_metadata(
         }
     }
 
-    let mut selected_audio = None;
-
     let audios = audio.into_iter().map(|audio| {
         Audio::new(
             id,
@@ -1334,10 +1332,6 @@ fn save_video_metadata(
     });
 
     for audio in audios {
-        if selected_audio.is_none() {
-            selected_audio = Some(audio.id);
-        }
-
         let query = audio.insert();
         match query.execute(db) {
             Ok(succ) => succ.log(),
@@ -1346,23 +1340,6 @@ fn save_video_metadata(
             }
         }
     }
-
-    let selected_audio = selected_audio
-        .map(|audio| ToSqlOutput::from(audio))
-        .unwrap_or(ToSqlOutput::Owned(Value::Null));
-
-    db.execute(
-        &format!(
-            "UPDATE {} SET audio_id=:audio WHERE id=:id",
-            if matches!(id, VideoId::Movie(_)) {
-                "movie"
-            } else {
-                "episode"
-            }
-        ),
-        &[(":audio", &selected_audio), (":id", &ToSqlOutput::from(id))],
-    )
-    .with_ctx_log(|| format!("Setting video {id} audio"));
 
     let videos = videos.into_iter().map(|video| {
         video::VideoInfo::new(
