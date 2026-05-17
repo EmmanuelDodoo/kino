@@ -27,7 +27,7 @@ impl VideoInfoId {
             .map(|id| Self(Uuid::try_parse(&id).unwrap()))
     }
 
-    pub(super) fn _from_row_maybe(column: &str, row: &Row<'_>) -> rusqlite::Result<Option<Self>> {
+    pub(crate) fn from_row_maybe(column: &str, row: &Row<'_>) -> rusqlite::Result<Option<Self>> {
         row.get::<_, Option<String>>(column)
             .map(|id| id.map(|id| Self(Uuid::try_parse(&id).unwrap())))
     }
@@ -129,6 +129,22 @@ impl VideoInfo {
             dar_num,
             dar_denom,
             stream,
+        }
+    }
+
+    pub fn resolution(&self) -> String {
+        match (self.width, self.height) {
+            (7680, 4320) => "8K".to_owned(),
+            (3840, 2160) => "4K".to_owned(),
+            (4096, 2160) => "4K (DCI)".to_owned(),
+            (2048, 1080) => "2K (DCI)".to_owned(),
+            (2560, 1440) => "1440p (QHD)".to_owned(),
+            (1920, 1080) => "1080p (FHD)".to_owned(),
+            (1280, 720) => "720p (HD)".to_owned(),
+            (854, 480) => "480p (SD)".to_owned(),
+            (640, 360) => "360p".to_owned(),
+            (426, 240) => "240p".to_owned(),
+            (_, height) => format!("{height}p"),
         }
     }
 

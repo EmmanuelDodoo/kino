@@ -3878,7 +3878,7 @@ fn draw_info<'a>(
         let bitrate = info(format!("Bitrate: {bitrate:.2} Mbps"));
 
         let framerate = info(format!("Framerate: {:.1}", video.framerate));
-        let dimensions = info(format!("Dimensions: {}x{}", video.dar_num, video.dar_denom));
+        let dimensions = info(format!("Resolution: {}", video.resolution()));
 
         let info = column!(codec, bitrate, framerate, dimensions)
             .spacing(4)

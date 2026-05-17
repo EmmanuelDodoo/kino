@@ -28,7 +28,7 @@ impl SubtitleId {
             .map(|id| Self(Uuid::try_parse(&id).unwrap()))
     }
 
-    pub(super) fn from_row_maybe(column: &str, row: &Row<'_>) -> rusqlite::Result<Option<Self>> {
+    pub(crate) fn from_row_maybe(column: &str, row: &Row<'_>) -> rusqlite::Result<Option<Self>> {
         row.get::<_, Option<String>>(column)
             .map(|id| id.map(|id| Self(Uuid::try_parse(&id).unwrap())))
     }
@@ -114,7 +114,7 @@ impl Subtitle {
     }
 
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO subtitle (id, video, media_type, kind, path, title, lang, removed, sub_offset) VALUES (:id, :video, :media_type, :kind, :path, :title, :lang, :removed, :sub_offset) ON CONFLICT DO NOTHING";
+        let sql = "INSERT INTO subtitle (id, video, media_type, kind, path, title, lang, removed, sub_offset) VALUES (:id, :video, :media_type, :kind, :path, :title, :lang, :removed, :sub_offset) ON CONFLICT DO UPDATE SET removed=FALSE";
 
         let Self {
             id,
@@ -212,6 +212,19 @@ impl Subtitle {
             sql,
             params,
             op: Operation::Insert,
+        }
+    }
+
+    pub fn remove<'a>(id: SubtitleId) -> Query<'a> {
+        let sql = "UPDATE subtitle SET removed=TRUE WHERE id=:id";
+        let params = vec![(":id", ToSqlOutput::from(id))];
+
+        Query {
+            id: id.0,
+            table: Table::Subtitle,
+            sql,
+            params,
+            op: Operation::Delete,
         }
     }
 

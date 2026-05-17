@@ -1,6 +1,7 @@
 use super::{
     CollectionThumbnail, HomeMessage, PageKind, ViewMessage, movies, shared::*, shows, view_unicode,
 };
+use super::movie::MovieItem;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{self, Layout, Scroll, empty, styles};
@@ -177,7 +178,7 @@ impl CollectionPage {
         now: Instant,
         layout: Layout,
         collection: &'a CollectionThumbnail,
-        movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
+        movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
@@ -352,7 +353,7 @@ impl CollectionPage {
     fn list<'a>(
         &self,
         now: Instant,
-        mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
+        mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
@@ -476,7 +477,7 @@ impl CollectionPage {
     fn compact<'a>(
         &self,
         now: Instant,
-        mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
+        mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
@@ -594,7 +595,7 @@ impl CollectionPage {
     fn grid<'a>(
         &self,
         now: Instant,
-        mut movies: Peekable<impl Iterator<Item = &'a Thumbnail<Movie>>>,
+        mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,

@@ -3,7 +3,10 @@ use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
-use super::{DirectoryId, Media, datetime_to_sql, image::Image, naivedate_to_sql};
+use super::{
+    AudioId, DirectoryId, Media, SubtitleId, VideoInfoId, datetime_to_sql, image::Image,
+    naivedate_to_sql,
+};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -45,8 +48,8 @@ pub struct Movie {
     original_name: String,
     pub directory: DirectoryId,
     path: String,
-    poster: Option<Image>,
-    backdrop: Option<String>,
+    pub poster: Option<Image>,
+    pub backdrop: Option<String>,
     pub tags: Vec<String>,
     synopsis: String,
     release: NaiveDate,
@@ -57,6 +60,9 @@ pub struct Movie {
     last_watched: Option<DateTime<Local>>,
     duration: u64,
     comments: u32,
+    pub video_id: Option<VideoInfoId>,
+    pub audio_id: Option<AudioId>,
+    pub subtitle_id: Option<SubtitleId>,
     source: String,
 }
 
@@ -109,6 +115,10 @@ impl Movie {
 
         let source = row.get::<_, String>("source")?;
 
+        let video_id = VideoInfoId::from_row_maybe("video_id", row)?;
+        let subtitle_id = SubtitleId::from_row_maybe("subtitle_id", row)?;
+        let audio_id = AudioId::from_row_maybe("audio_id", row)?;
+
         Ok(Self {
             id,
             directory,
@@ -128,6 +138,9 @@ impl Movie {
             duration,
             comments,
             source,
+            video_id,
+            subtitle_id,
+            audio_id,
         })
     }
 
@@ -151,6 +164,9 @@ impl Movie {
             duration,
             comments: _comments,
             source: _source,
+            video_id: _video,
+            audio_id: _audio,
+            subtitle_id: _sub,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -281,6 +297,23 @@ impl Movie {
     }
 
     #[must_use]
+    pub fn mark_watched<'a>(id: MovieId, count: u32) -> Query<'a> {
+        let sql = "UPDATE movie SET watch_count=:count, progress=1.0 WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":count", ToSqlOutput::from(count)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
     pub fn set_rating<'a>(id: MovieId, rating: f32) -> Query<'a> {
         debug_assert!((0.0..=5.0).contains(&rating), "Movie rating out of range");
 
@@ -288,6 +321,57 @@ impl Movie {
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":rating", ToSqlOutput::from(rating)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_video<'a>(id: MovieId, video: VideoInfoId,) -> Query<'a>{
+        let sql = "UPDATE movie SET video_id=:video WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":video", ToSqlOutput::from(video))
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_audio<'a>(id: MovieId, audio: AudioId,) -> Query<'a>{
+        let sql = "UPDATE movie SET audio_id=:audio WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":audio", ToSqlOutput::from(audio))
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_subtitle<'a>(id: MovieId, subtitle: SubtitleId,) -> Query<'a>{
+        let sql = "UPDATE movie SET subtitle_id=:subtitle WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":subtitle", ToSqlOutput::from(subtitle))
         ];
 
         Query {
@@ -332,6 +416,9 @@ impl Movie {
             duration,
             comments: 0,
             source: String::default(),
+            video_id: None,
+            audio_id: None,
+            subtitle_id: None,
         };
 
         let query = new.insert();

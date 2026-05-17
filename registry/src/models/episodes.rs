@@ -3,7 +3,10 @@ use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
-use super::{Media, SeasonId, datetime_to_sql, image::Image, naivedate_to_sql};
+use super::{
+    AudioId, Media, SeasonId, SubtitleId, VideoInfoId, datetime_to_sql, image::Image,
+    naivedate_to_sql,
+};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -65,6 +68,9 @@ pub struct Episode {
     comments: u32,
     pub number: u16,
     source: String,
+    pub video_id: Option<VideoInfoId>,
+    pub audio_id: Option<AudioId>,
+    pub subtitle_id: Option<SubtitleId>,
 }
 
 impl Episode {
@@ -110,6 +116,10 @@ impl Episode {
         let comments = row.get::<_, u32>("comment_count")?;
         let source = row.get::<_, String>("source")?;
 
+        let video_id = VideoInfoId::from_row_maybe("video_id", row)?;
+        let subtitle_id = SubtitleId::from_row_maybe("subtitle_id", row)?;
+        let audio_id = AudioId::from_row_maybe("audio_id", row)?;
+
         Ok(Self {
             id,
             name,
@@ -129,6 +139,9 @@ impl Episode {
             comments,
             number,
             source,
+            video_id,
+            subtitle_id,
+            audio_id,
         })
     }
 
@@ -152,6 +165,9 @@ impl Episode {
             comments,
             number,
             source: _source,
+            video_id: _video,
+            subtitle_id: _sub,
+            audio_id: _audio,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -316,6 +332,9 @@ impl Episode {
             last_watched: None,
             comments: 0,
             number,
+            video_id: None,
+            audio_id: None,
+            subtitle_id: None,
             source: String::default(),
         };
 

@@ -120,6 +120,38 @@ pub fn ratings<'a, Message: 'a>(rating: Option<f32>, show_text: bool) -> Element
     }
 }
 
+pub fn ratings_short<'a, Message: 'a>(rating: Option<f32>) -> Element<'a, Message> {
+    let size = H7;
+    let color = |theme: &Theme| -> text::Style {
+        let color = theme.palette().primary.strong.color;
+        text::Style { color: Some(color) }
+    };
+
+    let temp = |rating: f32, star: widget::Text<'a>| {
+        row!(
+            sized_medium(format!("{rating:.1}"), H8),
+            star.size(size).style(color)
+        )
+        .align_y(Vertical::Center)
+        .spacing(2.0)
+    };
+
+    match rating {
+        Some(rating) => {
+            let rating = (rating * 10.0).round() / 10.0;
+            let star = if rating >= 4.5 {
+                icon(STAR)
+            } else {
+                icon(HALF_STAR)
+            };
+
+            temp(rating, star)
+        }
+        None => temp(0.0, icon(UNSTAR)),
+    }
+    .into()
+}
+
 fn progress_icon(progress: f32) -> char {
     match progress {
         ..0.15 => PROGRESS_10,
@@ -203,7 +235,7 @@ pub fn data<'a, Message: 'a>(
 ) -> Element<'a, Message> {
     let size = H7;
     let color = |theme: &Theme| text::Style {
-        color: Some(theme.palette().primary.weak.color),
+        color: Some(theme.palette().primary.base.color),
     };
 
     let value = h7(value).style(color);
@@ -371,10 +403,10 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
     collection: &'a SimpleCollection,
     on_press: impl Fn(CollectionId) -> Message + 'a,
 ) -> Element<'a, Message> {
-    let size = P;
+    let size = H7;
     let unicode = Icon::new(collection.icon).unicode();
     let icon = icon(unicode).size(size);
-    let text = container(regular(&collection.name))
+    let text = container(medium(&collection.name).size(size))
         .max_height(48.0)
         .max_width(275);
 
@@ -387,7 +419,7 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
     .padding([8, 12])
     .on_press((on_press)(collection.id))
     .style(move |theme, status| {
-        let default = styles::button::subtle(theme, status);
+        let default = styles::button::text(theme, status);
 
         let border = default.border.rounded(IMAGE_RADIUS);
 
@@ -409,9 +441,9 @@ pub fn float<'a, Message: 'a>(
 
     widget::float(content)
         .scale(scale)
-        .translate(move |bounds, viewport| {
-            bounds.zoom(1.05).offset(&viewport.shrink(5)) * interpolation
-        })
+        // .translate(move |bounds, viewport| {
+        //     bounds.zoom(1.05).offset(&viewport.shrink(5)) * interpolation
+        // })
         .style(move |_theme| widget::float::Style {
             shadow: Shadow {
                 color,
@@ -595,41 +627,6 @@ impl<T: Media + 'static> Thumbnail<T> {
         }
     }
 
-    fn poster_helper<'a, Message: 'a>(&self, scale: f32, now: Instant) -> Element<'a, Message> {
-        let scale = if self.poster_ready() { scale } else { 1.0 };
-
-        let view = move |handle: &Handle| {
-            image(handle)
-                .border_radius(IMAGE_RADIUS)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .scale(scale)
-                .content_fit(ContentFit::Fill)
-        };
-
-        let empty = || {
-            container(empty())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(styles::container::dark)
-        };
-
-        match &self.poster {
-            Image::Ready {
-                allocation,
-                fade_in,
-            } => view(allocation.handle())
-                .opacity(fade_in.interpolate(0.0, 1.0, now))
-                .scale(scale * fade_in.interpolate(1.15, 1.0, now))
-                .into(),
-            Image::Loading => empty().into(),
-            Image::Default => match DEFAULT_POSTER.as_ref() {
-                Some(handle) => view(handle).into(),
-                _ => empty().into(),
-            },
-        }
-    }
-
     pub fn list<'a, Message: 'a + Clone>(
         &'a self,
         now: Instant,
@@ -674,6 +671,17 @@ impl<T: Media + 'static> Thumbnail<T> {
         let background_inter = self.background.interpolate(0.0, 1.0, now);
         let icon_inter = self.icon.interpolate(0.0, 1.0, now);
 
+        let sample = self.sample_text;
+        let duration = sized_medium(self.media.duration_full(), H8).style(move |theme: &Theme| {
+            if sample.is_some() {
+                text::Style { color: sample }
+            } else {
+                text::Style {
+                    color: Some(theme.palette().primary.strong.text),
+                }
+            }
+        });
+
         let overlay = card_overlay(
             self.media.as_ref(),
             on_add,
@@ -681,6 +689,7 @@ impl<T: Media + 'static> Thumbnail<T> {
             self.sample_text,
             background_inter,
             icon_inter,
+            duration,
         );
 
         let card = Card {
@@ -1291,6 +1300,7 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     sample_text: Option<Color>,
     background_inter: f32,
     icon_inter: f32,
+    unique: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
     let padding = [3, 6];
     let sample = sample_text;
@@ -1318,8 +1328,7 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     };
 
     let bottom = {
-        let duration = sized_medium(media.duration_full(), H8).style(color);
-        row!(space::horizontal(), duration)
+        row!(space::horizontal(), unique.into())
             .align_y(Vertical::Center)
             .padding(padding)
     };

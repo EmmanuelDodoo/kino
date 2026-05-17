@@ -9,11 +9,11 @@ use iced::{
 };
 use tokio::sync::mpsc;
 
-use crate::home::{Home, HomeMessage, WishThumbnailTask, shared};
+use crate::home::{self, Home, HomeMessage, WishThumbnailTask, shared};
 use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
 use crate::settings::{Settings, SettingsMessage};
 use crate::utils::{Action, Config, KeyPress, Layout, Screen, icons, typo};
-use core::{Context, Error, Log, anyhow};
+use core::{Context, ContextLog, Log, Error, anyhow};
 use registry::db::{self, Query};
 use registry::{
     filter::{self, FilterMode, SearchFilter},
@@ -26,14 +26,16 @@ use devutils::{
     source::{self, SourceId, SourceSet},
 };
 use registry::models::{
-    self, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode, EpisodeId,
-    ItemId, Media, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Video,
-    VideoId, Wish, WishId, WishKind, collection,
+    self, AudioId, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode,
+    EpisodeId, ItemId, Media, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection,
+    Subtitle, SubtitleId, Video, VideoId, VideoInfoId, Wish, WishId, WishKind, collection,
     collection::{
         Items,
         triggers::{DeleteTrigger, InsertTrigger},
     },
 };
+use std::fs;
+use std::path::PathBuf;
 use widgets::toast;
 
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +51,27 @@ pub enum FetchId {
     Season(SeasonId),
     Episode(EpisodeId),
     Collection(CollectionId),
+}
+
+#[derive(Clone, Debug)]
+pub enum NewUpdateKind {
+    Name(String),
+    Overview(String),
+    Rating(f32),
+    Video(VideoInfoId),
+    Audio(AudioId),
+    Subtitle(SubtitleId),
+    SourceId(SourceId),
+    MarkWatched(u32),
+}
+
+#[derive(Clone, Debug)]
+pub struct MovieUpdate {
+    pub id: MovieId,
+    /// Is some if the source was updated
+    pub prev_source: Option<(SourceSet, String)>,
+    pub source: SourceSet,
+    pub updates: Vec<NewUpdateKind>,
 }
 
 #[derive(Clone, Debug)]
@@ -108,11 +131,24 @@ pub enum Message {
         id: CollectionId,
         items: Items,
     },
+    SubtitleDelete(SubtitleId),
     MediaUpdate(MediaUpdate),
+    MovieUpdate(MovieUpdate),
+    PosterUpdate {
+        id: ItemId,
+        path: PathBuf,
+    },
+    BackdropUpdate {
+        id: ItemId,
+        path: PathBuf,
+    },
     //todo
     Query(Query<'static>),
     FetchMembershipIds(ItemId),
     FetchMemberships(ItemId),
+    FetchVideoInfo(VideoId),
+    FetchAudio(VideoId),
+    FetchSubtitles(VideoId),
     ToggleMembership {
         item: ItemId,
         collections: Vec<(CollectionId, bool)>,
@@ -149,7 +185,7 @@ pub enum Message {
     CaptureKeys(bool),
     Scan,
     ScanComplete(Vec<DirectoryId>),
-    MovieTask(ThumbnailTask<Movie>),
+    MovieTask(home::MovieItemTask),
     ShowTask(ThumbnailTask<Show>),
     SeasonTask(ThumbnailTask<Season>),
     EpisodeTask(ThumbnailTask<Episode>),
@@ -417,11 +453,10 @@ impl App {
                 settings.update(ssg)
             }
             Message::Query(query) => {
-                match query.execute(&self.db) {
+                match query.execute(&self.db).context("Query Message") {
                     Ok(suc) => suc.log(),
                     Err(error) => {
-                        let msg = Message::error(error.to_string(), false);
-                        error.log_err();
+                        let msg = Message::anyhow(error);
 
                         return Task::done(msg);
                     }
@@ -451,16 +486,16 @@ impl App {
                     },
                     MediaUpdateKind::Refetch(source) => match source.refetch(id) {
                         Some(query) => {
-                            match query.execute(&self.db) {
+                            match query.execute(&self.db).with_context(|| {
+                                format!("Refetch media {id:?} with source {}", source.to_str())
+                            }) {
                                 Ok(succ) => {
                                     succ.log();
                                     let msg = Message::success("Refetch queued").tasked();
                                     return Task::batch([self.home.content_refresh(), msg]);
                                 }
                                 Err(error) => {
-                                    // todo
-                                    let msg = Message::error(error.to_string(), false);
-                                    error.log_err();
+                                    let msg = Message::anyhow(error);
 
                                     return Task::done(msg);
                                 }
@@ -482,7 +517,6 @@ impl App {
                     } => {
                         let query = match id {
                             ItemId::Movie(id) => source.set_tmdb_id(id, tmdb_id),
-
                             ItemId::Show(id) => source.set_tmdb_id(id, tmdb_id),
                             ItemId::Season(id) => source.set_tmdb_number(id, tmdb_id as u16),
                             ItemId::Episode(id) => source.set_tmdb_number(id, tmdb_id as u16),
@@ -490,16 +524,16 @@ impl App {
 
                         match query {
                             Some(query) => {
-                                match query.execute(&self.db) {
+                                match query.execute(&self.db).with_context(|| {
+                                    format!("Updating media {id:?} tmdb id {tmdb_id}")
+                                }) {
                                     Ok(succ) => {
                                         succ.log();
                                         let msg = Message::success("Refetch queued").tasked();
                                         return Task::batch([self.home.content_refresh(), msg]);
                                     }
                                     Err(error) => {
-                                        // todo
-                                        let msg = Message::error(error.to_string(), false);
-                                        error.log_err();
+                                        let msg = Message::anyhow(error);
 
                                         return Task::done(msg);
                                     }
@@ -518,11 +552,204 @@ impl App {
                         self.home.content_refresh()
                     }
                     Err(error) => {
-                        // todo
-                        let msg = Message::error(error.to_string(), false);
-                        error.log_err();
+                        let msg = Message::anyhow(error);
                         Task::done(msg)
                     }
+                }
+            }
+            Message::SubtitleDelete(subtitle) => {
+                let query = Subtitle::remove(subtitle);
+                match query
+                    .execute(&self.db)
+                    .with_context(|| format!("Deleting subtitle {subtitle}"))
+                    .context("Failed to delete subtitle")
+                {
+                    Ok(succ) => {
+                        succ.log();
+                        Task::batch([
+                            Message::success("Subtitle deleted").tasked(),
+                            self.home.content_refresh(),
+                        ])
+                    }
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
+            Message::PosterUpdate { id, path } => {
+                let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
+                    return Message::error("Invalid poster file", true).tasked();
+                };
+
+                let poster = source::poster(&self.config.images_path(), &id, extension);
+
+                if let Err(error) = fs::copy(&path, &poster)
+                    .with_context(|| format!("Copying media {id:?} poster from {}", path.display()))
+                    .context("Copying poster file failed")
+                {
+                    return Message::anyhow(error).tasked();
+                }
+
+                use std::ops::DerefMut;
+                if let Err(error) = source::insert_media_image(
+                    &self.db,
+                    id,
+                    Some(poster.display().to_string()),
+                    None,
+                )
+                .with_context(|| format!("Media {id:?} poster {}", poster.display()))
+                .context("Inserting media poster failed")
+                {
+                    return Message::anyhow(error).tasked();
+                };
+
+                let tasks = Task::batch([
+                    self.home.content_refresh(),
+                    Message::success("Poster updated!").tasked(),
+                ]);
+
+                return tasks;
+            }
+            Message::BackdropUpdate { id, path } => {
+                let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
+                    return Message::error("Invalid backdrop file", true).tasked();
+                };
+
+                let backdrop = source::backdrop(&self.config.images_path(), &id, extension);
+
+                if let Err(error) = fs::copy(&path, &backdrop)
+                    .with_context(|| {
+                        format!("Copying media {id:?} backdrop from {}", path.display())
+                    })
+                    .context("Copying backdrop file failed")
+                {
+                    return Message::anyhow(error).tasked();
+                }
+
+                use std::ops::DerefMut;
+
+                if let Err(error) = source::insert_media_image(
+                    &self.db,
+                    id,
+                    None,
+                    Some(backdrop.display().to_string()),
+                )
+                .with_context(|| format!("Media {id:?} backdrop {}", backdrop.display()))
+                .context("Inserting media backdrop failed")
+                {
+                    return Message::anyhow(error).tasked();
+                };
+
+                let tasks = Task::batch([
+                    self.home.content_refresh(),
+                    Message::success("backdrop updated!").tasked(),
+                ]);
+
+                return tasks;
+            }
+            Message::MovieUpdate(MovieUpdate {
+                id,
+                prev_source,
+                source,
+                updates,
+            }) => {
+                let trans = match self
+                    .db
+                    .transaction()
+                    .context("Movie update failed")
+                    .with_context(|| format!("Failed to start transaction for movie {id} update"))
+                {
+                    Ok(trans) => trans,
+                    Err(error) => {
+                        return Message::anyhow(error).tasked();
+                    }
+                };
+
+                let mut name = None;
+                let mut source_id = None;
+
+                for update in updates {
+                    let query = match update {
+                        NewUpdateKind::Name(new) => {
+                            name.replace(new.clone());
+                            Movie::set_name(id, new)
+                        }
+                        NewUpdateKind::Overview(overview) => Movie::set_synopsis(id, overview),
+                        NewUpdateKind::Rating(rating) => Movie::set_rating(id, rating),
+                        NewUpdateKind::Video(video) => Movie::set_video(id, video),
+                        NewUpdateKind::Audio(audio) => Movie::set_audio(id, audio),
+                        NewUpdateKind::Subtitle(subtitle) => Movie::set_subtitle(id, subtitle),
+                        NewUpdateKind::SourceId(id) => {
+                            source_id = Some(id);
+                            continue;
+                        }
+                        NewUpdateKind::MarkWatched(count) => Movie::mark_watched(id, count),
+                    };
+
+                    if let Some(succ) = query
+                        .execute(&trans)
+                        .with_ctx_log(|| format!("Updating movie {id} update kind"))
+                    {
+                        succ.log()
+                    }
+                }
+
+                if let Some((prev, prev_name)) = prev_source {
+                    if let Some(delete) = prev.delete(id)
+                        && let Some(succ) = delete.execute(&trans).with_ctx_log(|| {
+                            format!(
+                                "Failed to delete movie {id} source {} request",
+                                prev.to_str()
+                            )
+                        })
+                    {
+                        succ.log();
+                    }
+
+                    let name = name.unwrap_or(prev_name);
+                    if let Some((query, request)) = source.movie_request(id, name)
+                        && let Some(succ) = query.execute(&trans).with_ctx_log(|| {
+                            format!("Update movie {id} source {}", source.to_str())
+                        })
+                    {
+                        use rusqlite::types::ToSqlOutput;
+
+                        succ.log();
+                        let _ = trans
+                            .execute(
+                                "UPDATE movie SET source=:source, request=:request WHERE id=:id",
+                                &[
+                                    (":id", &ToSqlOutput::from(id)),
+                                    (":source", &ToSqlOutput::from(source)),
+                                    (":request", &ToSqlOutput::from(request.as_str())),
+                                ],
+                            )
+                            .with_ctx_log(|| {
+                                format!("Update movie {id} failed to update request on {request}")
+                            });
+                    }
+                }
+
+                if let Some(source_id) = source_id
+                    && let Some(query) = source.set_source_id(id, source_id, true)
+                    && let Some(succ) = query.execute(&trans).with_ctx_log(|| {
+                        format!(
+                            "Update movie {id} source {} source id {source_id:?}",
+                            source.to_str(),
+                        )
+                    })
+                {
+                    succ.log();
+                }
+
+                match trans
+                    .commit()
+                    .context("Movie update failed")
+                    .with_context(|| format!("Update movie {id} transaction failed"))
+                {
+                    Ok(_) => Task::batch([
+                        Message::success("Movie Updated").tasked(),
+                        self.home.content_refresh(),
+                    ]),
+                    Err(error) => Message::anyhow(error).tasked(),
                 }
             }
             Message::PlayItem(item) => self.play_items(std::iter::once(item), true),
@@ -846,7 +1073,7 @@ impl App {
                     FetchId::Movie(id) => {
                         let (movie, task) = match self.db.get_movie(id, movie_map) {
                             Ok(movie) => {
-                                tracing::debug!("Fetched Movie {}", movie.0.media.name());
+                                tracing::debug!("Fetched Movie {}", movie.0.item.name());
                                 movie
                             }
                             Err(error) => {
@@ -1123,6 +1350,48 @@ impl App {
 
                 self.home.fetched_memberships(memberships)
             }
+            Message::FetchVideoInfo(video) => {
+                let info = match self.db.get_video_info(video) {
+                    Ok(info) => {
+                        tracing::debug!("Fetched {} video info for Video {video}", info.len());
+                        info
+                    }
+                    Err(error) => {
+                        let msg = Message::error(error, true);
+                        return Task::done(msg);
+                    }
+                };
+
+                self.home.fetched_video_info(info)
+            }
+            Message::FetchAudio(video) => {
+                let audio = match self.db.get_video_audios(video) {
+                    Ok(audio) => {
+                        tracing::debug!("Fetched {} audio for Video {video}", audio.len());
+                        audio
+                    }
+                    Err(error) => {
+                        let msg = Message::error(error, true);
+                        return Task::done(msg);
+                    }
+                };
+
+                self.home.fetched_audio(audio)
+            }
+            Message::FetchSubtitles(video) => {
+                let subtitles = match self.db.get_video_subtitles(video) {
+                    Ok(subtitles) => {
+                        tracing::debug!("Fetched {} subtitles for Video {video}", subtitles.len());
+                        subtitles
+                    }
+                    Err(error) => {
+                        let msg = Message::error(error, true);
+                        return Task::done(msg);
+                    }
+                };
+
+                self.home.fetched_subs(subtitles)
+            }
             Message::ToggleMembership { item, collections } => {
                 let msg = match self.db.toggle_membership(item, collections) {
                     Ok(true) => Message::success("Collections Updated!"),
@@ -1330,7 +1599,9 @@ impl App {
 
                 self.home.scanning(false)
             }
-            Message::MovieTask(ThumbnailTask { id, kind }) => self.home.movie_task(id, kind, now),
+            Message::MovieTask(home::MovieItemTask { id, kind }) => {
+                self.home.movie_task(id, kind, now)
+            }
             Message::ShowTask(ThumbnailTask { id, kind }) => self.home.show_task(id, kind, now),
             Message::SeasonTask(ThumbnailTask { id, kind }) => self.home.season_task(id, kind, now),
             Message::EpisodeTask(ThumbnailTask { id, kind }) => {
@@ -1506,8 +1777,7 @@ impl App {
                 match query.execute(&self.db) {
                     Ok(succ) => succ.log(),
                     Err(error) => {
-                        let msg = Message::error(error.to_string(), false).tasked();
-                        error.log_err();
+                        let msg = Message::anyhow(error).tasked();
 
                         return msg;
                     }
@@ -1553,8 +1823,7 @@ impl App {
                         {
                             Ok(succ) => succ.log(),
                             Err(error) => {
-                                let msg = Message::error(error.to_string(), false);
-                                error.log_err();
+                                let msg = Message::anyhow(error);
 
                                 return Task::done(msg);
                             }
@@ -1622,8 +1891,7 @@ impl App {
                         {
                             Ok(succ) => succ.log(),
                             Err(error) => {
-                                let msg = Message::error(error.to_string(), false);
-                                error.log_err();
+                                let msg = Message::anyhow(error);
 
                                 return Task::done(msg);
                             }
@@ -1688,8 +1956,7 @@ impl App {
                                 Message::success("Updated Wish!").tasked()
                             }
                             Err(error) => {
-                                let msg = Message::error(error.to_string(), false);
-                                error.log_err();
+                                let msg = Message::anyhow(error);
 
                                 return Task::done(msg);
                             }
@@ -1709,8 +1976,7 @@ impl App {
                                 ])
                             }
                             Err(error) => {
-                                let msg = Message::error(error.to_string(), false);
-                                error.log_err();
+                                let msg = Message::anyhow(error);
 
                                 return Task::done(msg);
                             }
@@ -1930,7 +2196,11 @@ impl App {
     fn play_item(&mut self, item: ItemId) -> Result<(Playlist, Vec<String>), Error> {
         match item {
             ItemId::Movie(id) => {
-                let item = self.db.get_video(id)?;
+                let item = self
+                    .db
+                    .get_video(id)
+                    .with_context(|| format!("Failed to fetch movie {id}"))
+                    .context("Could not retrieve movie")?;
                 if item.path.try_exists()? {
                     tracing::debug!("Movie {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
@@ -1944,7 +2214,11 @@ impl App {
                 }
             }
             ItemId::Episode(id) => {
-                let item = self.db.get_video(id)?;
+                let item = self
+                    .db
+                    .get_video(id)
+                    .with_context(|| format!("Failed to fetch episode {id}"))
+                    .context("Could not retrieve episode")?;
                 if item.path.try_exists()? {
                     tracing::debug!("Episode {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
@@ -2025,8 +2299,8 @@ impl App {
 
 fn movie_map(
     row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(shared::Thumbnail<Movie>, Task<ThumbnailTask<Movie>>)> {
-    Movie::from_row(row).map(shared::Thumbnail::new)
+) -> rusqlite::Result<(home::MovieItem, Task<home::MovieItemTask>)> {
+    Movie::from_row(row).map(home::MovieItem::new)
 }
 
 fn show_map(

@@ -27,7 +27,7 @@ impl AudioId {
             .map(|id| Self(Uuid::try_parse(&id).unwrap()))
     }
 
-    pub(super) fn from_row_maybe(column: &str, row: &Row<'_>) -> rusqlite::Result<Option<Self>> {
+    pub(crate) fn from_row_maybe(column: &str, row: &Row<'_>) -> rusqlite::Result<Option<Self>> {
         row.get::<_, Option<String>>(column)
             .map(|id| id.map(|id| Self(Uuid::try_parse(&id).unwrap())))
     }

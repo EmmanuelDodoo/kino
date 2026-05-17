@@ -121,6 +121,17 @@ impl From<ItemId> for ToSqlOutput<'_> {
     }
 }
 
+impl std::fmt::Display for ItemId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Show(id) => id.fmt(f),
+            Self::Movie(id) => id.fmt(f),
+            Self::Season(id) => id.fmt(f),
+            Self::Episode(id) => id.fmt(f),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SimpleCollection {
     pub id: CollectionId,

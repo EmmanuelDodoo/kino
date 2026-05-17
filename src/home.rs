@@ -13,6 +13,7 @@ use iced::{
     window,
 };
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 mod collection;
 mod collections;
@@ -27,12 +28,13 @@ pub mod shared;
 mod shows;
 mod wishlist;
 
-use crate::app::{MediaUpdate, MediaUpdateKind};
-use devutils::source::SourceSet;
+use crate::app::{MediaUpdate, MediaUpdateKind, MovieUpdate, NewUpdateKind};
+use devutils::source::{SourceId, SourceSet};
 use draws::*;
 use registry::models::{
-    Collection, CollectionId, CollectionView, Episode, EpisodeId, Media, Movie, MovieId, Season,
-    SeasonId, Show, ShowId, SimpleCollection, Wish, WishId, WishKind,
+    Audio, AudioId, Collection, CollectionId, CollectionView, Episode, EpisodeId, Media, Movie,
+    MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Subtitle, SubtitleId, VideoInfo,
+    VideoInfoId, Wish, WishId, WishKind,
     collection::{
         ItemId, Items,
         triggers::{self, Comparison, DeleteId, DeleteTrigger, InsertId, InsertTrigger, Logic},
@@ -46,22 +48,13 @@ use registry::{
 
 use crate::app::{FetchId, Message, WishMessage};
 use crate::utils::{
-    HomeAction,
-    Layout,
-    Scroll,
-    empty,
-    icons,
-    icons::*,
-    // modal::{self, modal},
-    picklist_handle,
-    styles,
-    tooltip,
-    typo::*,
+    HomeAction, Layout, Scroll, empty, icons, icons::*, picklist_handle, styles, tooltip, typo::*,
 };
 
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};
 use episode::{EpisodePage, EpisodePageMessage};
+pub use movie::{MovieItem, MovieItemTask};
 use movie::{MoviePage, MoviePageMessage};
 use movies::{Movies, MoviesMessage};
 use pages::{Page, PageKind};
@@ -333,6 +326,27 @@ variants! {
 }
 
 #[derive(Debug, Clone)]
+pub enum MovieEditMessage {
+    Name(String),
+    Overview(text_editor::Action),
+    Rating(String),
+    Video(VideoInfoId),
+    Audio(AudioId),
+    Subtitle(SubtitleId),
+    SubDelete(SubtitleId),
+    Source(SourceSet),
+    SourceId(String),
+    MarkWatched(bool),
+    Poster(Option<PathBuf>),
+    Backdrop(Option<PathBuf>),
+    PickPoster,
+    PickBackdrop,
+    Refetch,
+    Remove,
+    Save,
+}
+
+#[derive(Debug, Clone)]
 pub struct WishNewState {
     id: Option<WishId>,
     name: String,
@@ -434,6 +448,67 @@ impl WishNewState {
 }
 
 #[derive(Debug, Clone)]
+pub struct MovieEditState {
+    id: MovieId,
+    name: String,
+    placeholder: String,
+    name_input: widget::Id,
+    overview: text_editor::Content,
+    ratings: String,
+    videos: Vec<VideoInfo>,
+    selected_video: Option<VideoInfoId>,
+    audio: Vec<Audio>,
+    selected_audio: Option<AudioId>,
+    subtitles: Vec<Subtitle>,
+    selected_sub: Option<SubtitleId>,
+    source: SourceSet,
+    source_id: String,
+    watched: bool,
+    poster: Option<PathBuf>,
+    backdrop: Option<PathBuf>,
+}
+
+impl MovieEditState {
+    fn new(
+        movie: &Movie,
+        videos: &Vec<VideoInfo>,
+        audio: &Vec<Audio>,
+        subs: &Vec<Subtitle>,
+    ) -> Self {
+        Self {
+            id: movie.id,
+            name: movie.name().to_owned(),
+            placeholder: movie.name().to_owned(),
+            name_input: widget::Id::unique(),
+            overview: text_editor::Content::with_text(movie.synopsis()),
+            ratings: movie
+                .rating()
+                .map(|rating| format!("{rating:.2}"))
+                .unwrap_or("0.0".to_owned()),
+            videos: videos.clone(),
+            selected_video: movie.video_id,
+            audio: audio.clone(),
+            selected_audio: movie.audio_id,
+            subtitles: subs.clone(),
+            selected_sub: movie.subtitle_id,
+            source: SourceSet::from_str(&movie.source()),
+            source_id: String::default(),
+            watched: false,
+            poster: None,
+            backdrop: None,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn invalid_name(&self) -> bool {
+        self.name.trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewMessage {
     CollectionConfig,
     CollectionTriggers,
@@ -468,6 +543,7 @@ pub enum ViewMessage {
         name: String,
     },
     Selection,
+    MovieEdit(MovieId),
     WishModal(WishId),
 }
 
@@ -476,6 +552,7 @@ pub enum View {
     CollectionConfig(CollectionConfig),
     Search(SearchState, Option<CollectionId>),
     CollectionAdd(CollectionAddState),
+    MovieEdit(Box<MovieEditState>),
     Rating {
         id: ItemId,
         rating: Rating,
@@ -571,14 +648,17 @@ enum State {
     Loading,
     Recent {
         shows: Vec<Thumbnail<Show>>,
-        movies: Vec<Thumbnail<Movie>>,
+        movies: Vec<MovieItem>,
     },
     Shows(Vec<Thumbnail<Show>>),
-    Movies(Vec<Thumbnail<Movie>>),
+    Movies(Vec<MovieItem>),
     Collections(Vec<CollectionThumbnail>),
     Wishlist(Vec<WishThumbnail>),
     Movie {
-        movie: Box<Thumbnail<Movie>>,
+        movie: Box<MovieItem>,
+        subtitles: Vec<Subtitle>,
+        audio: Vec<Audio>,
+        videos: Vec<VideoInfo>,
         memberships: Vec<SimpleCollection>,
     },
     Show {
@@ -593,6 +673,9 @@ enum State {
     },
     Episode {
         episode: Box<Thumbnail<Episode>>,
+        subtitles: Vec<Subtitle>,
+        audio: Vec<Audio>,
+        videos: Vec<VideoInfo>,
         memberships: Vec<SimpleCollection>,
     },
     Collection {
@@ -600,7 +683,7 @@ enum State {
         itriggers: Vec<InsertTrigger>,
         dtriggers: Vec<DeleteTrigger>,
         shows: Vec<Thumbnail<Show>>,
-        movies: Vec<Thumbnail<Movie>>,
+        movies: Vec<MovieItem>,
         seasons: Vec<Thumbnail<Season>>,
         episodes: Vec<Thumbnail<Episode>>,
     },
@@ -653,6 +736,7 @@ pub enum HomeMessage {
     Hovered(ItemId, bool),
     WishHovered(WishId, bool),
     WishCompletion(WishId),
+    MovieEdit(MovieEditMessage),
     RemoveWish,
     CollectionTask(CollectionTask),
     Trigger(TriggerMessage),
@@ -1102,6 +1186,28 @@ impl Home {
 
                         (view, self.update_page_scroll())
                     }
+                    ViewMessage::MovieEdit(id) => {
+                        let State::Movie {
+                            movie,
+                            subtitles,
+                            audio,
+                            videos,
+                            memberships: _memberships,
+                        } = &self.state
+                        else {
+                            return Task::none();
+                        };
+
+                        if movie.item.id != id {
+                            return Task::none();
+                        }
+
+                        // Name, overview, ratings, video, audio, subs, images
+                        // source, refetch, delete
+                        let state = MovieEditState::new(&movie.item, videos, audio, subtitles);
+
+                        (View::MovieEdit(Box::new(state)), self.update_page_scroll())
+                    }
                 };
 
                 self.view = ViewState::Animating {
@@ -1341,6 +1447,13 @@ impl Home {
                                     return Task::none();
                                 };
 
+                                if state.invalid_name() {
+                                    let msg = Message::error("Invalid name", false).tasked();
+                                    let focus = operation::focus(state.name_input.clone());
+
+                                    return Task::batch([focus, msg]);
+                                }
+
                                 let kind = match wish_kind() {
                                     Ok(kind) => kind,
                                     Err(error) => {
@@ -1396,6 +1509,176 @@ impl Home {
                         }
                     }
                 }
+            }
+            HomeMessage::MovieEdit(msg) => {
+                let Some(View::MovieEdit(state)) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match msg {
+                    MovieEditMessage::Name(name) => {
+                        state.name = name;
+                    }
+                    MovieEditMessage::Overview(action) => {
+                        state.overview.perform(action);
+                    }
+                    MovieEditMessage::Video(id) => {
+                        state.selected_video = Some(id);
+                    }
+                    MovieEditMessage::Audio(id) => {
+                        state.selected_audio = Some(id);
+                    }
+                    MovieEditMessage::Subtitle(id) => {
+                        state.selected_sub = Some(id);
+                    }
+                    MovieEditMessage::Source(source) => {
+                        state.source = source;
+                    }
+                    MovieEditMessage::SourceId(id) => {
+                        state.source_id = id;
+                    }
+                    MovieEditMessage::Rating(rating) => {
+                        state.ratings = rating;
+                    }
+                    MovieEditMessage::MarkWatched(watched) => {
+                        state.watched = watched;
+                    }
+                    MovieEditMessage::Remove => {
+                        let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
+                            id: state.id.into(),
+                            name: state.name.clone(),
+                        });
+
+                        return self.update(msg, default_sauce, now);
+                    }
+                    MovieEditMessage::Refetch => {
+                        let State::Movie { movie, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        let source = SourceSet::from_str(movie.item.source());
+
+                        let msg = HomeMessage::Refetch {
+                            id: state.id.into(),
+                            source,
+                        };
+
+                        return self.update(msg, default_sauce, now);
+                    }
+                    MovieEditMessage::SubDelete(subtitle) => {
+                        return Message::SubtitleDelete(subtitle)
+                            .tasked()
+                            .chain(self.close_view(true, now));
+                    }
+                    MovieEditMessage::Poster(poster) => {
+                        state.poster = poster;
+                    }
+                    MovieEditMessage::Backdrop(backdrop) => {
+                        state.backdrop = backdrop;
+                    }
+                    MovieEditMessage::PickPoster => {
+                        return Task::perform(pick_image(), |path| {
+                            Message::Home(HomeMessage::MovieEdit(MovieEditMessage::Poster(path)))
+                        });
+                    }
+                    MovieEditMessage::PickBackdrop => {
+                        return Task::perform(pick_image(), |path| {
+                            Message::Home(HomeMessage::MovieEdit(MovieEditMessage::Backdrop(path)))
+                        });
+                    }
+                    MovieEditMessage::Save => {
+                        let State::Movie { movie, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        if state.invalid_name() {
+                            let msg = Message::error("Invalid name", false).tasked();
+                            let focus = operation::focus(state.name_input.clone());
+
+                            return Task::batch([focus, msg]);
+                        }
+
+                        let mut updates = vec![];
+
+                        if movie.item.name() != state.name {
+                            updates.push(NewUpdateKind::Name(state.name().to_owned()))
+                        }
+
+                        let overview = state.overview.text();
+                        if movie.item.synopsis() != overview {
+                            updates.push(NewUpdateKind::Overview(overview))
+                        }
+
+                        if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
+                            && ratings != movie.item.rating().unwrap_or_default()
+                        {
+                            updates.push(NewUpdateKind::Rating(ratings));
+                        };
+
+                        if state.watched {
+                            updates.push(NewUpdateKind::MarkWatched(movie.item.watch_count() + 1))
+                        }
+
+                        if let Some(video_id) = state.selected_video
+                            && movie.item.video_id != state.selected_video
+                        {
+                            updates.push(NewUpdateKind::Video(video_id))
+                        }
+
+                        if let Some(audio_id) = state.selected_audio
+                            && movie.item.audio_id != state.selected_audio
+                        {
+                            updates.push(NewUpdateKind::Audio(audio_id))
+                        }
+
+                        if let Some(subtitle_id) = state.selected_sub
+                            && movie.item.subtitle_id != state.selected_sub
+                        {
+                            updates.push(NewUpdateKind::Subtitle(subtitle_id))
+                        }
+
+                        if let Some(source_id) = state.source.source_id(&state.source_id) {
+                            updates.push(NewUpdateKind::SourceId(source_id))
+                        };
+
+                        let prev_source = SourceSet::from_str(movie.item.source());
+
+                        let prev_source = (prev_source != state.source)
+                            .then_some((prev_source, state.name().to_owned()));
+
+                        let update = MovieUpdate {
+                            id: state.id,
+                            prev_source,
+                            source: state.source,
+                            updates,
+                        };
+
+                        let poster = match &state.poster {
+                            Some(poster) => Message::PosterUpdate {
+                                id: state.id.into(),
+                                path: poster.clone(),
+                            }
+                            .tasked(),
+                            None => Task::none(),
+                        };
+
+                        let backdrop = match &state.backdrop {
+                            Some(backdrop) => Message::BackdropUpdate {
+                                id: state.id.into(),
+                                path: backdrop.clone(),
+                            }
+                            .tasked(),
+                            None => Task::none(),
+                        };
+
+                        let msg = Message::MovieUpdate(update).tasked();
+                        let close = self.close_view(true, now);
+
+                        return Task::batch([msg, close, poster, backdrop]);
+                    }
+                }
+
+                Task::none()
             }
             HomeMessage::RemoveCollection => {
                 self.unfocus(now);
@@ -1702,7 +1985,7 @@ impl Home {
                             | (ItemId::Movie(id), State::Movies(movies))
                             | (ItemId::Movie(id), State::Collection { movies, .. }) => {
                                 if let Some(media) =
-                                    movies.iter_mut().find(|item| item.media.id == id)
+                                    movies.iter_mut().find(|item| item.item.id == id)
                                 {
                                     media.selected = new;
                                 }
@@ -3116,7 +3399,7 @@ impl Home {
                         Task::none()
                     }
                     (State::Recent { movies, .. }, ItemId::Movie(id)) => {
-                        if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
                             movie.go_mut(is_hovered, now);
                         }
 
@@ -3134,7 +3417,7 @@ impl Home {
                     }
                     (State::Shows(_), _) => Task::none(),
                     (State::Movies(movies), ItemId::Movie(id)) => {
-                        if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
                             movie.go_mut(is_hovered, now);
                         }
 
@@ -3172,7 +3455,7 @@ impl Home {
                         Task::none()
                     }
                     (State::Collection { movies, .. }, ItemId::Movie(id)) => {
-                        if let Some(movie) = movies.iter_mut().find(|movie| movie.media.id == id) {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
                             movie.go_mut(is_hovered, now);
                         }
 
@@ -3428,7 +3711,7 @@ impl Home {
     fn recents<'a>(
         &self,
         now: Instant,
-        movies: &'a [Thumbnail<Movie>],
+        movies: &'a [MovieItem],
         shows: &'a [Thumbnail<Show>],
     ) -> Element<'a, HomeMessage> {
         let movies = {
@@ -4012,7 +4295,7 @@ impl Home {
             State::Shows(shows) => ("Shows", shows.len()),
             State::Movies(movies) => ("Movies", movies.len()),
             State::Show { show, seasons, .. } => (show.media.name(), seasons.len()),
-            State::Movie { movie, .. } => (movie.media.name(), 0),
+            State::Movie { movie, .. } => (movie.item.name(), 0),
             State::Season {
                 season, episodes, ..
             } => (season.media.name(), episodes.len()),
@@ -4139,14 +4422,37 @@ impl Home {
                 State::Episode {
                     episode,
                     memberships,
+                    videos: _video,
+                    audio: _audio,
+                    subtitles: _subs,
                 },
                 Some(Page::Episode { page, .. }),
             ) => page
                 .view(now, episode, memberships.iter())
                 .map(HomeMessage::EpisodePage),
-            (State::Movie { movie, memberships }, Some(Page::Movie { page, .. })) => page
-                .view(now, movie, memberships.iter())
-                .map(HomeMessage::MoviePage),
+            (
+                State::Movie {
+                    movie,
+                    memberships,
+                    videos,
+                    audio,
+                    subtitles,
+                },
+                Some(Page::Movie { page, .. }),
+            ) => {
+                let video = videos
+                    .iter()
+                    .find(|video| Some(video.id) == movie.item.video_id);
+                let audio = audio
+                    .iter()
+                    .find(|audio| Some(audio.id) == movie.item.audio_id);
+                let subtitle = subtitles
+                    .iter()
+                    .find(|subtitle| Some(subtitle.id) == movie.item.subtitle_id);
+
+                page.view(movie, memberships.iter().peekable(), video, audio, subtitle)
+                    .map(HomeMessage::MoviePage)
+            }
             (
                 State::Season {
                     season,
@@ -4320,6 +4626,7 @@ impl Home {
                     View::RemoveWish { name, .. } => {
                         modalize(draw_delete_confirm(name, HomeMessage::RemoveWish))
                     }
+                    View::MovieEdit(state) => modalize(draw_movie_edit(state)).right(),
                 }
                 .into()
             }
@@ -4444,7 +4751,7 @@ impl Home {
             State::Show { show, .. } => (FetchId::Show(show.media.id), None),
             State::Season { season, .. } => (FetchId::Season(season.media.id), None),
             State::Episode { episode, .. } => (FetchId::Episode(episode.media.id), None),
-            State::Movie { movie, .. } => (FetchId::Movie(movie.media.id), None),
+            State::Movie { movie, .. } => (FetchId::Movie(movie.item.id), None),
             State::Collections(_) => (FetchId::Collections, None),
             State::Wishlist(_) => (FetchId::Wishlist, None),
             State::Collection { collection, .. } => {
@@ -4644,12 +4951,12 @@ impl Home {
 
     pub fn fetched_recents(
         &mut self,
-        mut movies: Vec<Thumbnail<Movie>>,
+        mut movies: Vec<MovieItem>,
         mut shows: Vec<Thumbnail<Show>>,
     ) -> Task<Message> {
         if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
-                media.selected = selected.contains(&media.media.id.into());
+                media.selected = selected.contains(&media.item.id.into());
             }
             for media in &mut shows {
                 media.selected = selected.contains(&media.media.id.into());
@@ -4684,10 +4991,10 @@ impl Home {
         self.update_page_scroll()
     }
 
-    pub fn fetched_movies(&mut self, mut movies: Vec<Thumbnail<Movie>>) -> Task<Message> {
+    pub fn fetched_movies(&mut self, mut movies: Vec<MovieItem>) -> Task<Message> {
         if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
-                media.selected = selected.contains(&media.media.id.into());
+                media.selected = selected.contains(&media.item.id.into());
             }
         }
         self.state = State::Movies(movies);
@@ -4716,15 +5023,27 @@ impl Home {
         Task::batch([self.update_page_scroll(), Task::done(memberships)])
     }
 
-    pub fn fetched_movie(&mut self, movie: Thumbnail<Movie>) -> Task<Message> {
-        let memberships = Message::FetchMemberships(movie.media.id.into());
+    pub fn fetched_movie(&mut self, movie: MovieItem) -> Task<Message> {
+        let memberships = Message::FetchMemberships(movie.item.id.into()).tasked();
+        let videos = Message::FetchVideoInfo(movie.item.id.into()).tasked();
+        let audio = Message::FetchAudio(movie.item.id.into()).tasked();
+        let subtitles = Message::FetchSubtitles(movie.item.id.into()).tasked();
 
         self.state = State::Movie {
             movie: Box::new(movie),
             memberships: vec![],
+            videos: vec![],
+            audio: vec![],
+            subtitles: vec![],
         };
 
-        Task::batch([self.update_page_scroll(), Task::done(memberships)])
+        Task::batch([
+            self.update_page_scroll(),
+            memberships,
+            videos,
+            audio,
+            subtitles,
+        ])
     }
 
     pub fn fetched_season(
@@ -4749,14 +5068,26 @@ impl Home {
     }
 
     pub fn fetched_episode(&mut self, episode: Thumbnail<Episode>) -> Task<Message> {
-        let memberships = Message::FetchMemberships(episode.media.id.into());
+        let memberships = Message::FetchMemberships(episode.media.id.into()).tasked();
+        let videos = Message::FetchVideoInfo(episode.media.id.into()).tasked();
+        let audio = Message::FetchAudio(episode.media.id.into()).tasked();
+        let subtitles = Message::FetchSubtitles(episode.media.id.into()).tasked();
 
         self.state = State::Episode {
             episode: Box::new(episode),
             memberships: vec![],
+            videos: vec![],
+            audio: vec![],
+            subtitles: vec![],
         };
 
-        Task::batch([self.update_page_scroll(), Task::done(memberships)])
+        Task::batch([
+            self.update_page_scroll(),
+            memberships,
+            videos,
+            audio,
+            subtitles,
+        ])
     }
 
     pub fn fetched_collections(&mut self, collections: Vec<Collection>) -> Task<Message> {
@@ -4792,7 +5123,7 @@ impl Home {
         collection: Collection,
         itriggers: Vec<InsertTrigger>,
         dtriggers: Vec<DeleteTrigger>,
-        mut movies: Vec<Thumbnail<Movie>>,
+        mut movies: Vec<MovieItem>,
         mut shows: Vec<Thumbnail<Show>>,
         mut seasons: Vec<Thumbnail<Season>>,
         mut episodes: Vec<Thumbnail<Episode>>,
@@ -4803,7 +5134,7 @@ impl Home {
 
         if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut movies {
-                media.selected = selected.contains(&media.media.id.into());
+                media.selected = selected.contains(&media.item.id.into());
             }
             for media in &mut shows {
                 media.selected = selected.contains(&media.media.id.into());
@@ -4867,6 +5198,48 @@ impl Home {
         }
     }
 
+    pub fn fetched_video_info(&mut self, fetched: Vec<VideoInfo>) -> Task<Message> {
+        match &mut self.state {
+            State::Movie { videos: video, .. } => {
+                *video = fetched;
+                self.update_page_scroll()
+            }
+            State::Episode { videos: video, .. } => {
+                *video = fetched;
+                self.update_page_scroll()
+            }
+            _ => Task::none(),
+        }
+    }
+
+    pub fn fetched_audio(&mut self, fetched: Vec<Audio>) -> Task<Message> {
+        match &mut self.state {
+            State::Movie { audio, .. } => {
+                *audio = fetched;
+                self.update_page_scroll()
+            }
+            State::Episode { audio, .. } => {
+                *audio = fetched;
+                self.update_page_scroll()
+            }
+            _ => Task::none(),
+        }
+    }
+
+    pub fn fetched_subs(&mut self, fetched: Vec<Subtitle>) -> Task<Message> {
+        match &mut self.state {
+            State::Movie { subtitles, .. } => {
+                *subtitles = fetched;
+                self.update_page_scroll()
+            }
+            State::Episode { subtitles, .. } => {
+                *subtitles = fetched;
+                self.update_page_scroll()
+            }
+            _ => Task::none(),
+        }
+    }
+
     pub fn movie_task(
         &mut self,
         id: MovieId,
@@ -4877,11 +5250,11 @@ impl Home {
             State::Movies(movies)
             | State::Recent { movies, .. }
             | State::Collection { movies, .. } => {
-                if let Some(movie) = movies.iter_mut().find(|thumbnail| thumbnail.media.id == id) {
+                if let Some(movie) = movies.iter_mut().find(|thumbnail| thumbnail.item.id == id) {
                     movie.task(task, now);
                 }
             }
-            State::Movie { movie, .. } if movie.media.id == id => {
+            State::Movie { movie, .. } if movie.item.id == id => {
                 movie.task(task, now);
             }
             _ => {}
@@ -5148,4 +5521,12 @@ fn comp_icon(comp: filter::Comp) -> char {
         Comp::Greater => CHEV_LEFT,
         Comp::Less => CHEV_RIGHT,
     }
+}
+
+async fn pick_image() -> Option<PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .add_filter("", &["png", "jpeg", "jpg"])
+        .pick_file()
+        .await
+        .map(|handle| handle.path().to_path_buf())
 }

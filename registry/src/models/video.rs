@@ -90,6 +90,7 @@ pub struct Video {
     pub progress: f32,
     pub duration: u64,
     pub watch_count: u32,
+    pub video_id: Option<VideoInfoId>,
     pub subtitle_id: Option<SubtitleId>,
     pub audio_id: Option<AudioId>,
     pub generate_poster: bool,
@@ -152,6 +153,7 @@ impl Video {
         let generate_poster = row.get::<_, bool>("generate_poster")?;
         let fetched = row.get::<_, bool>("fetched")?;
 
+        let video_id = VideoInfoId::from_row_maybe("video_id", row)?;
         let subtitle_id = SubtitleId::from_row_maybe("subtitle_id", row)?;
         let audio_id = AudioId::from_row_maybe("audio_id", row)?;
 
@@ -162,6 +164,7 @@ impl Video {
             progress,
             duration,
             watch_count,
+            video_id,
             subtitle_id,
             audio_id,
             subtitles: vec![],

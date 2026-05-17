@@ -1,4 +1,5 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use super::movie::MovieItem;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll};
@@ -68,7 +69,7 @@ impl Movies {
     fn grid<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
+        thumbnails: impl Iterator<Item = &'a MovieItem>,
     ) -> Element<'a, MoviesMessage> {
         let content = thumbnails.map(|thumbnail| {
             thumbnail.card(
@@ -98,7 +99,7 @@ impl Movies {
     fn list<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
+        thumbnails: impl Iterator<Item = &'a MovieItem>,
     ) -> Element<'a, MoviesMessage> {
         let content = thumbnails.map(|thumbnail| {
             thumbnail.list(
@@ -127,7 +128,7 @@ impl Movies {
     fn compact<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
+        thumbnails: impl Iterator<Item = &'a MovieItem>,
     ) -> Element<'a, MoviesMessage> {
         let content = thumbnails.map(|thumbnail| {
             thumbnail.compact(
@@ -156,7 +157,7 @@ impl Movies {
         &self,
         now: Instant,
         layout: Layout,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Movie>>,
+        thumbnails: impl Iterator<Item = &'a MovieItem>,
     ) -> Element<'a, MoviesMessage> {
         match layout {
             Layout::Grid => self.grid(now, thumbnails),

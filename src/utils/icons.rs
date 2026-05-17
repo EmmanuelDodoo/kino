@@ -127,13 +127,15 @@ pub const CHECK: char = '\u{e86a}';
 
 pub const PIN: char = '\u{e844}';
 pub const EDIT: char = '\u{e846}';
-pub const EXTERNAL: char = '\u{e859}';
+// pub const EXTERNAL: char = '\u{e859}';
+pub const EXTERNAL: char = '\u{e86c}';
 
 pub const DELETE: char = '\u{e85a}';
 pub const COPY: char = '\u{e864}';
 pub const RENAME: char = '\u{e85b}';
 pub const FILE_UP: char = '\u{e85c}';
 pub const FOLDER_ADD: char = '\u{e85d}';
+pub const UPLOAD: char = '\u{e86b}';
 
 fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
     let fnt: Font = Font::new(name);

@@ -477,13 +477,13 @@ pub mod button {
 
 pub mod text_input {
     use super::*;
-    use widget::text_input::{Status, Style, default};
+    use widget::text_input::{self, Status, Style};
 
     pub fn required(invalid: bool) -> impl Fn(&Theme, Status) -> Style {
         move |theme: &Theme, status| {
             let error = theme.palette().danger.strong.color;
             let default = default(theme, status);
-            let border = default.border.rounded(5.0);
+            let border = default.border;
             let border = if invalid && matches!(status, text_input::Status::Focused { .. }) {
                 border.color(error)
             } else {
@@ -492,6 +492,13 @@ pub mod text_input {
 
             text_input::Style { border, ..default }
         }
+    }
+
+    pub fn default(theme: &Theme, status: Status) -> Style {
+        let default = text_input::default(theme, status);
+        let border = default.border.rounded(5.0);
+
+        text_input::Style { border, ..default }
     }
 }
 
