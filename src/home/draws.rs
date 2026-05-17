@@ -1714,7 +1714,12 @@ pub fn draw_wish<'a>(wish: &'a WishThumbnail, now: Instant) -> Element<'a, HomeM
         .into()
 }
 
-pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage> {
+pub fn draw_movie_edit<'a>(
+    state: &'a MovieEditState,
+    videos: &'a [VideoInfo],
+    audio: &'a [Audio],
+    subs: &'a [Subtitle],
+) -> Element<'a, HomeMessage> {
     let padding = Padding::from([6, 6]);
     let size = H7;
     let label = |label: &'a str| sized_medium(label, P);
@@ -1726,7 +1731,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
 
         let input = text_input(&state.placeholder, state.name())
             .id(state.name_input.clone())
-            .on_input(|input| HomeMessage::MovieEdit(MovieEditMessage::Name(input)))
+            .on_input(MovieEditMessage::Name)
             .font(regular_font())
             .style(styles::text_input::default)
             .padding(padding)
@@ -1742,7 +1747,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
         let content = text_editor(&state.overview)
             .height(175)
             .font(regular_font())
-            .on_action(|action| HomeMessage::MovieEdit(MovieEditMessage::Overview(action)));
+            .on_action(MovieEditMessage::Overview);
 
         column!(label, content).spacing(3)
     };
@@ -1757,9 +1762,9 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
                 .font(regular_font())
                 .padding([4, 4])
                 .align_x(Horizontal::Right)
-                .width(60.0)
+                .width(80.0)
                 .style(styles::text_input::default)
-                .on_input(|input| HomeMessage::MovieEdit(MovieEditMessage::Rating(input)));
+                .on_input(MovieEditMessage::Rating);
 
             row!(value, extra).spacing(2.0).align_y(Vertical::Center)
         };
@@ -1772,24 +1777,20 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
 
         let content = checkbox(state.watched)
             .size(P)
-            .on_toggle(|toggle| HomeMessage::MovieEdit(MovieEditMessage::MarkWatched(toggle)));
+            .on_toggle(MovieEditMessage::MarkWatched);
 
         row!(label, space::horizontal(), content).align_y(Vertical::Center)
     };
 
-    let videos = draw_videos(&state.videos, state.selected_video, |id| {
-        HomeMessage::MovieEdit(MovieEditMessage::Video(id))
-    });
+    let videos = draw_videos(videos, state.selected_video, MovieEditMessage::Video);
 
-    let audio = draw_audio(&state.audio, state.selected_audio, |id| {
-        HomeMessage::MovieEdit(MovieEditMessage::Audio(id))
-    });
+    let audio = draw_audio(audio, state.selected_audio, MovieEditMessage::Audio);
 
     let subtitles = draw_subs(
-        &state.subtitles,
+        subs,
         state.selected_sub,
-        |id| HomeMessage::MovieEdit(MovieEditMessage::Subtitle(id)),
-        |id| HomeMessage::MovieEdit(MovieEditMessage::SubDelete(id)),
+        MovieEditMessage::Subtitle,
+        MovieEditMessage::SubDelete,
     );
 
     let source = {
@@ -1802,7 +1803,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
         })
         .style(styles::pick_list::default)
         .font(regular_font())
-        .on_select(|kind| HomeMessage::MovieEdit(MovieEditMessage::Source(kind)))
+        .on_select(MovieEditMessage::Source)
         .handle(handle)
         .padding([5, 10])
         .text_size(size);
@@ -1817,7 +1818,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
             let label = label("Source Id (optional):");
 
             let input = text_input("", &state.source_id)
-                .on_input(|input| HomeMessage::MovieEdit(MovieEditMessage::SourceId(input)))
+                .on_input(MovieEditMessage::SourceId)
                 .align_x(Horizontal::Right)
                 .style(styles::text_input::default)
                 .font(regular_font())
@@ -1837,7 +1838,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
 
         button(refetch)
             .style(styles::button::subtle)
-            .on_press(HomeMessage::MovieEdit(MovieEditMessage::Refetch))
+            .on_press(MovieEditMessage::Refetch)
     };
 
     let remove = {
@@ -1848,14 +1849,14 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
 
         button(remove)
             .style(styles::button::danger)
-            .on_press(HomeMessage::MovieEdit(MovieEditMessage::Remove))
+            .on_press(MovieEditMessage::Remove)
     };
 
     let images = {
         let poster = {
             let label = label("Poster: ");
 
-            let action: Element<'_, HomeMessage> = match &state.poster {
+            let action: Element<'_, MovieEditMessage> = match &state.poster {
                 Some(path) => {
                     let path = trim_path(path, 3);
                     let path = marquee(path)
@@ -1864,8 +1865,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
                         .font(mono_font())
                         .direction(true);
 
-                    let redo = text_button(REFRESH)
-                        .on_press(HomeMessage::MovieEdit(MovieEditMessage::PickPoster));
+                    let redo = text_button(REFRESH).on_press(MovieEditMessage::PickPoster);
 
                     row!(path, redo)
                         .spacing(3.0)
@@ -1879,7 +1879,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
 
                     button(upload)
                         .style(styles::button::subtle)
-                        .on_press(HomeMessage::MovieEdit(MovieEditMessage::PickPoster))
+                        .on_press(MovieEditMessage::PickPoster)
                         .into()
                 }
             };
@@ -1890,7 +1890,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
         let backdrop = {
             let label = label("Backdrop: ");
 
-            let action: Element<'_, HomeMessage> = match &state.backdrop {
+            let action: Element<'_, MovieEditMessage> = match &state.backdrop {
                 Some(path) => {
                     let path = trim_path(path, 3);
                     let path = marquee(path)
@@ -1899,8 +1899,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
                         .font(mono_font())
                         .direction(true);
 
-                    let redo = text_button(REFRESH)
-                        .on_press(HomeMessage::MovieEdit(MovieEditMessage::PickBackdrop));
+                    let redo = text_button(REFRESH).on_press(MovieEditMessage::PickBackdrop);
 
                     row!(path, redo)
                         .spacing(3.0)
@@ -1914,7 +1913,7 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
 
                     button(upload)
                         .style(styles::button::subtle)
-                        .on_press(HomeMessage::MovieEdit(MovieEditMessage::PickBackdrop))
+                        .on_press(MovieEditMessage::PickBackdrop)
                         .into()
                 }
             };
@@ -1941,9 +1940,196 @@ pub fn draw_movie_edit<'a>(state: &'a MovieEditState) -> Element<'a, HomeMessage
             .width(Length::Fill)
     };
 
-    let content = scrollable(content).spacing(4).height(Length::Fill);
+    let content: Element<'_, MovieEditMessage> =
+        scrollable(content).spacing(4).height(Length::Fill).into();
 
-    let content = column!(content, actions).spacing(28);
+    let content = column!(content.map(HomeMessage::MovieEdit), actions).spacing(28);
+
+    modal_container(content)
+        .width(500)
+        .padding([8, 12])
+        .align_y(Vertical::Top)
+        .into()
+}
+
+pub fn draw_episode_edit<'a>(
+    state: &'a EpisodeEditState,
+    videos: &'a [VideoInfo],
+    audio: &'a [Audio],
+    subs: &'a [Subtitle],
+) -> Element<'a, HomeMessage> {
+    let padding = Padding::from([6, 6]);
+    let size = H7;
+    let label = |label: &'a str| sized_medium(label, P);
+
+    let name = {
+        let label = label("Name");
+
+        let input = text_input(&state.placeholder, state.name())
+            .on_input(EpisodeEditMessage::Name)
+            .font(regular_font())
+            .style(styles::text_input::default)
+            .padding(padding)
+            .width(Length::Fill);
+
+        column!(label, input).spacing(3)
+    };
+
+    let overview = {
+        let label = label("Overview");
+
+        let content = text_editor(&state.overview)
+            .height(175)
+            .font(regular_font())
+            .on_action(EpisodeEditMessage::Overview);
+
+        column!(label, content).spacing(3)
+    };
+
+    let ratings = {
+        let label = label("Rating: ");
+
+        let content = {
+            let extra = sized_regular("/5", H7);
+
+            let value = text_input("", &state.ratings)
+                .font(regular_font())
+                .padding([4, 4])
+                .align_x(Horizontal::Right)
+                .width(80.0)
+                .style(styles::text_input::default)
+                .on_input(EpisodeEditMessage::Rating);
+
+            row!(value, extra).spacing(2.0).align_y(Vertical::Center)
+        };
+
+        row!(label, space::horizontal(), content).align_y(Vertical::Center)
+    };
+
+    let watched = {
+        let label = label("Mark as Watched");
+
+        let content = checkbox(state.watched)
+            .size(P)
+            .on_toggle(EpisodeEditMessage::MarkWatched);
+
+        row!(label, space::horizontal(), content).align_y(Vertical::Center)
+    };
+
+    let videos = draw_videos(videos, state.selected_video, EpisodeEditMessage::Video);
+
+    let audio = draw_audio(audio, state.selected_audio, EpisodeEditMessage::Audio);
+
+    let subtitles = draw_subs(
+        subs,
+        state.selected_sub,
+        EpisodeEditMessage::Subtitle,
+        EpisodeEditMessage::SubDelete,
+    );
+
+    let source = {
+        let label = label("Source:");
+
+        let source = sized_medium(state.source.to_str(), H7);
+
+        row!(label, space::horizontal(), source)
+            .spacing(40.0)
+            .align_y(Vertical::Center)
+    };
+
+    let source_id = match state.source {
+        SourceSet::Tmdb => {
+            let label = label("Source Id (optional):");
+
+            let input = text_input("", &state.source_id)
+                .on_input(EpisodeEditMessage::SourceId)
+                .align_x(Horizontal::Right)
+                .style(styles::text_input::default)
+                .font(regular_font())
+                .size(P)
+                .padding([4, 6])
+                .width(80.0);
+
+            Some(row!(label, space::horizontal(), input).align_y(Vertical::Center))
+        }
+        SourceSet::None => None,
+    };
+
+    let refetch = {
+        let refetch = row!(icon(REFRESH).size(size), sized_medium("Refetch", size))
+            .spacing(4.0)
+            .align_y(Vertical::Center);
+
+        button(refetch)
+            .style(styles::button::subtle)
+            .on_press(EpisodeEditMessage::Refetch)
+    };
+
+    let remove = {
+        let size = H7;
+        let remove = row!(icon(DELETE).size(size), sized_medium("Delete", size))
+            .spacing(4.0)
+            .align_y(Vertical::Center);
+
+        button(remove)
+            .style(styles::button::danger)
+            .on_press(EpisodeEditMessage::Remove)
+    };
+
+    let poster = {
+        let label = label("Poster: ");
+
+        let action: Element<'_, EpisodeEditMessage> = match &state.poster {
+            Some(path) => {
+                let path = trim_path(path, 3);
+                let path = marquee(path)
+                    .size(size)
+                    .width(250)
+                    .font(mono_font())
+                    .direction(true);
+
+                let redo = text_button(REFRESH).on_press(EpisodeEditMessage::PickPoster);
+
+                row!(path, redo)
+                    .spacing(3.0)
+                    .align_y(Vertical::Center)
+                    .into()
+            }
+            None => {
+                let upload = row!(icon(UPLOAD).size(size), sized_medium("Upload", size))
+                    .spacing(4.0)
+                    .align_y(Vertical::Center);
+
+                button(upload)
+                    .style(styles::button::subtle)
+                    .on_press(EpisodeEditMessage::PickPoster)
+                    .into()
+            }
+        };
+
+        row!(label, space::horizontal(), action).align_y(Vertical::Center)
+    };
+
+    let content = column!(
+        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, refetch, remove,
+        poster
+    )
+    .spacing(24);
+
+    let actions = {
+        let save = save_btn().on_press(HomeMessage::EpisodeEdit(EpisodeEditMessage::Save));
+
+        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+
+        column!(row!(save, cancel).spacing(80))
+            .align_x(Horizontal::Center)
+            .width(Length::Fill)
+    };
+
+    let content: Element<'_, EpisodeEditMessage> =
+        scrollable(content).spacing(4).height(Length::Fill).into();
+
+    let content = column!(content.map(HomeMessage::EpisodeEdit), actions).spacing(28);
 
     modal_container(content)
         .width(500)

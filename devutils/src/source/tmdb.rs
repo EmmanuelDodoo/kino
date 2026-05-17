@@ -1261,7 +1261,7 @@ fn insert_episode(
     episode: &TMDBEpisode,
     rating: bool,
 ) -> rusqlite::Result<()> {
-    let sql = "UPDATE episode SET  synopsis=:overview, duration=:duration, release=:release, name=:name, rating=:rating WHERE id=:id AND request=:request";
+    let sql = "UPDATE episode SET  synopsis=:overview, duration=:duration, release=:release, name=:name, rating=:rating, episode_number=:episode_number WHERE id=:id AND request=:request";
     let mut statement = db.prepare_cached(sql)?;
 
     let TMDBEpisode {
@@ -1294,6 +1294,7 @@ fn insert_episode(
         (":name", &ToSqlOutput::from(name)),
         (":rating", rating),
         (":duration", &ToSqlOutput::from(duration)),
+        (":episode_number", &ToSqlOutput::from(*episode_number)),
     ])?;
 
     Ok(())

@@ -52,10 +52,12 @@ pub struct Episode {
     pub id: EpisodeId,
     name: String,
     original_name: String,
+    pub show_name: String,
+    pub season_number: u16,
     path: String,
-    poster: Option<Image>,
+    pub poster: Option<Image>,
     // Join from show
-    backdrop: Option<String>,
+    pub backdrop: Option<String>,
     synopsis: String,
     release: NaiveDate,
     added: DateTime<Local>,
@@ -120,6 +122,9 @@ impl Episode {
         let subtitle_id = SubtitleId::from_row_maybe("subtitle_id", row)?;
         let audio_id = AudioId::from_row_maybe("audio_id", row)?;
 
+        let show_name = row.get::<_, String>("show_name")?;
+        let season_number = row.get::<_, u16>("season_number")?;
+
         Ok(Self {
             id,
             name,
@@ -142,6 +147,8 @@ impl Episode {
             video_id,
             subtitle_id,
             audio_id,
+            show_name,
+            season_number,
         })
     }
 
@@ -168,6 +175,8 @@ impl Episode {
             video_id: _video,
             subtitle_id: _sub,
             audio_id: _audio,
+            show_name: _show,
+            season_number: _season_number,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -300,6 +309,74 @@ impl Episode {
         }
     }
 
+    #[must_use]
+    pub fn mark_watched<'a>(id: EpisodeId, count: u32) -> Query<'a> {
+        let sql = "UPDATE episode SET watch_count=:count, progress=1.0 WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":count", ToSqlOutput::from(count)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Episode,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_video<'a>(id: EpisodeId, video: VideoInfoId) -> Query<'a> {
+        let sql = "UPDATE episode SET video_id=:video WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":video", ToSqlOutput::from(video)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Episode,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_audio<'a>(id: EpisodeId, audio: AudioId) -> Query<'a> {
+        let sql = "UPDATE episode SET audio_id=:audio WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":audio", ToSqlOutput::from(audio)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Episode,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_subtitle<'a>(id: EpisodeId, subtitle: SubtitleId) -> Query<'a> {
+        let sql = "UPDATE episode SET subtitle_id=:subtitle WHERE id=:id";
+        let params = vec![
+            (":id", ToSqlOutput::from(id)),
+            (":subtitle", ToSqlOutput::from(subtitle)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Episode,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         season: SeasonId,
         name: String,
@@ -336,6 +413,10 @@ impl Episode {
             audio_id: None,
             subtitle_id: None,
             source: String::default(),
+
+            // Not saved within episode table so these values are okay
+            show_name: String::default(),
+            season_number: 0,
         };
 
         let query = new.insert();

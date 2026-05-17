@@ -13,7 +13,7 @@ use crate::home::{self, Home, HomeMessage, WishThumbnailTask, shared};
 use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
 use crate::settings::{Settings, SettingsMessage};
 use crate::utils::{Action, Config, KeyPress, Layout, Screen, icons, typo};
-use core::{Context, ContextLog, Log, Error, anyhow};
+use core::{Context, ContextLog, Error, Log, anyhow};
 use registry::db::{self, Query};
 use registry::{
     filter::{self, FilterMode, SearchFilter},
@@ -70,6 +70,13 @@ pub struct MovieUpdate {
     pub id: MovieId,
     /// Is some if the source was updated
     pub prev_source: Option<(SourceSet, String)>,
+    pub source: SourceSet,
+    pub updates: Vec<NewUpdateKind>,
+}
+
+#[derive(Clone, Debug)]
+pub struct EpisodeUpdate {
+    pub id: EpisodeId,
     pub source: SourceSet,
     pub updates: Vec<NewUpdateKind>,
 }
@@ -134,6 +141,7 @@ pub enum Message {
     SubtitleDelete(SubtitleId),
     MediaUpdate(MediaUpdate),
     MovieUpdate(MovieUpdate),
+    EpisodeUpdate(EpisodeUpdate),
     PosterUpdate {
         id: ItemId,
         path: PathBuf,
@@ -186,9 +194,9 @@ pub enum Message {
     Scan,
     ScanComplete(Vec<DirectoryId>),
     MovieTask(home::MovieItemTask),
+    EpisodeTask(home::EpisodeItemTask),
     ShowTask(ThumbnailTask<Show>),
     SeasonTask(ThumbnailTask<Season>),
-    EpisodeTask(ThumbnailTask<Episode>),
     WishTask(WishThumbnailTask),
     Triggers {
         inserts: Vec<(InsertTrigger, bool)>,
@@ -665,6 +673,7 @@ impl App {
 
                 let mut name = None;
                 let mut source_id = None;
+                let mut count = 0;
 
                 for update in updates {
                     let query = match update {
@@ -688,6 +697,7 @@ impl App {
                         .execute(&trans)
                         .with_ctx_log(|| format!("Updating movie {id} update kind"))
                     {
+                        count += 1;
                         succ.log()
                     }
                 }
@@ -701,6 +711,7 @@ impl App {
                             )
                         })
                     {
+                        count += 1;
                         succ.log();
                     }
 
@@ -712,6 +723,7 @@ impl App {
                     {
                         use rusqlite::types::ToSqlOutput;
 
+                        count += 1;
                         succ.log();
                         let _ = trans
                             .execute(
@@ -737,6 +749,7 @@ impl App {
                         )
                     })
                 {
+                    count += 1;
                     succ.log();
                 }
 
@@ -745,10 +758,89 @@ impl App {
                     .context("Movie update failed")
                     .with_context(|| format!("Update movie {id} transaction failed"))
                 {
-                    Ok(_) => Task::batch([
-                        Message::success("Movie Updated").tasked(),
-                        self.home.content_refresh(),
-                    ]),
+                    Ok(_) => {
+                        let succ = if count > 0 {
+                            Message::success("Movie Updated").tasked()
+                        } else {
+                            Task::none()
+                        };
+
+                        Task::batch([succ, self.home.content_refresh()])
+                    }
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
+            Message::EpisodeUpdate(EpisodeUpdate {
+                id,
+                source,
+                updates,
+            }) => {
+                let trans = match self
+                    .db
+                    .transaction()
+                    .context("Episode update failed")
+                    .with_context(|| format!("Failed to start transaction for episode {id} update"))
+                {
+                    Ok(trans) => trans,
+                    Err(error) => {
+                        return Message::anyhow(error).tasked();
+                    }
+                };
+
+                let mut source_id = None;
+                let mut count = 0;
+
+                for update in updates {
+                    let query = match update {
+                        NewUpdateKind::Name(new) => Episode::set_name(id, new),
+                        NewUpdateKind::Overview(overview) => Episode::set_synopsis(id, overview),
+                        NewUpdateKind::Rating(rating) => Episode::set_rating(id, rating),
+                        NewUpdateKind::Video(video) => Episode::set_video(id, video),
+                        NewUpdateKind::Audio(audio) => Episode::set_audio(id, audio),
+                        NewUpdateKind::Subtitle(subtitle) => Episode::set_subtitle(id, subtitle),
+                        NewUpdateKind::SourceId(id) => {
+                            source_id = Some(id);
+                            continue;
+                        }
+                        NewUpdateKind::MarkWatched(count) => Episode::mark_watched(id, count),
+                    };
+
+                    if let Some(succ) = query
+                        .execute(&trans)
+                        .with_ctx_log(|| format!("Updating episode {id} update kind"))
+                    {
+                        count += 1;
+                        succ.log()
+                    }
+                }
+
+                if let Some(source_id) = source_id
+                    && let Some(query) = source.set_source_id(id, source_id, false)
+                    && let Some(succ) = query.execute(&trans).with_ctx_log(|| {
+                        format!(
+                            "Update episode {id} source {} source id {source_id:?}",
+                            source.to_str(),
+                        )
+                    })
+                {
+                    count += 1;
+                    succ.log();
+                }
+
+                match trans
+                    .commit()
+                    .context("Episode update failed")
+                    .with_context(|| format!("Update episode {id} transaction failed"))
+                {
+                    Ok(_) => {
+                        let succ = if count > 0 {
+                            Message::success("Episode Updated").tasked()
+                        } else {
+                            Task::none()
+                        };
+
+                        Task::batch([succ, self.home.content_refresh()])
+                    }
                     Err(error) => Message::anyhow(error).tasked(),
                 }
             }
@@ -1056,7 +1148,7 @@ impl App {
                     FetchId::Episode(id) => {
                         let (episode, sample) = match self.db.get_episode(id, episode_map) {
                             Ok(episode) => {
-                                tracing::debug!("Fetched Episode {}", episode.0.media.name());
+                                tracing::debug!("Fetched Episode {}", episode.0.item.name());
                                 episode
                             }
                             Err(error) => {
@@ -1604,7 +1696,7 @@ impl App {
             }
             Message::ShowTask(ThumbnailTask { id, kind }) => self.home.show_task(id, kind, now),
             Message::SeasonTask(ThumbnailTask { id, kind }) => self.home.season_task(id, kind, now),
-            Message::EpisodeTask(ThumbnailTask { id, kind }) => {
+            Message::EpisodeTask(home::EpisodeItemTask { id, kind }) => {
                 self.home.episode_task(id, kind, now)
             }
             Message::WishTask(task) => self.home.wish_task(task, now),
@@ -2317,8 +2409,8 @@ fn season_map(
 
 fn episode_map(
     row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(shared::Thumbnail<Episode>, Task<ThumbnailTask<Episode>>)> {
-    Episode::from_row(row).map(shared::Thumbnail::new)
+) -> rusqlite::Result<(home::EpisodeItem, Task<home::EpisodeItemTask>)> {
+    Episode::from_row(row).map(home::EpisodeItem::new)
 }
 
 fn scan_task(

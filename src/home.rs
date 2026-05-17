@@ -28,7 +28,7 @@ pub mod shared;
 mod shows;
 mod wishlist;
 
-use crate::app::{MediaUpdate, MediaUpdateKind, MovieUpdate, NewUpdateKind};
+use crate::app::{EpisodeUpdate, MediaUpdate, MediaUpdateKind, MovieUpdate, NewUpdateKind};
 use devutils::source::{SourceId, SourceSet};
 use draws::*;
 use registry::models::{
@@ -53,6 +53,7 @@ use crate::utils::{
 
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};
+pub use episode::{EpisodeItem, EpisodeItemTask};
 use episode::{EpisodePage, EpisodePageMessage};
 pub use movie::{MovieItem, MovieItemTask};
 use movie::{MoviePage, MoviePageMessage};
@@ -347,6 +348,24 @@ pub enum MovieEditMessage {
 }
 
 #[derive(Debug, Clone)]
+pub enum EpisodeEditMessage {
+    Name(String),
+    Overview(text_editor::Action),
+    Rating(String),
+    Video(VideoInfoId),
+    Audio(AudioId),
+    Subtitle(SubtitleId),
+    SubDelete(SubtitleId),
+    SourceId(String),
+    MarkWatched(bool),
+    Poster(Option<PathBuf>),
+    PickPoster,
+    Refetch,
+    Remove,
+    Save,
+}
+
+#[derive(Debug, Clone)]
 pub struct WishNewState {
     id: Option<WishId>,
     name: String,
@@ -455,11 +474,8 @@ pub struct MovieEditState {
     name_input: widget::Id,
     overview: text_editor::Content,
     ratings: String,
-    videos: Vec<VideoInfo>,
     selected_video: Option<VideoInfoId>,
-    audio: Vec<Audio>,
     selected_audio: Option<AudioId>,
-    subtitles: Vec<Subtitle>,
     selected_sub: Option<SubtitleId>,
     source: SourceSet,
     source_id: String,
@@ -469,12 +485,7 @@ pub struct MovieEditState {
 }
 
 impl MovieEditState {
-    fn new(
-        movie: &Movie,
-        videos: &Vec<VideoInfo>,
-        audio: &Vec<Audio>,
-        subs: &Vec<Subtitle>,
-    ) -> Self {
+    fn new(movie: &Movie) -> Self {
         Self {
             id: movie.id,
             name: movie.name().to_owned(),
@@ -485,17 +496,60 @@ impl MovieEditState {
                 .rating()
                 .map(|rating| format!("{rating:.2}"))
                 .unwrap_or("0.0".to_owned()),
-            videos: videos.clone(),
             selected_video: movie.video_id,
-            audio: audio.clone(),
             selected_audio: movie.audio_id,
-            subtitles: subs.clone(),
             selected_sub: movie.subtitle_id,
             source: SourceSet::from_str(&movie.source()),
             source_id: String::default(),
             watched: false,
             poster: None,
             backdrop: None,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn invalid_name(&self) -> bool {
+        self.name.trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EpisodeEditState {
+    id: EpisodeId,
+    name: String,
+    placeholder: String,
+    overview: text_editor::Content,
+    ratings: String,
+    selected_video: Option<VideoInfoId>,
+    selected_audio: Option<AudioId>,
+    selected_sub: Option<SubtitleId>,
+    source: SourceSet,
+    source_id: String,
+    watched: bool,
+    poster: Option<PathBuf>,
+}
+
+impl EpisodeEditState {
+    fn new(episode: &Episode) -> Self {
+        Self {
+            id: episode.id,
+            name: episode.name().to_owned(),
+            placeholder: episode.name().to_owned(),
+            overview: text_editor::Content::with_text(episode.synopsis()),
+            ratings: episode
+                .rating()
+                .map(|rating| format!("{rating:.2}"))
+                .unwrap_or("0.0".to_owned()),
+            selected_video: episode.video_id,
+            selected_audio: episode.audio_id,
+            selected_sub: episode.subtitle_id,
+            source: SourceSet::from_str(&episode.source()),
+            source_id: String::default(),
+            watched: false,
+            poster: None,
         }
     }
 
@@ -544,6 +598,7 @@ pub enum ViewMessage {
     },
     Selection,
     MovieEdit(MovieId),
+    EpisodeEdit(EpisodeId),
     WishModal(WishId),
 }
 
@@ -553,6 +608,7 @@ pub enum View {
     Search(SearchState, Option<CollectionId>),
     CollectionAdd(CollectionAddState),
     MovieEdit(Box<MovieEditState>),
+    EpisodeEdit(Box<EpisodeEditState>),
     Rating {
         id: ItemId,
         rating: Rating,
@@ -669,10 +725,10 @@ enum State {
     Season {
         season: Box<Thumbnail<Season>>,
         memberships: Vec<SimpleCollection>,
-        episodes: Vec<Thumbnail<Episode>>,
+        episodes: Vec<EpisodeItem>,
     },
     Episode {
-        episode: Box<Thumbnail<Episode>>,
+        episode: Box<EpisodeItem>,
         subtitles: Vec<Subtitle>,
         audio: Vec<Audio>,
         videos: Vec<VideoInfo>,
@@ -685,7 +741,7 @@ enum State {
         shows: Vec<Thumbnail<Show>>,
         movies: Vec<MovieItem>,
         seasons: Vec<Thumbnail<Season>>,
-        episodes: Vec<Thumbnail<Episode>>,
+        episodes: Vec<EpisodeItem>,
     },
 }
 
@@ -737,6 +793,7 @@ pub enum HomeMessage {
     WishHovered(WishId, bool),
     WishCompletion(WishId),
     MovieEdit(MovieEditMessage),
+    EpisodeEdit(EpisodeEditMessage),
     RemoveWish,
     CollectionTask(CollectionTask),
     Trigger(TriggerMessage),
@@ -1187,14 +1244,7 @@ impl Home {
                         (view, self.update_page_scroll())
                     }
                     ViewMessage::MovieEdit(id) => {
-                        let State::Movie {
-                            movie,
-                            subtitles,
-                            audio,
-                            videos,
-                            memberships: _memberships,
-                        } = &self.state
-                        else {
+                        let State::Movie { movie, .. } = &self.state else {
                             return Task::none();
                         };
 
@@ -1202,11 +1252,25 @@ impl Home {
                             return Task::none();
                         }
 
-                        // Name, overview, ratings, video, audio, subs, images
-                        // source, refetch, delete
-                        let state = MovieEditState::new(&movie.item, videos, audio, subtitles);
+                        let state = MovieEditState::new(&movie.item);
 
                         (View::MovieEdit(Box::new(state)), self.update_page_scroll())
+                    }
+                    ViewMessage::EpisodeEdit(id) => {
+                        let State::Episode { episode, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        if episode.item.id != id {
+                            return Task::none();
+                        }
+
+                        let state = EpisodeEditState::new(&episode.item);
+
+                        (
+                            View::EpisodeEdit(Box::new(state)),
+                            self.update_page_scroll(),
+                        )
                     }
                 };
 
@@ -1566,9 +1630,7 @@ impl Home {
                         return self.update(msg, default_sauce, now);
                     }
                     MovieEditMessage::SubDelete(subtitle) => {
-                        return Message::SubtitleDelete(subtitle)
-                            .tasked()
-                            .chain(self.close_view(true, now));
+                        return Message::SubtitleDelete(subtitle).tasked();
                     }
                     MovieEditMessage::Poster(poster) => {
                         state.poster = poster;
@@ -1675,6 +1737,143 @@ impl Home {
                         let close = self.close_view(true, now);
 
                         return Task::batch([msg, close, poster, backdrop]);
+                    }
+                }
+
+                Task::none()
+            }
+            HomeMessage::EpisodeEdit(msg) => {
+                let Some(View::EpisodeEdit(state)) = self.view.as_mut() else {
+                    return Task::none();
+                };
+
+                match msg {
+                    EpisodeEditMessage::Name(name) => {
+                        state.name = name;
+                    }
+                    EpisodeEditMessage::Overview(action) => {
+                        state.overview.perform(action);
+                    }
+                    EpisodeEditMessage::Video(id) => {
+                        state.selected_video = Some(id);
+                    }
+                    EpisodeEditMessage::Audio(id) => {
+                        state.selected_audio = Some(id);
+                    }
+                    EpisodeEditMessage::Subtitle(id) => {
+                        state.selected_sub = Some(id);
+                    }
+                    EpisodeEditMessage::SourceId(id) => {
+                        state.source_id = id;
+                    }
+                    EpisodeEditMessage::Rating(rating) => {
+                        state.ratings = rating;
+                    }
+                    EpisodeEditMessage::MarkWatched(watched) => {
+                        state.watched = watched;
+                    }
+                    EpisodeEditMessage::Refetch => {
+                        let State::Episode { episode, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        let source = SourceSet::from_str(episode.item.source());
+
+                        let msg = HomeMessage::Refetch {
+                            id: state.id.into(),
+                            source,
+                        };
+
+                        return self.update(msg, default_sauce, now);
+                    }
+                    EpisodeEditMessage::Remove => {
+                        let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
+                            id: state.id.into(),
+                            name: state.name.clone(),
+                        });
+
+                        return self.update(msg, default_sauce, now);
+                    }
+                    EpisodeEditMessage::SubDelete(subtitle) => {
+                        return Message::SubtitleDelete(subtitle).tasked();
+                    }
+                    EpisodeEditMessage::Poster(poster) => {
+                        state.poster = poster;
+                    }
+                    EpisodeEditMessage::PickPoster => {
+                        return Task::perform(pick_image(), |path| {
+                            Message::Home(HomeMessage::EpisodeEdit(EpisodeEditMessage::Poster(
+                                path,
+                            )))
+                        });
+                    }
+                    EpisodeEditMessage::Save => {
+                        let State::Episode { episode, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        let mut updates = vec![];
+
+                        if !state.invalid_name() && episode.item.name() != state.name() {
+                            updates.push(NewUpdateKind::Name(state.name().to_owned()))
+                        }
+
+                        let overview = state.overview.text();
+                        if episode.item.synopsis() != overview {
+                            updates.push(NewUpdateKind::Overview(overview))
+                        }
+
+                        if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
+                            && ratings != episode.item.rating().unwrap_or_default()
+                        {
+                            updates.push(NewUpdateKind::Rating(ratings));
+                        };
+
+                        if state.watched {
+                            updates.push(NewUpdateKind::MarkWatched(episode.item.watch_count() + 1))
+                        }
+
+                        if let Some(video_id) = state.selected_video
+                            && episode.item.video_id != state.selected_video
+                        {
+                            updates.push(NewUpdateKind::Video(video_id))
+                        }
+
+                        if let Some(audio_id) = state.selected_audio
+                            && episode.item.audio_id != state.selected_audio
+                        {
+                            updates.push(NewUpdateKind::Audio(audio_id))
+                        }
+
+                        if let Some(subtitle_id) = state.selected_sub
+                            && episode.item.subtitle_id != state.selected_sub
+                        {
+                            updates.push(NewUpdateKind::Subtitle(subtitle_id))
+                        }
+
+                        if let Some(source_id) = state.source.source_id(&state.source_id) {
+                            updates.push(NewUpdateKind::SourceId(source_id))
+                        };
+
+                        let update = EpisodeUpdate {
+                            id: state.id,
+                            source: state.source,
+                            updates,
+                        };
+
+                        let poster = match &state.poster {
+                            Some(poster) => Message::PosterUpdate {
+                                id: state.id.into(),
+                                path: poster.clone(),
+                            }
+                            .tasked(),
+                            None => Task::none(),
+                        };
+
+                        let msg = Message::EpisodeUpdate(update).tasked();
+                        let close = self.close_view(true, now);
+
+                        return Task::batch([msg, close, poster]);
                     }
                 }
 
@@ -2010,7 +2209,7 @@ impl Home {
                             (ItemId::Episode(id), State::Season { episodes, .. })
                             | (ItemId::Episode(id), State::Collection { episodes, .. }) => {
                                 if let Some(media) =
-                                    episodes.iter_mut().find(|item| item.media.id == id)
+                                    episodes.iter_mut().find(|item| item.item.id == id)
                                 {
                                     media.selected = new;
                                 }
@@ -3437,7 +3636,7 @@ impl Home {
                     (State::Show { .. }, _) => Task::none(),
                     (State::Season { episodes, .. }, ItemId::Episode(id)) => {
                         if let Some(episode) =
-                            episodes.iter_mut().find(|episode| episode.media.id == id)
+                            episodes.iter_mut().find(|episode| episode.item.id == id)
                         {
                             episode.go_mut(is_hovered, now);
                         }
@@ -3472,7 +3671,7 @@ impl Home {
                     }
                     (State::Collection { episodes, .. }, ItemId::Episode(id)) => {
                         if let Some(episode) =
-                            episodes.iter_mut().find(|episode| episode.media.id == id)
+                            episodes.iter_mut().find(|episode| episode.item.id == id)
                         {
                             episode.go_mut(is_hovered, now);
                         }
@@ -4299,7 +4498,7 @@ impl Home {
             State::Season {
                 season, episodes, ..
             } => (season.media.name(), episodes.len()),
-            State::Episode { episode, .. } => (episode.media.name(), 0),
+            State::Episode { episode, .. } => (episode.item.name(), 0),
             State::Loading => ("Loading", 0),
             State::Collections(collections) => ("Collections", collections.len()),
             State::Wishlist(wishlist) => ("Wishlist", wishlist.len()),
@@ -4422,14 +4621,31 @@ impl Home {
                 State::Episode {
                     episode,
                     memberships,
-                    videos: _video,
-                    audio: _audio,
-                    subtitles: _subs,
+                    videos,
+                    audio,
+                    subtitles,
                 },
                 Some(Page::Episode { page, .. }),
-            ) => page
-                .view(now, episode, memberships.iter())
-                .map(HomeMessage::EpisodePage),
+            ) => {
+                let video = videos
+                    .iter()
+                    .find(|video| Some(video.id) == episode.item.video_id);
+                let audio = audio
+                    .iter()
+                    .find(|audio| Some(audio.id) == episode.item.audio_id);
+                let subtitle = subtitles
+                    .iter()
+                    .find(|subtitle| Some(subtitle.id) == episode.item.subtitle_id);
+
+                page.view(
+                    episode,
+                    memberships.iter().peekable(),
+                    video,
+                    audio,
+                    subtitle,
+                )
+                .map(HomeMessage::EpisodePage)
+            }
             (
                 State::Movie {
                     movie,
@@ -4537,50 +4753,59 @@ impl Home {
         match self.view.view() {
             None => default(content),
             Some((view, toggle)) => {
-                let modalize = |overlay| modalize(content, overlay, toggle);
+                let modalize = |content, overlay| modalize(content, overlay, toggle);
 
                 match view {
-                    View::CollectionConfig(config) => modalize(draw_config(config)).right(),
-                    View::Search(state, None) => modalize(draw_search(
-                        state,
-                        |id| HomeMessage::Goto(id.into()),
-                        theme,
-                        true,
-                    )),
-                    View::Search(state, Some(collection)) => modalize(draw_search(
-                        state,
-                        |item| HomeMessage::AddCollection(item, *collection),
-                        theme,
-                        false,
-                    )),
-                    View::CollectionAdd(state) => modalize(draw_collection_add(
-                        state,
-                        self.collections.iter(),
-                        self.collections.is_empty(),
-                    )),
-                    View::Rating { rating, .. } => modalize(draw_rating(rating)),
+                    View::CollectionConfig(config) => {
+                        modalize(content, draw_config(config)).right()
+                    }
+                    View::Search(state, None) => modalize(
+                        content,
+                        draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true),
+                    ),
+                    View::Search(state, Some(collection)) => modalize(
+                        content,
+                        draw_search(
+                            state,
+                            |item| HomeMessage::AddCollection(item, *collection),
+                            theme,
+                            false,
+                        ),
+                    ),
+                    View::CollectionAdd(state) => modalize(
+                        content,
+                        draw_collection_add(
+                            state,
+                            self.collections.iter(),
+                            self.collections.is_empty(),
+                        ),
+                    ),
+                    View::Rating { rating, .. } => modalize(content, draw_rating(rating)),
                     View::Rename {
                         input,
                         old,
                         value,
                         empty,
                         ..
-                    } => modalize(draw_rename(input, old, value, *empty)),
+                    } => modalize(content, draw_rename(input, old, value, *empty)),
                     View::Synopsis {
-                        editor, content, ..
-                    } => modalize(draw_synopsis(editor, content)),
+                        editor,
+                        content: editor_content,
+                        ..
+                    } => modalize(content, draw_synopsis(editor, editor_content)),
                     View::TMDBId {
                         input,
                         value,
                         top_level,
                         ..
-                    } => modalize(draw_tmdb(input, value, *top_level)),
+                    } => modalize(content, draw_tmdb(input, value, *top_level)),
                     View::RemoveMedia { name, .. } => {
-                        modalize(draw_delete_confirm(name, HomeMessage::RemoveMedia))
+                        modalize(content, draw_delete_confirm(name, HomeMessage::RemoveMedia))
                     }
-                    View::RemoveCollection { name, .. } => {
-                        modalize(draw_delete_confirm(name, HomeMessage::RemoveCollection))
-                    }
+                    View::RemoveCollection { name, .. } => modalize(
+                        content,
+                        draw_delete_confirm(name, HomeMessage::RemoveCollection),
+                    ),
                     View::CollectionTriggers {
                         itriggers,
                         dtriggers,
@@ -4588,17 +4813,16 @@ impl Home {
                         id: _id,
                         removed_inserts: _removed_inserts,
                         removed_deletes: _removed_deletes,
-                    } => modalize(draw_collection_triggers(
-                        *view_inserts,
-                        itriggers,
-                        dtriggers,
-                    ))
+                    } => modalize(
+                        content,
+                        draw_collection_triggers(*view_inserts, itriggers, dtriggers),
+                    )
                     .right(),
                     View::Selection(selected) => {
                         let selection = container(draw_selection(selected.len()))
                             .style(styles::container::dark);
 
-                        modalize(selection.into())
+                        modalize(content, selection.into())
                             .passthrough(true)
                             .on_blur_maybe(None)
                             .style(|theme| {
@@ -4609,24 +4833,60 @@ impl Home {
                             })
                             .right()
                     }
-                    View::WishNew(state) => modalize(draw_wishlist(state)),
+                    View::WishNew(state) => modalize(content, draw_wishlist(state)),
                     View::WishDrawer(id) => {
                         let State::Wishlist(wishlist) = &self.state else {
-                            return modalize(empty()).toggle(false).passthrough(true).into();
+                            return default(content);
                         };
 
                         let Some(wish) = wishlist.iter().find(|wish| wish.item.id == *id) else {
-                            return modalize(empty()).toggle(false).passthrough(true).into();
+                            return default(content);
                         };
 
                         let overlay = draw_wish(wish, now);
 
-                        modalize(overlay).right()
+                        modalize(content, overlay).right()
                     }
                     View::RemoveWish { name, .. } => {
-                        modalize(draw_delete_confirm(name, HomeMessage::RemoveWish))
+                        modalize(content, draw_delete_confirm(name, HomeMessage::RemoveWish))
                     }
-                    View::MovieEdit(state) => modalize(draw_movie_edit(state)).right(),
+                    View::MovieEdit(state) => {
+                        let State::Movie {
+                            movie,
+                            subtitles,
+                            audio,
+                            videos,
+                            ..
+                        } = &self.state
+                        else {
+                            return default(content);
+                        };
+
+                        if movie.item.id != state.id {
+                            return default(content);
+                        }
+
+                        modalize(content, draw_movie_edit(state, videos, audio, subtitles)).right()
+                    }
+                    View::EpisodeEdit(state) => {
+                        let State::Episode {
+                            episode,
+                            subtitles,
+                            audio,
+                            videos,
+                            ..
+                        } = &self.state
+                        else {
+                            return default(content);
+                        };
+
+                        if episode.item.id != state.id {
+                            return default(content);
+                        }
+
+                        modalize(content, draw_episode_edit(state, videos, audio, subtitles))
+                            .right()
+                    }
                 }
                 .into()
             }
@@ -4750,7 +5010,7 @@ impl Home {
             State::Shows(_) => (FetchId::Shows, None),
             State::Show { show, .. } => (FetchId::Show(show.media.id), None),
             State::Season { season, .. } => (FetchId::Season(season.media.id), None),
-            State::Episode { episode, .. } => (FetchId::Episode(episode.media.id), None),
+            State::Episode { episode, .. } => (FetchId::Episode(episode.item.id), None),
             State::Movie { movie, .. } => (FetchId::Movie(movie.item.id), None),
             State::Collections(_) => (FetchId::Collections, None),
             State::Wishlist(_) => (FetchId::Wishlist, None),
@@ -5049,11 +5309,11 @@ impl Home {
     pub fn fetched_season(
         &mut self,
         season: Thumbnail<Season>,
-        mut episodes: Vec<Thumbnail<Episode>>,
+        mut episodes: Vec<EpisodeItem>,
     ) -> Task<Message> {
         if let Some(View::Selection(selected)) = self.view.as_ref() {
             for media in &mut episodes {
-                media.selected = selected.contains(&media.media.id.into());
+                media.selected = selected.contains(&media.item.id.into());
             }
         }
         let memberships = Message::FetchMemberships(season.media.id.into());
@@ -5067,11 +5327,11 @@ impl Home {
         Task::batch([self.update_page_scroll(), Task::done(memberships)])
     }
 
-    pub fn fetched_episode(&mut self, episode: Thumbnail<Episode>) -> Task<Message> {
-        let memberships = Message::FetchMemberships(episode.media.id.into()).tasked();
-        let videos = Message::FetchVideoInfo(episode.media.id.into()).tasked();
-        let audio = Message::FetchAudio(episode.media.id.into()).tasked();
-        let subtitles = Message::FetchSubtitles(episode.media.id.into()).tasked();
+    pub fn fetched_episode(&mut self, episode: EpisodeItem) -> Task<Message> {
+        let memberships = Message::FetchMemberships(episode.item.id.into()).tasked();
+        let videos = Message::FetchVideoInfo(episode.item.id.into()).tasked();
+        let audio = Message::FetchAudio(episode.item.id.into()).tasked();
+        let subtitles = Message::FetchSubtitles(episode.item.id.into()).tasked();
 
         self.state = State::Episode {
             episode: Box::new(episode),
@@ -5126,7 +5386,7 @@ impl Home {
         mut movies: Vec<MovieItem>,
         mut shows: Vec<Thumbnail<Show>>,
         mut seasons: Vec<Thumbnail<Season>>,
-        mut episodes: Vec<Thumbnail<Episode>>,
+        mut episodes: Vec<EpisodeItem>,
     ) -> Task<Message> {
         let (collection, task) = CollectionThumbnail::new(collection);
         let task = task.map(|task| Message::Home(HomeMessage::CollectionTask(task)));
@@ -5143,7 +5403,7 @@ impl Home {
                 media.selected = selected.contains(&media.media.id.into());
             }
             for media in &mut episodes {
-                media.selected = selected.contains(&media.media.id.into());
+                media.selected = selected.contains(&media.item.id.into());
             }
         }
 
@@ -5318,12 +5578,12 @@ impl Home {
             State::Season { episodes, .. } | State::Collection { episodes, .. } => {
                 if let Some(episode) = episodes
                     .iter_mut()
-                    .find(|thumbnail| thumbnail.media.id == id)
+                    .find(|thumbnail| thumbnail.item.id == id)
                 {
                     episode.task(task, now);
                 }
             }
-            State::Episode { episode, .. } if episode.media.id == id => {
+            State::Episode { episode, .. } if episode.item.id == id => {
                 episode.task(task, now);
             }
             _ => {}

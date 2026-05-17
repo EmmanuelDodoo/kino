@@ -1,4 +1,5 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use super::episode::EpisodeItem;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, empty, styles};
@@ -175,7 +176,7 @@ impl SeasonPage {
     fn list<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
+        thumbnails: impl Iterator<Item = &'a EpisodeItem>,
     ) -> Element<'a, SeasonPageMessage> {
         let season = self.id;
 
@@ -222,7 +223,7 @@ impl SeasonPage {
     fn compact<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
+        thumbnails: impl Iterator<Item = &'a EpisodeItem>,
     ) -> Element<'a, SeasonPageMessage> {
         let season = self.id;
 
@@ -268,7 +269,7 @@ impl SeasonPage {
     fn grid<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
+        thumbnails: impl Iterator<Item = &'a EpisodeItem>,
     ) -> Element<'a, SeasonPageMessage> {
         let season = self.id;
 
@@ -481,7 +482,7 @@ impl SeasonPage {
         now: Instant,
         layout: Layout,
         season: &'a Thumbnail<Season>,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Episode>>,
+        thumbnails: impl Iterator<Item = &'a EpisodeItem>,
         memberships: impl Iterator<Item = &'a SimpleCollection>,
     ) -> Element<'a, SeasonPageMessage> {
         let source = SourceSet::from_str(season.media.source());

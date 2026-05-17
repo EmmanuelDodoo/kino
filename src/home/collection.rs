@@ -1,7 +1,8 @@
+use super::episode::EpisodeItem;
+use super::movie::MovieItem;
 use super::{
     CollectionThumbnail, HomeMessage, PageKind, ViewMessage, movies, shared::*, shows, view_unicode,
 };
-use super::movie::MovieItem;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{self, Layout, Scroll, empty, styles};
@@ -181,7 +182,7 @@ impl CollectionPage {
         movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
-        episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
+        episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
         let content = match layout {
             Layout::List => self.list(now, movies, shows, seasons, episodes),
@@ -356,7 +357,7 @@ impl CollectionPage {
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
-        mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
+        mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
         let collection = self.id;
 
@@ -480,7 +481,7 @@ impl CollectionPage {
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
-        mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
+        mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
         let collection = self.id;
 
@@ -598,7 +599,7 @@ impl CollectionPage {
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
-        mut episodes: Peekable<impl Iterator<Item = &'a Thumbnail<Episode>>>,
+        mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
         let collection = self.id;
 
