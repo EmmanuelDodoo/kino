@@ -1,7 +1,8 @@
 use core::error::{Context, ContextLog, Error, Log, Result, bail};
-use registry::db::{Database, Query};
+use registry::db::Query;
 use registry::models::tmdb::{Media, Request, RequestId, Status, WishType};
 use registry::models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId, wish};
+use rusqlite::Connection;
 use rusqlite::types::{ToSqlOutput, Value};
 use serde::Deserialize;
 use std::ops::Deref;
@@ -12,7 +13,10 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
 use tokio::time;
 
-use super::{CLIENT, IMAGE_SQL, SourceId, SourceImpl, backdrop_path, poster_path};
+use super::{
+    CLIENT, SourceId, SourceImpl, backdrop_path, insert_episode_image, insert_movie_image,
+    insert_season_image, insert_show_image, insert_wish_image, poster_path,
+};
 
 #[derive(Debug)]
 pub struct TMDB {}
@@ -409,7 +413,11 @@ async fn img_download(auth: &str, url: String, path: impl AsRef<Path>) -> bool {
     true
 }
 
-fn get_requests(db: &Database, retry_limit: u8, limit: u16) -> rusqlite::Result<Vec<Request>> {
+fn get_requests(
+    db: &impl Deref<Target = Connection>,
+    retry_limit: u8,
+    limit: u16,
+) -> rusqlite::Result<Vec<Request>> {
     let searching = Status::Searching as u8;
     let done = Status::Done as u8;
 
@@ -440,7 +448,9 @@ pub async fn run(
     interval: Duration,
 ) {
     tracing::debug!("Starting up TMDB fetcher instance");
-    let Some(mut db) = Database::open(db).ctx_log(format!("TMDB fetcher DB opening error")) else {
+    let Some(mut db) =
+        registry::db::Database::open(db).ctx_log(format!("TMDB fetcher DB opening error"))
+    else {
         return;
     };
 
@@ -517,7 +527,7 @@ pub async fn run(
 }
 
 async fn execute(
-    db: &mut Database,
+    db: &mut impl Deref<Target = Connection>,
     image_config: &ImageConfig,
     images_path: impl AsRef<Path>,
     auth: &str,
@@ -885,7 +895,7 @@ async fn execute(
                     );
                 }
 
-                insert_movie_image(db, request.id, *id, poster, backdrop).with_context(|| {
+                insert_movie_image(db, *id, poster, backdrop).with_context(|| {
                     format!("Inserting TMDB movie {name} image. Request: {}", request.id)
                 })?;
                 request.status = Status::Done;
@@ -927,7 +937,7 @@ async fn execute(
                     );
                 }
 
-                insert_show_image(db, request.id, *id, poster, backdrop).with_context(|| {
+                insert_show_image(db, *id, poster, backdrop).with_context(|| {
                     format!("Inserting TMDB show {name} image. Request: {}", request.id)
                 })?;
                 request.status = Status::Done;
@@ -953,7 +963,7 @@ async fn execute(
                     )
                 }
 
-                insert_season_image(db, request.id, *id, poster).with_context(|| {
+                insert_season_image(db, *id, poster).with_context(|| {
                     format!(
                         "Inserting TMDB season {number} image. Request: {}",
                         request.id
@@ -983,7 +993,7 @@ async fn execute(
                     )
                 }
 
-                insert_episode_image(db, request.id, *id, poster).with_context(|| {
+                insert_episode_image(db, *id, poster).with_context(|| {
                     format!(
                         "Inserting TMDB episode {number} image. Request: {}",
                         request.id
@@ -1013,7 +1023,7 @@ async fn execute(
                     )
                 }
 
-                insert_wish_image(db, request.id, *id, poster).with_context(|| {
+                insert_wish_image(db, *id, poster).with_context(|| {
                     format!("Inserting TMDB wish image. Request: {}", request.id)
                 })?;
 
@@ -1037,7 +1047,7 @@ async fn execute(
 }
 
 fn insert_movie(
-    db: &Database,
+    db: &impl Deref<Target = Connection>,
     request: RequestId,
     id: MovieId,
     movie: &TMDBMovie,
@@ -1091,7 +1101,7 @@ fn insert_movie(
 }
 
 fn insert_wish(
-    db: &Database,
+    db: &impl Deref<Target = Connection>,
     request: RequestId,
     id: WishId,
     name: String,
@@ -1157,7 +1167,7 @@ fn insert_wish(
 }
 
 fn insert_show(
-    db: &Database,
+    db: &impl Deref<Target = Connection>,
     request: RequestId,
     id: ShowId,
     show: &TMDBShow,
@@ -1206,7 +1216,7 @@ fn insert_show(
 }
 
 fn insert_season(
-    db: &Database,
+    db: &impl Deref<Target = Connection>,
     request: RequestId,
     id: SeasonId,
     season: &TMDBSeason,
@@ -1245,7 +1255,7 @@ fn insert_season(
 }
 
 fn insert_episode(
-    db: &Database,
+    db: &impl Deref<Target = Connection>,
     request: RequestId,
     id: EpisodeId,
     episode: &TMDBEpisode,
@@ -1284,168 +1294,6 @@ fn insert_episode(
         (":name", &ToSqlOutput::from(name)),
         (":rating", rating),
         (":duration", &ToSqlOutput::from(duration)),
-    ])?;
-
-    Ok(())
-}
-
-fn insert_wish_image(
-    db: &Database,
-    request: RequestId,
-    id: WishId,
-    poster: Option<String>,
-) -> Result<()> {
-    let sql = "UPDATE wish SET poster=:poster WHERE id=:id AND request=:request";
-    let mut statement = db.prepare_cached(sql)?;
-
-    let poster = match poster {
-        Some(poster) => {
-            let poster = ToSqlOutput::from(poster);
-            db.execute(IMAGE_SQL, &[(":path", &poster)])
-                .with_ctx_log(|| format!("Insert wish {id} poster image"));
-
-            poster
-        }
-        None => ToSqlOutput::Owned(Value::Null),
-    };
-
-    statement.execute(&[
-        (":id", &ToSqlOutput::from(id)),
-        (":request", &ToSqlOutput::from(request)),
-        (":poster", &poster),
-    ])?;
-
-    Ok(())
-}
-
-fn insert_movie_image(
-    db: &Database,
-    request: RequestId,
-    id: MovieId,
-    poster: Option<String>,
-    backdrop: Option<String>,
-) -> Result<()> {
-    let sql = "UPDATE movie SET  poster=:poster, backdrop=:backdrop, generate_poster=:generate_poster, fetched=TRUE WHERE id=:id AND request=:request";
-    let mut statement = db.prepare_cached(sql)?;
-
-    let poster = match poster {
-        Some(poster) => {
-            let poster = ToSqlOutput::from(poster);
-            db.execute(IMAGE_SQL, &[(":path", &poster)])
-                .with_ctx_log(|| format!("Insert movie {id} poster image"));
-
-            poster
-        }
-        None => ToSqlOutput::Owned(Value::Null),
-    };
-
-    let backdrop = match backdrop {
-        Some(path) => ToSqlOutput::from(path),
-        None => ToSqlOutput::Owned(Value::Null),
-    };
-
-    statement.execute(&[
-        (":id", &ToSqlOutput::from(id)),
-        (":request", &ToSqlOutput::from(request)),
-        (":poster", &poster),
-        (":backdrop", &backdrop),
-        (":generate_poster", &ToSqlOutput::from(false)),
-    ])?;
-
-    Ok(())
-}
-
-fn insert_show_image(
-    db: &Database,
-    request: RequestId,
-    id: ShowId,
-    poster: Option<String>,
-    backdrop: Option<String>,
-) -> Result<()> {
-    let sql =
-        "UPDATE tv_show SET  poster=:poster, backdrop=:backdrop WHERE id=:id AND request=:request";
-    let mut statement = db.prepare_cached(sql)?;
-
-    let poster = match poster {
-        Some(poster) => {
-            let poster = ToSqlOutput::from(poster);
-            db.execute(IMAGE_SQL, &[(":path", &poster)])
-                .with_ctx_log(|| format!("Insert show {id} poster iamge"));
-
-            poster
-        }
-        None => ToSqlOutput::Owned(Value::Null),
-    };
-
-    let backdrop = match backdrop {
-        Some(path) => ToSqlOutput::from(path),
-        None => ToSqlOutput::Owned(Value::Null),
-    };
-
-    statement.execute(&[
-        (":id", &ToSqlOutput::from(id)),
-        (":request", &ToSqlOutput::from(request)),
-        (":poster", &poster),
-        (":backdrop", &backdrop),
-    ])?;
-
-    Ok(())
-}
-
-fn insert_season_image(
-    db: &Database,
-    request: RequestId,
-    id: SeasonId,
-    poster: Option<String>,
-) -> Result<()> {
-    let sql = "UPDATE season SET poster=:poster WHERE id=:id AND request=:request";
-    let mut statement = db.prepare_cached(sql)?;
-
-    let poster = match poster {
-        Some(poster) => {
-            let poster = ToSqlOutput::from(poster);
-            db.execute(IMAGE_SQL, &[(":path", &poster)])
-                .with_ctx_log(|| format!("Insert season {id} poster image"));
-
-            poster
-        }
-        None => ToSqlOutput::Owned(Value::Null),
-    };
-
-    statement.execute(&[
-        (":id", &ToSqlOutput::from(id)),
-        (":request", &ToSqlOutput::from(request)),
-        (":poster", &poster),
-    ])?;
-
-    Ok(())
-}
-
-fn insert_episode_image(
-    db: &Database,
-    request: RequestId,
-    id: EpisodeId,
-    poster: Option<String>,
-) -> rusqlite::Result<()> {
-    let sql = "UPDATE episode SET poster=:poster, generate_poster=:generate_poster, fetched=TRUE WHERE id=:id AND request=:request";
-    let mut statement = db.prepare_cached(sql)?;
-
-    let poster = match poster {
-        Some(poster) => {
-            let poster = ToSqlOutput::from(poster);
-            db.execute(IMAGE_SQL, &[(":path", &poster)])
-                .with_ctx_log(|| format!("Insert episode {id} poster image"));
-
-            poster
-        }
-        None => ToSqlOutput::Owned(Value::Null),
-    };
-
-    statement.execute(&[
-        (":id", &ToSqlOutput::from(id)),
-        (":request", &ToSqlOutput::from(request)),
-        (":poster", &poster),
-        (":generate_poster", &ToSqlOutput::from(false)),
     ])?;
 
     Ok(())
