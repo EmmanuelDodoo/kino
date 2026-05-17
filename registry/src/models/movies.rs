@@ -218,7 +218,7 @@ impl Movie {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO movie (id, directory, path, name, original_name,  poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name,  :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration) ON CONFLICT(directory, path) DO UPDATE SET removed=FALSE";
+        let sql = "INSERT INTO movie (id, directory, path, name, original_name,  poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name,  :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration) ON CONFLICT(directory, path) DO UPDATE SET duration=:duration, removed=FALSE";
 
         let params = self.insert_params();
 

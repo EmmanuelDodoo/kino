@@ -229,7 +229,7 @@ impl Episode {
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO episode (id, season_id, name, original_name,  path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :episode_number) ON CONFLICT(season_id, path) DO UPDATE SET removed=FALSE";
+        let sql = "INSERT INTO episode (id, season_id, name, original_name,  path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :episode_number) ON CONFLICT(season_id, path) DO UPDATE SET duration=:duration, removed=FALSE";
 
         let params = self.insert_params();
 
