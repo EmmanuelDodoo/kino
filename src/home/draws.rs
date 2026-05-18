@@ -2111,8 +2111,8 @@ pub fn draw_episode_edit<'a>(
     };
 
     let content = column!(
-        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, refetch, remove,
-        poster
+        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, refetch,
+        remove, poster
     )
     .spacing(24);
 
@@ -2156,54 +2156,70 @@ where
             .padding([2, 2]),
     )
     .interaction(mouse::Interaction::Pointer);
+    let size = H7;
 
-    let map = |video: &VideoInfo| {
-        let sep = "    ";
-        let codec = video.codec.as_deref().unwrap_or("unknown codec");
-        let resolution = video.resolution();
-        let framerate = if video.framerate > 0.0 {
-            Some(format!("{:.2} fps", video.framerate))
-        } else {
-            None
-        };
-
-        let bitrate = if video.bitrate > 0 {
-            Some(format!("{:.2} Mbps", video.bitrate as f32 / 1000_000.0))
-        } else {
-            None
-        };
-
-        let label = [
-            Some(codec),
-            Some(&resolution),
-            framerate.as_deref(),
-            bitrate.as_deref(),
-        ]
-        .into_iter()
-        .flatten()
-        .fold(String::default(), |mut acc, curr| {
-            acc.push_str(sep);
-            acc.push_str(curr);
-
-            acc
-        });
-
-        radio(label, video.id, selected, on_select.clone())
+    let rad = table::column(empty(), |video: &VideoInfo| {
+        radio("", video.id, selected, on_select.clone())
             .size(12)
-            .text_size(H7)
-            .width(Length::Fill)
-            .spacing(12)
-            .into()
-    };
+            .spacing(0)
+    })
+    .align_y(Vertical::Center);
 
-    let content = column(videos.iter().map(map))
-        .spacing(6)
-        .padding(Padding::ZERO.left(10));
+    let codec = table::column(empty(), |video: &VideoInfo| {
+        let codec = video.codec.as_deref().unwrap_or("unknown codec");
+        button(sized_regular(codec, size))
+            .on_press(on_select(video.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
+
+    let resolution = table::column(empty(), |video: &VideoInfo| {
+        button(sized_regular(video.resolution(), size))
+            .on_press(on_select(video.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
+
+    let framerate = table::column(empty(), |video: &VideoInfo| {
+        if video.framerate > 0.0 {
+            let framerate = format!("{:.2} fps", video.framerate);
+
+            Some(
+                button(sized_regular(framerate, size))
+                    .on_press(on_select(video.id))
+                    .padding(0)
+                    .style(styles::button::text),
+            )
+        } else {
+            None
+        }
+    })
+    .align_y(Vertical::Center);
+
+    let bitrate = table::column(empty(), |video: &VideoInfo| {
+        if video.bitrate > 0 {
+            let bitrate = format!("{:.2} Mbps", video.bitrate as f32 / 1000_000.0);
+
+            Some(
+                button(sized_regular(bitrate, size))
+                    .on_press(on_select(video.id))
+                    .padding(0)
+                    .style(styles::button::text),
+            )
+        } else {
+            None
+        }
+    })
+    .align_y(Vertical::Center);
+
+    let content = table([rad, codec, resolution, bitrate, framerate], videos).separator(0);
 
     expandable(label, content)
         .width(Length::Fill)
         .expanded(true)
-        .spacing(8)
+        .spacing(0)
         .into()
 }
 
@@ -2219,6 +2235,7 @@ where
         return empty();
     }
 
+    let size = H7;
     let label = mouse_area(
         row!(sized_medium("Audios", P))
             .width(Length::Fill)
@@ -2226,60 +2243,85 @@ where
     )
     .interaction(mouse::Interaction::Pointer);
 
-    let map = |audio: &Audio| {
-        let sep = "    ";
-        let codec = audio.codec.as_deref().unwrap_or("unknown codec");
-        let lang = audio.lang.as_deref().unwrap_or("unknown language");
-        let bitrate = if audio.bitrate > 0 {
-            Some(format!("{:.2} kbps", audio.bitrate as f32 / 1000.0))
-        } else {
-            None
-        };
-
-        let sample = if audio.sample_rate > 0 {
-            Some(format!("{} Hz", audio.sample_rate))
-        } else {
-            None
-        };
-
-        let channels = if audio.channels > 0 {
-            Some(format!("{} channels", audio.channels))
-        } else {
-            None
-        };
-
-        let label = [
-            Some(lang),
-            Some(codec),
-            bitrate.as_deref(),
-            sample.as_deref(),
-            channels.as_deref(),
-        ]
-        .into_iter()
-        .flatten()
-        .fold(String::default(), |mut acc, curr| {
-            acc.push_str(sep);
-            acc.push_str(curr);
-
-            acc
-        });
-
-        radio(label, audio.id, selected, on_select.clone())
+    let radio = table::column(empty(), |audio: &Audio| {
+        radio("", audio.id, selected, on_select.clone())
             .size(12)
-            .text_size(H7)
-            .width(Length::Fill)
-            .spacing(12)
-            .into()
-    };
+            .spacing(0)
+    })
+    .align_y(Vertical::Center);
 
-    let content = column(audio.iter().map(map))
-        .spacing(6)
-        .padding(Padding::ZERO.left(10));
+    let lang = table::column(empty(), |audio: &Audio| {
+        let lang = audio.lang.as_deref().unwrap_or("unk. lang");
+        button(sized_regular(lang, size))
+            .on_press(on_select(audio.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
+
+    let codec = table::column(empty(), |audio: &Audio| {
+        let codec = audio.codec.as_deref().unwrap_or("unk. codec");
+        button(sized_regular(codec, size))
+            .on_press(on_select(audio.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
+
+    let bitrate = table::column(empty(), |audio: &Audio| {
+        if audio.bitrate > 0 {
+            let bitrate = format!("{:.2} kbps", audio.bitrate as f32 / 1000.0);
+
+            Some(
+                button(sized_regular(bitrate, size))
+                    .on_press(on_select(audio.id))
+                    .padding(0)
+                    .style(styles::button::text),
+            )
+        } else {
+            None
+        }
+    })
+    .align_y(Vertical::Center);
+
+    let sample = table::column(empty(), |audio: &Audio| {
+        if audio.sample_rate > 0 {
+            let sample = format!("{} Hz", audio.sample_rate);
+
+            Some(
+                button(sized_regular(sample, size))
+                    .on_press(on_select(audio.id))
+                    .padding(0)
+                    .style(styles::button::text),
+            )
+        } else {
+            None
+        }
+    })
+    .align_y(Vertical::Center);
+
+    let channels = table::column(empty(), |audio: &Audio| {
+        if audio.channels > 0 {
+            let channels = format!("{} chan.", audio.channels);
+
+            Some(
+                button(sized_regular(channels, size))
+                    .on_press(on_select(audio.id))
+                    .padding(0)
+                    .style(styles::button::text),
+            )
+        } else {
+            None
+        }
+    })
+    .align_y(Vertical::Center);
+
+    let content = table([radio, lang, codec, bitrate, sample, channels], audio).separator(0);
 
     expandable(label, content)
         .width(Length::Fill)
         .expanded(true)
-        .spacing(8)
+        .spacing(0)
         .into()
 }
 
@@ -2303,50 +2345,58 @@ where
             .padding([2, 2]),
     )
     .interaction(mouse::Interaction::Pointer);
+    let size = H7;
 
-    let map = |sub: &Subtitle| {
-        let sep = "    ";
+    let radio = table::column(empty(), |sub: &Subtitle| {
+        radio("", sub.id, selected, on_select.clone())
+            .size(12)
+            .spacing(0)
+    })
+    .align_y(Vertical::Center);
 
-        let title = &sub.title;
-        let lang = &sub.lang;
+    let title = table::column(empty(), |sub: &Subtitle| {
+        button(sized_regular(&sub.title, size))
+            .on_press(on_select(sub.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
+
+    let lang = table::column(empty(), |sub: &Subtitle| {
+        button(sized_regular(&sub.lang, size))
+            .on_press(on_select(sub.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
+
+    let kind = table::column(empty(), |sub: &Subtitle| {
         let kind = match &sub.kind {
             registry::models::SubtitleKind::Embedded => "embedded".to_owned(),
-            registry::models::SubtitleKind::Loaded { path, .. } => trim_path(path, 2),
+            registry::models::SubtitleKind::Loaded { path, .. } => trim_path(path, 3),
         };
 
-        let label = [title, lang, &kind]
-            .into_iter()
-            .fold(String::default(), |mut acc, curr| {
-                acc.push_str(sep);
-                acc.push_str(curr);
+        button(marquee(kind).size(size).width(225))
+            .on_press(on_select(sub.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
 
-                acc
-            });
+    let delete = table::column(empty(), |sub: &Subtitle| match &sub.kind {
+        registry::models::SubtitleKind::Embedded => empty(),
+        registry::models::SubtitleKind::Loaded { .. } => icons::text_button(icons::CANCEL)
+            .padding(0)
+            .on_press(on_delete(sub.id))
+            .into(),
+    })
+    .align_y(Vertical::Center);
 
-        let radio = radio(label, sub.id, selected, on_select.clone())
-            .size(12)
-            .text_size(H7)
-            .width(Length::Fill)
-            .spacing(12);
-
-        let delete = match &sub.kind {
-            registry::models::SubtitleKind::Embedded => empty(),
-            registry::models::SubtitleKind::Loaded { .. } => icons::text_button(icons::CANCEL)
-                .padding(0)
-                .on_press(on_delete(sub.id))
-                .into(),
-        };
-
-        row!(radio, delete).spacing(3).into()
-    };
-
-    let content = column(subs.iter().map(map))
-        .spacing(6)
-        .padding(Padding::ZERO.left(10));
+    let content = table([radio, title, lang, kind, delete], subs).separator(0);
 
     expandable(label, content)
         .width(Length::Fill)
         .expanded(true)
-        .spacing(8)
+        .spacing(0)
         .into()
 }
