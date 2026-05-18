@@ -1,10 +1,10 @@
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{empty, styles, tooltip};
+use crate::utils::{empty, styles, tooltip, trim_path, typo};
 use core::variants;
 use devutils::image_ops::{collage, sample_complement};
 use iced::{
-    Color, ContentFit, Element, Length, Task, Theme,
+    Color, ContentFit, Element, Length, Padding, Task, Theme,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
     mouse, task,
@@ -16,11 +16,12 @@ use iced::{
     },
 };
 use registry::models::{
-    self, Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection,
+    self, Audio, Collection, CollectionId, ItemId, Media, SearchItem, SimpleCollection, Subtitle,
+    VideoInfo,
 };
-use widgets::marquee;
-
+use std::iter::Peekable;
 use std::sync::LazyLock;
+use widgets::marquee;
 pub static DEFAULT_POSTER: LazyLock<Option<Handle>> =
     LazyLock::new(|| devutils::image_ops::default_poster().map(to_handle));
 
@@ -1800,4 +1801,337 @@ pub fn image_poster<'a, Message: 'a>(
             _ => empty().into(),
         },
     }
+}
+
+pub fn page_image<'a, Message: 'a>(
+    f: impl Fn(f32, f32) -> Element<'a, Message> + 'a,
+) -> Element<'a, Message> {
+    use iced::widget::responsive;
+
+    responsive(move |size| {
+        let img_height = size.height * 0.85;
+        let ratio = 2.0 / 3.0;
+        f(img_height * ratio, img_height)
+    })
+    .width(Length::Shrink)
+    .into()
+}
+
+pub fn page_tags<'a, Message: 'a + Clone, T: text::IntoFragment<'a>>(
+    values: impl IntoIterator<Item = (T, Option<Message>)>,
+) -> Element<'a, Message> {
+    let separator = || Element::from(text("•").line_height(1.0).size(H7));
+
+    let values = values
+        .into_iter()
+        .flat_map(|(value, message)| {
+            let value = text(value).size(H8).font(bold_italic_font());
+
+            let value = match message {
+                Some(message) => Element::from(
+                    button(value)
+                        .padding(0)
+                        .style(styles::button::text)
+                        .on_press(message),
+                ),
+                None => Element::from(value),
+            };
+
+            [separator(), value]
+        })
+        .skip(1);
+
+    row(values).spacing(4).align_y(Vertical::Center).into()
+}
+
+pub fn page_header<'a, Message: 'a + Clone>(
+    header: impl Into<Element<'a, Message>>,
+    on_play: Message,
+    on_collection: Message,
+    on_edit: Message,
+) -> Element<'a, Message> {
+    let header = header.into();
+
+    let actions = {
+        let size = H2;
+        let play = button(icon(PLAY).size(size))
+            .style(styles::button::text_primary)
+            .padding(0)
+            .on_press(on_play);
+
+        let collection = button(icon(ADD_COLLECTION).size(size))
+            .style(styles::button::text)
+            .padding(0)
+            .on_press(on_collection);
+
+        let config = button(icon(VIDEO_CONFIG).size(size / RATIO))
+            .style(styles::button::text)
+            .padding(0)
+            .on_press(on_edit);
+
+        row!(play, collection, config)
+            .align_y(Vertical::Center)
+            .spacing(16)
+    };
+
+    row!(
+        header,
+        container(actions)
+            .align_x(Horizontal::Right)
+            .width(Length::Fill)
+    )
+    .align_y(Vertical::Center)
+    .spacing(4)
+    .into()
+}
+
+pub fn page_details<'a, Message: 'a>(
+    rating: Option<f32>,
+    release: impl text::IntoFragment<'a>,
+    unique: impl text::IntoFragment<'a>,
+) -> Element<'a, Message> {
+    let vert = || container(rule::vertical(2.0)).height(H8).clip(true);
+
+    let rating = ratings_short(rating);
+    let release = sized_medium(release, H7);
+    let duration = sized_medium(unique, H7);
+
+    row!(release, vert(), rating, vert(), duration)
+        .spacing(8)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+pub fn page_title<'a, Message: 'a>(
+    top: impl Into<Element<'a, Message>>,
+    title: impl text::IntoFragment<'a>,
+    details: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let title = sized_bold(title, H3)
+        .width(Length::FillPortion(2))
+        .height(32);
+
+    column!(top.into(), title, details.into())
+        .spacing(4.0)
+        .into()
+}
+
+pub fn page_overview<'a, Message: 'a>(
+    overview: impl text::IntoFragment<'a>,
+) -> Element<'a, Message> {
+    let synopsis = regular(overview);
+
+    container(scrollable(synopsis).spacing(4.0))
+        .max_width(750)
+        .max_height(500)
+        .into()
+}
+
+pub fn page_video<'a, Message: 'a>(
+    video: Option<&'a VideoInfo>,
+    audio: Option<&'a Audio>,
+    subtitle: Option<&'a Subtitle>,
+) -> Element<'a, Message> {
+    if video.is_none() && audio.is_none() && subtitle.is_none() {
+        return empty();
+    }
+
+    let size = P;
+
+    let info = |value: String| sized_medium(value, size / RATIO);
+
+    let video = video.map(|video| {
+        let title = sized_medium("Video", size);
+
+        let resolution =
+            (video.height > 0).then(|| info(format!("Resolution: {}", video.resolution())));
+
+        let codec = video
+            .codec
+            .as_deref()
+            .map(|codec| info(format!("Codec: {codec}")));
+
+        let framerate =
+            (video.framerate > 0.0).then(|| info(format!("Framerate: {:.0}", video.framerate)));
+
+        let info = column!(resolution, codec, framerate)
+            .spacing(4)
+            .padding(Padding::new(0.0).left(12));
+
+        column!(title, info).spacing(8)
+    });
+
+    let audio = audio.map(|audio| {
+        let title = sized_medium("Audio", size);
+
+        let codec = audio
+            .codec
+            .as_deref()
+            .map(|codec| info(format!("Codec: {codec}")));
+
+        let lang = audio
+            .lang
+            .as_deref()
+            .map(|lang| info(format!("Language: {lang}")));
+
+        let bitrate = (audio.bitrate > 0).then(|| {
+            info(format!(
+                "Bitrate: {:.2} kbps",
+                audio.bitrate as f32 / 1000.0
+            ))
+        });
+
+        let info = column!(lang, codec, bitrate)
+            .spacing(4)
+            .padding(Padding::new(0.0).left(12));
+
+        column!(title, info).spacing(8)
+    });
+
+    let subtitle = subtitle.map(|sub| {
+        let title = sized_medium("Subtitle", size);
+
+        let name = info(format!("Title: {}", sub.title));
+        let lang = info(format!("Language: {}", sub.lang));
+
+        let (kind, path) = match &sub.kind {
+            registry::models::SubtitleKind::Embedded => ("Embedded", None),
+            registry::models::SubtitleKind::Loaded { path, .. } => ("Loaded", Some(path)),
+        };
+
+        let kind = info(format!("Kind: {kind}"));
+
+        let path = path.map(|path| {
+            let name = info("Path: ".to_string());
+            let path = trim_path(&path, 3);
+            let path = marquee(path).size(size / typo::RATIO);
+
+            row!(name, path).spacing(2).align_y(Vertical::Center)
+        });
+
+        let info = column!(name, lang, kind, path)
+            .spacing(4)
+            .padding(Padding::new(0.0).left(12));
+
+        column!(title, info).spacing(8)
+    });
+
+    column!(video, audio, subtitle).spacing(12).into()
+}
+
+pub fn page_collections<'a, Message: 'a + Clone>(
+    mut memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
+    goto: impl Fn(CollectionId) -> Message + 'a + Clone,
+) -> Element<'a, Message> {
+    let size = P;
+
+    if memberships.peek().is_some() {
+        let title = sized_medium("Collections", size);
+        let collections =
+            memberships.map(|collection| draw_collection_tab(collection, goto.clone()));
+
+        let content = column(collections).spacing(4.0).width(Length::Fill);
+        let collections = container(scrollable(content).spacing(4.0)).max_height(300);
+
+        column!(title, collections).spacing(8).into()
+    } else {
+        empty()
+    }
+}
+
+pub fn page_nav<'a, Message: 'a + Clone>(
+    on_prev: Option<Message>,
+    on_next: Message,
+) -> Element<'a, Message> {
+    let size = H4;
+    let prev = button(icon(CHEV_RIGHT).size(size))
+        .style(styles::button::subtlest)
+        .on_press_maybe(on_prev);
+
+    let next = button(icon(CHEV_LEFT).size(size))
+        .style(styles::button::subtlest)
+        .on_press(on_next);
+
+    row!(space::horizontal(), prev, next, space::horizontal())
+        .spacing(40)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+pub fn page_data<'a, Message: 'a>(
+    added: String,
+    count: u32,
+    progress: f32,
+    recent: Option<String>,
+    comments: u32,
+    unique: Option<(&'a str, impl text::IntoFragment<'a>, char)>,
+) -> Element<'a, Message> {
+    let title = sized_medium("Statistics", P);
+
+    let content = {
+        let added = data("Date Added", added, CALENDAR);
+
+        let count = data("Watch Count", count, EYE);
+
+        let progress = (progress * 1000.0).round() / 10.0;
+        let progress = data("Watch Progress", format!("{:.1}%", progress), HOURGLASS);
+
+        let recent = data(
+            "Recent Watch",
+            recent.unwrap_or(String::from(" --:--:--")),
+            CALENDAR,
+        );
+
+        let comments = data("Comments", comments, NUMBER);
+
+        let unique = unique.map(|(label, value, icon)| data(label, value, icon));
+
+        let c1 = column!(added, recent)
+            .align_x(Horizontal::Center)
+            .spacing(20.0);
+        let c2 = column!(count, comments)
+            .align_x(Horizontal::Center)
+            .spacing(20.0);
+        let c3 = column!(progress, unique)
+            .align_x(Horizontal::Center)
+            .spacing(20.0);
+
+        row!(c1, c2, c3).spacing(40).width(500)
+    };
+
+    column!(title, content).spacing(12).into()
+}
+
+pub fn page_layout<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+    img: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let h_padding = 40.0;
+    let r_padding_inner = 35.0;
+
+    let content = container(content).padding(Padding::ZERO.right(r_padding_inner));
+
+    let content = scrollable(content).auto_scroll(true).spacing(8.0);
+    let content = row!(img.into(), content).spacing(40);
+
+    container(content)
+        .padding(
+            Padding::new(20.0)
+                .left(h_padding)
+                .right(h_padding - r_padding_inner),
+        )
+        .height(Length::FillPortion(4))
+        .width(Length::Fill)
+        .style(|theme| {
+            let default = styles::container::bb(theme);
+            let background = default
+                .background
+                .map(|background| background.scale_alpha(0.85));
+
+            container::Style {
+                background,
+                ..default
+            }
+        })
+        .into()
 }

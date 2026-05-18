@@ -37,14 +37,12 @@ pub struct MoviePageMessage {
 #[derive(Debug, Clone)]
 pub struct MoviePage {
     pub id: MovieId,
-    pub tab: Tab,
 }
 
 impl MoviePage {
     pub fn new(id: MovieId) -> Self {
         Self {
             id,
-            tab: Tab::Items,
         }
     }
 
@@ -72,270 +70,54 @@ impl MoviePage {
 
     pub fn overlay<'a>(
         &self,
-        mut memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
+        memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
         movie: &'a MovieItem,
         video: Option<&'a VideoInfo>,
         audio: Option<&'a Audio>,
         subtitle: Option<&'a Subtitle>,
     ) -> Element<'a, MoviePageMessage> {
         let id = self.id;
-        let size = P;
-        let separator = || Element::from(text("•").line_height(1.0).size(H7));
 
-        let img = {
-            let img = responsive(move |size| {
-                let img_height = size.height * 0.85;
-                let ratio = 2.0 / 3.0;
-                movie.poster(img_height * ratio, img_height)
-            })
-            .width(Length::Shrink);
-
-            img
-        };
+        let img = page_image(|width, height| movie.poster(width, height));
 
         let header = {
-            let vert = || container(rule::vertical(2.0)).height(H8).clip(true);
+            let details = page_details(
+                movie.item.rating(),
+                movie.item.release_year(),
+                movie.item.duration_short(),
+            );
 
-            let title = sized_bold(movie.item.name(), H3)
-                .width(Length::FillPortion(2))
-                .height(32);
+            let tags = {
+                let values = movie.item.tags.iter().map(|tag| (tag, None)).take(4);
 
-            let duration = sized_medium(movie.item.duration_short(), H7);
-            let rating = ratings_short(movie.item.rating());
-            let release = sized_medium(movie.item.release_year(), H7);
-
-            let details = row!(release, vert(), duration, vert(), rating)
-                .spacing(8)
-                .align_y(Vertical::Center);
-
-            let mut tags = vec![];
-            let movie_tags = movie.item.tags.iter().take(4);
-            let tag_len = movie_tags.len();
-
-            for (i, tag) in movie_tags.enumerate() {
-                let tag = text(tag).size(H8).font(bold_italic_font());
-
-                tags.push(Element::from(tag));
-
-                if i < tag_len - 1 {
-                    tags.push(separator())
-                }
-            }
-
-            let tags = row(tags).spacing(6).align_y(Vertical::Center);
-            column!(tags, title, details).spacing(4.0)
-        };
-
-        let actions = {
-            let size = H2;
-            let play = button(icon(PLAY).size(size))
-                .style(styles::button::text_primary)
-                .padding(0)
-                .on_press(MoviePageMessage {
-                    id,
-                    message: Message::Play,
-                });
-
-            let collection = button(icon(ADD_COLLECTION).size(size))
-                .style(styles::button::text)
-                .padding(0)
-                .on_press(MoviePageMessage {
-                    id,
-                    message: Message::AddCollection,
-                });
-
-            let config = button(icon(VIDEO_CONFIG).size(size / typo::RATIO))
-                .style(styles::button::text)
-                .padding(0)
-                .on_press(MoviePageMessage {
-                    id,
-                    message: Message::Edit,
-                });
-
-            row!(play, collection, config)
-                .align_y(Vertical::Center)
-                .spacing(16)
-        };
-
-        let header = row!(
-            header,
-            container(actions)
-                .align_x(Horizontal::Right)
-                .width(Length::Fill)
-        )
-        .align_y(Vertical::Center)
-        .spacing(4);
-
-        let overview = {
-            let synopsis = regular(movie.item.synopsis());
-
-            container(scrollable(synopsis).spacing(4.0))
-                .max_width(750)
-                .max_height(500)
-        };
-
-        let info = {
-            let info = |value: String| sized_medium(value, size / typo::RATIO);
-
-            let video = video.map(|video| {
-                let title = sized_medium("Video", size);
-
-                let resolution =
-                    (video.height > 0).then(|| info(format!("Resolution: {}", video.resolution())));
-
-                let codec = video
-                    .codec
-                    .as_deref()
-                    .map(|codec| info(format!("Codec: {codec}")));
-
-                let framerate = (video.framerate > 0.0)
-                    .then(|| info(format!("Framerate: {:.0}", video.framerate)));
-
-                let info = column!(resolution, codec, framerate)
-                    .spacing(4)
-                    .padding(Padding::new(0.0).left(12));
-
-                column!(title, info).spacing(8)
-            });
-
-            let audio = audio.map(|audio| {
-                let title = sized_medium("Audio", size);
-
-                let codec = audio
-                    .codec
-                    .as_deref()
-                    .map(|codec| info(format!("Codec: {codec}")));
-
-                let lang = audio
-                    .lang
-                    .as_deref()
-                    .map(|lang| info(format!("Language: {lang}")));
-
-                let bitrate = (audio.bitrate > 0).then(|| {
-                    info(format!(
-                        "Bitrate: {:.2} kbps",
-                        audio.bitrate as f32 / 1000.0
-                    ))
-                });
-
-                let info = column!(lang, codec, bitrate)
-                    .spacing(4)
-                    .padding(Padding::new(0.0).left(12));
-
-                column!(title, info).spacing(8)
-            });
-
-            let subtitle = subtitle.map(|sub| {
-                let title = sized_medium("Subtitle", size);
-
-                let name = info(format!("Title: {}", sub.title));
-                let lang = info(format!("Language: {}", sub.lang));
-
-                let (kind, path) = match &sub.kind {
-                    registry::models::SubtitleKind::Embedded => ("Embedded", None),
-                    registry::models::SubtitleKind::Loaded { path, .. } => ("Loaded", Some(path)),
-                };
-
-                let kind = info(format!("Kind: {kind}"));
-
-                let path = path.map(|path| {
-                    let name = info("Path: ".to_string());
-                    let path = trim_path(&path, 3);
-                    let path = marquee(path).size(size / typo::RATIO);
-
-                    row!(name, path).spacing(2).align_y(Vertical::Center)
-                });
-
-                let info = column!(name, lang, kind, path)
-                    .spacing(4)
-                    .padding(Padding::new(0.0).left(12));
-
-                column!(title, info).spacing(8)
-            });
-
-            column!(video, audio, subtitle).spacing(12)
-        };
-
-        let collections = if memberships.peek().is_some() {
-            let title = sized_medium("Collections", size);
-            let collections = memberships.map(|collection| {
-                draw_collection_tab(collection, move |collection| MoviePageMessage {
-                    id,
-                    message: Message::Goto(collection),
-                })
-            });
-
-            let content = column(collections).spacing(4.0).width(Length::Fill);
-            let collections = container(scrollable(content).spacing(4.0)).max_height(300);
-
-            Some(column!(title, collections).spacing(8))
-        } else {
-            None
-        };
-
-        let data = {
-            let title = sized_medium("Statistics", size);
-
-            let content = {
-                let added = data("Date Added", movie.item.added_humaized(), CALENDAR);
-
-                let count = data("Watch Count", movie.item.watch_count(), EYE);
-
-                let progress = (movie.item.progress() * 1000.0).round() / 10.0;
-                let progress = data("Watch Progress", format!("{:.1}%", progress), HOURGLASS);
-
-                let recent = data(
-                    "Recent Watch",
-                    movie
-                        .item
-                        .recent_humanized()
-                        .unwrap_or(String::from(" --:--:--")),
-                    CALENDAR,
-                );
-
-                let comments = data("Comments", movie.item.comments(), NUMBER);
-
-                let duration = data("Duration", movie.item.duration_short(), CLOCK);
-
-                let c1 = column!(added, recent)
-                    .align_x(Horizontal::Center)
-                    .spacing(20.0);
-                let c2 = column!(count, comments)
-                    .align_x(Horizontal::Center)
-                    .spacing(20.0);
-                let c3 = column!(progress, duration)
-                    .align_x(Horizontal::Center)
-                    .spacing(20.0);
-
-                row!(c1, c2, c3).spacing(40).width(500)
+                page_tags(values)
             };
 
-            column!(title, content).spacing(12)
+            page_title(tags, movie.item.name(), details)
         };
 
-        let content = column!(header, overview, info, collections, data)
-            .spacing(40)
-            .padding(Padding::ZERO.top(20).right(30.0));
+        let header = page_header(header, Message::Play, Message::AddCollection, Message::Edit);
 
-        let content = scrollable(content).auto_scroll(true).spacing(8.0);
-        let content = row!(img, content).spacing(40);
+        let overview = page_overview(movie.item.synopsis());
 
-        container(content)
-            .padding(Padding::new(20.0).left(40.0).right(10.0))
-            .height(Length::FillPortion(4))
-            .width(Length::Fill)
-            .style(|theme| {
-                let default = styles::container::bb(theme);
-                let background = default
-                    .background
-                    .map(|background| background.scale_alpha(0.85));
+        let info = page_video(video, audio, subtitle);
 
-                container::Style {
-                    background,
-                    ..default
-                }
-            })
-            .into()
+        let collections = page_collections(memberships, Message::Goto);
+
+        let data = page_data(
+            movie.item.added_humaized(),
+            movie.item.watch_count(),
+            movie.item.progress(),
+            movie.item.recent_humanized(),
+            movie.item.comments(),
+            Some(("Duration", movie.item.duration_short(), CLOCK)),
+        );
+
+        let content = column!(header, overview, info, collections, data).spacing(40);
+
+        let content = page_layout(content, img);
+
+        content.map(move |message| MoviePageMessage { id, message })
     }
 
     pub fn view<'a>(

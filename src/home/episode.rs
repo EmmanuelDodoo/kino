@@ -28,6 +28,7 @@ pub enum Message {
     Play,
     Edit,
     Goto(PageKind),
+    GotoCollection(CollectionId),
     Sibbling(SeasonId, u16),
 }
 
@@ -39,16 +40,12 @@ pub struct EpisodePageMessage {
 
 #[derive(Debug, Clone)]
 pub struct EpisodePage {
-    pub tab: Tab,
     pub id: EpisodeId,
 }
 
 impl EpisodePage {
     pub fn new(id: EpisodeId) -> Self {
-        Self {
-            id,
-            tab: Tab::Items,
-        }
+        Self { id }
     }
 
     pub fn update(&mut self, message: EpisodePageMessage) -> Option<HomeMessage> {
@@ -70,6 +67,9 @@ impl EpisodePage {
                 Some(msg)
             }
             Message::Goto(page) => Some(HomeMessage::Goto(page)),
+            Message::GotoCollection(collection) => {
+                Some(HomeMessage::Goto(PageKind::Collection(collection)))
+            }
             Message::Sibbling(season, number) => Some(HomeMessage::GotoEpisode(season, number)),
         }
     }
@@ -77,313 +77,72 @@ impl EpisodePage {
     fn overlay<'a>(
         &self,
         episode: &'a EpisodeItem,
-        mut memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
+        memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
         video: Option<&'a VideoInfo>,
         audio: Option<&'a Audio>,
         subtitle: Option<&'a Subtitle>,
     ) -> Element<'a, EpisodePageMessage> {
         let id = self.id;
-        let size = P;
-        let separator = || Element::from(text("•").line_height(1.0).size(H7));
-
-        let img = {
-            let img = responsive(move |size| {
-                let img_width = size.width * 0.35;
-                let ratio = 3.0 / 2.0;
-                episode.poster(img_width, img_width * ratio)
-            })
-            .width(Length::Shrink);
-
-            img
-        };
+        let img = page_image(|width, height| episode.poster(width, height));
 
         let header = {
-            let vert = || container(rule::vertical(2.0)).height(H8).clip(true);
-
-            let title = sized_bold(episode.item.name(), H3)
-                .width(Length::FillPortion(2))
-                .height(32);
-
-            let duration = sized_medium(episode.item.duration_short(), H7);
-            let rating = ratings_short(episode.item.rating());
-            let release = sized_medium(episode.item.release_year(), H7);
-
-            let details = row!(release, vert(), duration, vert(), rating)
-                .spacing(8)
-                .align_y(Vertical::Center);
+            let details = page_details(
+                episode.item.rating(),
+                episode.item.release_year(),
+                episode.item.duration_short(),
+            );
 
             let top = {
                 let values = [
                     (
                         episode.item.show_name.clone(),
-                        Some(PageKind::Show(episode.item.show)),
+                        Some(Message::Goto(PageKind::Show(episode.item.show))),
                     ),
                     (
                         format!("Season {:02}", episode.item.season_number),
-                        Some(PageKind::Season(episode.item.season)),
+                        Some(Message::Goto(PageKind::Season(episode.item.season))),
                     ),
                     (format!("Episode {:02}", episode.item.number), None),
-                ]
-                .into_iter()
-                .flat_map(|(value, page)| {
-                    let value = text(value).size(H8).font(bold_italic_font());
+                ];
 
-                    let value = match page {
-                        Some(page) => Element::from(
-                            button(value)
-                                .padding(0)
-                                .style(styles::button::text)
-                                .on_press(EpisodePageMessage {
-                                    id,
-                                    message: Message::Goto(page),
-                                }),
-                        ),
-                        None => Element::from(value),
-                    };
-
-                    [separator(), value]
-                })
-                .skip(1);
-
-                row(values).spacing(4).align_y(Vertical::Center)
+                page_tags(values)
             };
 
-            column!(top, title, details).spacing(4.0)
+            page_title(top, episode.item.name(), details)
         };
 
-        let actions = {
-            let size = H2;
-            let play = button(icon(PLAY).size(size))
-                .style(styles::button::text_primary)
-                .padding(0)
-                .on_press(EpisodePageMessage {
-                    id,
-                    message: Message::Play,
-                });
+        let header = page_header(header, Message::Play, Message::AddCollection, Message::Edit);
 
-            let collection = button(icon(ADD_COLLECTION).size(size))
-                .style(styles::button::text)
-                .padding(0)
-                .on_press(EpisodePageMessage {
-                    id,
-                    message: Message::AddCollection,
-                });
+        let overview = page_overview(episode.item.synopsis());
 
-            let config = button(icon(VIDEO_CONFIG).size(size / typo::RATIO))
-                .style(styles::button::text)
-                .padding(0)
-                .on_press(EpisodePageMessage {
-                    id,
-                    message: Message::Edit,
-                });
+        let info = page_video(video, audio, subtitle);
 
-            row!(play, collection, config)
-                .align_y(Vertical::Center)
-                .spacing(16)
-        };
+        let collections = page_collections(memberships, Message::GotoCollection);
 
-        let header = row!(
-            header,
-            container(actions)
-                .align_x(Horizontal::Right)
-                .width(Length::Fill)
-        )
-        .align_y(Vertical::Center)
-        .spacing(4);
+        let data = page_data(
+            episode.item.added_humaized(),
+            episode.item.watch_count(),
+            episode.item.progress(),
+            episode.item.recent_humanized(),
+            episode.item.comments(),
+            Some(("Duration", episode.item.duration_short(), CLOCK)),
+        );
 
-        let overview = {
-            let synopsis = regular(episode.item.synopsis());
-
-            container(scrollable(synopsis).spacing(4.0))
-                .max_width(750)
-                .max_height(500)
-        };
-
-        let info = {
-            let info = |value: String| sized_medium(value, size / typo::RATIO);
-
-            let video = video.map(|video| {
-                let title = sized_medium("Video", size);
-
-                let resolution =
-                    (video.height > 0).then(|| info(format!("Resolution: {}", video.resolution())));
-
-                let codec = video
-                    .codec
-                    .as_deref()
-                    .map(|codec| info(format!("Codec: {codec}")));
-
-                let framerate = (video.framerate > 0.0)
-                    .then(|| info(format!("Framerate: {:.0}", video.framerate)));
-
-                let info = column!(resolution, codec, framerate)
-                    .spacing(4)
-                    .padding(Padding::new(0.0).left(12));
-
-                column!(title, info).spacing(8)
-            });
-
-            let audio = audio.map(|audio| {
-                let title = sized_medium("Audio", size);
-
-                let codec = audio
-                    .codec
-                    .as_deref()
-                    .map(|codec| info(format!("Codec: {codec}")));
-
-                let lang = audio
-                    .lang
-                    .as_deref()
-                    .map(|lang| info(format!("Language: {lang}")));
-
-                let bitrate = (audio.bitrate > 0).then(|| {
-                    info(format!(
-                        "Bitrate: {:.2} kbps",
-                        audio.bitrate as f32 / 1000.0
-                    ))
-                });
-
-                let info = column!(lang, codec, bitrate)
-                    .spacing(4)
-                    .padding(Padding::new(0.0).left(12));
-
-                column!(title, info).spacing(8)
-            });
-
-            let subtitle = subtitle.map(|sub| {
-                let title = sized_medium("Subtitle", size);
-
-                let name = info(format!("Title: {}", sub.title));
-                let lang = info(format!("Language: {}", sub.lang));
-
-                let (kind, path) = match &sub.kind {
-                    registry::models::SubtitleKind::Embedded => ("Embedded", None),
-                    registry::models::SubtitleKind::Loaded { path, .. } => ("Loaded", Some(path)),
-                };
-
-                let kind = info(format!("Kind: {kind}"));
-
-                let path = path.map(|path| {
-                    let name = info("Path: ".to_string());
-                    let path = trim_path(&path, 3);
-                    let path = marquee(path).size(size / typo::RATIO);
-
-                    row!(name, path).spacing(2).align_y(Vertical::Center)
-                });
-
-                let info = column!(name, lang, kind, path)
-                    .spacing(4)
-                    .padding(Padding::new(0.0).left(12));
-
-                column!(title, info).spacing(8)
-            });
-
-            column!(video, audio, subtitle).spacing(12)
-        };
-        let collections = if memberships.peek().is_some() {
-            let title = sized_medium("Collections", size);
-            let collections = memberships.map(|collection| {
-                draw_collection_tab(collection, move |collection| EpisodePageMessage {
-                    id,
-                    message: Message::Goto(PageKind::Collection(collection)),
-                })
-            });
-
-            let content = column(collections).spacing(4.0).width(Length::Fill);
-            let collections = container(scrollable(content).spacing(4.0)).max_height(300);
-
-            Some(column!(title, collections).spacing(8))
-        } else {
-            None
-        };
-
-        let data = {
-            let title = sized_medium("Statistics", size);
-
-            let content = {
-                let added = data("Date Added", episode.item.added_humaized(), CALENDAR);
-
-                let count = data("Watch Count", episode.item.watch_count(), EYE);
-
-                let progress = (episode.item.progress() * 1000.0).round() / 10.0;
-                let progress = data("Watch Progress", format!("{:.1}%", progress), HOURGLASS);
-
-                let recent = data(
-                    "Recent Watch",
-                    episode
-                        .item
-                        .recent_humanized()
-                        .unwrap_or(String::from(" --:--:--")),
-                    CALENDAR,
-                );
-
-                let comments = data("Comments", episode.item.comments(), NUMBER);
-
-                let duration = data("Duration", episode.item.duration_short(), CLOCK);
-
-                let c1 = column!(added, recent)
-                    .align_x(Horizontal::Center)
-                    .spacing(20.0);
-                let c2 = column!(count, comments)
-                    .align_x(Horizontal::Center)
-                    .spacing(20.0);
-                let c3 = column!(progress, duration)
-                    .align_x(Horizontal::Center)
-                    .spacing(20.0);
-
-                row!(c1, c2, c3).spacing(40).width(500)
-            };
-
-            column!(title, content).spacing(12)
-        };
-
-        let nav = {
-            let size = H4;
-            let prev = button(icon(CHEV_RIGHT).size(size))
-                .style(styles::button::subtlest)
-                .on_press_maybe((episode.item.number > 1).then_some(EpisodePageMessage {
-                    id,
-                    message: Message::Sibbling(
-                        episode.item.season,
-                        episode.item.number.saturating_sub(1),
-                    ),
-                }));
-
-            let next = button(icon(CHEV_LEFT).size(size))
-                .style(styles::button::subtlest)
-                .on_press(EpisodePageMessage {
-                    id,
-                    message: Message::Sibbling(episode.item.season, episode.item.number + 1),
-                });
-
-            row!(space::horizontal(), prev, next, space::horizontal())
-                .spacing(40)
-                .align_y(Vertical::Center)
-        };
+        let nav = page_nav(
+            (episode.item.number > 1).then_some(Message::Sibbling(
+                episode.item.season,
+                episode.item.number.saturating_sub(1),
+            )),
+            Message::Sibbling(episode.item.season, episode.item.number + 1),
+        );
 
         let content = column!(header, overview, info, collections, data, nav)
             .spacing(40)
             .padding(Padding::ZERO.top(20).right(30.0));
 
-        let content = scrollable(content).auto_scroll(true).spacing(8.0);
-        let content = row!(img, content).spacing(40);
+        let content = page_layout(content, img);
 
-        container(content)
-            .padding(Padding::new(20.0).left(40.0).right(10.0))
-            .height(Length::FillPortion(4))
-            .width(Length::Fill)
-            .style(|theme| {
-                let default = styles::container::bb(theme);
-                let background = default
-                    .background
-                    .map(|background| background.scale_alpha(0.85));
-
-                container::Style {
-                    background,
-                    ..default
-                }
-            })
-            .into()
+        content.map(move |message| EpisodePageMessage { id, message })
     }
 
     pub fn view<'a>(
