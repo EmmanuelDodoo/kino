@@ -4,7 +4,7 @@ use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
 use super::{
-    AudioId, Media, SeasonId, SubtitleId, VideoInfoId, datetime_to_sql, image::Image,
+    AudioId, Media, SeasonId, ShowId, SubtitleId, VideoInfoId, datetime_to_sql, image::Image,
     naivedate_to_sql,
 };
 use crate::db::{Operation, Query, Table};
@@ -63,6 +63,7 @@ pub struct Episode {
     added: DateTime<Local>,
     watch_count: u32,
     pub season: SeasonId,
+    pub show: ShowId,
     progress: f32,
     rating: Option<f32>,
     last_watched: Option<DateTime<Local>>,
@@ -124,6 +125,7 @@ impl Episode {
         let last_watched = row.get::<_, Option<DateTime<Local>>>("last_watched")?;
 
         let season = SeasonId::from_child(row)?;
+        let show = ShowId::from_child(row)?;
 
         let duration = row.get::<_, u64>("duration")?;
 
@@ -161,6 +163,7 @@ impl Episode {
             audio_id,
             show_name,
             season_number,
+            show,
         })
     }
 
@@ -187,8 +190,9 @@ impl Episode {
             video_id: _video,
             subtitle_id: _sub,
             audio_id: _audio,
-            show_name: _show,
+            show_name: _show_name,
             season_number: _season_number,
+            show: _show,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -390,6 +394,7 @@ impl Episode {
     }
 
     pub fn new<'a>(
+        show: ShowId,
         season: SeasonId,
         name: String,
         original_name: String,
@@ -409,6 +414,7 @@ impl Episode {
             original_name,
             path,
             season,
+            show,
             backdrop,
             poster,
             synopsis,

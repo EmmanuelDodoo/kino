@@ -16,7 +16,8 @@ use iced::{
     },
 };
 use registry::models::{
-    Audio, CollectionId, Episode, EpisodeId, ItemId, Media, SimpleCollection, Subtitle, VideoInfo,
+    Audio, CollectionId, Episode, EpisodeId, ItemId, Media, SeasonId, ShowId, SimpleCollection,
+    Subtitle, VideoInfo,
 };
 use std::iter::Peekable;
 use widgets::marquee;
@@ -26,7 +27,8 @@ pub enum Message {
     AddCollection,
     Play,
     Edit,
-    Goto(CollectionId),
+    Goto(PageKind),
+    Sibbling(SeasonId, u16),
 }
 
 #[derive(Debug, Clone)]
@@ -67,10 +69,8 @@ impl EpisodePage {
                 let msg = HomeMessage::OpenView(ViewMessage::EpisodeEdit(self.id));
                 Some(msg)
             }
-            Message::Goto(id) => {
-                let msg = HomeMessage::Goto(PageKind::Collection(id));
-                Some(msg)
-            }
+            Message::Goto(page) => Some(HomeMessage::Goto(page)),
+            Message::Sibbling(season, number) => Some(HomeMessage::GotoEpisode(season, number)),
         }
     }
 
@@ -114,13 +114,32 @@ impl EpisodePage {
 
             let top = {
                 let values = [
-                    episode.item.show_name.clone(),
-                    format!("Season {:02}", episode.item.season_number),
-                    format!("Episode {:02}", episode.item.number),
+                    (
+                        episode.item.show_name.clone(),
+                        Some(PageKind::Show(episode.item.show)),
+                    ),
+                    (
+                        format!("Season {:02}", episode.item.season_number),
+                        Some(PageKind::Season(episode.item.season)),
+                    ),
+                    (format!("Episode {:02}", episode.item.number), None),
                 ]
                 .into_iter()
-                .flat_map(|value| {
-                    let value = Element::from(text(value).size(H8).font(bold_italic_font()));
+                .flat_map(|(value, page)| {
+                    let value = text(value).size(H8).font(bold_italic_font());
+
+                    let value = match page {
+                        Some(page) => Element::from(
+                            button(value)
+                                .padding(0)
+                                .style(styles::button::text)
+                                .on_press(EpisodePageMessage {
+                                    id,
+                                    message: Message::Goto(page),
+                                }),
+                        ),
+                        None => Element::from(value),
+                    };
 
                     [separator(), value]
                 })
@@ -266,7 +285,7 @@ impl EpisodePage {
             let collections = memberships.map(|collection| {
                 draw_collection_tab(collection, move |collection| EpisodePageMessage {
                     id,
-                    message: Message::Goto(collection),
+                    message: Message::Goto(PageKind::Collection(collection)),
                 })
             });
 
@@ -318,7 +337,31 @@ impl EpisodePage {
             column!(title, content).spacing(12)
         };
 
-        let content = column!(header, overview, info, collections, data)
+        let nav = {
+            let size = H4;
+            let prev = button(icon(CHEV_RIGHT).size(size))
+                .style(styles::button::subtlest)
+                .on_press_maybe((episode.item.number > 1).then_some(EpisodePageMessage {
+                    id,
+                    message: Message::Sibbling(
+                        episode.item.season,
+                        episode.item.number.saturating_sub(1),
+                    ),
+                }));
+
+            let next = button(icon(CHEV_LEFT).size(size))
+                .style(styles::button::subtlest)
+                .on_press(EpisodePageMessage {
+                    id,
+                    message: Message::Sibbling(episode.item.season, episode.item.number + 1),
+                });
+
+            row!(space::horizontal(), prev, next, space::horizontal())
+                .spacing(40)
+                .align_y(Vertical::Center)
+        };
+
+        let content = column!(header, overview, info, collections, data, nav)
             .spacing(40)
             .padding(Padding::ZERO.top(20).right(30.0));
 

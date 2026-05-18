@@ -162,6 +162,8 @@ pub enum Message {
         collections: Vec<(CollectionId, bool)>,
     },
     LoadSearch(String, Option<SearchFilter>),
+    FetchEpisode(SeasonId, u16),
+    FetchSeason(ShowId, u16),
     Animate,
     Fetch {
         id: FetchId,
@@ -2075,6 +2077,44 @@ impl App {
                         }
                     }
                 }
+            }
+            Message::FetchEpisode(season, number) => {
+                let episode = match self
+                    .db
+                    .get_season_episode(season, number, EpisodeId::from_row)
+                    .with_context(|| format!("Fetching season {season} episode {number}"))
+                    .context("Could not fetch episode")
+                {
+                    Ok(Some(episode)) => episode,
+                    Ok(None) => {
+                        tracing::error!("Could not find season {season} episode {number}");
+                        return Message::error("Episode not found", false).tasked();
+                    }
+                    Err(error) => {
+                        return Message::anyhow(error).tasked();
+                    }
+                };
+
+                self.home.goto_episode(episode, now)
+            }
+            Message::FetchSeason(show, number) => {
+                let season = match self
+                    .db
+                    .get_show_season(show, number, SeasonId::from_row)
+                    .with_context(|| format!("Fetching show {show} season {number}"))
+                    .context("Could not fetch season")
+                {
+                    Ok(Some(season)) => season,
+                    Ok(None) => {
+                        tracing::error!("Could not find show {show} season {number}");
+                        return Message::error("Season not found", false).tasked();
+                    }
+                    Err(error) => {
+                        return Message::anyhow(error).tasked();
+                    }
+                };
+
+                self.home.goto_season(season, now)
             }
         }
     }

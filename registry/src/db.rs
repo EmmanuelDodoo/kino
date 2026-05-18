@@ -7,6 +7,7 @@ use crate::models::{
 use crate::sort::{self, Sort};
 use core::error::Context;
 
+use rusqlite::OptionalExtension;
 use rusqlite::{
     Connection, Row, ToSql, params_from_iter,
     types::{ToSqlOutput, Value},
@@ -270,6 +271,27 @@ impl Database {
             .collect()
     }
 
+    pub fn get_show_season<T>(
+        &self,
+        show: ShowId,
+        number: u16,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Option<T>> {
+        let sql = format!("{} WHERE show_id=:show AND season_number=:number", Self::SEASON_QUERY);
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_row(
+                &[
+                    (":show", &ToSqlOutput::from(show)),
+                    (":number", &ToSqlOutput::from(number)),
+                ],
+                map,
+            )
+            .optional()
+    }
+
     pub fn get_show_seasons_removed<T>(
         &self,
         show: ShowId,
@@ -333,6 +355,30 @@ impl Database {
                 map,
             )?
             .collect()
+    }
+
+    pub fn get_season_episode<T>(
+        &self,
+        season: SeasonId,
+        number: u16,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Option<T>> {
+        let sql = format!(
+            "{} WHERE season_id=:season AND episode_number=:number",
+            Self::EPISODE_QUERY
+        );
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_row(
+                &[
+                    (":season", &ToSqlOutput::from(season)),
+                    (":number", &ToSqlOutput::from(number)),
+                ],
+                map,
+            )
+            .optional()
     }
 
     pub fn get_season_episodes_removed<T>(

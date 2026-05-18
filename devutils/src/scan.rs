@@ -734,6 +734,7 @@ pub fn scan_dir_helper(
                         let episode_number = number.unwrap_or_default();
 
                         let (new, query) = Episode::new(
+                            show,
                             season,
                             name,
                             episode.name,

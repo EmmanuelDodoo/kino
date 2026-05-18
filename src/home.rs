@@ -797,6 +797,8 @@ pub enum HomeMessage {
     RemoveWish,
     CollectionTask(CollectionTask),
     Trigger(TriggerMessage),
+    GotoEpisode(SeasonId, u16),
+    GotoSeason(ShowId, u16),
 }
 
 pub struct Home {
@@ -3716,6 +3718,10 @@ impl Home {
                 })
                 .tasked()
             }
+            HomeMessage::GotoEpisode(season, number) => {
+                Message::FetchEpisode(season, number).tasked()
+            }
+            HomeMessage::GotoSeason(show, number) => Message::FetchSeason(show, number).tasked(),
         }
     }
 
@@ -5603,6 +5609,14 @@ impl Home {
         }
 
         Task::none()
+    }
+
+    pub fn goto_episode(&mut self, episode: EpisodeId, now: Instant) -> Task<Message> {
+        self.goto(PageKind::Episode(episode), now)
+    }
+
+    pub fn goto_season(&mut self, season: SeasonId, now: Instant) -> Task<Message> {
+        self.goto(PageKind::Season(season), now)
     }
 
     pub fn load(&mut self) -> Task<Message> {
