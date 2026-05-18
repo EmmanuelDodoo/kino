@@ -67,6 +67,18 @@ pub struct Movie {
 }
 
 impl Movie {
+    pub fn subtitle_maybe(row: &Row<'_>) -> rusqlite::Result<Option<SubtitleId>> {
+        SubtitleId::from_row_maybe("subtitle_id", row)
+    }
+
+    pub fn video_maybe(row: &Row<'_>) -> rusqlite::Result<Option<VideoInfoId>> {
+        VideoInfoId::from_row_maybe("video_id", row)
+    }
+
+    pub fn audio_maybe(row: &Row<'_>) -> rusqlite::Result<Option<AudioId>> {
+        AudioId::from_row_maybe("audio_id", row)
+    }
+
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Movie> {
         let id = MovieId::from_row(row)?;
         let directory = row.get::<_, String>("directory")?;
@@ -115,9 +127,9 @@ impl Movie {
 
         let source = row.get::<_, String>("source")?;
 
-        let video_id = VideoInfoId::from_row_maybe("video_id", row)?;
-        let subtitle_id = SubtitleId::from_row_maybe("subtitle_id", row)?;
-        let audio_id = AudioId::from_row_maybe("audio_id", row)?;
+        let video_id = Self::video_maybe(row)?;
+        let subtitle_id = Self::subtitle_maybe(row)?;
+        let audio_id = Self::audio_maybe(row)?;
 
         Ok(Self {
             id,
@@ -333,11 +345,11 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn set_video<'a>(id: MovieId, video: VideoInfoId,) -> Query<'a>{
+    pub fn set_video<'a>(id: MovieId, video: VideoInfoId) -> Query<'a> {
         let sql = "UPDATE movie SET video_id=:video WHERE id=:id";
         let params = vec![
             (":id", ToSqlOutput::from(id)),
-            (":video", ToSqlOutput::from(video))
+            (":video", ToSqlOutput::from(video)),
         ];
 
         Query {
@@ -350,11 +362,11 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn set_audio<'a>(id: MovieId, audio: AudioId,) -> Query<'a>{
+    pub fn set_audio<'a>(id: MovieId, audio: AudioId) -> Query<'a> {
         let sql = "UPDATE movie SET audio_id=:audio WHERE id=:id";
         let params = vec![
             (":id", ToSqlOutput::from(id)),
-            (":audio", ToSqlOutput::from(audio))
+            (":audio", ToSqlOutput::from(audio)),
         ];
 
         Query {
@@ -367,11 +379,11 @@ impl Movie {
     }
 
     #[must_use]
-    pub fn set_subtitle<'a>(id: MovieId, subtitle: SubtitleId,) -> Query<'a>{
+    pub fn set_subtitle<'a>(id: MovieId, subtitle: SubtitleId) -> Query<'a> {
         let sql = "UPDATE movie SET subtitle_id=:subtitle WHERE id=:id";
         let params = vec![
             (":id", ToSqlOutput::from(id)),
-            (":subtitle", ToSqlOutput::from(subtitle))
+            (":subtitle", ToSqlOutput::from(subtitle)),
         ];
 
         Query {

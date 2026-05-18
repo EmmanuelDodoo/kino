@@ -76,6 +76,18 @@ pub struct Episode {
 }
 
 impl Episode {
+    pub fn subtitle_maybe(row: &Row<'_>) -> rusqlite::Result<Option<SubtitleId>> {
+        SubtitleId::from_row_maybe("subtitle_id", row)
+    }
+
+    pub fn video_maybe(row: &Row<'_>) -> rusqlite::Result<Option<VideoInfoId>> {
+        VideoInfoId::from_row_maybe("video_id", row)
+    }
+
+    pub fn audio_maybe(row: &Row<'_>) -> rusqlite::Result<Option<AudioId>> {
+        AudioId::from_row_maybe("audio_id", row)
+    }
+
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         let id = EpisodeId::from_row(row)?;
 
@@ -118,9 +130,9 @@ impl Episode {
         let comments = row.get::<_, u32>("comment_count")?;
         let source = row.get::<_, String>("source")?;
 
-        let video_id = VideoInfoId::from_row_maybe("video_id", row)?;
-        let subtitle_id = SubtitleId::from_row_maybe("subtitle_id", row)?;
-        let audio_id = AudioId::from_row_maybe("audio_id", row)?;
+        let video_id = Self::video_maybe(row)?;
+        let subtitle_id = Self::subtitle_maybe(row)?;
+        let audio_id = Self::audio_maybe(row)?;
 
         let show_name = row.get::<_, String>("show_name")?;
         let season_number = row.get::<_, u16>("season_number")?;

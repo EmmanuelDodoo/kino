@@ -5,7 +5,7 @@ use gstreamer_pbutils::Discoverer;
 use registry::db::Database;
 use registry::models::{
     Audio, AudioId, Directory, DirectoryId, Episode, EpisodeId, MediaType, Movie, MovieId, Season,
-    SeasonId, Show, ShowId, Subtitle, SubtitleId, VideoId, video,
+    SeasonId, Show, ShowId, Subtitle, SubtitleId, VideoId, VideoInfoId, video,
 };
 use rusqlite::OptionalExtension;
 use rusqlite::types::{ToSqlOutput, ValueRef};
@@ -145,8 +145,8 @@ pub fn scan_dir(
         discoverer.as_ref(),
         movie_depth,
         restore,
-        preferred_subtitle_code.as_ref(),
-        preferred_audio_code.as_ref(),
+        preferred_subtitle_code.as_deref(),
+        preferred_audio_code.as_deref(),
     )
 }
 
@@ -186,8 +186,8 @@ pub fn scan_dirs(
             discoverer.as_ref(),
             movie_depth,
             restore,
-            preferred_subtitle_code.as_ref(),
-            preferred_audio_code.as_ref(),
+            preferred_subtitle_code.as_deref(),
+            preferred_audio_code.as_deref(),
         ) {
             Some(_) => {
                 scanned.push(id);
@@ -205,8 +205,8 @@ pub fn scan_dir_helper(
     discoverer: Option<&Discoverer>,
     movie_depth: u8,
     restore: bool,
-    preferred_subtitle_code: Option<&String>,
-    preferred_audio_code: Option<&String>,
+    preferred_subtitle_code: Option<&str>,
+    preferred_audio_code: Option<&str>,
 ) -> Option<()> {
     let default_source = SourceSet::from_str(&dir.source);
 
@@ -219,6 +219,9 @@ pub fn scan_dir_helper(
                 scanned: bool,
                 request: Option<String>,
                 source: SourceSet,
+                subtitle: bool,
+                audio: bool,
+                video: bool,
             }
 
             let videos = scan_video_dir(&dir.path, discoverer, movie_depth, None)
@@ -235,6 +238,10 @@ pub fn scan_dir_helper(
                     let request = row.get::<_, Option<String>>("request")?;
                     let source = SourceSet::from_row(row, "source")?;
 
+                    let subtitle = Movie::subtitle_maybe(row)?.is_some();
+                    let video = Movie::video_maybe(row)?.is_some();
+                    let audio = Movie::audio_maybe(row)?.is_some();
+
                     Ok((
                         path,
                         DirMovie {
@@ -243,6 +250,9 @@ pub fn scan_dir_helper(
                             scanned: false,
                             request,
                             source,
+                            subtitle,
+                            audio,
+                            video,
                         },
                     ))
                 })
@@ -259,7 +269,18 @@ pub fn scan_dir_helper(
 
             for movie in videos {
                 let mut dir_movie = dir_movies.get_mut(&movie.path);
-                let pick_preferred = dir_movie.is_none();
+                let pick_sub = !dir_movie
+                    .as_ref()
+                    .map(|movie| movie.subtitle)
+                    .unwrap_or_default();
+                let pick_vid = !dir_movie
+                    .as_ref()
+                    .map(|movie| movie.video)
+                    .unwrap_or_default();
+                let pick_aud = !dir_movie
+                    .as_ref()
+                    .map(|movie| movie.audio)
+                    .unwrap_or_default();
 
                 if dir_movie
                     .as_ref()
@@ -338,12 +359,21 @@ pub fn scan_dir_helper(
                     id,
                     movie.embedded_subs,
                     movie.loaded_sub,
-                    pick_preferred,
-                    preferred_subtitle_code,
                     movie.audio,
-                    preferred_audio_code,
                     movie.video,
                 );
+
+                if pick_sub {
+                    pick_subtitle(db, id, preferred_subtitle_code).log_err();
+                }
+
+                if pick_aud {
+                    pick_audio(db, id, preferred_audio_code).log_err();
+                }
+
+                if pick_vid {
+                    pick_video(db, id).log_err();
+                }
             }
 
             tracing::debug!("Performing movies insert/remove");
@@ -373,6 +403,9 @@ pub fn scan_dir_helper(
                 scanned: bool,
                 source: SourceSet,
                 request: Option<String>,
+                subtitle: bool,
+                audio: bool,
+                video: bool,
             }
 
             struct DirSeason {
@@ -649,6 +682,9 @@ pub fn scan_dir_helper(
 
                         let request = row.get::<_, Option<String>>("request")?;
                         let source = SourceSet::from_row(row, "source")?;
+                        let subtitle = Movie::subtitle_maybe(row)?.is_some();
+                        let video = Movie::video_maybe(row)?.is_some();
+                        let audio = Movie::audio_maybe(row)?.is_some();
 
                         Ok((
                             path,
@@ -658,6 +694,9 @@ pub fn scan_dir_helper(
                                 scanned: false,
                                 request,
                                 source,
+                                subtitle,
+                                audio,
+                                video,
                             },
                         ))
                     }).with_ctx_log(|| format!("Scanning show {show_name} season {season_number} episodes in directory")) else {
@@ -673,7 +712,14 @@ pub fn scan_dir_helper(
 
                     for episode in episodes {
                         let mut dir_ep = dir_episodes.get_mut(&episode.path);
-                        let pick_sub = dir_ep.is_none();
+                        let pick_sub = !dir_ep
+                            .as_ref()
+                            .map(|movie| movie.subtitle)
+                            .unwrap_or_default();
+                        let pick_vid =
+                            !dir_ep.as_ref().map(|movie| movie.video).unwrap_or_default();
+                        let pick_aud =
+                            !dir_ep.as_ref().map(|movie| movie.audio).unwrap_or_default();
 
                         if dir_ep.as_ref().map(|ep| ep.tombstone).unwrap_or_default() && !restore {
                             continue;
@@ -759,12 +805,21 @@ pub fn scan_dir_helper(
                             episode_id,
                             episode.embedded_subs,
                             episode.loaded_sub,
-                            pick_sub,
-                            preferred_subtitle_code,
                             episode.audio,
-                            preferred_audio_code,
                             episode.video,
                         );
+
+                        if pick_sub {
+                            pick_subtitle(db, episode_id, preferred_subtitle_code).log_err();
+                        }
+
+                        if pick_aud {
+                            pick_audio(db, episode_id, preferred_audio_code).log_err();
+                        }
+
+                        if pick_vid {
+                            pick_video(db, episode_id).log_err();
+                        }
                     }
 
                     tracing::debug!("Performing episodes insert/remove");
@@ -1196,7 +1251,7 @@ fn discover(
     Ok((duration, subs, audios, videos))
 }
 
-fn pick_subtitle(db: &Database, id: impl Into<VideoId>, preferred: Option<&String>) -> Result<()> {
+fn pick_subtitle(db: &Database, id: impl Into<VideoId>, preferred: Option<&str>) -> Result<()> {
     let id = id.into();
 
     let table = if matches!(id, VideoId::Movie(_)) {
@@ -1246,7 +1301,7 @@ fn pick_subtitle(db: &Database, id: impl Into<VideoId>, preferred: Option<&Strin
     }
 }
 
-fn pick_audio(db: &Database, id: impl Into<VideoId>, preferred: Option<&String>) -> Result<()> {
+fn pick_audio(db: &Database, id: impl Into<VideoId>, preferred: Option<&str>) -> Result<()> {
     let Some(preferred) = preferred else {
         return Ok(());
     };
@@ -1261,7 +1316,7 @@ fn pick_audio(db: &Database, id: impl Into<VideoId>, preferred: Option<&String>)
 
     let res = db
         .query_row(
-            "SELECT id FROM audio WHERE media=:media AND lang=:lang",
+            "SELECT id FROM audio WHERE media=:media ORDER BY CASE WHEN lang=:lang THEN 0 ELSE 1 END LIMIT 1",
             &[
                 (
                     ":lang",
@@ -1290,15 +1345,46 @@ fn pick_audio(db: &Database, id: impl Into<VideoId>, preferred: Option<&String>)
     }
 }
 
+fn pick_video(db: &Database, id: impl Into<VideoId>) -> Result<()> {
+    let id = id.into();
+
+    let table = if matches!(id, VideoId::Movie(_)) {
+        "movie"
+    } else {
+        "episode"
+    };
+
+    let res = db
+        .query_row(
+            "SELECT id FROM video WHERE media=:media ORDER BY height DESC",
+            &[(":media", &ToSqlOutput::from(id))],
+            VideoInfoId::from_row,
+        )
+        .optional()
+        .with_context(|| format!("Selecting video info for video {id}"))?;
+
+    let sql = format!("UPDATE {table} SET video_id=:video WHERE id=:id");
+    match res {
+        Some(video_id) => db
+            .execute(
+                &sql,
+                &[
+                    (":id", &ToSqlOutput::from(id)),
+                    (":video", &ToSqlOutput::from(video_id)),
+                ],
+            )
+            .map(|_| ())
+            .with_context(|| format!("Setting video {id} video info to {video_id}")),
+        None => Ok(()),
+    }
+}
+
 fn save_video_metadata(
     db: &Database,
     id: impl Into<VideoId>,
     subtitles: Vec<SubtitleInfo>,
     loaded_sub: Option<String>,
-    pick_preferred: bool,
-    preferred_subtitle_code: Option<&String>,
     audio: Vec<AudioInfo>,
-    preferred_audio_code: Option<&String>,
     videos: Vec<VideoInfo>,
 ) {
     let id = id.into();
@@ -1366,10 +1452,5 @@ fn save_video_metadata(
                 err.with_ctx_log(|| format!("Video Info {} insertion on video {id}", video.id));
             }
         }
-    }
-
-    if pick_preferred {
-        pick_subtitle(db, id, preferred_subtitle_code).log_err();
-        pick_audio(db, id, preferred_audio_code).log_err();
     }
 }
