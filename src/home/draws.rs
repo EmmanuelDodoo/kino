@@ -24,6 +24,8 @@ use iced::{
 };
 use widgets::expandable;
 
+const PADDING_5: Padding = Padding::new(5.0);
+
 pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let width = 550;
     let height = 550;
@@ -1720,67 +1722,13 @@ pub fn draw_movie_edit<'a>(
     audio: &'a [Audio],
     subs: &'a [Subtitle],
 ) -> Element<'a, HomeMessage> {
-    let padding = Padding::from([6, 6]);
-    let size = H7;
-    let label = |label: &'a str| sized_medium(label, P);
+    let name = media_name(&state.placeholder, state.name(), MovieEditMessage::Name);
 
-    let name = {
-        let label = label("Name");
+    let overview = media_overview(&state.overview, MovieEditMessage::Overview);
 
-        let input_style = styles::text_input::required(state.invalid_name());
+    let ratings = media_rating(&state.ratings, MovieEditMessage::Rating);
 
-        let input = text_input(&state.placeholder, state.name())
-            .id(state.name_input.clone())
-            .on_input(MovieEditMessage::Name)
-            .font(regular_font())
-            .style(styles::text_input::default)
-            .padding(padding)
-            .style(input_style)
-            .width(Length::Fill);
-
-        column!(label, input).spacing(3)
-    };
-
-    let overview = {
-        let label = label("Overview");
-
-        let content = text_editor(&state.overview)
-            .height(175)
-            .font(regular_font())
-            .on_action(MovieEditMessage::Overview);
-
-        column!(label, content).spacing(3)
-    };
-
-    let ratings = {
-        let label = label("Rating: ");
-
-        let content = {
-            let extra = sized_regular("/5", H7);
-
-            let value = text_input("", &state.ratings)
-                .font(regular_font())
-                .padding([4, 4])
-                .align_x(Horizontal::Right)
-                .width(80.0)
-                .style(styles::text_input::default)
-                .on_input(MovieEditMessage::Rating);
-
-            row!(value, extra).spacing(2.0).align_y(Vertical::Center)
-        };
-
-        row!(label, space::horizontal(), content).align_y(Vertical::Center)
-    };
-
-    let watched = {
-        let label = label("Mark as Watched");
-
-        let content = checkbox(state.watched)
-            .size(P)
-            .on_toggle(MovieEditMessage::MarkWatched);
-
-        row!(label, space::horizontal(), content).align_y(Vertical::Center)
-    };
+    let watched = media_mark(state.watched, MovieEditMessage::MarkWatched);
 
     let videos = draw_videos(videos, state.selected_video, MovieEditMessage::Video);
 
@@ -1793,163 +1741,39 @@ pub fn draw_movie_edit<'a>(
         MovieEditMessage::SubDelete,
     );
 
-    let source = {
-        let size = H7;
-        let label = label("Source:");
-        let handle = picklist_handle(size);
+    let source = media_source(
+        &state.source,
+        Some(|source| MovieEditMessage::Source(source)),
+    );
 
-        let source = pick_list(Some(state.source), SourceSet::VARIANTS, |source| {
-            source.to_str().to_owned()
-        })
-        .style(styles::pick_list::default)
-        .font(regular_font())
-        .on_select(MovieEditMessage::Source)
-        .handle(handle)
-        .padding([5, 10])
-        .text_size(size);
+    let source_id = media_source_id(state.source, &state.source_id, MovieEditMessage::SourceId);
 
-        row!(label, space::horizontal(), source)
-            .spacing(40.0)
-            .align_y(Vertical::Center)
-    };
+    let refetch = media_icon_btn(REFRESH, "Refetch").on_press(MovieEditMessage::Refetch);
 
-    let source_id = match state.source {
-        SourceSet::Tmdb => {
-            let label = label("Source Id (optional):");
+    let remove = media_icon_btn(DELETE, "Delete").on_press(MovieEditMessage::Remove);
 
-            let input = text_input("", &state.source_id)
-                .on_input(MovieEditMessage::SourceId)
-                .align_x(Horizontal::Right)
-                .style(styles::text_input::default)
-                .font(regular_font())
-                .size(P)
-                .padding([4, 6])
-                .width(80.0);
+    let poster = media_image(
+        "Poster: ",
+        state.poster.as_deref(),
+        MovieEditMessage::PickPoster,
+    );
+    let backdrop = media_image(
+        "Backdrop: ",
+        state.backdrop.as_deref(),
+        MovieEditMessage::PickPoster,
+    );
 
-            Some(row!(label, space::horizontal(), input).align_y(Vertical::Center))
-        }
-        SourceSet::None => None,
-    };
-
-    let refetch = {
-        let refetch = row!(icon(REFRESH).size(size), sized_medium("Refetch", size))
-            .spacing(4.0)
-            .align_y(Vertical::Center);
-
-        button(refetch)
-            .style(styles::button::subtle)
-            .on_press(MovieEditMessage::Refetch)
-    };
-
-    let remove = {
-        let size = H7;
-        let remove = row!(icon(DELETE).size(size), sized_medium("Delete", size))
-            .spacing(4.0)
-            .align_y(Vertical::Center);
-
-        button(remove)
-            .style(styles::button::danger)
-            .on_press(MovieEditMessage::Remove)
-    };
-
-    let images = {
-        let poster = {
-            let label = label("Poster: ");
-
-            let action: Element<'_, MovieEditMessage> = match &state.poster {
-                Some(path) => {
-                    let path = trim_path(path, 3);
-                    let path = marquee(path)
-                        .size(size)
-                        .width(250)
-                        .font(mono_font())
-                        .direction(true);
-
-                    let redo = text_button(REFRESH).on_press(MovieEditMessage::PickPoster);
-
-                    row!(path, redo)
-                        .spacing(3.0)
-                        .align_y(Vertical::Center)
-                        .into()
-                }
-                None => {
-                    let upload = row!(icon(UPLOAD).size(size), sized_medium("Upload", size))
-                        .spacing(4.0)
-                        .align_y(Vertical::Center);
-
-                    button(upload)
-                        .style(styles::button::subtle)
-                        .on_press(MovieEditMessage::PickPoster)
-                        .into()
-                }
-            };
-
-            row!(label, space::horizontal(), action).align_y(Vertical::Center)
-        };
-
-        let backdrop = {
-            let label = label("Backdrop: ");
-
-            let action: Element<'_, MovieEditMessage> = match &state.backdrop {
-                Some(path) => {
-                    let path = trim_path(path, 3);
-                    let path = marquee(path)
-                        .size(size)
-                        .width(250)
-                        .font(mono_font())
-                        .direction(true);
-
-                    let redo = text_button(REFRESH).on_press(MovieEditMessage::PickBackdrop);
-
-                    row!(path, redo)
-                        .spacing(3.0)
-                        .align_y(Vertical::Center)
-                        .into()
-                }
-                None => {
-                    let upload = row!(icon(UPLOAD).size(size), sized_medium("Upload", size))
-                        .spacing(4.0)
-                        .align_y(Vertical::Center);
-
-                    button(upload)
-                        .style(styles::button::subtle)
-                        .on_press(MovieEditMessage::PickBackdrop)
-                        .into()
-                }
-            };
-
-            row!(label, space::horizontal(), action).align_y(Vertical::Center)
-        };
-
-        column!(poster, backdrop).spacing(8)
-    };
-
-    let content = column!(
-        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, images,
-        refetch, remove,
+    let content: Element<'_, MovieEditMessage> = column!(
+        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, poster,
+        backdrop, refetch, remove,
     )
-    .spacing(24);
+    .spacing(24)
+    .into();
 
-    let actions = {
-        let save = save_btn().on_press(HomeMessage::MovieEdit(MovieEditMessage::Save));
-
-        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
-
-        column!(row!(save, cancel).spacing(80))
-            .align_x(Horizontal::Center)
-            .width(Length::Fill)
-    };
-
-    let content: Element<'_, MovieEditMessage> =
-        scrollable(content).spacing(4).height(Length::Fill).into();
-
-    let content = column!(content.map(HomeMessage::MovieEdit), actions).spacing(28);
-
-    modal_container(content)
-        .width(500)
-        .padding([8, 12])
-        .align_y(Vertical::Top)
-        .into()
+    media_layout(
+        content.map(HomeMessage::MovieEdit),
+        HomeMessage::MovieEdit(MovieEditMessage::Save),
+    )
 }
 
 pub fn draw_episode_edit<'a>(
@@ -1958,63 +1782,13 @@ pub fn draw_episode_edit<'a>(
     audio: &'a [Audio],
     subs: &'a [Subtitle],
 ) -> Element<'a, HomeMessage> {
-    let padding = Padding::from([6, 6]);
-    let size = H7;
-    let label = |label: &'a str| sized_medium(label, P);
+    let name = media_name(&state.placeholder, state.name(), EpisodeEditMessage::Name);
 
-    let name = {
-        let label = label("Name");
+    let overview = media_overview(&state.overview, EpisodeEditMessage::Overview);
 
-        let input = text_input(&state.placeholder, state.name())
-            .on_input(EpisodeEditMessage::Name)
-            .font(regular_font())
-            .style(styles::text_input::default)
-            .padding(padding)
-            .width(Length::Fill);
+    let ratings = media_rating(&state.ratings, EpisodeEditMessage::Rating);
 
-        column!(label, input).spacing(3)
-    };
-
-    let overview = {
-        let label = label("Overview");
-
-        let content = text_editor(&state.overview)
-            .height(175)
-            .font(regular_font())
-            .on_action(EpisodeEditMessage::Overview);
-
-        column!(label, content).spacing(3)
-    };
-
-    let ratings = {
-        let label = label("Rating: ");
-
-        let content = {
-            let extra = sized_regular("/5", H7);
-
-            let value = text_input("", &state.ratings)
-                .font(regular_font())
-                .padding([4, 4])
-                .align_x(Horizontal::Right)
-                .width(80.0)
-                .style(styles::text_input::default)
-                .on_input(EpisodeEditMessage::Rating);
-
-            row!(value, extra).spacing(2.0).align_y(Vertical::Center)
-        };
-
-        row!(label, space::horizontal(), content).align_y(Vertical::Center)
-    };
-
-    let watched = {
-        let label = label("Mark as Watched");
-
-        let content = checkbox(state.watched)
-            .size(P)
-            .on_toggle(EpisodeEditMessage::MarkWatched);
-
-        row!(label, space::horizontal(), content).align_y(Vertical::Center)
-    };
+    let watched = media_mark(state.watched, EpisodeEditMessage::MarkWatched);
 
     let videos = draw_videos(videos, state.selected_video, EpisodeEditMessage::Video);
 
@@ -2027,115 +1801,31 @@ pub fn draw_episode_edit<'a>(
         EpisodeEditMessage::SubDelete,
     );
 
-    let source = {
-        let label = label("Source:");
+    let source = media_source(&state.source, None::<fn(_) -> EpisodeEditMessage>);
 
-        let source = sized_medium(state.source.to_str(), H7);
+    let source_id = media_source_id(state.source, &state.source_id, EpisodeEditMessage::SourceId);
 
-        row!(label, space::horizontal(), source)
-            .spacing(40.0)
-            .align_y(Vertical::Center)
-    };
+    let refetch = media_icon_btn(REFRESH, "Refetch").on_press(EpisodeEditMessage::Refetch);
 
-    let source_id = match state.source {
-        SourceSet::Tmdb => {
-            let label = label("Source Id (optional):");
+    let remove = media_icon_btn(DELETE, "Delete").on_press(EpisodeEditMessage::Remove);
 
-            let input = text_input("", &state.source_id)
-                .on_input(EpisodeEditMessage::SourceId)
-                .align_x(Horizontal::Right)
-                .style(styles::text_input::default)
-                .font(regular_font())
-                .size(P)
-                .padding([4, 6])
-                .width(80.0);
+    let poster = media_image(
+        "Poster: ",
+        state.poster.as_deref(),
+        EpisodeEditMessage::PickPoster,
+    );
 
-            Some(row!(label, space::horizontal(), input).align_y(Vertical::Center))
-        }
-        SourceSet::None => None,
-    };
-
-    let refetch = {
-        let refetch = row!(icon(REFRESH).size(size), sized_medium("Refetch", size))
-            .spacing(4.0)
-            .align_y(Vertical::Center);
-
-        button(refetch)
-            .style(styles::button::subtle)
-            .on_press(EpisodeEditMessage::Refetch)
-    };
-
-    let remove = {
-        let size = H7;
-        let remove = row!(icon(DELETE).size(size), sized_medium("Delete", size))
-            .spacing(4.0)
-            .align_y(Vertical::Center);
-
-        button(remove)
-            .style(styles::button::danger)
-            .on_press(EpisodeEditMessage::Remove)
-    };
-
-    let poster = {
-        let label = label("Poster: ");
-
-        let action: Element<'_, EpisodeEditMessage> = match &state.poster {
-            Some(path) => {
-                let path = trim_path(path, 3);
-                let path = marquee(path)
-                    .size(size)
-                    .width(250)
-                    .font(mono_font())
-                    .direction(true);
-
-                let redo = text_button(REFRESH).on_press(EpisodeEditMessage::PickPoster);
-
-                row!(path, redo)
-                    .spacing(3.0)
-                    .align_y(Vertical::Center)
-                    .into()
-            }
-            None => {
-                let upload = row!(icon(UPLOAD).size(size), sized_medium("Upload", size))
-                    .spacing(4.0)
-                    .align_y(Vertical::Center);
-
-                button(upload)
-                    .style(styles::button::subtle)
-                    .on_press(EpisodeEditMessage::PickPoster)
-                    .into()
-            }
-        };
-
-        row!(label, space::horizontal(), action).align_y(Vertical::Center)
-    };
-
-    let content = column!(
+    let content: Element<'_, EpisodeEditMessage> = column!(
         name, overview, ratings, watched, videos, audio, subtitles, source, source_id, refetch,
         remove, poster
     )
-    .spacing(24);
+    .spacing(24)
+    .into();
 
-    let actions = {
-        let save = save_btn().on_press(HomeMessage::EpisodeEdit(EpisodeEditMessage::Save));
-
-        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
-
-        column!(row!(save, cancel).spacing(80))
-            .align_x(Horizontal::Center)
-            .width(Length::Fill)
-    };
-
-    let content: Element<'_, EpisodeEditMessage> =
-        scrollable(content).spacing(4).height(Length::Fill).into();
-
-    let content = column!(content.map(HomeMessage::EpisodeEdit), actions).spacing(28);
-
-    modal_container(content)
-        .width(500)
-        .padding([8, 12])
-        .align_y(Vertical::Top)
-        .into()
+    media_layout(
+        content.map(HomeMessage::EpisodeEdit),
+        HomeMessage::EpisodeEdit(EpisodeEditMessage::Save),
+    )
 }
 
 fn draw_videos<'a, Message: 'a + Clone, F>(
@@ -2151,7 +1841,7 @@ where
     }
 
     let label = mouse_area(
-        row!(sized_medium("Videos", P))
+        row!(media_label("Videos"))
             .width(Length::Fill)
             .padding([2, 2]),
     )
@@ -2237,7 +1927,7 @@ where
 
     let size = H7;
     let label = mouse_area(
-        row!(sized_medium("Audios", P))
+        row!(media_label("Audios"))
             .width(Length::Fill)
             .padding([2, 2]),
     )
@@ -2340,7 +2030,7 @@ where
     }
 
     let label = mouse_area(
-        row!(sized_medium("Subtitles", P))
+        row!(media_label("Subtitles"))
             .width(Length::Fill)
             .padding([2, 2]),
     )
@@ -2398,5 +2088,213 @@ where
         .width(Length::Fill)
         .expanded(true)
         .spacing(0)
+        .into()
+}
+
+fn media_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+    sized_medium(label, P)
+}
+
+fn media_name<'a, Message: 'a + Clone>(
+    placeholder: &str,
+    value: &str,
+    on_input: impl Fn(String) -> Message + 'a,
+) -> Element<'a, Message> {
+    let label = media_label("Name");
+
+    let input = text_input(placeholder, value)
+        .on_input(on_input)
+        .font(regular_font())
+        .style(styles::text_input::default)
+        .padding(PADDING_5)
+        .style(styles::text_input::default)
+        .width(Length::Fill);
+
+    column!(label, input).spacing(3).into()
+}
+
+fn media_overview<'a, Message: 'a + Clone>(
+    content: &'a text_editor::Content,
+    on_edit: impl Fn(text_editor::Action) -> Message + 'a,
+) -> Element<'a, Message> {
+    let label = media_label("Overview");
+
+    let content = text_editor(content)
+        .padding(PADDING_5)
+        .height(175)
+        .font(regular_font())
+        .on_action(on_edit);
+
+    column!(label, content).spacing(3).into()
+}
+
+fn media_rating<'a, Message: 'a + Clone>(
+    rating: &'a str,
+    on_input: impl Fn(String) -> Message + 'a,
+) -> Element<'a, Message> {
+    let label = media_label("Rating: ");
+
+    let content = {
+        let extra = sized_regular("/5", H7);
+
+        let value = text_input("", rating)
+            .font(regular_font())
+            .padding(PADDING_5)
+            .align_x(Horizontal::Right)
+            .width(80.0)
+            .style(styles::text_input::default)
+            .on_input(on_input);
+
+        row!(value, extra).spacing(2.0).align_y(Vertical::Center)
+    };
+
+    row!(label, space::horizontal(), content)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+fn media_mark<'a, Message: 'a + Clone>(
+    watched: bool,
+    on_toggle: impl Fn(bool) -> Message + 'a,
+) -> Element<'a, Message> {
+    let label = media_label("Mark as Watched");
+
+    let content = checkbox(watched).size(P).on_toggle(on_toggle);
+
+    row!(label, space::horizontal(), content)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+fn media_source<'a, Message: 'a + Clone>(
+    source: &'a SourceSet,
+    on_select: Option<impl Fn(SourceSet) -> Message + 'a>,
+) -> Element<'a, Message> {
+    let size = H7;
+    let label = media_label("Source:");
+    let handle = picklist_handle(size);
+
+    let source: Element<'_, Message> = match on_select {
+        Some(on_select) => pick_list(Some(source), SourceSet::VARIANTS, |source| {
+            source.to_str().to_owned()
+        })
+        .style(styles::pick_list::default)
+        .font(regular_font())
+        .on_select(on_select)
+        .handle(handle)
+        .padding([5, 10])
+        .text_size(size)
+        .into(),
+        None => sized_medium(source.to_str(), H7).into(),
+    };
+
+    row!(label, space::horizontal(), source)
+        .spacing(40.0)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+fn media_source_id<'a, Message: 'a + Clone>(
+    source: SourceSet,
+    id: &'a str,
+    on_input: impl Fn(String) -> Message + 'a,
+) -> Element<'a, Message> {
+    let source_id = match source {
+        SourceSet::Tmdb => {
+            let label = media_label("Source Id (optional):");
+
+            let input = text_input("", id)
+                .on_input(on_input)
+                .align_x(Horizontal::Right)
+                .style(styles::text_input::default)
+                .font(regular_font())
+                .size(P)
+                .padding(PADDING_5)
+                .width(80.0);
+
+            Some(row!(label, space::horizontal(), input).align_y(Vertical::Center))
+        }
+        SourceSet::None => None,
+    };
+
+    source_id.into()
+}
+
+fn media_icon_btn<'a, Message: 'a + Clone>(
+    codepoint: char,
+    label: &'a str,
+) -> button::Button<'a, Message> {
+    let size = H7;
+
+    let refetch = row!(icon(codepoint).size(size), sized_medium(label, size))
+        .spacing(4.0)
+        .align_y(Vertical::Center);
+
+    button(refetch).style(styles::button::subtle)
+}
+
+fn media_image<'a, Message: 'a + Clone>(
+    label: &'a str,
+    path: Option<&'a std::path::Path>,
+    on_press: Message,
+) -> Element<'a, Message> {
+    let size = H7;
+    let label = media_label(label);
+
+    let action: Element<'_, Message> = match path {
+        Some(path) => {
+            let path = trim_path(path, 3);
+            let path = marquee(path)
+                .size(size)
+                .width(250)
+                .font(mono_font())
+                .direction(true);
+
+            let redo = text_button(REFRESH).on_press(on_press);
+
+            row!(path, redo)
+                .spacing(3.0)
+                .align_y(Vertical::Center)
+                .into()
+        }
+        None => {
+            let upload = row!(icon(UPLOAD).size(size), sized_medium("Upload", size))
+                .spacing(4.0)
+                .align_y(Vertical::Center);
+
+            button(upload)
+                .style(styles::button::subtle)
+                .on_press(on_press)
+                .into()
+        }
+    };
+
+    row!(label, space::horizontal(), action)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+fn media_layout<'a>(
+    content: impl Into<Element<'a, HomeMessage>>,
+    on_save: HomeMessage,
+) -> Element<'a, HomeMessage> {
+    let actions = {
+        let save = save_btn().on_press(on_save);
+
+        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+
+        column!(row!(save, cancel).spacing(80))
+            .align_x(Horizontal::Center)
+            .width(Length::Fill)
+    };
+
+    let content = scrollable(content).spacing(4).height(Length::Fill);
+
+    let content = column!(content, actions).spacing(28);
+
+    modal_container(content)
+        .width(500)
+        .padding([8, 12])
+        .align_y(Vertical::Top)
         .into()
 }

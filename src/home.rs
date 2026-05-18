@@ -471,7 +471,6 @@ pub struct MovieEditState {
     id: MovieId,
     name: String,
     placeholder: String,
-    name_input: widget::Id,
     overview: text_editor::Content,
     ratings: String,
     selected_video: Option<VideoInfoId>,
@@ -490,7 +489,6 @@ impl MovieEditState {
             id: movie.id,
             name: movie.name().to_owned(),
             placeholder: movie.name().to_owned(),
-            name_input: widget::Id::unique(),
             overview: text_editor::Content::with_text(movie.synopsis()),
             ratings: movie
                 .rating()
@@ -1655,16 +1653,9 @@ impl Home {
                             return Task::none();
                         };
 
-                        if state.invalid_name() {
-                            let msg = Message::error("Invalid name", false).tasked();
-                            let focus = operation::focus(state.name_input.clone());
-
-                            return Task::batch([focus, msg]);
-                        }
-
                         let mut updates = vec![];
 
-                        if movie.item.name() != state.name {
+                        if !state.invalid_name() && movie.item.name() != state.name() {
                             updates.push(NewUpdateKind::Name(state.name().to_owned()))
                         }
 
