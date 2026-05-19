@@ -19,7 +19,6 @@ use registry::{
     filter::{self, FilterMode, SearchFilter},
     sort::{self, Sort, SortKind},
 };
-use shared::ThumbnailTask;
 
 use devutils::{
     scan,
@@ -54,7 +53,7 @@ pub enum FetchId {
 }
 
 #[derive(Clone, Debug)]
-pub enum NewUpdateKind {
+pub enum MediaUpdateKind {
     Name(String),
     Overview(String),
     Rating(f32),
@@ -71,7 +70,7 @@ pub struct MovieUpdate {
     /// Is some if the source was updated
     pub prev_source: Option<(SourceSet, String)>,
     pub source: SourceSet,
-    pub updates: Vec<NewUpdateKind>,
+    pub updates: Vec<MediaUpdateKind>,
 }
 
 #[derive(Clone, Debug)]
@@ -80,37 +79,21 @@ pub struct ShowUpdate {
     /// Is some if the source was updated
     pub prev_source: Option<(SourceSet, String)>,
     pub source: SourceSet,
-    pub updates: Vec<NewUpdateKind>,
+    pub updates: Vec<MediaUpdateKind>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SeasonUpdate {
     pub id: SeasonId,
     pub source: SourceSet,
-    pub updates: Vec<NewUpdateKind>,
+    pub updates: Vec<MediaUpdateKind>,
 }
 
 #[derive(Clone, Debug)]
 pub struct EpisodeUpdate {
     pub id: EpisodeId,
     pub source: SourceSet,
-    pub updates: Vec<NewUpdateKind>,
-}
-
-#[derive(Clone, Debug)]
-pub enum MediaUpdateKind {
-    Rating(f32),
-    Name(String),
-    Synopsis(String),
-    Refetch(SourceSet),
-    Remove,
-    TMDBId { id: u32, source: SourceSet },
-}
-
-#[derive(Clone, Debug)]
-pub struct MediaUpdate {
-    pub id: ItemId,
-    pub kind: MediaUpdateKind,
+    pub updates: Vec<MediaUpdateKind>,
 }
 
 #[derive(Clone, Debug)]
@@ -155,7 +138,8 @@ pub enum Message {
         items: Items,
     },
     SubtitleDelete(SubtitleId),
-    MediaUpdate(MediaUpdate),
+    RemoveMedia(ItemId),
+    RefetchMedia(ItemId, SourceSet),
     MovieUpdate(MovieUpdate),
     ShowUpdate(ShowUpdate),
     EpisodeUpdate(EpisodeUpdate),
@@ -492,89 +476,40 @@ impl App {
 
                 Task::none()
             }
-            Message::MediaUpdate(MediaUpdate { id, kind }) => {
-                let query = match kind {
-                    MediaUpdateKind::Rating(value) => match id {
-                        ItemId::Show(id) => Show::set_rating(id, value),
-                        ItemId::Movie(id) => Movie::set_rating(id, value),
-                        ItemId::Season(id) => Season::set_rating(id, value),
-                        ItemId::Episode(id) => Episode::set_rating(id, value),
-                    },
-                    MediaUpdateKind::Name(value) => match id {
-                        ItemId::Show(id) => Show::set_name(id, value),
-                        ItemId::Movie(id) => Movie::set_name(id, value),
-                        ItemId::Season(id) => Season::set_name(id, value),
-                        ItemId::Episode(id) => Episode::set_name(id, value),
-                    },
-                    MediaUpdateKind::Synopsis(value) => match id {
-                        ItemId::Show(id) => Show::set_synopsis(id, value),
-                        ItemId::Movie(id) => Movie::set_synopsis(id, value),
-                        ItemId::Season(id) => Season::set_synopsis(id, value),
-                        ItemId::Episode(id) => Episode::set_synopsis(id, value),
-                    },
-                    MediaUpdateKind::Refetch(source) => match source.refetch(id) {
-                        Some(query) => {
-                            match query.execute(&self.db).with_context(|| {
-                                format!("Refetch media {id:?} with source {}", source.to_str())
-                            }) {
-                                Ok(succ) => {
-                                    succ.log();
-                                    let msg = Message::success("Refetch queued").tasked();
-                                    return Task::batch([self.home.content_refresh(), msg]);
-                                }
-                                Err(error) => {
-                                    let msg = Message::anyhow(error);
-
-                                    return Task::done(msg);
-                                }
-                            }
+            Message::RefetchMedia(id, source) => match source.refetch(id) {
+                Some(query) => {
+                    match query.execute(&self.db).with_context(|| {
+                        format!("Refetch media {id:?} with source {}", source.to_str())
+                    }) {
+                        Ok(succ) => {
+                            succ.log();
+                            let msg = Message::success("Refetch queued").tasked();
+                            return Task::batch([self.home.content_refresh(), msg]);
                         }
-                        None => {
-                            return Task::none();
-                        }
-                    },
-                    MediaUpdateKind::Remove => match id {
-                        ItemId::Show(id) => Show::remove(id),
-                        ItemId::Movie(id) => Movie::remove(id),
-                        ItemId::Season(id) => Season::remove(id),
-                        ItemId::Episode(id) => Episode::remove(id),
-                    },
-                    MediaUpdateKind::TMDBId {
-                        id: tmdb_id,
-                        source,
-                    } => {
-                        let query = match id {
-                            ItemId::Movie(id) => source.set_tmdb_id(id, tmdb_id),
-                            ItemId::Show(id) => source.set_tmdb_id(id, tmdb_id),
-                            ItemId::Season(id) => source.set_tmdb_number(id, tmdb_id as u16),
-                            ItemId::Episode(id) => source.set_tmdb_number(id, tmdb_id as u16),
-                        };
+                        Err(error) => {
+                            let msg = Message::anyhow(error);
 
-                        match query {
-                            Some(query) => {
-                                match query.execute(&self.db).with_context(|| {
-                                    format!("Updating media {id:?} tmdb id {tmdb_id}")
-                                }) {
-                                    Ok(succ) => {
-                                        succ.log();
-                                        let msg = Message::success("Refetch queued").tasked();
-                                        return Task::batch([self.home.content_refresh(), msg]);
-                                    }
-                                    Err(error) => {
-                                        let msg = Message::anyhow(error);
-
-                                        return Task::done(msg);
-                                    }
-                                }
-                            }
-                            None => {
-                                return Task::none();
-                            }
+                            return Task::done(msg);
                         }
                     }
+                }
+                None => {
+                    return Task::none();
+                }
+            },
+            Message::RemoveMedia(id) => {
+                let query = match id {
+                    ItemId::Show(id) => Show::remove(id),
+                    ItemId::Movie(id) => Movie::remove(id),
+                    ItemId::Season(id) => Season::remove(id),
+                    ItemId::Episode(id) => Episode::remove(id),
                 };
 
-                match query.execute(&self.db) {
+                match query
+                    .execute(&self.db)
+                    .with_context(|| format!("Deleting media {id:?} Failed"))
+                    .context("Delete media failed")
+                {
                     Ok(succ) => {
                         succ.log();
                         self.home.content_refresh()
@@ -697,20 +632,20 @@ impl App {
 
                 for update in updates {
                     let query = match update {
-                        NewUpdateKind::Name(new) => {
+                        MediaUpdateKind::Name(new) => {
                             name.replace(new.clone());
                             Movie::set_name(id, new)
                         }
-                        NewUpdateKind::Overview(overview) => Movie::set_synopsis(id, overview),
-                        NewUpdateKind::Rating(rating) => Movie::set_rating(id, rating),
-                        NewUpdateKind::Video(video) => Movie::set_video(id, video),
-                        NewUpdateKind::Audio(audio) => Movie::set_audio(id, audio),
-                        NewUpdateKind::Subtitle(subtitle) => Movie::set_subtitle(id, subtitle),
-                        NewUpdateKind::SourceId(id) => {
+                        MediaUpdateKind::Overview(overview) => Movie::set_synopsis(id, overview),
+                        MediaUpdateKind::Rating(rating) => Movie::set_rating(id, rating),
+                        MediaUpdateKind::Video(video) => Movie::set_video(id, video),
+                        MediaUpdateKind::Audio(audio) => Movie::set_audio(id, audio),
+                        MediaUpdateKind::Subtitle(subtitle) => Movie::set_subtitle(id, subtitle),
+                        MediaUpdateKind::SourceId(id) => {
                             source_id = Some(id);
                             continue;
                         }
-                        NewUpdateKind::MarkWatched(count) => Movie::mark_watched(id, count),
+                        MediaUpdateKind::MarkWatched(count) => Movie::mark_watched(id, count),
                     };
 
                     if let Some(succ) = query
@@ -814,20 +749,20 @@ impl App {
 
                 for update in updates {
                     let query = match update {
-                        NewUpdateKind::Name(new) => {
+                        MediaUpdateKind::Name(new) => {
                             name.replace(new.clone());
                             Show::set_name(id, new)
                         }
-                        NewUpdateKind::Overview(overview) => Show::set_synopsis(id, overview),
-                        NewUpdateKind::Rating(rating) => Show::set_rating(id, rating),
-                        NewUpdateKind::Video(_)
-                        | NewUpdateKind::Audio(_)
-                        | NewUpdateKind::Subtitle(_) => continue,
-                        NewUpdateKind::SourceId(id) => {
+                        MediaUpdateKind::Overview(overview) => Show::set_synopsis(id, overview),
+                        MediaUpdateKind::Rating(rating) => Show::set_rating(id, rating),
+                        MediaUpdateKind::Video(_)
+                        | MediaUpdateKind::Audio(_)
+                        | MediaUpdateKind::Subtitle(_) => continue,
+                        MediaUpdateKind::SourceId(id) => {
                             source_id = Some(id);
                             continue;
                         }
-                        NewUpdateKind::MarkWatched(count) => Show::mark_watched(id, count),
+                        MediaUpdateKind::MarkWatched(count) => Show::mark_watched(id, count),
                     };
 
                     if let Some(succ) = query
@@ -934,17 +869,17 @@ impl App {
 
                 for update in updates {
                     let query = match update {
-                        NewUpdateKind::Name(new) => Season::set_name(id, new),
-                        NewUpdateKind::Overview(overview) => Season::set_synopsis(id, overview),
-                        NewUpdateKind::Rating(rating) => Season::set_rating(id, rating),
-                        NewUpdateKind::SourceId(id) => {
+                        MediaUpdateKind::Name(new) => Season::set_name(id, new),
+                        MediaUpdateKind::Overview(overview) => Season::set_synopsis(id, overview),
+                        MediaUpdateKind::Rating(rating) => Season::set_rating(id, rating),
+                        MediaUpdateKind::SourceId(id) => {
                             source_id = Some(id);
                             continue;
                         }
-                        NewUpdateKind::MarkWatched(count) => Season::mark_watched(id, count),
-                        NewUpdateKind::Video(_)
-                        | NewUpdateKind::Audio(_)
-                        | NewUpdateKind::Subtitle(_) => {
+                        MediaUpdateKind::MarkWatched(count) => Season::mark_watched(id, count),
+                        MediaUpdateKind::Video(_)
+                        | MediaUpdateKind::Audio(_)
+                        | MediaUpdateKind::Subtitle(_) => {
                             continue;
                         }
                     };
@@ -1010,17 +945,17 @@ impl App {
 
                 for update in updates {
                     let query = match update {
-                        NewUpdateKind::Name(new) => Episode::set_name(id, new),
-                        NewUpdateKind::Overview(overview) => Episode::set_synopsis(id, overview),
-                        NewUpdateKind::Rating(rating) => Episode::set_rating(id, rating),
-                        NewUpdateKind::Video(video) => Episode::set_video(id, video),
-                        NewUpdateKind::Audio(audio) => Episode::set_audio(id, audio),
-                        NewUpdateKind::Subtitle(subtitle) => Episode::set_subtitle(id, subtitle),
-                        NewUpdateKind::SourceId(id) => {
+                        MediaUpdateKind::Name(new) => Episode::set_name(id, new),
+                        MediaUpdateKind::Overview(overview) => Episode::set_synopsis(id, overview),
+                        MediaUpdateKind::Rating(rating) => Episode::set_rating(id, rating),
+                        MediaUpdateKind::Video(video) => Episode::set_video(id, video),
+                        MediaUpdateKind::Audio(audio) => Episode::set_audio(id, audio),
+                        MediaUpdateKind::Subtitle(subtitle) => Episode::set_subtitle(id, subtitle),
+                        MediaUpdateKind::SourceId(id) => {
                             source_id = Some(id);
                             continue;
                         }
-                        NewUpdateKind::MarkWatched(count) => Episode::mark_watched(id, count),
+                        MediaUpdateKind::MarkWatched(count) => Episode::mark_watched(id, count),
                     };
 
                     if let Some(succ) = query

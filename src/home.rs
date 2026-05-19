@@ -28,10 +28,7 @@ pub mod shared;
 mod shows;
 mod wishlist;
 
-use crate::app::{
-    EpisodeUpdate, MediaUpdate, MediaUpdateKind, MovieUpdate, NewUpdateKind, SeasonUpdate,
-    ShowUpdate,
-};
+use crate::app::{EpisodeUpdate, MediaUpdateKind, MovieUpdate, SeasonUpdate, ShowUpdate};
 use devutils::source::{SourceId, SourceSet};
 use draws::*;
 use registry::models::{
@@ -67,7 +64,7 @@ use season::{SeasonPage, SeasonPageMessage};
 pub use series::{ShowItem, ShowItemTask};
 use series::{ShowPage, ShowPageMessage};
 use shared::{
-    CARD_HEIGHT, CARD_WIDTH, CollectionTask, CollectionThumbnail, Icon, SearchView, Thumbnail,
+    CARD_HEIGHT, CARD_WIDTH, CollectionTask, CollectionThumbnail, Icon, SearchView,
     ThumbnailTaskKind,
 };
 use shows::{TvShows, TvShowsMessage};
@@ -269,38 +266,6 @@ pub enum TriggerMessage {
     ToggleROEDelete(DeleteId),
     LogicInsert(InsertId, LogicMessage),
     LogicDelete(DeleteId, LogicMessage),
-}
-
-#[derive(Debug, Clone)]
-pub enum Rating {
-    Value(f32),
-    Input { id: widget::Id, input: String },
-}
-
-#[derive(Debug, Clone)]
-pub enum RatingMessage {
-    Type,
-    Submit,
-    Star(u8),
-    Input(String),
-}
-
-#[derive(Debug, Clone)]
-pub enum RenameMessage {
-    Input(String),
-    Submit,
-}
-
-#[derive(Debug, Clone)]
-pub enum SynopsisMessage {
-    Action(text_editor::Action),
-    Submit,
-}
-
-#[derive(Debug, Clone)]
-pub enum TMDBMessage {
-    Input(String),
-    Submit,
 }
 
 #[derive(Debug, Clone)]
@@ -686,32 +651,9 @@ pub enum ViewMessage {
     Add(ItemId),
     AddToCollection(CollectionId),
     Search,
-    Rating(ItemId, Option<f32>),
-    Rename {
-        id: ItemId,
-        old: String,
-    },
-    Synopsis {
-        id: ItemId,
-        old: String,
-    },
-    TMDBId {
-        id: ItemId,
-        top_level: bool,
-        source: SourceSet,
-    },
-    RemoveMedia {
-        id: ItemId,
-        name: String,
-    },
-    RemoveCollection {
-        id: CollectionId,
-        name: String,
-    },
-    RemoveWish {
-        id: WishId,
-        name: String,
-    },
+    RemoveMedia { id: ItemId, name: String },
+    RemoveCollection { id: CollectionId, name: String },
+    RemoveWish { id: WishId, name: String },
     Selection,
     MovieEdit(MovieId),
     ShowEdit(ShowId),
@@ -729,29 +671,6 @@ pub enum View {
     ShowEdit(Box<ShowEditState>),
     SeasonEdit(Box<SeasonEditState>),
     EpisodeEdit(Box<EpisodeEditState>),
-    Rating {
-        id: ItemId,
-        rating: Rating,
-    },
-    Rename {
-        id: ItemId,
-        input: widget::Id,
-        old: String,
-        value: String,
-        empty: bool,
-    },
-    Synopsis {
-        id: ItemId,
-        editor: widget::Id,
-        content: text_editor::Content,
-    },
-    TMDBId {
-        id: ItemId,
-        input: widget::Id,
-        value: String,
-        top_level: bool,
-        source: SourceSet,
-    },
     RemoveMedia {
         id: ItemId,
         name: String,
@@ -890,10 +809,6 @@ pub enum HomeMessage {
     RemoveCollectionItems(CollectionId, Items),
     SearchMessage(SearchMessage),
     CollectionAdd(CollectionAddMessage),
-    Rating(RatingMessage),
-    Rename(RenameMessage),
-    Synopsis(SynopsisMessage),
-    TMDBId(TMDBMessage),
     Selection(SelectionMessage),
     RemoveMedia,
     Refetch { id: ItemId, source: SourceSet },
@@ -1265,60 +1180,6 @@ impl Home {
                     }
                     ViewMessage::AddToCollection(id) => return self.toggle_search(Some(id), now),
                     ViewMessage::Search => return self.toggle_search(None, now),
-                    ViewMessage::Rating(id, rating) => {
-                        let rating = Rating::Value(rating.unwrap_or_default());
-                        let view = View::Rating { id, rating };
-
-                        (view, self.update_page_scroll())
-                    }
-                    ViewMessage::Rename { id, old } => {
-                        let input = widget::Id::unique();
-                        let view = View::Rename {
-                            id,
-                            empty: old.is_empty(),
-                            input: input.clone(),
-                            value: old.clone(),
-                            old,
-                        };
-
-                        (
-                            view,
-                            Task::batch([self.update_page_scroll(), operation::focus(input)]),
-                        )
-                    }
-                    ViewMessage::Synopsis { id, old } => {
-                        let editor = widget::Id::unique();
-
-                        let view = View::Synopsis {
-                            id,
-                            editor: editor.clone(),
-                            content: text_editor::Content::with_text(&old),
-                        };
-
-                        (
-                            view,
-                            Task::batch([self.update_page_scroll(), operation::focus(editor)]),
-                        )
-                    }
-                    ViewMessage::TMDBId {
-                        id,
-                        top_level,
-                        source,
-                    } => {
-                        let input = widget::Id::unique();
-                        let view = View::TMDBId {
-                            id,
-                            input: input.clone(),
-                            value: String::new(),
-                            top_level,
-                            source,
-                        };
-
-                        (
-                            view,
-                            Task::batch([self.update_page_scroll(), operation::focus(input)]),
-                        )
-                    }
                     ViewMessage::RemoveMedia { id, name } => {
                         let view = View::RemoveMedia { id, name };
 
@@ -1806,44 +1667,44 @@ impl Home {
                         let mut updates = vec![];
 
                         if !state.invalid_name() && movie.item.name() != state.name() {
-                            updates.push(NewUpdateKind::Name(state.name().to_owned()))
+                            updates.push(MediaUpdateKind::Name(state.name().to_owned()))
                         }
 
                         let overview = state.overview.text();
                         if movie.item.synopsis() != overview {
-                            updates.push(NewUpdateKind::Overview(overview))
+                            updates.push(MediaUpdateKind::Overview(overview))
                         }
 
                         if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
                             && ratings != movie.item.rating().unwrap_or_default()
                         {
-                            updates.push(NewUpdateKind::Rating(ratings));
+                            updates.push(MediaUpdateKind::Rating(ratings));
                         };
 
                         if state.watched {
-                            updates.push(NewUpdateKind::MarkWatched(movie.item.watch_count() + 1))
+                            updates.push(MediaUpdateKind::MarkWatched(movie.item.watch_count() + 1))
                         }
 
                         if let Some(video_id) = state.selected_video
                             && movie.item.video_id != state.selected_video
                         {
-                            updates.push(NewUpdateKind::Video(video_id))
+                            updates.push(MediaUpdateKind::Video(video_id))
                         }
 
                         if let Some(audio_id) = state.selected_audio
                             && movie.item.audio_id != state.selected_audio
                         {
-                            updates.push(NewUpdateKind::Audio(audio_id))
+                            updates.push(MediaUpdateKind::Audio(audio_id))
                         }
 
                         if let Some(subtitle_id) = state.selected_sub
                             && movie.item.subtitle_id != state.selected_sub
                         {
-                            updates.push(NewUpdateKind::Subtitle(subtitle_id))
+                            updates.push(MediaUpdateKind::Subtitle(subtitle_id))
                         }
 
                         if let Some(source_id) = state.source.source_id(&state.source_id) {
-                            updates.push(NewUpdateKind::SourceId(source_id))
+                            updates.push(MediaUpdateKind::SourceId(source_id))
                         };
 
                         let prev_source = SourceSet::from_str(movie.item.source());
@@ -1955,26 +1816,26 @@ impl Home {
                         let mut updates = vec![];
 
                         if !state.invalid_name() && show.item.name() != state.name() {
-                            updates.push(NewUpdateKind::Name(state.name().to_owned()))
+                            updates.push(MediaUpdateKind::Name(state.name().to_owned()))
                         }
 
                         let overview = state.overview.text();
                         if show.item.synopsis() != overview {
-                            updates.push(NewUpdateKind::Overview(overview))
+                            updates.push(MediaUpdateKind::Overview(overview))
                         }
 
                         if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
                             && ratings != show.item.rating().unwrap_or_default()
                         {
-                            updates.push(NewUpdateKind::Rating(ratings));
+                            updates.push(MediaUpdateKind::Rating(ratings));
                         };
 
                         if state.watched {
-                            updates.push(NewUpdateKind::MarkWatched(show.item.watch_count() + 1))
+                            updates.push(MediaUpdateKind::MarkWatched(show.item.watch_count() + 1))
                         }
 
                         if let Some(source_id) = state.source.source_id(&state.source_id) {
-                            updates.push(NewUpdateKind::SourceId(source_id))
+                            updates.push(MediaUpdateKind::SourceId(source_id))
                         };
 
                         let prev_source = SourceSet::from_str(show.item.source());
@@ -2075,26 +1936,27 @@ impl Home {
                         let mut updates = vec![];
 
                         if !state.invalid_name() && season.item.name() != state.name() {
-                            updates.push(NewUpdateKind::Name(state.name().to_owned()))
+                            updates.push(MediaUpdateKind::Name(state.name().to_owned()))
                         }
 
                         let overview = state.overview.text();
                         if season.item.synopsis() != overview {
-                            updates.push(NewUpdateKind::Overview(overview))
+                            updates.push(MediaUpdateKind::Overview(overview))
                         }
 
                         if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
                             && ratings != season.item.rating().unwrap_or_default()
                         {
-                            updates.push(NewUpdateKind::Rating(ratings));
+                            updates.push(MediaUpdateKind::Rating(ratings));
                         };
 
                         if state.watched {
-                            updates.push(NewUpdateKind::MarkWatched(season.item.watch_count() + 1))
+                            updates
+                                .push(MediaUpdateKind::MarkWatched(season.item.watch_count() + 1))
                         }
 
                         if let Some(source_id) = state.source.source_id(&state.source_id) {
-                            updates.push(NewUpdateKind::SourceId(source_id))
+                            updates.push(MediaUpdateKind::SourceId(source_id))
                         };
 
                         let update = SeasonUpdate {
@@ -2194,44 +2056,45 @@ impl Home {
                         let mut updates = vec![];
 
                         if !state.invalid_name() && episode.item.name() != state.name() {
-                            updates.push(NewUpdateKind::Name(state.name().to_owned()))
+                            updates.push(MediaUpdateKind::Name(state.name().to_owned()))
                         }
 
                         let overview = state.overview.text();
                         if episode.item.synopsis() != overview {
-                            updates.push(NewUpdateKind::Overview(overview))
+                            updates.push(MediaUpdateKind::Overview(overview))
                         }
 
                         if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
                             && ratings != episode.item.rating().unwrap_or_default()
                         {
-                            updates.push(NewUpdateKind::Rating(ratings));
+                            updates.push(MediaUpdateKind::Rating(ratings));
                         };
 
                         if state.watched {
-                            updates.push(NewUpdateKind::MarkWatched(episode.item.watch_count() + 1))
+                            updates
+                                .push(MediaUpdateKind::MarkWatched(episode.item.watch_count() + 1))
                         }
 
                         if let Some(video_id) = state.selected_video
                             && episode.item.video_id != state.selected_video
                         {
-                            updates.push(NewUpdateKind::Video(video_id))
+                            updates.push(MediaUpdateKind::Video(video_id))
                         }
 
                         if let Some(audio_id) = state.selected_audio
                             && episode.item.audio_id != state.selected_audio
                         {
-                            updates.push(NewUpdateKind::Audio(audio_id))
+                            updates.push(MediaUpdateKind::Audio(audio_id))
                         }
 
                         if let Some(subtitle_id) = state.selected_sub
                             && episode.item.subtitle_id != state.selected_sub
                         {
-                            updates.push(NewUpdateKind::Subtitle(subtitle_id))
+                            updates.push(MediaUpdateKind::Subtitle(subtitle_id))
                         }
 
                         if let Some(source_id) = state.source.source_id(&state.source_id) {
-                            updates.push(NewUpdateKind::SourceId(source_id))
+                            updates.push(MediaUpdateKind::SourceId(source_id))
                         };
 
                         let update = EpisodeUpdate {
@@ -2392,157 +2255,6 @@ impl Home {
                     }
                 }
             }
-            HomeMessage::Rating(rsg) => {
-                let Some(View::Rating { rating, id }) = self.view.as_mut() else {
-                    return Task::none();
-                };
-
-                match rsg {
-                    RatingMessage::Type => {
-                        let Rating::Value(value) = &rating else {
-                            return Task::none();
-                        };
-                        let id = widget::Id::unique();
-                        *rating = Rating::Input {
-                            id: id.clone(),
-                            input: value.to_string(),
-                        };
-
-                        operation::focus(id)
-                    }
-                    RatingMessage::Star(val) => {
-                        match rating {
-                            Rating::Value(old) => {
-                                *old = val as f32;
-                            }
-                            Rating::Input { input, .. } => {
-                                *input = val.to_string();
-                            }
-                        }
-
-                        let value = val as f32;
-                        let msg = Message::MediaUpdate(MediaUpdate {
-                            id: *id,
-                            kind: MediaUpdateKind::Rating(value),
-                        });
-
-                        let close = self.close_view(true, now);
-
-                        Task::batch([Task::done(msg), close])
-                    }
-                    RatingMessage::Submit => {
-                        let Rating::Input { input, .. } = &rating else {
-                            return Task::none();
-                        };
-
-                        let value = input.parse::<f32>().unwrap_or(0.0).clamp(0.0, 5.0);
-                        *rating = Rating::Value(value);
-
-                        let msg = Message::MediaUpdate(MediaUpdate {
-                            id: *id,
-                            kind: MediaUpdateKind::Rating(value),
-                        });
-
-                        let close = self.close_view(true, now);
-
-                        Task::batch([Task::done(msg), close])
-                    }
-                    RatingMessage::Input(value) => {
-                        if let Rating::Input { input, .. } = rating {
-                            *input = value;
-                        }
-
-                        Task::none()
-                    }
-                }
-            }
-            HomeMessage::Rename(rsg) => {
-                let Some(View::Rename {
-                    id, value, empty, ..
-                }) = self.view.as_mut()
-                else {
-                    return Task::none();
-                };
-
-                match rsg {
-                    RenameMessage::Input(new) => {
-                        *empty = new.is_empty();
-                        *value = new;
-                        Task::none()
-                    }
-                    RenameMessage::Submit => {
-                        let msg = Message::MediaUpdate(MediaUpdate {
-                            id: *id,
-                            kind: MediaUpdateKind::Name(value.clone()),
-                        });
-                        let close = self.close_view(true, now);
-
-                        Task::batch([Task::done(msg), close])
-                    }
-                }
-            }
-            HomeMessage::Synopsis(ssg) => {
-                let Some(View::Synopsis { id, content, .. }) = self.view.as_mut() else {
-                    return Task::none();
-                };
-
-                match ssg {
-                    SynopsisMessage::Submit => {
-                        let msg = Message::MediaUpdate(MediaUpdate {
-                            id: *id,
-                            kind: MediaUpdateKind::Synopsis(content.text()),
-                        });
-
-                        Task::batch([Task::done(msg), self.close_view(true, now)])
-                    }
-                    SynopsisMessage::Action(action) => {
-                        content.perform(action);
-                        Task::none()
-                    }
-                }
-            }
-            HomeMessage::TMDBId(tsg) => {
-                let Some(View::TMDBId {
-                    id,
-                    value,
-                    top_level,
-                    source,
-                    ..
-                }) = self.view.as_mut()
-                else {
-                    return Task::none();
-                };
-
-                match tsg {
-                    TMDBMessage::Input(new) => {
-                        *value = new;
-                        Task::none()
-                    }
-                    TMDBMessage::Submit => {
-                        let tmdb_id = match value.parse::<u32>() {
-                            Ok(tmdb_id) => tmdb_id,
-                            Err(error) => return Task::done(Message::error(error, true)),
-                        };
-
-                        if !(*top_level) && tmdb_id == 0 {
-                            return Task::done(Message::error(
-                                "Cannot have a 0 season/episode number",
-                                true,
-                            ));
-                        }
-
-                        let msg = Message::MediaUpdate(MediaUpdate {
-                            id: *id,
-                            kind: MediaUpdateKind::TMDBId {
-                                id: tmdb_id,
-                                source: *source,
-                            },
-                        });
-
-                        Task::batch([Task::done(msg), self.close_view(true, now)])
-                    }
-                }
-            }
             HomeMessage::Selection(ssg) => {
                 let Some(View::Selection(selected)) = self.view.as_mut() else {
                     return Task::none();
@@ -2670,10 +2382,7 @@ impl Home {
                 }
             }
             HomeMessage::Refetch { id, source } => {
-                let msg = Message::MediaUpdate(MediaUpdate {
-                    id,
-                    kind: MediaUpdateKind::Refetch(source),
-                });
+                let msg = Message::RefetchMedia(id, source);
 
                 Task::done(msg)
             }
@@ -2682,10 +2391,7 @@ impl Home {
                     return Task::none();
                 };
 
-                let msg = Message::MediaUpdate(MediaUpdate {
-                    id: *id,
-                    kind: MediaUpdateKind::Remove,
-                });
+                let msg = Message::RemoveMedia(*id);
 
                 let remove = Task::done(msg);
 
@@ -5167,25 +4873,6 @@ impl Home {
                             self.collections.is_empty(),
                         ),
                     ),
-                    View::Rating { rating, .. } => modalize(content, draw_rating(rating)),
-                    View::Rename {
-                        input,
-                        old,
-                        value,
-                        empty,
-                        ..
-                    } => modalize(content, draw_rename(input, old, value, *empty)),
-                    View::Synopsis {
-                        editor,
-                        content: editor_content,
-                        ..
-                    } => modalize(content, draw_synopsis(editor, editor_content)),
-                    View::TMDBId {
-                        input,
-                        value,
-                        top_level,
-                        ..
-                    } => modalize(content, draw_tmdb(input, value, *top_level)),
                     View::RemoveMedia { name, .. } => {
                         modalize(content, draw_delete_confirm(name, HomeMessage::RemoveMedia))
                     }
