@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use super::{HomeMessage, PageKind, Scroll, ViewMessage, shared::*};
 use crate::utils::icons::*;
 use crate::utils::styles;
 use crate::utils::typo::*;
@@ -11,8 +11,8 @@ use iced::{
     task,
     time::Instant,
     widget::{
-        bottom_center, button, center_x, column, container, image, image::Handle, responsive, row,
-        rule, scrollable, space, stack, text,
+        self, bottom_center, button, center_x, column, container, image, image::Handle, operation,
+        responsive, row, rule, scrollable, space, stack, text,
     },
 };
 use registry::models::{
@@ -30,6 +30,7 @@ pub enum Message {
     Goto(PageKind),
     GotoCollection(CollectionId),
     Sibbling(SeasonId, u16),
+    Scroll(scrollable::Viewport),
 }
 
 #[derive(Debug, Clone)]
@@ -41,11 +42,22 @@ pub struct EpisodePageMessage {
 #[derive(Debug, Clone)]
 pub struct EpisodePage {
     pub id: EpisodeId,
+    scroll: Scroll,
 }
 
 impl EpisodePage {
-    pub fn new(id: EpisodeId) -> Self {
-        Self { id }
+    pub fn boot(show: EpisodeId) -> (Self, Task<EpisodePageMessage>) {
+        let (new, id) = Self::new(show);
+        let scroll = operation::scroll_to(id, scrollable::AbsoluteOffset::<f32>::default());
+
+        (new, scroll)
+    }
+
+    fn new(show: EpisodeId) -> (Self, widget::Id) {
+        let scroll = Scroll::new();
+        let id = scroll.id.clone();
+
+        (Self { id: show, scroll }, id)
     }
 
     pub fn update(&mut self, message: EpisodePageMessage) -> Option<HomeMessage> {
@@ -71,6 +83,10 @@ impl EpisodePage {
                 Some(HomeMessage::Goto(PageKind::Collection(collection)))
             }
             Message::Sibbling(season, number) => Some(HomeMessage::GotoEpisode(season, number)),
+            Message::Scroll(view) => {
+                self.scroll.offset = view.absolute_offset();
+                None
+            }
         }
     }
 
@@ -140,7 +156,7 @@ impl EpisodePage {
             .spacing(40)
             .padding(Padding::ZERO.top(20).right(30.0));
 
-        let content = page_layout(content, img);
+        let content = page_layout(content, img, &self.scroll, Message::Scroll);
 
         content.map(move |message| EpisodePageMessage { id, message })
     }
@@ -167,6 +183,10 @@ impl EpisodePage {
 
     pub fn show_tools(&self) -> bool {
         false
+    }
+
+    pub fn update_scroll(&mut self) -> Task<()> {
+        operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
     }
 }
 

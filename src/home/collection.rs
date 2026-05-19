@@ -1,5 +1,6 @@
 use super::episode::EpisodeItem;
 use super::movie::MovieItem;
+use super::series::ShowItem;
 use super::{
     CollectionThumbnail, HomeMessage, PageKind, ViewMessage, movies, shared::*, shows, view_unicode,
 };
@@ -180,7 +181,7 @@ impl CollectionPage {
         layout: Layout,
         collection: &'a CollectionThumbnail,
         movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
-        shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
+        shows: Peekable<impl Iterator<Item = &'a ShowItem>>,
         seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
@@ -355,7 +356,7 @@ impl CollectionPage {
         &self,
         now: Instant,
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
-        mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
+        mut shows: Peekable<impl Iterator<Item = &'a ShowItem>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
@@ -402,7 +403,6 @@ impl CollectionPage {
                             move |id| select(collection, ItemId::Show(id)),
                             move |id, hovered| hover(collection, hovered, ItemId::Show(id)),
                             move |id| play(collection, ItemId::Show(id)),
-                            shows::unique,
                         )
                     });
 
@@ -479,7 +479,7 @@ impl CollectionPage {
         &self,
         now: Instant,
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
-        mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
+        mut shows: Peekable<impl Iterator<Item = &'a ShowItem>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
@@ -597,7 +597,7 @@ impl CollectionPage {
         &self,
         now: Instant,
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
-        mut shows: Peekable<impl Iterator<Item = &'a Thumbnail<Show>>>,
+        mut shows: Peekable<impl Iterator<Item = &'a ShowItem>>,
         mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
         mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {

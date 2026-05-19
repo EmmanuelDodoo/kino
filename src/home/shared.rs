@@ -1,6 +1,6 @@
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{empty, styles, tooltip, trim_path, typo};
+use crate::utils::{Scroll, empty, styles, tooltip, trim_path, typo};
 use core::variants;
 use devutils::image_ops::{collage, sample_complement};
 use iced::{
@@ -1569,13 +1569,13 @@ pub fn list_bottom<'a, T, Message: 'a + Clone>(
     id: T,
     progress: f32,
     duration: String,
-    unique: Element<'a, Message>,
+    unique: impl Into<Element<'a, Message>>,
     on_add: impl Fn(T) -> Message + 'a,
 ) -> Element<'a, Message> {
     row!(
         self::progress(progress, None, false),
         self::duration(duration),
-        unique,
+        unique.into(),
         space::horizontal(),
         add_labelled(id, on_add)
     )
@@ -2105,14 +2105,20 @@ pub fn page_data<'a, Message: 'a>(
 pub fn page_layout<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,
     img: impl Into<Element<'a, Message>>,
+    scroll: &Scroll,
+    on_scroll: impl Fn(scrollable::Viewport) -> Message + 'a,
 ) -> Element<'a, Message> {
     let h_padding = 40.0;
     let r_padding_inner = 35.0;
 
-    let content = container(content).padding(Padding::ZERO.right(r_padding_inner));
+    let content = container(content).padding(Padding::ZERO.left(40.0).right(r_padding_inner));
 
-    let content = scrollable(content).auto_scroll(true).spacing(8.0);
-    let content = row!(img.into(), content).spacing(40);
+    let content = scrollable(content)
+        .auto_scroll(true)
+        .spacing(8.0)
+        .id(scroll.id.clone())
+        .on_scroll(on_scroll);
+    let content = row!(img.into(), content).spacing(0);
 
     container(content)
         .padding(

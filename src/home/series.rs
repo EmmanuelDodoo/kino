@@ -1,38 +1,35 @@
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, styles};
+use crate::utils::{Layout, Scroll, empty, styles};
 use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{
-    Element, Length, Padding, Task,
+    Animation, Color, ContentFit, Element, Length, Padding, Task,
     alignment::{Horizontal, Vertical},
+    task,
     time::Instant,
     widget::{
-        self, button, column, container, grid, operation, row, rule, scrollable, space, stack, text,
+        self, button, column, container, grid, image, image::Handle, operation, row, rule,
+        scrollable, space, stack, text,
     },
 };
 use registry::models::{
     CollectionId, ItemId, Media, Season, SeasonId, Show, ShowId, SimpleCollection,
 };
+use std::iter::Peekable;
 
 #[derive(Debug, Clone)]
 pub enum Message {
     Add(SeasonId),
-    AddSelf,
+    AddCollection,
     Hovered(SeasonId, bool),
     Details(SeasonId),
+    Edit,
     Resume,
-    Tab(Tab),
     Play(SeasonId),
     Scroll(scrollable::Viewport),
-    Rate(Option<f32>),
     Goto(CollectionId),
-    Rename(String),
-    Synopsis(String),
-    Refetch(SourceSet),
-    Remove(String),
-    TmdbId(SourceSet),
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +41,6 @@ pub struct ShowPageMessage {
 #[derive(Debug, Clone)]
 pub struct ShowPage {
     id: ShowId,
-    tab: Tab,
     scroll: Scroll,
 }
 
@@ -60,14 +56,7 @@ impl ShowPage {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
-        (
-            Self {
-                id: show,
-                tab: Tab::Items,
-                scroll,
-            },
-            id,
-        )
+        (Self { id: show, scroll }, id)
     }
 
     pub fn update(&mut self, message: ShowPageMessage) -> Option<HomeMessage> {
@@ -76,12 +65,17 @@ impl ShowPage {
         }
 
         match message.message {
+            Message::Edit => {
+                let msg = HomeMessage::OpenView(ViewMessage::ShowEdit(self.id));
+
+                Some(msg)
+            }
             Message::Hovered(id, is_hovered) => {
                 let msg = HomeMessage::Hovered(ItemId::Season(id), is_hovered);
 
                 Some(msg)
             }
-            Message::AddSelf => {
+            Message::AddCollection => {
                 let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(self.id)));
 
                 Some(msg)
@@ -95,10 +89,6 @@ impl ShowPage {
                 let msg = HomeMessage::Play(ItemId::Show(self.id));
 
                 Some(msg)
-            }
-            Message::Tab(tab) => {
-                self.tab = tab;
-                None
             }
             Message::Play(season) => {
                 let msg = HomeMessage::Play(ItemId::Season(season));
@@ -114,50 +104,8 @@ impl ShowPage {
                 self.scroll.offset = view.absolute_offset();
                 None
             }
-            Message::Rate(rating) => {
-                let msg = HomeMessage::OpenView(ViewMessage::Rating(ItemId::Show(self.id), rating));
-                Some(msg)
-            }
             Message::Goto(id) => {
                 let msg = HomeMessage::Goto(PageKind::Collection(id));
-                Some(msg)
-            }
-            Message::Rename(name) => {
-                let msg = HomeMessage::OpenView(ViewMessage::Rename {
-                    id: self.id.into(),
-                    old: name,
-                });
-
-                Some(msg)
-            }
-            Message::Synopsis(synopsis) => {
-                let msg = HomeMessage::OpenView(ViewMessage::Synopsis {
-                    id: self.id.into(),
-                    old: synopsis,
-                });
-
-                Some(msg)
-            }
-            Message::Refetch(source) => {
-                let msg = HomeMessage::Refetch {
-                    id: self.id.into(),
-                    source,
-                };
-                Some(msg)
-            }
-            Message::Remove(name) => {
-                let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
-                    id: self.id.into(),
-                    name,
-                });
-                Some(msg)
-            }
-            Message::TmdbId(source) => {
-                let msg = HomeMessage::OpenView(ViewMessage::TMDBId {
-                    id: self.id.into(),
-                    top_level: true,
-                    source,
-                });
                 Some(msg)
             }
         }
@@ -174,33 +122,19 @@ impl ShowPage {
     fn list<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
-    ) -> Element<'a, ShowPageMessage> {
-        let show = self.id;
-
-        let content = thumbnails.map(|thumbnail| {
+        seasons: impl Iterator<Item = &'a Thumbnail<Season>>,
+    ) -> Element<'a, Message> {
+        let content = seasons.map(|thumbnail| {
             thumbnail.list(
                 now,
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Add(id),
-                },
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Details(id),
-                },
-                move |id, is_hovered| ShowPageMessage {
-                    id: show,
-                    message: Message::Hovered(id, is_hovered),
-                },
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Play(id),
-                },
+                Message::Add,
+                Message::Details,
+                Message::Hovered,
+                Message::Play,
                 |season| {
                     let episodes = season.episodes;
                     let episodes = format!(
-                        "{} episodes{}",
+                        "{} episode{}",
                         episodes,
                         if episodes > 1 { "s" } else { "" }
                     );
@@ -209,18 +143,7 @@ impl ShowPage {
             )
         });
 
-        let content = column(content)
-            .spacing(16)
-            .padding(Padding::ZERO.horizontal(10));
-
-        let content = scrollable(content)
-            .auto_scroll(true)
-            .spacing(0.5)
-            .id(self.scroll.id.clone())
-            .on_scroll(move |viewport| ShowPageMessage {
-                id: show,
-                message: Message::Scroll(viewport),
-            });
+        let content = column(content).spacing(16);
 
         content.into()
     }
@@ -228,44 +151,19 @@ impl ShowPage {
     fn compact<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
-    ) -> Element<'a, ShowPageMessage> {
-        let show = self.id;
-
-        let content = thumbnails.map(|thumbnail| {
+        seasons: impl Iterator<Item = &'a Thumbnail<Season>>,
+    ) -> Element<'a, Message> {
+        let content = seasons.map(|thumbnail| {
             thumbnail.compact(
                 now,
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Add(id),
-                },
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Details(id),
-                },
-                move |id, is_hovered| ShowPageMessage {
-                    id: show,
-                    message: Message::Hovered(id, is_hovered),
-                },
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Play(id),
-                },
+                Message::Add,
+                Message::Details,
+                Message::Hovered,
+                Message::Play,
             )
         });
 
-        let content = column(content)
-            .spacing(16)
-            .padding(Padding::ZERO.horizontal(10));
-
-        let content = scrollable(content)
-            .auto_scroll(true)
-            .spacing(0.5)
-            .id(self.scroll.id.clone())
-            .on_scroll(move |viewport| ShowPageMessage {
-                id: show,
-                message: Message::Scroll(viewport),
-            });
+        let content = column(content).spacing(16);
 
         content.into()
     }
@@ -273,29 +171,15 @@ impl ShowPage {
     fn grid<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
-    ) -> Element<'a, ShowPageMessage> {
-        let show = self.id;
-
-        let content = thumbnails.map(|thumbnail| {
+        seasons: impl Iterator<Item = &'a Thumbnail<Season>>,
+    ) -> Element<'a, Message> {
+        let content = seasons.map(|thumbnail| {
             thumbnail.card(
                 now,
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Add(id),
-                },
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Details(id),
-                },
-                move |id, is_hovered| ShowPageMessage {
-                    id: show,
-                    message: Message::Hovered(id, is_hovered),
-                },
-                move |id| ShowPageMessage {
-                    id: show,
-                    message: Message::Play(id),
-                },
+                Message::Add,
+                Message::Details,
+                Message::Hovered,
+                Message::Play,
             )
         });
 
@@ -304,252 +188,345 @@ impl ShowPage {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content = container(content).padding(Padding::ZERO.left(10).right(16));
-
-        let content = container(
-            scrollable(content)
-                .auto_scroll(true)
-                .height(Length::Fill)
-                .id(self.scroll.id.clone())
-                .on_scroll(move |viewport| ShowPageMessage {
-                    id: show,
-                    message: Message::Scroll(viewport),
-                }),
-        );
-
         content.into()
     }
 
-    fn top<'a>(&self, now: Instant, show: &'a Thumbnail<Show>) -> Element<'a, ShowPageMessage> {
+    pub fn overlay<'a>(
+        &self,
+        now: Instant,
+        layout: Layout,
+        show: &'a ShowItem,
+        memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
+        seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+    ) -> Element<'a, ShowPageMessage> {
         let id = self.id;
 
-        let img_height = CARD_HEIGHT * 0.65;
-        let img: Element<'_, ShowPageMessage> = {
-            let ratio = 2.0 / 3.0;
-            show.poster(img_height * ratio, img_height, now)
-        };
+        let img = page_image(|width, height| show.poster(width, height));
 
         let header = {
-            let separator = || Element::from(text("•").line_height(0.9).size(H4));
-
-            let title = title(show.media.name());
-
-            let duration = duration(show.media.duration_full());
-            let rating = button(ratings(show.media.rating(), true))
-                .on_press(ShowPageMessage {
-                    id,
-                    message: Message::Rate(show.media.rating()),
-                })
-                .style(styles::button::text)
-                .padding(0);
-            let release = sized_medium(show.media.release_year(), H7);
-
-            let details = row!(release, separator(), duration)
-                .spacing(6)
-                .align_y(Vertical::Center);
+            let seasons = show.item.seasons;
+            let details = page_details(
+                show.item.rating(),
+                show.item.release_year(),
+                format!(
+                    "{:02} Season{}",
+                    seasons,
+                    if seasons > 1 { "s" } else { "" }
+                ),
+            );
 
             let tags = {
-                let mut tags = vec![];
-                let tag_len = show.media.tags.len();
+                let values = show.item.tags.iter().map(|tag| (tag, None)).take(4);
 
-                for (i, tag) in show.media.tags.iter().enumerate() {
-                    tags.push(Element::from(h8(tag)));
-
-                    if i < tag_len - 1 {
-                        tags.push(separator())
-                    }
-                }
-
-                row(tags).spacing(6).align_y(Vertical::Center)
+                page_tags(values)
             };
 
-            let synopsis = tab_synopsis(show.media.synopsis());
-
-            let progress = show.media.progress();
-            let play = if progress > 0.0 && progress != 1.0 {
-                "Resume"
-            } else {
-                "Play"
-            };
-            let actions = row!(
-                button(
-                    row!(icon(PLAY).size(H5), sized_medium(play, P))
-                        .spacing(10.0)
-                        .align_y(Vertical::Center),
-                )
-                .padding([6, 12])
-                .on_press(ShowPageMessage {
-                    id,
-                    message: Message::Resume
-                })
-                .style(|theme, status| {
-                    let default = styles::button::primary(theme, status);
-                    let border = default.border.rounded(5);
-
-                    button::Style { border, ..default }
-                }),
-                button(
-                    row!(
-                        icon(ADD_COLLECTION).size(H5),
-                        sized_medium("Add to Collection", P)
-                    )
-                    .spacing(10.0)
-                    .align_y(Vertical::Center),
-                )
-                .padding([6, 12])
-                .on_press(ShowPageMessage {
-                    id,
-                    message: Message::AddSelf
-                })
-                .style(|theme, status| {
-                    let default = styles::button::primary(theme, status);
-                    let border = default.border.rounded(5);
-
-                    button::Style { border, ..default }
-                })
-            )
-            .align_y(Vertical::Center)
-            .spacing(16.0);
-
-            let details = column!(tags, details, rating).spacing(8.0);
-
-            column!(
-                title,
-                details,
-                synopsis,
-                space::vertical().height(3),
-                actions
-            )
-            .height(img_height)
-            .spacing(10.0)
+            page_title(tags, show.item.name(), details)
         };
 
-        let backdrop: Element<'_, ShowPageMessage> = {
-            let height = img_height + 71.0;
+        let header = page_header(
+            header,
+            Message::Resume,
+            Message::AddCollection,
+            Message::Edit,
+        );
 
-            show.backdrop(Length::Fill, height)
+        let overview = page_overview(show.item.synopsis());
+
+        let seasons = match layout {
+            Layout::Grid => self.grid(now, seasons),
+            Layout::List => self.list(now, seasons),
+            Layout::Compact => self.compact(now, seasons),
         };
 
-        let content = row!(img, header).align_y(Vertical::Center).spacing(36.0);
+        let collections = page_collections(memberships, Message::Goto);
 
-        let item = "Seasons";
-        let tabs = Tab::VARIANTS.iter().map(move |tab| {
-            let is_selected = self.tab == *tab;
-            let text = if is_selected {
-                bold(tab.to_str(item))
-            } else {
-                regular(tab.to_str(item))
-            };
+        let data = page_data(
+            show.item.added_humaized(),
+            show.item.watch_count(),
+            show.item.progress(),
+            show.item.recent_humanized(),
+            show.item.comments(),
+            Some(("Seasons", show.item.seasons, NUMBER)),
+        );
 
-            Element::from(
-                column!(
-                    button(text)
-                        .padding([3, 6])
-                        .on_press(ShowPageMessage {
-                            id,
-                            message: Message::Tab(*tab)
-                        })
-                        .style(|theme, status| {
-                            let default = styles::button::text_white(theme, status);
+        let content = column!(header, overview, seasons, collections, data).spacing(40);
 
-                            button::Style {
-                                border: iced::Border::default(),
-                                ..default
-                            }
-                        }),
-                    container(Space::new().width(68).height(2)).style(if is_selected {
-                        styles::container::pb
-                    } else {
-                        styles::container::transparent
-                    }),
-                )
-                .align_x(Horizontal::Center)
-                .padding([3, 6])
-                .spacing(0.0),
-            )
-        });
+        let content = page_layout(content, img, &self.scroll, Message::Scroll);
 
-        let tabs = row(tabs).spacing(40.0).align_y(Vertical::Center);
-        let tabs = column!(tabs, rule::horizontal(2.0)).spacing(4.0);
-
-        let content = container(column!(content, tabs).spacing(24))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding([4, 6])
-            .style(|theme| {
-                let default = styles::container::dark(theme);
-
-                container::Style {
-                    background: default
-                        .background
-                        .map(|background| background.scale_alpha(0.85)),
-                    ..default
-                }
-            });
-
-        let content = stack![backdrop, content];
-
-        content.into()
+        content.map(move |message| ShowPageMessage { id, message })
     }
 
     pub fn view<'a>(
         &self,
         now: Instant,
         layout: Layout,
-        show: &'a Thumbnail<Show>,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Season>>,
-        memberships: impl Iterator<Item = &'a SimpleCollection>,
+        show: &'a ShowItem,
+        seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
     ) -> Element<'a, ShowPageMessage> {
-        let source = SourceSet::from_str(show.media.source());
-        let content = {
-            let width = 750.0;
-            let id = self.id;
+        let overlay = self.overlay(now, layout, show, memberships, seasons);
+        let top = space::vertical();
 
-            match self.tab {
-                Tab::Items => match layout {
-                    Layout::Grid => self.grid(now, thumbnails),
-                    Layout::List => self.list(now, thumbnails),
-                    Layout::Compact => self.compact(now, thumbnails),
-                },
-                Tab::Data => data_tab(
-                    show.media.as_ref(),
-                    width,
-                    Message::Rename(show.media.name().to_owned()),
-                    Message::Refetch(source),
-                    Message::Remove(show.media.name().to_owned()),
-                    Message::Synopsis(show.media.synopsis().to_owned()),
-                    (Message::TmdbId(source), true),
-                )
-                .map(move |message| ShowPageMessage { id, message }),
-                // todo
-                // Tab::Comments => {
-                //     let comments = ["Some comment here: "; 7]
-                //         .into_iter()
-                //         .enumerate()
-                //         .map(|(i, comment)| Element::from(regular(format!("{comment}{i}"))));
-                //
-                //     let comments =
-                //         scrollable(column(comments).spacing(4.0).width(Length::Fill)).spacing(4.0);
-                //
-                //     column!(comments).spacing(8.0).width(width).into()
-                // }
-                Tab::Collections => {
-                    let collections = memberships.map(|collection| {
-                        draw_collection_tab(collection, move |collection| ShowPageMessage {
-                            id,
-                            message: Message::Goto(collection),
-                        })
-                    });
+        let overlay = column!(top, overlay);
 
-                    scrollable(column(collections).spacing(4.0).width(Length::Fill))
-                        .spacing(4.0)
-                        .into()
-                }
-            }
-        };
+        let content = show.backdrop(Length::Fill, Length::FillPortion(3));
 
-        let content = column!(self.top(now, show), content).spacing(20.0);
+        let content = stack![content, overlay];
 
         content.into()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowItemTask {
+    pub id: ShowId,
+    pub kind: ThumbnailTaskKind,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShowItem {
+    backdrop: Option<Handle>,
+    sample_text: Option<Color>,
+    sample_color: Option<Color>,
+    background: Animation<bool>,
+    icon: Animation<bool>,
+    float: Animation<bool>,
+    _tasks: task::Handle,
+    hovered: bool,
+    poster: Image,
+    pub selected: bool,
+    pub item: Box<Show>,
+}
+
+impl ShowItem {
+    pub fn new(show: Show) -> (Self, Task<ShowItemTask>) {
+        let id = show.id;
+
+        let (poster, task) = Image::load(show.poster.as_ref());
+        let (task, handle) = task.map(move |kind| ShowItemTask { id, kind }).abortable();
+        let handle = handle.abort_on_drop();
+
+        //todo: Sample color is not great for current default poster
+        let (sample_color, sample_text) = match show.poster() {
+            Some(poster) => (
+                poster.get_main().map(to_color),
+                poster.get_accent().map(to_color),
+            ),
+            None => (None, None),
+        };
+
+        let backdrop = show.backdrop().map(Handle::from_path);
+
+        let new = Self {
+            selected: false,
+            poster,
+            backdrop,
+            sample_color,
+            sample_text,
+            background: background_animation(),
+            icon: icon_animation(),
+            float: float_animation(),
+            hovered: false,
+            _tasks: handle,
+            item: Box::new(show),
+        };
+
+        (new, task)
+    }
+
+    pub fn is_animating(&self, now: Instant) -> bool {
+        let poster = match &self.poster {
+            Image::Ready { fade_in, .. } => fade_in.is_animating(now),
+            _ => false,
+        };
+
+        self.background.is_animating(now)
+            || self.icon.is_animating(now)
+            || self.float.is_animating(now)
+            || poster
+    }
+
+    pub fn go_mut(&mut self, new_state: bool, at: Instant) {
+        self.hovered = new_state;
+        self.background.go_mut(new_state, at);
+        self.icon.go_mut(new_state, at);
+        self.float.go_mut(new_state, at);
+    }
+
+    fn poster_ready(&self) -> bool {
+        matches!(&self.poster, Image::Ready { .. })
+    }
+
+    pub fn poster<'a, Message: 'a>(
+        &'a self,
+        width: impl Into<Length>,
+        height: impl Into<Length>,
+    ) -> Element<'a, Message> {
+        let view = move |handle: &Handle| {
+            image(handle)
+                .border_radius(IMAGE_RADIUS)
+                .height(height)
+                .width(width)
+                .content_fit(ContentFit::Contain)
+                .into()
+        };
+
+        match &self.poster {
+            Image::Ready { allocation, .. } => view(allocation.handle()),
+            Image::Loading => empty().into(),
+            Image::Default => match DEFAULT_POSTER.as_ref() {
+                Some(handle) => view(handle).into(),
+                _ => empty().into(),
+            },
+        }
+    }
+
+    pub fn backdrop<'a, Message: 'a>(
+        &'a self,
+        width: impl Into<Length>,
+        height: impl Into<Length>,
+    ) -> Element<'a, Message> {
+        match &self.backdrop {
+            Some(handle) => image(handle)
+                .height(height)
+                .width(width)
+                .content_fit(ContentFit::Cover)
+                .into(),
+            None => container(empty())
+                .height(height)
+                .width(width)
+                .style(styles::container::dark)
+                .into(),
+        }
+    }
+
+    pub fn task(&mut self, task: ThumbnailTaskKind, now: Instant) {
+        match task {
+            ThumbnailTaskKind::Samples { main, accent } => {
+                self.sample_color = Some(main);
+                self.sample_text = Some(accent);
+            }
+            ThumbnailTaskKind::Image(Ok(allocation)) => {
+                self.poster = Image::Ready {
+                    allocation,
+                    fade_in: fade_in(now),
+                };
+            }
+            ThumbnailTaskKind::Image(Err(error)) => {
+                tracing::error!("Show Thumbnail poster allocation error: \n{error}");
+            }
+        }
+    }
+
+    pub fn card<'a, Message: 'a + Clone>(
+        &'a self,
+        now: Instant,
+        on_add: impl Fn(ShowId) -> Message + 'a,
+        on_select: impl Fn(ShowId) -> Message + 'a,
+        on_hover: impl Fn(ShowId, bool) -> Message + 'a,
+        on_play: impl Fn(ShowId) -> Message + 'a,
+    ) -> Element<'a, Message> {
+        let background_inter = self.background.interpolate(0.0, 1.0, now);
+        let icon_inter = self.icon.interpolate(0.0, 1.0, now);
+
+        let sample = self.sample_text;
+        let seasons = self.item.seasons;
+        let seasons = sized_medium(
+            format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" }),
+            H8,
+        )
+        .style(move |theme: &iced::Theme| {
+            if sample.is_some() {
+                text::Style { color: sample }
+            } else {
+                text::Style {
+                    color: Some(theme.palette().primary.strong.text),
+                }
+            }
+        });
+        let overlay = card_overlay(
+            self.item.as_ref(),
+            on_add,
+            on_play,
+            self.sample_text,
+            background_inter,
+            icon_inter,
+            seasons,
+        );
+
+        let card = Card {
+            sample_color: self.sample_color,
+            background_inter,
+            selected: self.selected,
+            item: self.item.id,
+            poster: &self.poster,
+            title: card_title(self.item.name(), self.hovered),
+            details: Some(card_details(self.item.rating(), self.item.release_year())),
+            overlay: Some(overlay),
+            float_anim: Some(&self.float),
+        };
+
+        let on_select = move |arg: ShowId| Some((on_select)(arg));
+
+        card.view(now, on_select, on_hover)
+    }
+
+    pub fn list<'a, Message: 'a + Clone>(
+        &'a self,
+        now: Instant,
+        on_add: impl Fn(ShowId) -> Message + 'a,
+        on_select: impl Fn(ShowId) -> Message + 'a,
+        on_hover: impl Fn(ShowId, bool) -> Message + 'a,
+        on_play: impl Fn(ShowId) -> Message + 'a,
+    ) -> Element<'a, Message> {
+        let seasons = self.item.seasons;
+        let seasons = format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" });
+        let unique = h7(seasons);
+
+        let background_inter = self.background.interpolate(0.0, 1.0, now);
+        let icon_inter = self.icon.interpolate(0.0, 1.0, now);
+        let list = List {
+            selected: self.selected,
+            poster: &self.poster,
+            item: self.item.id,
+            title: list_title(self.item.name(), self.hovered),
+            ratings: Some(ratings(self.item.rating(), true)),
+            synopsis: Some(synopsis(self.item.synopsis())),
+            bottom: Some(list_bottom(
+                self.item.id,
+                self.item.progress(),
+                self.item.duration_full(),
+                unique,
+                on_add,
+            )),
+            overlay: Some(list_overlay(icon_inter, background_inter)),
+        };
+
+        list.view(now, on_select, on_hover, on_play)
+    }
+
+    pub fn compact<'a, Message: 'a + Clone>(
+        &'a self,
+        now: Instant,
+        on_add: impl Fn(ShowId) -> Message + 'a,
+        on_select: impl Fn(ShowId) -> Message + 'a,
+        on_hover: impl Fn(ShowId, bool) -> Message + 'a,
+        on_play: impl Fn(ShowId) -> Message + 'a,
+    ) -> Element<'a, Message> {
+        let id = self.item.id;
+
+        let compact = Compact {
+            selected: self.selected,
+            poster: &self.poster,
+            item: id,
+            title: compact_title(self.item.name(), self.hovered),
+            ratings: ratings(self.item.rating(), false),
+            progress: Some(compact_progress(self.item.progress())),
+            duration: Some(compact_duration(self.item.duration_short())),
+            recent: Some(compact_recent(self.item.recent_short())),
+        };
+
+        compact.view(now, (on_add)(id), (on_select)(id), on_hover, (on_play)(id))
     }
 }

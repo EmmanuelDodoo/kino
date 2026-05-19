@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use super::{HomeMessage, PageKind, ShowItem, ViewMessage, shared::*};
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll};
 use iced::{
@@ -74,7 +74,7 @@ impl TvShows {
     fn list<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
+        thumbnails: impl Iterator<Item = &'a ShowItem>,
     ) -> Element<'a, TvShowsMessage> {
         let content = thumbnails.map(|thumbnail| {
             thumbnail.list(
@@ -83,7 +83,6 @@ impl TvShows {
                 TvShowsMessage::Details,
                 TvShowsMessage::Hovered,
                 TvShowsMessage::Play,
-                unique,
             )
         });
 
@@ -103,7 +102,7 @@ impl TvShows {
     fn compact<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
+        thumbnails: impl Iterator<Item = &'a ShowItem>,
     ) -> Element<'a, TvShowsMessage> {
         let content = thumbnails.map(|thumbnail| {
             thumbnail.compact(
@@ -131,7 +130,7 @@ impl TvShows {
     fn grid<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
+        thumbnails: impl Iterator<Item = &'a ShowItem>,
     ) -> Element<'a, TvShowsMessage> {
         let content = thumbnails.map(|thumbnail| {
             thumbnail.card(
@@ -162,7 +161,7 @@ impl TvShows {
         &self,
         now: Instant,
         layout: Layout,
-        thumbnails: impl Iterator<Item = &'a Thumbnail<Show>>,
+        thumbnails: impl Iterator<Item = &'a ShowItem>,
     ) -> Element<'a, TvShowsMessage> {
         match layout {
             Layout::Grid => self.grid(now, thumbnails),
@@ -170,20 +169,4 @@ impl TvShows {
             Layout::Compact => self.compact(now, thumbnails),
         }
     }
-}
-
-pub fn unique<'a, Message: 'a>(show: &Show) -> Element<'a, Message> {
-    use iced::font::{Font, Weight};
-
-    let seasons = show.seasons;
-
-    let seasons = format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" });
-
-    text(seasons)
-        .size(H8)
-        .font(Font {
-            weight: Weight::Semibold,
-            ..Default::default()
-        })
-        .into()
 }

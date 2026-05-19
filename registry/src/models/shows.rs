@@ -48,8 +48,8 @@ pub struct Show {
     path: String,
     name: String,
     original_name: String,
-    poster: Option<Image>,
-    pub(super) backdrop: Option<String>,
+    pub poster: Option<Image>,
+    pub backdrop: Option<String>,
     pub tags: Vec<String>,
     synopsis: String,
     release: NaiveDate,
@@ -279,6 +279,23 @@ impl Show {
             table: Table::Show,
             sql,
             params,
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn mark_watched<'a>(id: ShowId, count: u32) -> Query<'a> {
+        let sql = "UPDATE show SET watch_count=:count, progress=1.0 WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":count", ToSqlOutput::from(count)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Show,
+            sql,
+            params: params.to_vec(),
             op: Operation::Update,
         }
     }

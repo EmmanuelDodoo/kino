@@ -192,9 +192,11 @@ impl Page {
             Self::Shows(page) => page.update_scroll(),
             Self::Collections(page) => page.update_scroll(),
             Self::Collection { collection, .. } => collection.update_scroll(),
+            Self::Movie { page, .. } => page.update_scroll(),
             Self::Show { page, .. } => page.update_scroll(),
             Self::Season { page, .. } => page.update_scroll(),
-            Self::Movie { .. } | Self::Episode { .. } | Self::Home => Task::none(),
+            Self::Episode { page, .. } => page.update_scroll(),
+            Self::Home => Task::none(),
             Self::Wishlist(wishlist) => wishlist.update_scroll(),
             _ => todo!(),
         }

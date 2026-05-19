@@ -13,7 +13,7 @@ use crate::home::{self, Home, HomeMessage, WishThumbnailTask, shared};
 use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
 use crate::settings::{Settings, SettingsMessage};
 use crate::utils::{Action, Config, KeyPress, Layout, Screen, icons, typo};
-use core::{Context, ContextLog, Error, Log, anyhow};
+use core::{Context, ContextLog, Error, Log, anyhow, error};
 use registry::db::{self, Query};
 use registry::{
     filter::{self, FilterMode, SearchFilter},
@@ -68,6 +68,15 @@ pub enum NewUpdateKind {
 #[derive(Clone, Debug)]
 pub struct MovieUpdate {
     pub id: MovieId,
+    /// Is some if the source was updated
+    pub prev_source: Option<(SourceSet, String)>,
+    pub source: SourceSet,
+    pub updates: Vec<NewUpdateKind>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ShowUpdate {
+    pub id: ShowId,
     /// Is some if the source was updated
     pub prev_source: Option<(SourceSet, String)>,
     pub source: SourceSet,
@@ -141,6 +150,7 @@ pub enum Message {
     SubtitleDelete(SubtitleId),
     MediaUpdate(MediaUpdate),
     MovieUpdate(MovieUpdate),
+    ShowUpdate(ShowUpdate),
     EpisodeUpdate(EpisodeUpdate),
     PosterUpdate {
         id: ItemId,
@@ -197,7 +207,7 @@ pub enum Message {
     ScanComplete(Vec<DirectoryId>),
     MovieTask(home::MovieItemTask),
     EpisodeTask(home::EpisodeItemTask),
-    ShowTask(ThumbnailTask<Show>),
+    ShowTask(home::ShowItemTask),
     SeasonTask(ThumbnailTask<Season>),
     WishTask(WishThumbnailTask),
     Triggers {
@@ -772,6 +782,128 @@ impl App {
                     Err(error) => Message::anyhow(error).tasked(),
                 }
             }
+            Message::ShowUpdate(ShowUpdate {
+                id,
+                prev_source,
+                source,
+                updates,
+            }) => {
+                let trans = match self
+                    .db
+                    .transaction()
+                    .context("Show update failed")
+                    .with_context(|| format!("Failed to start transaction for show {id} update"))
+                {
+                    Ok(trans) => trans,
+                    Err(error) => {
+                        return Message::anyhow(error).tasked();
+                    }
+                };
+
+                let mut name = None;
+                let mut source_id = None;
+                let mut count = 0;
+
+                for update in updates {
+                    let query = match update {
+                        NewUpdateKind::Name(new) => {
+                            name.replace(new.clone());
+                            Show::set_name(id, new)
+                        }
+                        NewUpdateKind::Overview(overview) => Show::set_synopsis(id, overview),
+                        NewUpdateKind::Rating(rating) => Show::set_rating(id, rating),
+                        NewUpdateKind::Video(_)
+                        | NewUpdateKind::Audio(_)
+                        | NewUpdateKind::Subtitle(_) => continue,
+                        NewUpdateKind::SourceId(id) => {
+                            source_id = Some(id);
+                            continue;
+                        }
+                        NewUpdateKind::MarkWatched(count) => Show::mark_watched(id, count),
+                    };
+
+                    if let Some(succ) = query
+                        .execute(&trans)
+                        .with_ctx_log(|| format!("Updating show {id} update kind"))
+                    {
+                        count += 1;
+                        succ.log()
+                    }
+                }
+
+                if let Some((prev, prev_name)) = prev_source {
+                    if let Some(delete) = prev.delete(id)
+                        && let Some(succ) = delete.execute(&trans).with_ctx_log(|| {
+                            format!(
+                                "Failed to delete show {id} source {} request",
+                                prev.to_str()
+                            )
+                        })
+                    {
+                        count += 1;
+                        succ.log();
+                    }
+
+                    let name = name.unwrap_or(prev_name);
+                    if let Some((query, show_request)) = source.show_request(id, name)
+                        && let Some(succ) = query
+                            .execute(&trans)
+                            .with_ctx_log(|| format!("Update show {id} source {}", source.to_str()))
+                    {
+                        use rusqlite::types::ToSqlOutput;
+
+                        count += 1;
+                        succ.log();
+                        let _ = trans
+                            .execute(
+                                "UPDATE tv_show SET source=:source, request=:request WHERE id=:id",
+                                &[
+                                    (":id", &ToSqlOutput::from(id)),
+                                    (":source", &ToSqlOutput::from(source)),
+                                    (":request", &ToSqlOutput::from(show_request.as_str())),
+                                ],
+                            )
+                            .with_ctx_log(|| {
+                                format!(
+                                    "Update show {id} failed to update request on {show_request}"
+                                )
+                            });
+
+                        let _ = update_show_requests(&trans, id, source, show_request)
+                            .with_ctx_log(|| format!("Update show {id} child requests"));
+                    }
+                }
+
+                if let Some(source_id) = source_id
+                    && let Some(query) = source.set_source_id(id, source_id, true)
+                    && let Some(succ) = query.execute(&trans).with_ctx_log(|| {
+                        format!(
+                            "Update show {id} source {} source id {source_id:?}",
+                            source.to_str(),
+                        )
+                    })
+                {
+                    count += 1;
+                    succ.log();
+                }
+
+                match trans
+                    .commit()
+                    .context("Show update failed")
+                    .with_context(|| format!("Update show {id} transaction failed"))
+                {
+                    Ok(_) => {
+                        let succ = if count > 0 {
+                            Message::success("Show Updated").tasked()
+                        } else {
+                            Task::none()
+                        };
+
+                        Task::batch([succ, self.home.content_refresh()])
+                    }
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
             Message::EpisodeUpdate(EpisodeUpdate {
                 id,
                 source,
@@ -1065,7 +1197,7 @@ impl App {
                     FetchId::Show(id) => {
                         let (show, show_task) = match self.db.get_show(id, show_map) {
                             Ok(show) => {
-                                tracing::debug!("Fetched Show {}", show.0.media.name());
+                                tracing::debug!("Fetched Show {}", show.0.item.name());
                                 show
                             }
                             Err(error) => {
@@ -1696,7 +1828,9 @@ impl App {
             Message::MovieTask(home::MovieItemTask { id, kind }) => {
                 self.home.movie_task(id, kind, now)
             }
-            Message::ShowTask(ThumbnailTask { id, kind }) => self.home.show_task(id, kind, now),
+            Message::ShowTask(home::ShowItemTask { id, kind }) => {
+                self.home.show_task(id, kind, now)
+            }
             Message::SeasonTask(ThumbnailTask { id, kind }) => self.home.season_task(id, kind, now),
             Message::EpisodeTask(home::EpisodeItemTask { id, kind }) => {
                 self.home.episode_task(id, kind, now)
@@ -2437,8 +2571,8 @@ fn movie_map(
 
 fn show_map(
     row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(shared::Thumbnail<Show>, Task<ThumbnailTask<Show>>)> {
-    Show::from_row(row).map(shared::Thumbnail::new)
+) -> rusqlite::Result<(home::ShowItem, Task<home::ShowItemTask>)> {
+    Show::from_row(row).map(home::ShowItem::new)
 }
 
 fn season_map(
@@ -2476,4 +2610,140 @@ fn scan_task(
         },
         Message::ScanComplete,
     )
+}
+
+fn update_show_requests(
+    trans: &rusqlite::Transaction<'_>,
+    show: ShowId,
+    source: SourceSet,
+    show_request: String,
+) -> error::Result<()> {
+    use rusqlite::types::ToSqlOutput;
+
+    struct RequestSeason {
+        id: SeasonId,
+        number: u16,
+    }
+
+    struct RequestEpisode {
+        id: EpisodeId,
+        number: u16,
+    }
+
+    let mut statement = trans
+        .prepare_cached("SELECT id, season_number FROM season WHERE show_id=:show")
+        .context("Fetching child seasons")?;
+
+    let seasons = statement
+        .query_map(&[(":show", &ToSqlOutput::from(show))], |row| {
+            Ok(RequestSeason {
+                id: SeasonId::from_row(row)?,
+                number: row.get::<_, u16>("season_number")?,
+            })
+        })
+        .context("Querying child seasons")?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    for season in seasons {
+        let Some((query, season_request)) =
+            source.season_request(season.id, &show_request, season.number)
+        else {
+            continue;
+        };
+
+        let Some(succ) = query.execute(trans).with_ctx_log(|| {
+            format!(
+                "Insert season {} source {} request {season_request}",
+                season.id,
+                source.to_str()
+            )
+        }) else {
+            continue;
+        };
+
+        succ.log();
+        let Some(_) = trans
+            .execute(
+                "UPDATE season SET source=:source, request=:request WHERE id=:id",
+                &[
+                    (":id", &ToSqlOutput::from(season.id)),
+                    (":source", &ToSqlOutput::from(source)),
+                    (":request", &ToSqlOutput::from(season_request.as_str())),
+                ],
+            )
+            .with_ctx_log(|| {
+                format!(
+                    "Updating season {} source {} request {season_request}",
+                    season.id,
+                    source.to_str()
+                )
+            })
+        else {
+            continue;
+        };
+
+        let Some(mut statement) = trans
+            .prepare_cached("SELECT id, episode_number FROM episode WHERE season_id=:season")
+            .with_ctx_log(|| format!("Fetching season {} child episodes", season.id))
+        else {
+            continue;
+        };
+
+        let Some(episodes) = statement
+            .query_map(&[(":season", &ToSqlOutput::from(season.id))], |row| {
+                Ok(RequestEpisode {
+                    id: EpisodeId::from_row(row)?,
+                    number: row.get::<_, u16>("episode_number")?,
+                })
+            })
+            .and_then(|eps| eps.collect::<rusqlite::Result<Vec<_>>>())
+            .with_ctx_log(|| format!("Querying season {} child episodes", season.id))
+        else {
+            continue;
+        };
+
+        for episode in episodes {
+            let Some((query, episode_request)) =
+                source.episode_request(episode.id, &season_request, season.number, episode.number)
+            else {
+                continue;
+            };
+
+            let Some(succ) = query.execute(trans).with_ctx_log(|| {
+                format!(
+                    "Insert episode {} season {} source {} request {episode_request}",
+                    episode.id,
+                    season.id,
+                    source.to_str()
+                )
+            }) else {
+                continue;
+            };
+
+            succ.log();
+
+            let Some(_) = trans
+                .execute(
+                    "UPDATE episode SET source=:source, request=:request WHERE id=:id",
+                    &[
+                        (":id", &ToSqlOutput::from(episode.id)),
+                        (":source", &ToSqlOutput::from(source)),
+                        (":request", &ToSqlOutput::from(season_request.as_str())),
+                    ],
+                )
+                .with_ctx_log(|| {
+                    format!(
+                        "Updating episode {} season {} source {} request {episode_request}",
+                        episode.id,
+                        season.id,
+                        source.to_str()
+                    )
+                })
+            else {
+                continue;
+            };
+        }
+    }
+
+    Ok(())
 }

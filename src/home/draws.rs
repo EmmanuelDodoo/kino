@@ -1750,13 +1750,16 @@ pub fn draw_movie_edit<'a>(
 
     let refetch = media_icon_btn(REFRESH, "Refetch").on_press(MovieEditMessage::Refetch);
 
-    let remove = media_icon_btn(DELETE, "Delete").on_press(MovieEditMessage::Remove);
+    let remove = media_icon_btn(DELETE, "Delete")
+        .on_press(MovieEditMessage::Remove)
+        .style(styles::button::danger);
 
     let poster = media_image(
         "Poster: ",
         state.poster.as_deref(),
         MovieEditMessage::PickPoster,
     );
+
     let backdrop = media_image(
         "Backdrop: ",
         state.backdrop.as_deref(),
@@ -1773,6 +1776,52 @@ pub fn draw_movie_edit<'a>(
     media_layout(
         content.map(HomeMessage::MovieEdit),
         HomeMessage::MovieEdit(MovieEditMessage::Save),
+    )
+}
+
+pub fn draw_show_edit<'a>(state: &'a ShowEditState) -> Element<'a, HomeMessage> {
+    let name = media_name(&state.placeholder, state.name(), ShowEditMessage::Name);
+
+    let overview = media_overview(&state.overview, ShowEditMessage::Overview);
+
+    let ratings = media_rating(&state.ratings, ShowEditMessage::Rating);
+
+    let watched = media_mark(state.watched, ShowEditMessage::MarkWatched);
+
+    let source = media_source(
+        &state.source,
+        Some(|source| ShowEditMessage::Source(source)),
+    );
+
+    let source_id = media_source_id(state.source, &state.source_id, ShowEditMessage::SourceId);
+
+    let refetch = media_icon_btn(REFRESH, "Refetch").on_press(ShowEditMessage::Refetch);
+
+    let remove = media_icon_btn(DELETE, "Delete")
+        .on_press(ShowEditMessage::Remove)
+        .style(styles::button::danger);
+
+    let poster = media_image(
+        "Poster: ",
+        state.poster.as_deref(),
+        ShowEditMessage::PickPoster,
+    );
+
+    let backdrop = media_image(
+        "Backdrop: ",
+        state.backdrop.as_deref(),
+        ShowEditMessage::PickPoster,
+    );
+
+    let content: Element<'_, ShowEditMessage> = column!(
+        name, overview, ratings, watched, source, source_id, poster, backdrop, refetch, remove,
+    )
+    .spacing(24)
+    .into();
+
+    media_layout(
+        content.map(HomeMessage::ShowEdit),
+        HomeMessage::ShowEdit(ShowEditMessage::Save),
     )
 }
 
@@ -1807,7 +1856,9 @@ pub fn draw_episode_edit<'a>(
 
     let refetch = media_icon_btn(REFRESH, "Refetch").on_press(EpisodeEditMessage::Refetch);
 
-    let remove = media_icon_btn(DELETE, "Delete").on_press(EpisodeEditMessage::Remove);
+    let remove = media_icon_btn(DELETE, "Delete")
+        .on_press(EpisodeEditMessage::Remove)
+        .style(styles::button::danger);
 
     let poster = media_image(
         "Poster: ",
