@@ -609,57 +609,56 @@ impl CollectionPage {
         let content = if movies.peek().is_none() {
             content
         } else {
-            let movies = {
-                let movies = movies.map(|thumbnail| {
-                    thumbnail.card(
-                        now,
-                        move |id| add(collection, ItemId::Movie(id)),
-                        move |id| select(collection, ItemId::Movie(id)),
-                        move |id, hovered| hover(collection, hovered, ItemId::Movie(id)),
-                        move |id| play(collection, ItemId::Movie(id)),
-                    )
-                });
+            let movies =
+                {
+                    let movies = movies.map(|movie| {
+                        movie.card(
+                            now,
+                            move |id| add(collection, ItemId::Movie(id)),
+                            move |id| select(collection, ItemId::Movie(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Movie(id)),
+                            move |id| play(collection, ItemId::Movie(id)),
+                        )
+                    });
 
-                let movies =
-                    grid(movies)
-                        .spacing(16)
-                        .fluid(CARD_WIDTH)
-                        .height(if self.movies_shown {
-                            grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT)
+                    let movies = grid(movies).spacing(16).fluid(MovieItem::WIDTH).height(
+                        if self.movies_shown {
+                            grid::aspect_ratio(MovieItem::WIDTH, MovieItem::HEIGHT)
                         } else {
                             grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
-                        });
+                        },
+                    );
 
-                self.movie_expandable(movies)
-            };
+                    self.movie_expandable(movies)
+                };
             content.push(movies)
         };
 
         let content = if shows.peek().is_none() {
             content
         } else {
-            let shows = {
-                let shows = shows.map(|show| {
-                    show.card(
-                        now,
-                        move |id| add(collection, ItemId::Show(id)),
-                        move |id| select(collection, ItemId::Show(id)),
-                        move |id, hovered| hover(collection, hovered, ItemId::Show(id)),
-                        move |id| play(collection, ItemId::Show(id)),
-                    )
-                });
-
-                let shows = grid(shows)
-                    .spacing(16)
-                    .fluid(CARD_WIDTH)
-                    .height(if self.shows_shown {
-                        grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT)
-                    } else {
-                        grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
+            let shows =
+                {
+                    let shows = shows.map(|show| {
+                        show.card(
+                            now,
+                            move |id| add(collection, ItemId::Show(id)),
+                            move |id| select(collection, ItemId::Show(id)),
+                            move |id, hovered| hover(collection, hovered, ItemId::Show(id)),
+                            move |id| play(collection, ItemId::Show(id)),
+                        )
                     });
 
-                self.shows_expandable(shows)
-            };
+                    let shows = grid(shows).spacing(16).fluid(ShowItem::WIDTH).height(
+                        if self.shows_shown {
+                            grid::aspect_ratio(ShowItem::WIDTH, ShowItem::HEIGHT)
+                        } else {
+                            grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
+                        },
+                    );
+
+                    self.shows_expandable(shows)
+                };
 
             content.push(shows)
         };
@@ -678,15 +677,13 @@ impl CollectionPage {
                     )
                 });
 
-                let seasons =
-                    grid(seasons)
-                        .spacing(16)
-                        .fluid(CARD_WIDTH)
-                        .height(if self.seasons_shown {
-                            grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT)
-                        } else {
-                            grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
-                        });
+                let seasons = grid(seasons).spacing(16).fluid(SeasonItem::WIDTH).height(
+                    if self.seasons_shown {
+                        grid::aspect_ratio(SeasonItem::WIDTH, SeasonItem::HEIGHT)
+                    } else {
+                        grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
+                    },
+                );
 
                 self.seasons_expandable(seasons)
             };
@@ -697,28 +694,27 @@ impl CollectionPage {
         let content = if episodes.peek().is_none() {
             content
         } else {
-            let episodes =
-                {
-                    let episodes = episodes.map(|episode| {
-                        episode.card(
-                            now,
-                            move |id| add(collection, ItemId::Episode(id)),
-                            move |id| select(collection, ItemId::Episode(id)),
-                            move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
-                            move |id| play(collection, ItemId::Episode(id)),
-                        )
-                    });
+            let episodes = {
+                let episodes = episodes.map(|episode| {
+                    episode.card(
+                        now,
+                        move |id| add(collection, ItemId::Episode(id)),
+                        move |id| select(collection, ItemId::Episode(id)),
+                        move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
+                        move |id| play(collection, ItemId::Episode(id)),
+                    )
+                });
 
-                    let episodes = grid(episodes).spacing(16).fluid(CARD_WIDTH).height(
-                        if self.seasons_shown {
-                            grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT)
-                        } else {
-                            grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
-                        },
-                    );
+                let episodes = grid(episodes).spacing(16).fluid(EpisodeItem::WIDTH).height(
+                    if self.episodes_shown {
+                        grid::aspect_ratio(EpisodeItem::WIDTH, EpisodeItem::HEIGHT)
+                    } else {
+                        grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
+                    },
+                );
 
-                    self.episodes_expandable(episodes)
-                };
+                self.episodes_expandable(episodes)
+            };
 
             content.push(episodes)
         };

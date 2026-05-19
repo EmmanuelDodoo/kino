@@ -134,6 +134,9 @@ pub struct WishThumbnail {
 }
 
 impl WishThumbnail {
+    pub const WIDTH: f32 = CARD_WIDTH;
+    pub const HEIGHT: f32 = CARD_HEIGHT;
+
     pub fn new(wish: Wish) -> (Self, Task<WishThumbnailTask>) {
         let id = wish.id;
 
@@ -224,6 +227,8 @@ impl WishThumbnail {
 
         card.view(
             now,
+            Self::WIDTH,
+            Self::HEIGHT,
             |id| Some(WishlistMessage::Select(id)),
             WishlistMessage::Hover,
         )

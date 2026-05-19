@@ -1,5 +1,5 @@
-use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use super::movie::MovieItem;
+use super::{HomeMessage, PageKind, ViewMessage, shared::*};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll};
@@ -69,10 +69,10 @@ impl Movies {
     fn grid<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a MovieItem>,
+        movies: impl Iterator<Item = &'a MovieItem>,
     ) -> Element<'a, MoviesMessage> {
-        let content = thumbnails.map(|thumbnail| {
-            thumbnail.card(
+        let content = movies.map(|movie| {
+            movie.card(
                 now,
                 MoviesMessage::Add,
                 MoviesMessage::Details,
@@ -83,15 +83,14 @@ impl Movies {
 
         let content = grid(content)
             .spacing(16)
-            .fluid(CARD_WIDTH)
-            .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+            .fluid(MovieItem::WIDTH)
+            .height(grid::aspect_ratio(MovieItem::WIDTH, MovieItem::HEIGHT));
 
-        let content =
-            scrollable(container(content).padding(Padding::new(16.0)))
-                .auto_scroll(true)
-                .height(Length::Fill)
-                .id(self.scroll.id.clone())
-                .on_scroll(MoviesMessage::Scroll);
+        let content = scrollable(container(content).padding(Padding::new(16.0)))
+            .auto_scroll(true)
+            .height(Length::Fill)
+            .id(self.scroll.id.clone())
+            .on_scroll(MoviesMessage::Scroll);
 
         content.into()
     }
@@ -99,10 +98,10 @@ impl Movies {
     fn list<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a MovieItem>,
+        movies: impl Iterator<Item = &'a MovieItem>,
     ) -> Element<'a, MoviesMessage> {
-        let content = thumbnails.map(|thumbnail| {
-            thumbnail.list(
+        let content = movies.map(|movie| {
+            movie.list(
                 now,
                 MoviesMessage::Add,
                 MoviesMessage::Details,
@@ -128,10 +127,10 @@ impl Movies {
     fn compact<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a MovieItem>,
+        movies: impl Iterator<Item = &'a MovieItem>,
     ) -> Element<'a, MoviesMessage> {
-        let content = thumbnails.map(|thumbnail| {
-            thumbnail.compact(
+        let content = movies.map(|movie| {
+            movie.compact(
                 now,
                 MoviesMessage::Add,
                 MoviesMessage::Details,
@@ -157,12 +156,12 @@ impl Movies {
         &self,
         now: Instant,
         layout: Layout,
-        thumbnails: impl Iterator<Item = &'a MovieItem>,
+        movies: impl Iterator<Item = &'a MovieItem>,
     ) -> Element<'a, MoviesMessage> {
         match layout {
-            Layout::Grid => self.grid(now, thumbnails),
-            Layout::List => self.list(now, thumbnails),
-            Layout::Compact => self.compact(now, thumbnails),
+            Layout::Grid => self.grid(now, movies),
+            Layout::List => self.list(now, movies),
+            Layout::Compact => self.compact(now, movies),
         }
     }
 

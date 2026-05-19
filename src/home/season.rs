@@ -170,8 +170,8 @@ impl SeasonPage {
         now: Instant,
         episodes: impl Iterator<Item = &'a EpisodeItem>,
     ) -> Element<'a, Message> {
-        let content = episodes.map(|thumbnail| {
-            thumbnail.card(
+        let content = episodes.map(|episode| {
+            episode.card(
                 now,
                 Message::Add,
                 Message::Details,
@@ -182,8 +182,8 @@ impl SeasonPage {
 
         let content = grid(content)
             .spacing(12)
-            .fluid(CARD_WIDTH)
-            .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+            .fluid(EpisodeItem::WIDTH)
+            .height(grid::aspect_ratio(EpisodeItem::WIDTH, EpisodeItem::HEIGHT));
 
         content.into()
     }
@@ -306,6 +306,9 @@ pub struct SeasonItem {
 }
 
 impl SeasonItem {
+    pub const WIDTH: f32 = CARD_WIDTH;
+    pub const HEIGHT: f32 = CARD_HEIGHT;
+
     pub fn new(season: Season) -> (Self, Task<SeasonItemTask>) {
         let id = season.id;
 
@@ -461,6 +464,7 @@ impl SeasonItem {
             self.item.as_ref(),
             on_add,
             on_play,
+            self.sample_color,
             self.sample_text,
             background_inter,
             icon_inter,
@@ -481,7 +485,7 @@ impl SeasonItem {
 
         let on_select = move |arg: SeasonId| Some((on_select)(arg));
 
-        card.view(now, on_select, on_hover)
+        card.view(now, Self::WIDTH, Self::HEIGHT, on_select, on_hover)
     }
 
     pub fn list<'a, Message: 'a + Clone>(

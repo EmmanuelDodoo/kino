@@ -185,6 +185,9 @@ pub struct MovieItem {
 }
 
 impl MovieItem {
+    pub const WIDTH: f32 = CARD_WIDTH;
+    pub const HEIGHT: f32 = CARD_HEIGHT;
+
     pub fn new(movie: Movie) -> (Self, Task<MovieItemTask>) {
         let id = movie.id;
 
@@ -330,6 +333,7 @@ impl MovieItem {
             self.item.as_ref(),
             on_add,
             on_play,
+            self.sample_color,
             self.sample_text,
             background_inter,
             icon_inter,
@@ -350,7 +354,7 @@ impl MovieItem {
 
         let on_select = move |arg: MovieId| Some((on_select)(arg));
 
-        card.view(now, on_select, on_hover)
+        card.view(now, Self::WIDTH, Self::HEIGHT, on_select, on_hover)
     }
 
     pub fn list<'a, Message: 'a + Clone>(

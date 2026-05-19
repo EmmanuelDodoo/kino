@@ -74,10 +74,10 @@ impl TvShows {
     fn list<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a ShowItem>,
+        shows: impl Iterator<Item = &'a ShowItem>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = thumbnails.map(|thumbnail| {
-            thumbnail.list(
+        let content = shows.map(|show| {
+            show.list(
                 now,
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
@@ -102,10 +102,10 @@ impl TvShows {
     fn compact<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a ShowItem>,
+        shows: impl Iterator<Item = &'a ShowItem>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = thumbnails.map(|thumbnail| {
-            thumbnail.compact(
+        let content = shows.map(|show| {
+            show.compact(
                 now,
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
@@ -130,10 +130,10 @@ impl TvShows {
     fn grid<'a>(
         &self,
         now: Instant,
-        thumbnails: impl Iterator<Item = &'a ShowItem>,
+        shows: impl Iterator<Item = &'a ShowItem>,
     ) -> Element<'a, TvShowsMessage> {
-        let content = thumbnails.map(|thumbnail| {
-            thumbnail.card(
+        let content = shows.map(|show| {
+            show.card(
                 now,
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
@@ -144,8 +144,8 @@ impl TvShows {
 
         let content = grid(content)
             .spacing(16)
-            .fluid(CARD_WIDTH)
-            .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+            .fluid(ShowItem::WIDTH)
+            .height(grid::aspect_ratio(ShowItem::WIDTH, ShowItem::HEIGHT));
 
         let content = scrollable(container(content).padding(Padding::new(16.0)))
             .auto_scroll(true)
@@ -160,12 +160,12 @@ impl TvShows {
         &self,
         now: Instant,
         layout: Layout,
-        thumbnails: impl Iterator<Item = &'a ShowItem>,
+        shows: impl Iterator<Item = &'a ShowItem>,
     ) -> Element<'a, TvShowsMessage> {
         match layout {
-            Layout::Grid => self.grid(now, thumbnails),
-            Layout::List => self.list(now, thumbnails),
-            Layout::Compact => self.compact(now, thumbnails),
+            Layout::Grid => self.grid(now, shows),
+            Layout::List => self.list(now, shows),
+            Layout::Compact => self.compact(now, shows),
         }
     }
 }

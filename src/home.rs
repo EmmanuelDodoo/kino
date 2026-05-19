@@ -6,9 +6,10 @@ use iced::{
     border::Border,
     time::{Duration, Instant},
     widget::{
-        self, button, center, column, container, grid,
+        self, bottom, button, center, column, container, grid,
         operation::{self, scroll_to},
-        pick_list, row, rule, scrollable, space, text, text_editor, text_input, tooltip as tp,
+        pick_list, row, rule, scrollable, space, stack, text, text_editor, text_input,
+        tooltip as tp,
     },
     window,
 };
@@ -63,10 +64,7 @@ pub use season::{SeasonItem, SeasonItemTask};
 use season::{SeasonPage, SeasonPageMessage};
 pub use series::{ShowItem, ShowItemTask};
 use series::{ShowPage, ShowPageMessage};
-use shared::{
-    CARD_HEIGHT, CARD_WIDTH, CollectionTask, CollectionThumbnail, Icon, SearchView,
-    ThumbnailTaskKind,
-};
+use shared::{CollectionTask, CollectionThumbnail, Icon, SearchView, ThumbnailTaskKind};
 use shows::{TvShows, TvShowsMessage};
 use widgets::menu::{Position, menu};
 use widgets::{marquee, modal, throbber};
@@ -4021,8 +4019,8 @@ impl Home {
 
                     grid(content)
                         .spacing(16)
-                        .fluid(CARD_WIDTH)
-                        .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT))
+                        .fluid(MovieItem::WIDTH)
+                        .height(grid::aspect_ratio(MovieItem::WIDTH, MovieItem::HEIGHT))
                         .into()
                 }
                 Layout::List => {
@@ -4077,8 +4075,8 @@ impl Home {
 
                     grid(shows)
                         .spacing(16)
-                        .fluid(CARD_WIDTH)
-                        .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT))
+                        .fluid(ShowItem::WIDTH)
+                        .height(grid::aspect_ratio(ShowItem::WIDTH, ShowItem::HEIGHT))
                         .into()
                 }
                 Layout::List => {
@@ -4576,19 +4574,53 @@ impl Home {
     }
 
     fn content_area(&self, now: Instant) -> Element<'_, HomeMessage> {
-        let (title, items) = match &self.state {
-            State::Recent { shows, movies } => ("Recents", shows.len() + movies.len()),
-            State::Shows(shows) => ("Shows", shows.len()),
-            State::Movies(movies) => ("Movies", movies.len()),
-            State::Show { show, seasons, .. } => (show.item.name(), seasons.len()),
-            State::Movie { movie, .. } => (movie.item.name(), 0),
+        let (title, items, item_name) = match &self.state {
+            State::Recent { shows, movies } => ("Recents", shows.len() + movies.len(), None),
+            State::Shows(shows) => {
+                let shows = shows.len();
+                let name = if shows > 1 { "shows" } else { "show" };
+
+                ("Shows", shows, Some(name))
+            }
+            State::Movies(movies) => {
+                let movies = movies.len();
+                let name = if movies > 1 { "movies" } else { "movie" };
+
+                ("Movies", movies, Some(name))
+            }
+            State::Show { show, seasons, .. } => {
+                let seasons = seasons.len();
+                let name = if seasons > 1 { "seasons" } else { "season" };
+
+                (show.item.name(), seasons, Some(name))
+            }
+            State::Movie { movie, .. } => (movie.item.name(), 0, Some("movie")),
             State::Season {
                 season, episodes, ..
-            } => (season.item.name(), episodes.len()),
-            State::Episode { episode, .. } => (episode.item.name(), 0),
-            State::Loading => ("Loading", 0),
-            State::Collections(collections) => ("Collections", collections.len()),
-            State::Wishlist(wishlist) => ("Wishlist", wishlist.len()),
+            } => {
+                let episodes = episodes.len();
+                let name = if episodes > 1 { "episodes" } else { "episode" };
+
+                (season.item.name(), episodes, Some(name))
+            }
+            State::Episode { episode, .. } => (episode.item.name(), 0, Some("episode")),
+            State::Loading => ("Loading", 0, None),
+            State::Collections(collections) => {
+                let collections = collections.len();
+                let name = if collections > 1 {
+                    "collections"
+                } else {
+                    "collection"
+                };
+
+                ("Collections", collections, Some(name))
+            }
+            State::Wishlist(wishlist) => {
+                let wishes = wishlist.len();
+                let name = if wishes > 1 { "wishes" } else { "wish" };
+
+                ("Wishlist", wishes, Some(name))
+            }
             State::Collection {
                 collection,
                 itriggers: _itriggers,
@@ -4600,8 +4632,20 @@ impl Home {
             } => (
                 collection.collection.name.as_str(),
                 movies.len() + shows.len() + seasons.len() + episodes.len(),
+                None,
             ),
         };
+        let item_name = match item_name {
+            Some(name) => name,
+            None => {
+                if items > 1 {
+                    "items"
+                } else {
+                    "item"
+                }
+            }
+        };
+
         let title = container(marquee(title).size(H4).font(bold_font()))
             .center_x(Length::FillPortion(7))
             .center_y(40);
@@ -4632,11 +4676,11 @@ impl Home {
             .map(|page| page.show_tools())
             .unwrap_or(true);
 
-        let bottom: Element<'_, HomeMessage> = if items > 0 || self.scanning {
+        let status: Element<'_, HomeMessage> = if items > 0 || self.scanning {
             let size = H8;
             let padding = Padding::new(3.0).right(10);
 
-            let items = sized_medium(format!("{items} items"), size);
+            let items = sized_medium(format!("{items} {item_name}"), size);
 
             let scanning: Element<'_, HomeMessage> = if self.scanning {
                 let label = sized_medium("Scanning Directories", size);
@@ -4660,7 +4704,7 @@ impl Home {
                 .padding(padding)
                 .style(|theme| {
                     let default = styles::container::bw3(theme);
-                    let background = default.background.map(|back| back.scale_alpha(0.25));
+                    let background = default.background.map(|back| back.scale_alpha(0.5));
 
                     container::Style {
                         background,
@@ -4672,11 +4716,12 @@ impl Home {
             empty()
         };
 
+        let content_area = stack![content_area, bottom(status)];
+
         let content = container(column!(
             top,
             if show_tools { self.toolbar() } else { empty() },
             content_area,
-            bottom,
         ))
         .clip(true)
         .height(Length::Fill)

@@ -12,7 +12,7 @@ use iced::{
     widget::{
         self, button, center, column, container, image,
         image::{Allocation, Handle},
-        markdown, mouse_area, row, rule, scrollable, space, stack, text, tooltip as tp,
+        markdown, mouse_area, responsive, row, rule, scrollable, space, stack, text, tooltip as tp,
     },
 };
 use registry::models::{
@@ -993,9 +993,14 @@ impl<'a, T: Copy, Message: 'a + Clone> Card<'a, T, Message> {
     pub fn view(
         self,
         now: Instant,
+        width: impl Into<Length>,
+        height: impl Into<Length>,
         on_select: impl Fn(T) -> Option<Message> + 'a,
         on_hover: impl Fn(T, bool) -> Message + 'a,
     ) -> Element<'a, Message> {
+        let width = width.into();
+        let height = height.into();
+
         let overlay = self.overlay.unwrap_or(empty());
 
         let details = match self.details {
@@ -1012,13 +1017,13 @@ impl<'a, T: Copy, Message: 'a + Clone> Card<'a, T, Message> {
 
         let img = card_poster_helper(self.poster, 1.0 + (self.background_inter * 0.05), now);
 
-        let content = stack![img, overlay].width(CARD_WIDTH).height(Length::Fill);
+        let content = stack![img, overlay].width(width).height(Length::Fill);
 
         let selected = self.selected;
         let content = container(column!(content, details))
             .padding(4)
-            .width(CARD_WIDTH)
-            .height(CARD_HEIGHT)
+            .width(width)
+            .height(height)
             .style(move |theme| {
                 let default = styles::container::bb(theme);
                 let border = default.border.rounded(IMAGE_RADIUS);
@@ -1061,6 +1066,7 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     media: &'a T,
     on_add: impl Fn(T::Id) -> Message + 'a,
     on_play: impl Fn(T::Id) -> Message + 'a,
+    sample_color: Option<Color>,
     sample_text: Option<Color>,
     background_inter: f32,
     icon_inter: f32,
@@ -1098,42 +1104,43 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     };
 
     let play = {
-        let size = CARD_HEIGHT * 0.135;
+        responsive(move |parent| {
+            let main = parent.width.min(parent.height);
+            let size = (main * 0.25).max(45.0);
 
-        let play = icon(PLAY)
-            .size(size)
-            .align_x(Horizontal::Center)
-            .height(size)
-            .style(move |_| {
-                let color = Color::WHITE.scale_alpha(icon_inter);
+            let play = icon(PLAY).size(size).style(move |_| {
+                let color = sample_text.unwrap_or(Color::WHITE).scale_alpha(icon_inter);
                 text::Style { color: Some(color) }
             });
 
-        let play = center(play)
-            .width(size * background_inter)
-            .height(size * background_inter)
-            .style(move |theme| {
-                let default = styles::container::dark(theme);
-                let background = default
-                    .background
-                    .map(|background| background.scale_alpha(background_inter));
-                let border = default.border.rounded(IMAGE_RADIUS);
+            let play = container(play)
+                .width(size * 1.25)
+                .height(size * 1.25)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center)
+                .style(move |_| {
+                    let default = container::background(sample_color.unwrap_or(Color::BLACK));
+                    let background = default
+                        .background
+                        .map(|background| background.scale_alpha(background_inter));
+                    let border = default.border.rounded(size * 2.0);
 
-                container::Style {
-                    border,
-                    background,
-                    ..default
-                }
-            });
-
-        row!(space::horizontal(), play, space::horizontal())
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .align_y(Vertical::Center)
+                    container::Style {
+                        border,
+                        background,
+                        ..default
+                    }
+                });
+            row!(space::horizontal(), play, space::horizontal())
+                .height(Length::FillPortion(2))
+                .width(Length::Fill)
+                .align_y(Vertical::Center)
+                .into()
+        })
     };
 
     mouse_area(
-        column!(top, space::vertical(), play, space::vertical(), bottom)
+        column!(top, play, bottom)
             .width(Length::Fill)
             .height(Length::Fill),
     )
@@ -1569,8 +1576,6 @@ pub fn image_poster<'a, Message: 'a>(
 pub fn page_image<'a, Message: 'a>(
     f: impl Fn(f32, f32) -> Element<'a, Message> + 'a,
 ) -> Element<'a, Message> {
-    use iced::widget::responsive;
-
     responsive(move |size| {
         let img_height = size.height * 0.85;
         let ratio = 2.0 / 3.0;
@@ -1806,12 +1811,16 @@ pub fn page_nav<'a, Message: 'a + Clone>(
     on_prev: Option<Message>,
     on_next: Message,
 ) -> Element<'a, Message> {
-    let size = H4;
-    let prev = button(icon(CHEV_RIGHT).size(size))
+    let size = H3;
+    let color = |theme: &iced::Theme| text::Style {
+        color: Some(theme.palette().primary.base.color.into()),
+    };
+
+    let prev = button(icon(CHEV_RIGHT).size(size).style(color))
         .style(styles::button::subtlest)
         .on_press_maybe(on_prev);
 
-    let next = button(icon(CHEV_LEFT).size(size))
+    let next = button(icon(CHEV_LEFT).size(size).style(color))
         .style(styles::button::subtlest)
         .on_press(on_next);
 
