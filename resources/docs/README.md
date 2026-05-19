@@ -9,14 +9,13 @@ This document covers advanced usage, tips, configuration and customization optio
 ### General
 
 - Click the poster image in any layout to start playback
-- Loaded subtitles are saved and reused automatically
 - Click a video title in a playlist to jump to it
 - Hovering over status toasts prevents them from disappearing
-- <kbd>Ctrl</kbd> + <kbd>Enter</kbd> submits changes in the media overview
 - Year-based filtering currently supports release year only
 - Each sort category can be set independently to ascending or descending
 - Multiple sorts can be applied; their order is shown by the number indicator
-- Click on the ratings within the media details screen to leave your own local rating
+- Click on the show/season within the season/episode page to navigate there
+- Loaded subtitles are saved and reused automatically
 - Kino supports these subtitle extension types: `srt`, `ass`, `ssa`, `vtt`, `sub`, `sbv`, `ttml`, `dfxp`, `lrc`
 - Subtitle files directly neighboring a video file and sharing the same name are automatically associated with that video.
 - In the video player, double clicking enters full-screen mode, right clicking opens the video config dialog
