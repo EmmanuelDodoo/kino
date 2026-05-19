@@ -53,7 +53,8 @@ pub struct Season {
     name: String,
     original_name: String,
     path: String,
-    poster: Option<Image>,
+    pub show_name: String,
+    pub poster: Option<Image>,
     // Join from show
     backdrop: Option<String>,
     synopsis: String,
@@ -119,10 +120,13 @@ impl Season {
         let comments = row.get::<_, u32>("comment_count")?;
         let source = row.get::<_, String>("source")?;
 
+        let show_name = row.get::<_, String>("show_name")?;
+
         Ok(Self {
             id,
             name,
             original_name,
+            show_name,
             path,
             poster,
             backdrop,
@@ -148,6 +152,7 @@ impl Season {
             id,
             name,
             original_name,
+            show_name: _show,
             path,
             poster,
             backdrop: _backdrop,
@@ -303,6 +308,24 @@ impl Season {
         }
     }
 
+    #[must_use]
+    pub fn mark_watched<'a>(id: SeasonId, count: u32) -> Query<'a> {
+        let sql = "UPDATE episode SET watch_count=:count, progress=1.0 WHERE episode.season_id=:id AND episode.watch_count < :count";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":count", ToSqlOutput::from(count)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Season,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+
     pub fn new<'a>(show: ShowId, name: String, path: String, number: u16) -> (Self, Query<'a>) {
         let added = Local::now();
         let backdrop = None;
@@ -332,6 +355,9 @@ impl Season {
             comments: 0,
             number,
             source: String::default(),
+
+            // Not saved within season table so this is okay
+            show_name: String::default(),
         };
 
         let query = new.insert();

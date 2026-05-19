@@ -87,7 +87,7 @@ impl Movies {
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
         let content =
-            scrollable(container(content).padding(Padding::new(10.0).right(16).bottom(16)))
+            scrollable(container(content).padding(Padding::new(16.0)))
                 .auto_scroll(true)
                 .height(Length::Fill)
                 .id(self.scroll.id.clone())

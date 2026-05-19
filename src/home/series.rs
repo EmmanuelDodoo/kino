@@ -1,4 +1,4 @@
-use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use super::{HomeMessage, PageKind, SeasonItem, ViewMessage, shared::*};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll, empty, styles};
@@ -122,7 +122,7 @@ impl ShowPage {
     fn list<'a>(
         &self,
         now: Instant,
-        seasons: impl Iterator<Item = &'a Thumbnail<Season>>,
+        seasons: impl Iterator<Item = &'a SeasonItem>,
     ) -> Element<'a, Message> {
         let content = seasons.map(|thumbnail| {
             thumbnail.list(
@@ -131,15 +131,6 @@ impl ShowPage {
                 Message::Details,
                 Message::Hovered,
                 Message::Play,
-                |season| {
-                    let episodes = season.episodes;
-                    let episodes = format!(
-                        "{} episode{}",
-                        episodes,
-                        if episodes > 1 { "s" } else { "" }
-                    );
-                    h7(episodes).into()
-                },
             )
         });
 
@@ -151,7 +142,7 @@ impl ShowPage {
     fn compact<'a>(
         &self,
         now: Instant,
-        seasons: impl Iterator<Item = &'a Thumbnail<Season>>,
+        seasons: impl Iterator<Item = &'a SeasonItem>,
     ) -> Element<'a, Message> {
         let content = seasons.map(|thumbnail| {
             thumbnail.compact(
@@ -171,7 +162,7 @@ impl ShowPage {
     fn grid<'a>(
         &self,
         now: Instant,
-        seasons: impl Iterator<Item = &'a Thumbnail<Season>>,
+        seasons: impl Iterator<Item = &'a SeasonItem>,
     ) -> Element<'a, Message> {
         let content = seasons.map(|thumbnail| {
             thumbnail.card(
@@ -197,7 +188,7 @@ impl ShowPage {
         layout: Layout,
         show: &'a ShowItem,
         memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
-        seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        seasons: impl Iterator<Item = &'a SeasonItem>,
     ) -> Element<'a, ShowPageMessage> {
         let id = self.id;
 
@@ -262,7 +253,7 @@ impl ShowPage {
         now: Instant,
         layout: Layout,
         show: &'a ShowItem,
-        seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        seasons: impl Iterator<Item = &'a SeasonItem>,
         memberships: Peekable<impl Iterator<Item = &'a SimpleCollection>>,
     ) -> Element<'a, ShowPageMessage> {
         let overlay = self.overlay(now, layout, show, memberships, seasons);

@@ -147,12 +147,11 @@ impl TvShows {
             .fluid(CARD_WIDTH)
             .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
 
-        let content =
-            scrollable(container(content).padding(Padding::new(10.0).right(16).bottom(0)))
-                .auto_scroll(true)
-                .height(Length::Fill)
-                .id(self.scroll.id.clone())
-                .on_scroll(TvShowsMessage::Scroll);
+        let content = scrollable(container(content).padding(Padding::new(16.0)))
+            .auto_scroll(true)
+            .height(Length::Fill)
+            .id(self.scroll.id.clone())
+            .on_scroll(TvShowsMessage::Scroll);
 
         content.into()
     }

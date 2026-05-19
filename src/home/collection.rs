@@ -1,5 +1,6 @@
 use super::episode::EpisodeItem;
 use super::movie::MovieItem;
+use super::season::SeasonItem;
 use super::series::ShowItem;
 use super::{
     CollectionThumbnail, HomeMessage, PageKind, ViewMessage, movies, shared::*, shows, view_unicode,
@@ -182,7 +183,7 @@ impl CollectionPage {
         collection: &'a CollectionThumbnail,
         movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         shows: Peekable<impl Iterator<Item = &'a ShowItem>>,
-        seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        seasons: Peekable<impl Iterator<Item = &'a SeasonItem>>,
         episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
         let content = match layout {
@@ -357,7 +358,7 @@ impl CollectionPage {
         now: Instant,
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a ShowItem>>,
-        mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        mut seasons: Peekable<impl Iterator<Item = &'a SeasonItem>>,
         mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
         let collection = self.id;
@@ -427,7 +428,6 @@ impl CollectionPage {
                             move |id| select(collection, ItemId::Season(id)),
                             move |id, hovered| hover(collection, hovered, ItemId::Season(id)),
                             move |id| play(collection, ItemId::Season(id)),
-                            |_| empty(),
                         )
                     });
 
@@ -452,7 +452,6 @@ impl CollectionPage {
                             move |id| select(collection, ItemId::Episode(id)),
                             move |id, hovered| hover(collection, hovered, ItemId::Episode(id)),
                             move |id| play(collection, ItemId::Episode(id)),
-                            |_| empty(),
                         )
                     });
 
@@ -480,7 +479,7 @@ impl CollectionPage {
         now: Instant,
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a ShowItem>>,
-        mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        mut seasons: Peekable<impl Iterator<Item = &'a SeasonItem>>,
         mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
         let collection = self.id;
@@ -598,14 +597,14 @@ impl CollectionPage {
         now: Instant,
         mut movies: Peekable<impl Iterator<Item = &'a MovieItem>>,
         mut shows: Peekable<impl Iterator<Item = &'a ShowItem>>,
-        mut seasons: Peekable<impl Iterator<Item = &'a Thumbnail<Season>>>,
+        mut seasons: Peekable<impl Iterator<Item = &'a SeasonItem>>,
         mut episodes: Peekable<impl Iterator<Item = &'a EpisodeItem>>,
     ) -> Element<'a, CollectionMessage> {
         let collection = self.id;
 
         let content = Column::new()
             .spacing(40.0)
-            .padding(Padding::ZERO.left(10).right(16));
+            .padding(Padding::ZERO.left(16).right(16).bottom(16));
 
         let content = if movies.peek().is_none() {
             content

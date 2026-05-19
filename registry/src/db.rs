@@ -100,7 +100,7 @@ impl Database {
 
     const SHOW_QUERY: &str = "SELECT directory.id as directory_id, directory.path as directory_path, image.main as poster_main, image.accent as poster_accent, image.path as poster_path, tv_show.* FROM tv_show INNER JOIN directory ON tv_show.directory=directory.id LEFT JOIN image ON tv_show.poster = image.path";
 
-    const SEASON_QUERY: &str = "SELECT  tv_show.backdrop, image.main as poster_main, image.accent as poster_accent, image.path as poster_path,  season.* FROM season INNER JOIN tv_show ON season.show_id=tv_show.id LEFT JOIN image ON season.poster = image.path";
+    const SEASON_QUERY: &str = "SELECT  tv_show.backdrop, tv_show.name as show_name, image.main as poster_main, image.accent as poster_accent, image.path as poster_path,  season.* FROM season INNER JOIN tv_show ON season.show_id=tv_show.id LEFT JOIN image ON season.poster = image.path";
 
     const EPISODE_QUERY: &str = "SELECT * FROM get_episode_data";
 

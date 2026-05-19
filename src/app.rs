@@ -84,6 +84,13 @@ pub struct ShowUpdate {
 }
 
 #[derive(Clone, Debug)]
+pub struct SeasonUpdate {
+    pub id: SeasonId,
+    pub source: SourceSet,
+    pub updates: Vec<NewUpdateKind>,
+}
+
+#[derive(Clone, Debug)]
 pub struct EpisodeUpdate {
     pub id: EpisodeId,
     pub source: SourceSet,
@@ -152,6 +159,7 @@ pub enum Message {
     MovieUpdate(MovieUpdate),
     ShowUpdate(ShowUpdate),
     EpisodeUpdate(EpisodeUpdate),
+    SeasonUpdate(SeasonUpdate),
     PosterUpdate {
         id: ItemId,
         path: PathBuf,
@@ -208,7 +216,7 @@ pub enum Message {
     MovieTask(home::MovieItemTask),
     EpisodeTask(home::EpisodeItemTask),
     ShowTask(home::ShowItemTask),
-    SeasonTask(ThumbnailTask<Season>),
+    SeasonTask(home::SeasonItemTask),
     WishTask(WishThumbnailTask),
     Triggers {
         inserts: Vec<(InsertTrigger, bool)>,
@@ -904,6 +912,82 @@ impl App {
                     Err(error) => Message::anyhow(error).tasked(),
                 }
             }
+            Message::SeasonUpdate(SeasonUpdate {
+                id,
+                source,
+                updates,
+            }) => {
+                let trans = match self
+                    .db
+                    .transaction()
+                    .context("Season update failed")
+                    .with_context(|| format!("Failed to start transaction for season {id} update"))
+                {
+                    Ok(trans) => trans,
+                    Err(error) => {
+                        return Message::anyhow(error).tasked();
+                    }
+                };
+
+                let mut source_id = None;
+                let mut count = 0;
+
+                for update in updates {
+                    let query = match update {
+                        NewUpdateKind::Name(new) => Season::set_name(id, new),
+                        NewUpdateKind::Overview(overview) => Season::set_synopsis(id, overview),
+                        NewUpdateKind::Rating(rating) => Season::set_rating(id, rating),
+                        NewUpdateKind::SourceId(id) => {
+                            source_id = Some(id);
+                            continue;
+                        }
+                        NewUpdateKind::MarkWatched(count) => Season::mark_watched(id, count),
+                        NewUpdateKind::Video(_)
+                        | NewUpdateKind::Audio(_)
+                        | NewUpdateKind::Subtitle(_) => {
+                            continue;
+                        }
+                    };
+
+                    if let Some(succ) = query
+                        .execute(&trans)
+                        .with_ctx_log(|| format!("Updating season {id} update kind"))
+                    {
+                        count += 1;
+                        succ.log()
+                    }
+                }
+
+                if let Some(source_id) = source_id
+                    && let Some(query) = source.set_source_id(id, source_id, false)
+                    && let Some(succ) = query.execute(&trans).with_ctx_log(|| {
+                        format!(
+                            "Update season {id} source {} source id {source_id:?}",
+                            source.to_str(),
+                        )
+                    })
+                {
+                    count += 1;
+                    succ.log();
+                }
+
+                match trans
+                    .commit()
+                    .context("Season update failed")
+                    .with_context(|| format!("Update season {id} transaction failed"))
+                {
+                    Ok(_) => {
+                        let succ = if count > 0 {
+                            Message::success("Season Updated").tasked()
+                        } else {
+                            Task::none()
+                        };
+
+                        Task::batch([succ, self.home.content_refresh()])
+                    }
+                    Err(error) => Message::anyhow(error).tasked(),
+                }
+            }
             Message::EpisodeUpdate(EpisodeUpdate {
                 id,
                 source,
@@ -1238,7 +1322,7 @@ impl App {
                     FetchId::Season(id) => {
                         let (season, season_task) = match self.db.get_season(id, season_map) {
                             Ok(season) => {
-                                tracing::debug!("Fetched season {}", season.0.media.name());
+                                tracing::debug!("Fetched season {}", season.0.item.name());
                                 season
                             }
                             Err(error) => {
@@ -1831,7 +1915,9 @@ impl App {
             Message::ShowTask(home::ShowItemTask { id, kind }) => {
                 self.home.show_task(id, kind, now)
             }
-            Message::SeasonTask(ThumbnailTask { id, kind }) => self.home.season_task(id, kind, now),
+            Message::SeasonTask(home::SeasonItemTask { id, kind }) => {
+                self.home.season_task(id, kind, now)
+            }
             Message::EpisodeTask(home::EpisodeItemTask { id, kind }) => {
                 self.home.episode_task(id, kind, now)
             }
@@ -2577,8 +2663,8 @@ fn show_map(
 
 fn season_map(
     row: &rusqlite::Row<'_>,
-) -> rusqlite::Result<(shared::Thumbnail<Season>, Task<ThumbnailTask<Season>>)> {
-    Season::from_row(row).map(shared::Thumbnail::new)
+) -> rusqlite::Result<(home::SeasonItem, Task<home::SeasonItemTask>)> {
+    Season::from_row(row).map(home::SeasonItem::new)
 }
 
 fn episode_map(

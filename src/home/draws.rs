@@ -1825,6 +1825,43 @@ pub fn draw_show_edit<'a>(state: &'a ShowEditState) -> Element<'a, HomeMessage> 
     )
 }
 
+pub fn draw_season_edit<'a>(state: &'a SeasonEditState) -> Element<'a, HomeMessage> {
+    let name = media_name(&state.placeholder, state.name(), SeasonEditMessage::Name);
+
+    let overview = media_overview(&state.overview, SeasonEditMessage::Overview);
+
+    let ratings = media_rating(&state.ratings, SeasonEditMessage::Rating);
+
+    let watched = media_mark(state.watched, SeasonEditMessage::MarkWatched);
+
+    let source = media_source(&state.source, None::<fn(_) -> SeasonEditMessage>);
+
+    let source_id = media_source_id(state.source, &state.source_id, SeasonEditMessage::SourceId);
+
+    let refetch = media_icon_btn(REFRESH, "Refetch").on_press(SeasonEditMessage::Refetch);
+
+    let remove = media_icon_btn(DELETE, "Delete")
+        .on_press(SeasonEditMessage::Remove)
+        .style(styles::button::danger);
+
+    let poster = media_image(
+        "Poster: ",
+        state.poster.as_deref(),
+        SeasonEditMessage::PickPoster,
+    );
+
+    let content: Element<'_, SeasonEditMessage> = column!(
+        name, overview, ratings, watched, source, source_id, poster, refetch, remove
+    )
+    .spacing(24)
+    .into();
+
+    media_layout(
+        content.map(HomeMessage::SeasonEdit),
+        HomeMessage::SeasonEdit(SeasonEditMessage::Save),
+    )
+}
+
 pub fn draw_episode_edit<'a>(
     state: &'a EpisodeEditState,
     videos: &'a [VideoInfo],
@@ -1867,8 +1904,8 @@ pub fn draw_episode_edit<'a>(
     );
 
     let content: Element<'_, EpisodeEditMessage> = column!(
-        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, refetch,
-        remove, poster
+        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, poster,
+        refetch, remove
     )
     .spacing(24)
     .into();

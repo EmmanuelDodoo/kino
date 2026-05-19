@@ -182,7 +182,7 @@ impl EpisodePage {
     }
 
     pub fn show_tools(&self) -> bool {
-        false
+        true
     }
 
     pub fn update_scroll(&mut self) -> Task<()> {
@@ -388,9 +388,8 @@ impl EpisodeItem {
         on_select: impl Fn(EpisodeId) -> Message + 'a,
         on_hover: impl Fn(EpisodeId, bool) -> Message + 'a,
         on_play: impl Fn(EpisodeId) -> Message + 'a,
-        unique: impl Fn(&Episode) -> Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let unique = unique(&self.item);
+        let unique = empty();
 
         let background_inter = self.background.interpolate(0.0, 1.0, now);
         let icon_inter = self.icon.interpolate(0.0, 1.0, now);

@@ -285,7 +285,7 @@ impl Show {
 
     #[must_use]
     pub fn mark_watched<'a>(id: ShowId, count: u32) -> Query<'a> {
-        let sql = "UPDATE show SET watch_count=:count, progress=1.0 WHERE id=:id";
+        let sql = "UPDATE episode SET watch_count=:count, progress=1.0 WHERE EXISTS (SELECT 1 FROM season WHERE season.id = episode.season_id AND season.show_id =:id AND episode.watch_count < :count)";
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":count", ToSqlOutput::from(count)),
