@@ -422,7 +422,6 @@ impl ShowItem {
         on_play: impl Fn(ShowId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let background_inter = self.background.interpolate(0.0, 1.0, now);
-        let icon_inter = self.icon.interpolate(0.0, 1.0, now);
 
         let sample = self.sample_text;
         let seasons = self.item.seasons;
@@ -446,7 +445,6 @@ impl ShowItem {
             self.sample_color,
             self.sample_text,
             background_inter,
-            icon_inter,
             seasons,
         );
 

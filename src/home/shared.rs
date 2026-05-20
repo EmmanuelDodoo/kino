@@ -1069,7 +1069,6 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     sample_color: Option<Color>,
     sample_text: Option<Color>,
     background_inter: f32,
-    icon_inter: f32,
     unique: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
     let padding = [3, 6];
@@ -1109,7 +1108,9 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
             let size = (main * 0.25).max(45.0);
 
             let play = icon(PLAY).size(size).style(move |_| {
-                let color = sample_text.unwrap_or(Color::WHITE).scale_alpha(icon_inter);
+                let color = sample_text
+                    .unwrap_or(Color::WHITE)
+                    .scale_alpha(background_inter);
                 text::Style { color: Some(color) }
             });
 
