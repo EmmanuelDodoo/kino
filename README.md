@@ -5,8 +5,8 @@
 
 A local movie and TV show library manager and player with support for curated collections.
 
-<img src="resources/images/showcase/collection.png" width="400px" alt="Collection image"/>
-<img src="resources/images/showcase/movie.png" width="400px" alt="Movie image"/>
+<img src="resources/images/showcase/season.png" width="400px" alt="Season image"/>
+<img src="resources/images/showcase/movies.png" width="400px" alt="Movies image"/>
 <img src="resources/images/showcase/player.png" width="410px" alt ="Player iamge"/>
 
 See the [showcase directory](resources/images/showcase) for more images.
@@ -19,35 +19,19 @@ See the [showcase directory](resources/images/showcase) for more images.
 
 - Fast search across your library with filtering and sorting options
 
-- Fetch extra metadata using a user-supplied TMDB API key
+- Automatic collections with customizable rules and smart population
+
+- Playlist creation, temporary selection mode, and playlist saving
+
+- Comments, notes, and metadata management for videos
+
+- Wishlist support for tracking media to watch later
+
+- Fetch extra metadata from use selected sources
 
 - Fully customizable keybindings for actions throughout the app
 
-- Create and customize collections, with support for pinning and hiding
-
-- Theme support and configurable content layouts
-
 Take a look at [the documentation](/resources/docs/README.md) for more.
-
-## Roadmap
-
-- [x] Automatic Collection populating
-
-- [x] Selection mode for building playlists on the fly
-
-- [x] Playlist saving
-
-- [x] Comments on videos
-
-- [x] Subtitle syncing
-
-- [x] Wishlist support
-
-- [ ] Support for multiple metadata scrappers
-
-- [ ] One-off video playback (without adding to library)
-
-- [ ] Mini player mode
 
 ## Installation
 
