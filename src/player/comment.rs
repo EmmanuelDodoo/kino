@@ -14,13 +14,11 @@ use registry::models::{self, CommentId, VideoId};
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-static REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"@((?<hrs>\d+):)?((?<mins>[0-9]|[0-5][0-9]):)((?<secs>[0-5][0-9]))")
-        .expect("Failed to compile comment timestamp regex")
+static REGEX: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(r"@((?<hrs>\d+):)?((?<mins>[0-9]|[0-5][0-9]):)((?<secs>[0-5][0-9]))").ok()
 });
 
-static NOW: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"@now").expect("Failed to compile comment now regex"));
+static NOW: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"@now").ok());
 
 pub trait CommentMessage {
     fn link(url: String) -> Self;
@@ -83,7 +81,10 @@ impl Comment {
                     }
                 };
 
-                NOW.replace_all(&raw, now).to_string()
+                match NOW.as_ref() {
+                    Some(regex) => regex.replace_all(&raw, now).to_string(),
+                    None => raw,
+                }
             }
             None => raw,
         };
@@ -93,7 +94,10 @@ impl Comment {
             first: timestamp,
         };
 
-        let replaced = REGEX.replace_all(&raw, replacer);
+        let replaced = REGEX
+            .as_ref()
+            .map(|regex| regex.replace_all(&raw, replacer))
+            .unwrap_or_default();
         let markdown = markdown::Content::parse(&replaced);
 
         (raw, markdown)
@@ -123,7 +127,10 @@ impl Comment {
             first: &mut inner.timestamp,
         };
 
-        let replaced = REGEX.replace_all(&inner.content, replacer);
+        let replaced = REGEX
+            .as_ref()
+            .map(|regex| regex.replace_all(&inner.content, replacer))
+            .unwrap_or_default();
         let markdown = markdown::Content::parse(&replaced);
         let mode = Mode::View(Box::new(markdown));
         let text_editor = editor.unwrap_or_else(widget::Id::unique);
@@ -171,7 +178,10 @@ impl Comment {
             first: &mut self.inner.timestamp,
         };
 
-        let replaced = REGEX.replace_all(&self.inner.content, replacer);
+        let replaced = REGEX
+            .as_ref()
+            .map(|regex| regex.replace_all(&self.inner.content, replacer))
+            .unwrap_or_default();
         let markdown = markdown::Content::parse(&replaced);
 
         self.mode = Mode::View(Box::new(markdown))

@@ -59,6 +59,7 @@ struct Config {
     subtitle_uri: Option<PathBuf>,
     selected_text: Option<Subtitle>,
     selected_audio: Option<Audio>,
+    selected_video: Option<VideoInfo>,
     text_color: String,
     background_color: String,
     subtitle_font: FontState,
@@ -167,7 +168,7 @@ variants! {
 #[derive(Debug, Clone, Copy, PartialEq)]
     pub enum ConfigTab {
         General,
-        Filters,
+        Video,
         Subtitles,
         Audio,
         Info,
@@ -195,7 +196,6 @@ pub enum GeneralConfig {
     SeekAmt(String),
     SeekShiftAmt(String),
     Span(String),
-    Fit(ContentFit),
 }
 
 #[derive(Debug, Clone)]
@@ -205,6 +205,8 @@ pub enum VideoConfig {
     Contrast(f64),
     Hue(f64),
     Saturation(f64),
+    CurrentVideo(VideoInfo),
+    Fit(ContentFit),
 }
 
 #[derive(Debug, Clone)]
@@ -961,10 +963,6 @@ impl Manager {
 
                             Task::none()
                         }
-                        GeneralConfig::Fit(fit) => {
-                            config.fit = fit;
-                            Task::none()
-                        }
                     },
                     ConfigMessage::Video(vsg) => match vsg {
                         VideoConfig::Gamma(gamma) => {
@@ -990,6 +988,15 @@ impl Manager {
                         VideoConfig::Saturation(saturation) => {
                             self.settings.filters.saturation = saturation;
 
+                            Task::none()
+                        }
+                        VideoConfig::CurrentVideo(video) => {
+                            config.selected_video = Some(video);
+
+                            Task::none()
+                        }
+                        VideoConfig::Fit(fit) => {
+                            config.fit = fit;
                             Task::none()
                         }
                     },
@@ -1908,6 +1915,7 @@ impl Manager {
                 let item = &player.item;
                 let subs = item.subtitles.as_slice();
                 let audio = item.audios.as_slice();
+                let videos = item.videos.as_slice();
 
                 modal(
                     content,
@@ -1916,9 +1924,9 @@ impl Manager {
                         config,
                         subs,
                         audio,
+                        videos,
                         item,
                         player.file_size,
-                        config.fit,
                     ),
                     ManagerMessage::CloseView,
                 )
@@ -2417,6 +2425,7 @@ impl Manager {
             subtitle_uri,
             selected_text,
             selected_audio,
+            selected_video,
             tab: _tab,
             text_color: _text_color,
             background_color: _background,
@@ -2552,6 +2561,14 @@ impl Manager {
             }
         }
 
+        if let Some(video) = selected_video
+            && player.item.video_id != Some(video.id)
+        {
+            player.item.video_id = Some(video.id);
+
+            // todo: ivp_fork doesn't support changing video yet
+        }
+
         if awake.is_none() {
             *awake = keep_awake().ctx_log("New KeepAwake after save config");
         }
@@ -2614,37 +2631,47 @@ impl Manager {
     }
 
     fn video_config(&mut self) -> Task<Message> {
-        let (selected_text, selected_audio, subtitle_uri, fit) = if let State::Ready {
-            player,
-            awake,
-            comments: _comments,
-            thumbnails_handle: _handle,
-        } = &mut self.state
-        {
-            awake.take();
-            player.video.set_paused(true);
-            let current = player.item.subtitle_id.and_then(|id| {
-                player
-                    .item
-                    .subtitles
-                    .iter()
-                    .find(|sub| sub.id == id)
-                    .cloned()
-            });
+        let (selected_text, selected_audio, selected_video, subtitle_uri, fit) =
+            if let State::Ready {
+                player,
+                awake,
+                comments: _comments,
+                thumbnails_handle: _handle,
+            } = &mut self.state
+            {
+                awake.take();
+                player.video.set_paused(true);
+                let current = player.item.subtitle_id.and_then(|id| {
+                    player
+                        .item
+                        .subtitles
+                        .iter()
+                        .find(|sub| sub.id == id)
+                        .cloned()
+                });
 
-            let audio = player.item.audio_id.and_then(|id| {
-                player
-                    .item
-                    .audios
-                    .iter()
-                    .find(|audio| audio.id == id)
-                    .cloned()
-            });
+                let audio = player.item.audio_id.and_then(|id| {
+                    player
+                        .item
+                        .audios
+                        .iter()
+                        .find(|audio| audio.id == id)
+                        .cloned()
+                });
 
-            (current, audio, None, Some(player.fit))
-        } else {
-            (None, None, None, None)
-        };
+                let video = player.item.video_id.and_then(|id| {
+                    player
+                        .item
+                        .videos
+                        .iter()
+                        .find(|video| video.id == id)
+                        .cloned()
+                });
+
+                (current, audio, video, None, Some(player.fit))
+            } else {
+                (None, None, None, None, None)
+            };
 
         let subtitle_offset = selected_text
             .as_ref()
@@ -2656,6 +2683,7 @@ impl Manager {
             subtitle_uri,
             selected_text,
             selected_audio,
+            selected_video,
             text_color: format!("#{:08x}", self.settings.subtitles.color),
             background_color: format!("#{:08x}", self.settings.subtitles.background_color),
             subtitle_font: FontState::new(self.fonts.clone(), &self.settings.subtitles.font),
@@ -3371,7 +3399,6 @@ fn draw_general<'a>(
     size: f32,
     padding: Padding,
     spacing: f32,
-    fit: ContentFit,
 ) -> Element<'a, GeneralConfig> {
     let input_width = 48;
     let volume_amt = {
@@ -3461,39 +3488,19 @@ fn draw_general<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
-    let fit = {
-        let label = label_maker("Video Content Fit: ");
-
-        let handle = picklist_handle(size);
-
-        let pick = pick_list(
-            Some(fit),
-            [
-                ContentFit::Contain,
-                ContentFit::Cover,
-                ContentFit::Fill,
-                ContentFit::ScaleDown,
-                ContentFit::None,
-            ],
-            ToString::to_string,
-        )
-        .handle(handle)
-        .ellipsis(text::Ellipsis::End)
-        .on_select(GeneralConfig::Fit)
-        .padding(padding)
-        .text_size(size);
-
-        row!(label, space::horizontal(), pick)
-            .align_y(Vertical::Center)
-            .spacing(spacing)
-    };
-
-    column!(fit, volume_amt, speed_amt, seek_amt, seek_amt_shift, cspan)
+    column!(volume_amt, speed_amt, seek_amt, seek_amt_shift, cspan)
         .spacing(16)
         .into()
 }
 
-fn draw_filters<'a>(settings: &'a VideoSettings, size: f32) -> Element<'a, VideoConfig> {
+fn draw_video<'a>(
+    settings: &'a VideoSettings,
+    config: &'a Config,
+    videos: &'a [VideoInfo],
+    size: f32,
+    padding: Padding,
+    spacing: f32,
+) -> Element<'a, VideoConfig> {
     let width = 200;
     let slider_width = 200;
 
@@ -3581,7 +3588,55 @@ fn draw_filters<'a>(settings: &'a VideoSettings, size: f32) -> Element<'a, Video
         row!(label, space::horizontal(), slider).align_y(Vertical::Center)
     };
 
-    column!(gamma, brightness, contrast, hue, saturation)
+    let video = {
+        let label = label_maker("Video: ");
+
+        let handle = picklist_handle(size);
+
+        let pick: Element<'_, VideoConfig> = if videos.is_empty() {
+            label_maker("None").size(size).into()
+        } else {
+            pick_list(config.selected_video.clone(), videos, video_info_to_string)
+                .handle(handle)
+                .on_select(VideoConfig::CurrentVideo)
+                .padding(padding)
+                .text_size(size)
+                .into()
+        };
+
+        row!(label, space::horizontal(), pick)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    let fit = {
+        let label = label_maker("Video Content Fit: ");
+
+        let handle = picklist_handle(size);
+
+        let pick = pick_list(
+            Some(config.fit),
+            [
+                ContentFit::Contain,
+                ContentFit::Cover,
+                ContentFit::Fill,
+                ContentFit::ScaleDown,
+                ContentFit::None,
+            ],
+            ToString::to_string,
+        )
+        .handle(handle)
+        .ellipsis(text::Ellipsis::End)
+        .on_select(VideoConfig::Fit)
+        .padding(padding)
+        .text_size(size);
+
+        row!(label, space::horizontal(), pick)
+            .align_y(Vertical::Center)
+            .spacing(spacing)
+    };
+
+    column!(video, fit, gamma, brightness, contrast, hue, saturation)
         .spacing(16)
         .into()
 }
@@ -3864,9 +3919,7 @@ fn draw_info<'a>(
         column!(title, info).spacing(8)
     };
 
-    // todo: Should reflect currently selected video
-    let video = item.videos.first();
-    let video = video.map(|video| {
+    let video = config.selected_video.as_ref().map(|video| {
         let title = sized_medium("Video", size);
 
         let codec = video
@@ -3874,8 +3927,14 @@ fn draw_info<'a>(
             .as_deref()
             .map(|codec| info(format!("Codec: {codec}")));
 
-        let bitrate = video.bitrate as f32 / 1000_000.0;
-        let bitrate = info(format!("Bitrate: {bitrate:.2} Mbps"));
+        let bitrate = if video.bitrate > 0 {
+            Some(info(format!(
+                "Bitrate: {:.2} Mbps",
+                video.bitrate as f32 / 1000_000.0
+            )))
+        } else {
+            None
+        };
 
         let framerate = info(format!("Framerate: {:.1}", video.framerate));
         let dimensions = info(format!("Resolution: {}", video.resolution()));
@@ -3899,11 +3958,27 @@ fn draw_info<'a>(
             .lang
             .as_deref()
             .map(|lang| info(format!("Language: {lang}")));
-        let channels = info(format!("Channels: {}", audio.channels));
 
-        let sample = info(format!("Sample Rate: {} Hz", audio.sample_rate));
+        let channels = if audio.channels > 0 {
+            Some(info(format!("Channels: {}", audio.channels)))
+        } else {
+            None
+        };
 
-        let bitrate = info(format!("Bitrate: {} kbps", audio.bitrate as f32 / 1000.0));
+        let sample = if audio.sample_rate > 0 {
+            Some(info(format!("Sample Rate: {} Hz", audio.sample_rate)))
+        } else {
+            None
+        };
+
+        let bitrate = if audio.bitrate > 0 {
+            Some(info(format!(
+                "Bitrate: {:.2} kbps",
+                audio.bitrate as f32 / 1000.0
+            )))
+        } else {
+            None
+        };
 
         let info = column!(lang, codec, channels, sample, bitrate)
             .spacing(4)
@@ -3952,9 +4027,9 @@ fn draw_config<'a>(
     config: &'a Config,
     subtitles: &'a [Subtitle],
     audio: &'a [Audio],
+    videos: &'a [VideoInfo],
     item: &'a models::Video,
     file_size: u64,
-    fit: ContentFit,
 ) -> Element<'a, ManagerMessage> {
     // todo: Hardware volume
     let size = H7;
@@ -3986,9 +4061,11 @@ fn draw_config<'a>(
 
     let content = match curr_tab {
         ConfigTab::General => {
-            draw_general(settings, size, padding, spacing, fit).map(ConfigMessage::General)
+            draw_general(settings, size, padding, spacing).map(ConfigMessage::General)
         }
-        ConfigTab::Filters => draw_filters(settings, size).map(ConfigMessage::Video),
+        ConfigTab::Video => {
+            draw_video(settings, config, videos, size, padding, spacing).map(ConfigMessage::Video)
+        }
         ConfigTab::Subtitles => draw_subs(settings, config, subtitles, size, padding, spacing)
             .map(ConfigMessage::Subtitle),
         ConfigTab::Audio => {
@@ -4072,7 +4149,20 @@ fn subtitle_to_string(sub: &Subtitle) -> String {
 fn audio_to_string(audio: &Audio) -> String {
     format!(
         "{} - {}",
-        audio.lang.as_deref().unwrap_or("Unknown language"),
-        audio.codec.as_deref().unwrap_or("Unknown codec"),
+        audio.lang.as_deref().unwrap_or("Unk. language"),
+        audio.codec.as_deref().unwrap_or("Unk. codec"),
     )
+}
+
+fn video_info_to_string(video: &VideoInfo) -> String {
+    if video.bitrate > 0 {
+        let bitrate = video.bitrate as f32 / 1000_000.0;
+        format!(
+            "{}, {bitrate:.1} Mbps, {:.1}fps",
+            video.resolution(),
+            video.framerate
+        )
+    } else {
+        format!("{}, {:.1}fps", video.resolution(), video.framerate)
+    }
 }
