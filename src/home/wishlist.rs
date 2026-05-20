@@ -92,19 +92,22 @@ impl Wishlist {
 
         let content = grid(content)
             .spacing(16)
-            .fluid(CARD_WIDTH)
-            .height(grid::aspect_ratio(CARD_WIDTH, CARD_HEIGHT));
+            .fluid(WishThumbnail::WIDTH)
+            .height(grid::aspect_ratio(
+                WishThumbnail::WIDTH,
+                WishThumbnail::HEIGHT,
+            ));
 
-        let content =
-            scrollable(container(content).padding(Padding::new(10.0).right(16).bottom(0)))
-                .auto_scroll(true)
-                .height(Length::Fill)
-                .id(self.scroll.id.clone())
-                .on_scroll(WishlistMessage::Scroll);
+        let content = scrollable(container(content).padding(16))
+            .auto_scroll(true)
+            .height(Length::Fill)
+            .id(self.scroll.id.clone())
+            .on_scroll(WishlistMessage::Scroll);
 
-        let content = column!(add, content).width(Length::Fill).spacing(20.0);
-
-        let content = container(content).padding(Padding::new(10.0).bottom(0));
+        let content = column!(add, content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(10);
 
         content.into()
     }

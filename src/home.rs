@@ -694,6 +694,12 @@ pub enum View {
     WishDrawer(WishId),
 }
 
+impl View {
+    fn is_selection(&self) -> bool {
+        matches!(self, Self::Selection(_))
+    }
+}
+
 #[derive(Debug)]
 pub enum ViewState {
     None,
@@ -718,11 +724,7 @@ impl ViewState {
 
     fn is_selection(&self) -> bool {
         match self {
-            Self::Done(View::Selection(_))
-            | Self::Animating {
-                view: View::Selection(_),
-                ..
-            } => true,
+            Self::Done(view) | Self::Animating { view, .. } => view.is_selection(),
             _ => false,
         }
     }
@@ -5074,6 +5076,13 @@ impl Home {
 
     pub fn back(&mut self, now: Instant, clear: bool) -> Task<Message> {
         self.unfocus(now);
+
+        if let Some((view, _)) = self.view.view()
+            && !view.is_selection()
+        {
+            return self.close_view(true, now);
+        }
+
         let Some(new) = self.backward.pop() else {
             return Task::none();
         };
@@ -5111,6 +5120,13 @@ impl Home {
 
     pub fn forward(&mut self, now: Instant) -> Task<Message> {
         self.unfocus(now);
+
+        if let Some((view, _)) = self.view.view()
+            && !view.is_selection()
+        {
+            return self.close_view(true, now);
+        }
+
         let Some(new) = self.forward.pop() else {
             return Task::none();
         };
