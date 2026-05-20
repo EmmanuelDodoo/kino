@@ -101,8 +101,6 @@ pub struct VideoSettings {
     pub filters: VideoFilters,
 
     pub comment_span: u64,
-
-    pub comments_nulls_first: bool,
 }
 
 impl VideoSettings {
@@ -130,7 +128,6 @@ impl VideoSettings {
                 gamma: 1.0,
             },
             comment_span: 90,
-            comments_nulls_first: true,
         }
     }
 }

@@ -317,13 +317,84 @@ impl Player {
 }
 
 #[derive(Debug)]
+struct Comments {
+    nulls: Vec<Comment>,
+    timestamped: BTreeMap<u64, Vec<Comment>>,
+}
+
+impl Comments {
+    fn new() -> Self {
+        Self {
+            nulls: Vec::default(),
+            timestamped: BTreeMap::new(),
+        }
+    }
+
+    fn get_ref(&self, id: CommentId, timestamp: Option<u64>) -> Option<&Comment> {
+        match timestamp {
+            Some(timestamp) => self
+                .timestamped
+                .get(&timestamp)
+                .and_then(|comments| comments.iter().find(|comment| comment.inner.id == id)),
+            None => self.nulls.iter().find(|comment| comment.inner.id == id),
+        }
+    }
+
+    fn get_mut(&mut self, id: CommentId, timestamp: Option<u64>) -> Option<&mut Comment> {
+        match timestamp {
+            Some(timestamp) => self
+                .timestamped
+                .get_mut(&timestamp)
+                .and_then(|comments| comments.iter_mut().find(|comment| comment.inner.id == id)),
+            None => self.nulls.iter_mut().find(|comment| comment.inner.id == id),
+        }
+    }
+
+    fn is_animating(&self, now: Instant) -> bool {
+        self.nulls.iter().any(|comment| comment.is_animating(now))
+            || self
+                .timestamped
+                .iter()
+                .any(|(_, comment)| comment.iter().any(|comment| comment.is_animating(now)))
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &models::Comment> {
+        let nulls = self.nulls.iter();
+
+        let timestamped = self
+            .timestamped
+            .values()
+            .flat_map(|comments| comments.iter());
+
+        nulls.chain(timestamped).map(|comment| &comment.inner)
+    }
+
+    fn update(&mut self, comments: Vec<Comment>) {
+        let comments = comments
+            .into_iter()
+            .map(|comment| (comment.inner.timestamp, comment));
+
+        for (timestamp, comment) in comments {
+            match timestamp {
+                Some(timestamp) => {
+                    let entry = self.timestamped.entry(timestamp).or_default();
+
+                    entry.push(comment);
+                }
+                None => self.nulls.push(comment),
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 enum AutoState {
     Loading,
     Idle,
     Ready {
         player: Box<Player>,
         thumbnails_handle: Option<task::Handle>,
-        comments: BTreeMap<u64, Vec<Comment>>,
+        comments: Comments,
     },
 }
 
@@ -333,7 +404,7 @@ enum State {
     Ready {
         player: Box<Player>,
         thumbnails_handle: Option<task::Handle>,
-        comments: BTreeMap<u64, Vec<Comment>>,
+        comments: Comments,
         awake: Option<keepawake::KeepAwake>,
     },
 }
@@ -580,7 +651,7 @@ impl Manager {
                     self.state = State::Ready {
                         awake,
                         player: Box::new(player),
-                        comments: BTreeMap::default(),
+                        comments: Comments::new(),
                         thumbnails_handle: Some(handle),
                     };
 
@@ -590,7 +661,7 @@ impl Manager {
                     player.video.set_paused(true);
                     self.next = AutoState::Ready {
                         player: Box::new(player),
-                        comments: BTreeMap::default(),
+                        comments: Comments::new(),
                         thumbnails_handle: Some(handle),
                     };
                     Task::none()
@@ -1145,12 +1216,6 @@ impl Manager {
                 let Some(Panel::Comments(new)) = self.panel.as_mut() else {
                     return Task::none();
                 };
-                let nulls_first = self.settings.comments_nulls_first;
-                let default = if nulls_first {
-                    0
-                } else {
-                    player.video.duration().as_secs()
-                };
 
                 match csg {
                     CommentMessage::New => {
@@ -1176,10 +1241,13 @@ impl Manager {
                             editor,
                         );
 
-                        let batch = comments
-                            .entry(comment.inner.timestamp.unwrap_or(default))
-                            .or_default();
-                        batch.push(comment);
+                        match comment.inner.timestamp {
+                            Some(timestamp) => {
+                                let batch = comments.timestamped.entry(timestamp).or_default();
+                                batch.push(comment);
+                            }
+                            None => comments.nulls.push(comment),
+                        }
 
                         self.play(None)
                     }
@@ -1224,31 +1292,73 @@ impl Manager {
                         Task::none()
                     }
                     CommentMessage::Edit { id, timestamp } => {
-                        match comments.get_mut(&timestamp.unwrap_or_default()).and_then(
-                            |comments| comments.iter_mut().find(|comment| comment.inner.id == id),
-                        ) {
-                            Some(comment) => comment.edit(),
-                            None => Task::none(),
-                        }
+                        let comment = match timestamp {
+                            Some(timestamp) => {
+                                match comments.timestamped.get_mut(&timestamp).and_then(
+                                    |comments| {
+                                        comments.iter_mut().find(|comment| comment.inner.id == id)
+                                    },
+                                ) {
+                                    Some(comment) => comment,
+                                    None => return Task::none(),
+                                }
+                            }
+                            None => {
+                                match comments
+                                    .nulls
+                                    .iter_mut()
+                                    .find(|comment| comment.inner.id == id)
+                                {
+                                    Some(comment) => comment,
+                                    None => return Task::none(),
+                                }
+                            }
+                        };
+
+                        comment.edit()
                     }
                     CommentMessage::Save { id, timestamp } => {
-                        let Some(batch) = comments.get_mut(&timestamp.unwrap_or(default)) else {
-                            return Task::none();
+                        let mut saved = match timestamp {
+                            Some(timestamp) => {
+                                let Some(batch) = comments.timestamped.get_mut(&timestamp) else {
+                                    return Task::none();
+                                };
+
+                                let Some((idx, _)) = batch
+                                    .iter()
+                                    .enumerate()
+                                    .find(|(_, comment)| comment.inner.id == id)
+                                else {
+                                    return Task::none();
+                                };
+
+                                batch.remove(idx)
+                            }
+                            None => {
+                                let Some((idx, _)) = comments
+                                    .nulls
+                                    .iter()
+                                    .enumerate()
+                                    .find(|(_, comment)| comment.inner.id == id)
+                                else {
+                                    return Task::none();
+                                };
+
+                                comments.nulls.remove(idx)
+                            }
                         };
 
-                        let Some((idx, _)) = batch
-                            .iter()
-                            .enumerate()
-                            .find(|(_, comment)| comment.inner.id == id)
-                        else {
-                            return Task::none();
-                        };
+                        let timestamp = saved.save(player.position as u64);
 
-                        let mut saved = batch.remove(idx);
-                        let timestamp = saved.save(player.position as u64).unwrap_or(default);
-
-                        let batch = comments.entry(timestamp).or_default();
-                        batch.push(saved);
+                        match timestamp {
+                            Some(timestamp) => {
+                                let batch = comments.timestamped.entry(timestamp).or_default();
+                                batch.push(saved);
+                            }
+                            None => {
+                                comments.nulls.push(saved);
+                            }
+                        }
 
                         self.play(None)
                     }
@@ -1257,48 +1367,28 @@ impl Manager {
                         timestamp,
                         action,
                     } => {
-                        if let Some(comment) = comments
-                            .get_mut(&timestamp.unwrap_or(default))
-                            .and_then(|comments| {
-                                comments.iter_mut().find(|comment| comment.inner.id == id)
-                            })
-                        {
+                        if let Some(comment) = comments.get_mut(id, timestamp) {
                             comment.perform_action(action);
-                        }
+                        };
 
                         self.pause(None)
                     }
                     CommentMessage::Cancel { id, timestamp } => {
-                        if let Some(comment) = comments
-                            .get_mut(&timestamp.unwrap_or(default))
-                            .and_then(|comments| {
-                                comments.iter_mut().find(|comment| comment.inner.id == id)
-                            })
-                        {
+                        if let Some(comment) = comments.get_mut(id, timestamp) {
                             comment.cancel();
                         }
 
                         self.play(None)
                     }
                     CommentMessage::Delete { id, timestamp } => {
-                        if let Some(comment) = comments
-                            .get_mut(&timestamp.unwrap_or(default))
-                            .and_then(|comments| {
-                                comments.iter_mut().find(|comment| comment.inner.id == id)
-                            })
-                        {
+                        if let Some(comment) = comments.get_mut(id, timestamp) {
                             comment.inner.removed = true;
                         };
 
                         Task::none()
                     }
                     CommentMessage::ImageShown { id, timestamp, url } => {
-                        let Some(comment) = comments
-                            .get_mut(&timestamp.unwrap_or(default))
-                            .and_then(|comments| {
-                                comments.iter_mut().find(|comment| comment.inner.id == id)
-                            })
-                        else {
+                        let Some(comment) = comments.get_mut(id, timestamp) else {
                             return Task::none();
                         };
 
@@ -1326,13 +1416,8 @@ impl Manager {
                         image,
                     } => {
                         let Some(images) = comments
-                            .get_mut(&timestamp.unwrap_or(default))
-                            .and_then(|comments| {
-                                comments
-                                    .iter_mut()
-                                    .find(|comment| comment.inner.id == id)
-                                    .map(|comment| &mut comment.images)
-                            })
+                            .get_mut(id, timestamp)
+                            .map(|comment| &mut comment.images)
                         else {
                             return Task::none();
                         };
@@ -1936,9 +2021,7 @@ impl Manager {
 
     pub fn is_animating(&self, now: Instant) -> bool {
         let state = match &self.state {
-            State::Ready { comments, .. } => comments
-                .iter()
-                .any(|(_, comments)| comments.iter().any(|comment| comment.is_animating(now))),
+            State::Ready { comments, .. } => comments.is_animating(now),
             State::Loading | State::Idle => false,
         };
 
@@ -2745,10 +2828,7 @@ impl Manager {
             return Task::none();
         };
 
-        let comments = comments
-            .values()
-            .flat_map(|comments| comments.iter().map(|comment| comment.inner.clone()))
-            .collect();
+        let comments = comments.iter().cloned().collect();
         let comments = Message::SaveComments(comments).tasked();
 
         let duration = player.video.duration().as_secs_f64();
@@ -2787,26 +2867,6 @@ impl Manager {
     }
 
     pub fn fetched_comments(&mut self, id: VideoId, comments: Vec<Comment>) -> Task<Message> {
-        let nulls_start = self.settings.comments_nulls_first;
-
-        let update = |player: &mut Player, curr: &mut BTreeMap<u64, Vec<Comment>>| {
-            let default = if nulls_start {
-                0
-            } else {
-                player.video.duration().as_secs()
-            };
-
-            let comments = comments
-                .into_iter()
-                .map(|comment| (comment.inner.timestamp.unwrap_or(default), comment));
-
-            for (timestamp, comment) in comments {
-                let entry = curr.entry(timestamp).or_default();
-
-                entry.push(comment)
-            }
-        };
-
         match &mut self.state {
             State::Ready {
                 player,
@@ -2814,7 +2874,7 @@ impl Manager {
                 awake: _awake,
                 thumbnails_handle: _handle,
             } if player.item.id == id => {
-                update(player, curr);
+                curr.update(comments);
 
                 Task::none()
             }
@@ -2824,7 +2884,7 @@ impl Manager {
                     comments: curr,
                     thumbnails_handle: _handle,
                 } if player.item.id == id => {
-                    update(player, curr);
+                    curr.update(comments);
 
                     Task::none()
                 }
@@ -3001,7 +3061,6 @@ fn apply_settings(settings: &VideoSettings, player: &mut Player) {
         completion_watch_time: _completion_watch,
         subtitles: _subtitles,
         comment_span: _comment_span,
-        comments_nulls_first: _nulls_first,
         filters:
             utils::VideoFilters {
                 contrast,
@@ -3209,7 +3268,7 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
 
 fn draw_comments<'a>(
     new: &'a Option<(widget::Id, text_editor::Content)>,
-    comments: &'a BTreeMap<u64, Vec<Comment>>,
+    comments: &'a Comments,
     position: u64,
     span: u64,
     theme: &Theme,
@@ -3281,25 +3340,41 @@ fn draw_comments<'a>(
         .padding(padding)
         .into();
 
-    let content: Element<'_, CommentMessage> = {
+    let draw_comment = |comment: &'a Comment| {
+        container(comment.view(now, theme))
+            .max_height(325)
+            .width(Length::Fill)
+            .into()
+    };
+
+    let nulls = {
+        let nulls = comments.nulls.iter().filter_map(|comment| {
+            if !comment.inner.removed {
+                Some(draw_comment(comment))
+            } else {
+                None
+            }
+        });
+
+        let nulls = container(column(nulls)).max_height(500);
+
+        scrollable(nulls).spacing(10)
+    };
+
+    let comments = {
         let timestamp = { position.saturating_sub(span)..=position.saturating_add(span) };
 
         let comments = comments
+            .timestamped
             .range(timestamp)
             .flat_map(|(_, comments)| comments.iter().filter(|comment| !comment.inner.removed));
 
-        column(comments.map(|comment| {
-            container(comment.view(now, theme))
-                .max_height(325)
-                .width(Length::Fill)
-                .into()
-        }))
-        .spacing(16)
-        .into()
+        column(comments.map(|comment| draw_comment(comment))).spacing(16)
     };
 
-    let content: Element<'_, CommentMessage> =
-        scrollable(content).height(Length::Fill).spacing(10).into();
+    let content = scrollable(comments).height(Length::Fill).spacing(10);
+
+    let content: Element<'_, CommentMessage> = column!(nulls, content).spacing(10).into();
 
     let content = column!(
         title,
