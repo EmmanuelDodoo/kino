@@ -45,11 +45,13 @@ pub enum FetchId {
     CollectionsSimple,
     Wishlist,
     Collections,
+    Directories,
     Movie(MovieId),
     Show(ShowId),
     Season(SeasonId),
     Episode(EpisodeId),
     Collection(CollectionId),
+    Directory(DirectoryId),
 }
 
 #[derive(Clone, Debug)]
@@ -1097,18 +1099,86 @@ impl App {
                 self.last_refresh = now;
 
                 match id {
+                    FetchId::Directories => {
+                        let dirs = match self
+                            .db
+                            .get_directories()
+                            .context("Failed fetching directories")
+                        {
+                            Ok(dirs) => dirs,
+                            Err(error) => {
+                                return Message::anyhow(error).tasked();
+                            }
+                        };
+
+                        match &mut self.settings {
+                            Some(settings) => {
+                                settings.fetched_directories(dirs);
+                                Task::none()
+                            }
+                            None => self.home.fetched_directories(dirs),
+                        }
+                    }
+                    FetchId::Directory(id) => {
+                        let dir = match self
+                            .db
+                            .get_directory(id)
+                            .with_context(|| format!("Fetching directory {id}"))
+                            .context("Missing directory")
+                        {
+                            Ok(dir) => dir,
+                            Err(error) => return Message::anyhow(error).tasked(),
+                        };
+
+                        let dir_movies = match self
+                            .db
+                            .get_dir_movies(id, movie_map)
+                            .with_context(|| format!("Getting directory {id} movies"))
+                        {
+                            Ok(movies) => movies,
+                            Err(error) => return Message::anyhow(error).tasked(),
+                        };
+
+                        let dir_shows = match self
+                            .db
+                            .get_dir_shows(id, show_map)
+                            .with_context(|| format!("Getting directory {id} shows"))
+                        {
+                            Ok(shows) => shows,
+                            Err(error) => return Message::anyhow(error).tasked(),
+                        };
+
+                        let mut tasks = vec![];
+                        let mut movies = vec![];
+                        let mut shows = vec![];
+
+                        for (show, task) in dir_shows {
+                            shows.push(show);
+                            tasks.push(task.map(Message::ShowTask));
+                        }
+
+                        for (movie, task) in dir_movies {
+                            movies.push(movie);
+                            tasks.push(task.map(Message::MovieTask));
+                        }
+
+                        let home_tasks = self.home.fetched_directory(dir, movies, shows);
+                        let samples = Task::batch(tasks);
+
+                        Task::batch([home_tasks, samples])
+                    }
                     FetchId::CollectionsSimple => {
                         let collections = match self
                             .db
                             .get_collections(collection::Sort::View, SimpleCollection::from_row)
+                            .context("Fetching simple collections")
                         {
                             Ok(collections) => {
                                 tracing::debug!("Fetched {} Simple Collections", collections.len());
                                 collections
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
-                                return Task::done(msg);
+                                return Message::anyhow(error).tasked();
                             }
                         };
 
@@ -1468,24 +1538,15 @@ impl App {
                 }
             }
             Message::FetchDirectories => {
-                let Some(settings) = self.settings.as_mut() else {
-                    return Task::none();
+                let msg = Message::Fetch {
+                    id: FetchId::Directories,
+                    filters: filter::Filter::none(),
+                    sort: Sort::new(),
+                    limit: None,
+                    offset: None,
                 };
 
-                let dirs = match self.db.get_directories() {
-                    Ok(dirs) => {
-                        tracing::debug!("Fetched {} Directories", dirs.len());
-                        dirs
-                    }
-                    Err(error) => {
-                        let msg = Message::error(error, true);
-                        return Task::done(msg);
-                    }
-                };
-
-                settings.fetched_directories(dirs);
-
-                Task::none()
+                self.update(msg, now)
             }
             Message::FetchComments(id) => {
                 if matches!(self.screen, Screen::Settings) {
@@ -1730,15 +1791,18 @@ impl App {
                 self.config = config;
                 self.config.span_writer = writer;
 
+                let mut refresh = false;
                 let mut scans = vec![];
                 let mut dirs = vec![];
 
                 for (dir, op, scan, source_changed) in directories {
                     if scan && !matches!(op, Some(registry::db::Operation::Delete)) {
+                        refresh = true;
                         scans.push(dir.clone())
                     }
 
                     if let Some(op) = op {
+                        refresh = true;
                         dirs.push((dir, op, source_changed))
                     }
                 }
@@ -1751,6 +1815,11 @@ impl App {
 
                 let home_task = if !scans.is_empty() {
                     self.home.scanning(true)
+                } else {
+                    Task::none()
+                };
+                let refresh = if refresh {
+                    self.home.refresh()
                 } else {
                     Task::none()
                 };
@@ -1793,7 +1862,7 @@ impl App {
                     Task::none()
                 };
 
-                Task::batch([auth, home_scroll, rating, dir, home_task]).chain(scans)
+                Task::batch([auth, home_scroll, rating, dir, home_task, refresh]).chain(scans)
             }
             Message::Layout(layout) => {
                 self.config.general.layout = layout;
@@ -2277,7 +2346,10 @@ impl App {
     pub fn view(&self) -> Element<'_, Message> {
         let theme = self.theme().unwrap();
         let content: Element<'_, Message> = match self.screen {
-            Screen::Home => self.home.view(&theme, self.now).map(Message::Home),
+            Screen::Home => self
+                .home
+                .view(&theme, self.now, self.config.general.show_dirs)
+                .map(Message::Home),
             Screen::Player => {
                 let player = self.player.as_ref().unwrap();
 

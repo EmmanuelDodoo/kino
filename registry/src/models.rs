@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::Row;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef};
+use std::path::PathBuf;
 use uuid::Uuid;
 
 pub mod collection;
@@ -241,10 +242,17 @@ impl From<DirectoryId> for ToSqlOutput<'_> {
     }
 }
 
+impl std::fmt::Display for DirectoryId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Directory {
     pub id: DirectoryId,
-    pub path: String,
+    pub path: PathBuf,
+    pub name: String,
     pub active: bool,
     pub media_type: MediaType,
     pub last_scan: DateTime<Local>,
@@ -255,7 +263,16 @@ impl Directory {
     pub(super) fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         let id = row.get::<_, String>("id")?;
         let id = DirectoryId(Uuid::try_parse(&id).unwrap());
+
         let path = row.get::<_, String>("path")?;
+        let path = PathBuf::from(path);
+
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("Unknown directory")
+            .to_owned();
+
         let media_type = row.get::<_, MediaType>("media_type")?;
         let active = row.get::<_, bool>("active")?;
         let last_scan = row.get::<_, DateTime<Local>>("last_scan")?;
@@ -264,6 +281,7 @@ impl Directory {
         Ok(Self {
             id,
             path,
+            name,
             media_type,
             active,
             last_scan,
@@ -275,6 +293,7 @@ impl Directory {
         let Self {
             id,
             path,
+            name: _unused,
             active,
             media_type,
             last_scan,
@@ -283,7 +302,7 @@ impl Directory {
 
         let id = ToSqlOutput::from(*id);
 
-        let path = ToSqlOutput::from(path.clone());
+        let path = ToSqlOutput::from(path.display().to_string());
         let active = ToSqlOutput::from(*active);
         let media_type = ToSqlOutput::from(*media_type);
         let last_scan = datetime_to_sql(last_scan);
@@ -333,7 +352,7 @@ impl Directory {
 
     #[must_use]
     pub fn set_path<'a>(&mut self, path: String) -> Query<'a> {
-        self.path = path.clone();
+        self.path = PathBuf::from(&path);
 
         let sql = "UPDATE directory SET path=:path WHERE id=:id";
         let params = [
@@ -390,15 +409,26 @@ impl Directory {
 
     pub fn new(path: String, media_type: MediaType, active: bool, source: String) -> Self {
         let last_scan = Local::now();
+        let path = PathBuf::from(path);
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("Unknown directory")
+            .to_owned();
 
         Self {
             id: DirectoryId(Uuid::now_v7()),
             media_type,
             path,
+            name,
             active,
             last_scan,
             source,
         }
+    }
+
+    pub fn is_movie(&self) -> bool {
+        matches!(self.media_type, MediaType::Movies)
     }
 }
 

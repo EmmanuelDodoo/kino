@@ -3,6 +3,7 @@ use iced::Task;
 use super::HomeMessage;
 use super::collection::{CollectionMessage, CollectionPage};
 use super::collections::{Collections, CollectionsMessage};
+use super::directory::{DirectoryMessage, DirectoryPage};
 use super::episode::{EpisodePage, EpisodePageMessage};
 use super::movie::{MoviePage, MoviePageMessage};
 use super::movies::{Movies, MoviesMessage};
@@ -10,7 +11,7 @@ use super::season::{SeasonPage, SeasonPageMessage};
 use super::series::{ShowPage, ShowPageMessage};
 use super::shows::{TvShows, TvShowsMessage};
 use super::wishlist::{Wishlist, WishlistMessage};
-use registry::models::{CollectionId, EpisodeId, ItemId, MovieId, SeasonId, ShowId};
+use registry::models::{CollectionId, DirectoryId, EpisodeId, ItemId, MovieId, SeasonId, ShowId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum PageKind {
@@ -24,6 +25,7 @@ pub enum PageKind {
     Show(ShowId),
     Season(SeasonId),
     Collection(CollectionId),
+    Directory(DirectoryId),
 }
 
 impl From<ItemId> for PageKind {
@@ -37,14 +39,53 @@ impl From<ItemId> for PageKind {
     }
 }
 
+impl PageKind {
+    pub fn is_home(self) -> bool {
+        matches!(self, Self::Home)
+    }
+
+    pub fn is_shows(self) -> bool {
+        matches!(self, Self::Shows)
+    }
+
+    pub fn is_movies(self) -> bool {
+        matches!(self, Self::Movies)
+    }
+
+    pub fn is_collections(self) -> bool {
+        matches!(self, Self::Collections)
+    }
+
+    pub fn is_wishlist(self) -> bool {
+        matches!(self, Self::Wishlist)
+    }
+
+    pub fn is_collection(&self, id: &CollectionId) -> bool {
+        match self {
+            Self::Collection(collection) => collection == id,
+            _ => false,
+        }
+    }
+
+    pub fn is_directory(&self, id: &DirectoryId) -> bool {
+        match self {
+            Self::Directory(dir) => dir == id,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Page {
     Home,
     Shows(TvShows),
     Movies(Movies),
-    Comments(()),
     Collections(Collections),
     Wishlist(Wishlist),
+    Directory {
+        dir: DirectoryPage,
+        id: DirectoryId,
+    },
     Collection {
         collection: CollectionPage,
         id: CollectionId,
@@ -68,6 +109,22 @@ pub enum Page {
 }
 
 impl Page {
+    pub fn kind(&self) -> PageKind {
+        match self {
+            Self::Home => PageKind::Home,
+            Self::Shows(_) => PageKind::Shows,
+            Self::Movies(_) => PageKind::Movies,
+            Self::Collections(_) => PageKind::Collections,
+            Self::Wishlist(_) => PageKind::Wishlist,
+            Self::Episode { id, .. } => PageKind::Episode(*id),
+            Self::Movie { id, .. } => PageKind::Movie(*id),
+            Self::Season { id, .. } => PageKind::Season(*id),
+            Self::Show { id, .. } => PageKind::Show(*id),
+            Self::Collection { id, .. } => PageKind::Collection(*id),
+            Self::Directory { id, .. } => PageKind::Directory(*id),
+        }
+    }
+
     pub fn goto_shows() -> PageKind {
         PageKind::Shows
     }
@@ -86,10 +143,6 @@ impl Page {
 
     pub fn is_movies(&self) -> bool {
         matches!(self, Self::Movies(_))
-    }
-
-    pub fn is_comments(&self) -> bool {
-        matches!(self, Self::Comments(_))
     }
 
     pub fn is_collections(&self) -> bool {
@@ -124,6 +177,13 @@ impl Page {
     pub fn collection_update(&mut self, message: CollectionMessage) -> Option<HomeMessage> {
         match self {
             Self::Collection { id, collection } if message.id == *id => collection.update(message),
+            _ => None,
+        }
+    }
+
+    pub fn directory_update(&mut self, message: DirectoryMessage) -> Option<HomeMessage> {
+        match self {
+            Self::Directory { dir, id } if message.id == *id => dir.update(message),
             _ => None,
         }
     }
@@ -180,9 +240,9 @@ impl Page {
             Self::Movie { page, .. } => page.show_tools(),
             Self::Season { page, .. } => page.show_tools(),
             Self::Show { page, .. } => page.show_tools(),
+            Self::Directory { dir, .. } => dir.show_tools(),
             Self::Home => false,
             Self::Wishlist(_) => false,
-            _ => todo!(),
         }
     }
 
@@ -196,9 +256,9 @@ impl Page {
             Self::Show { page, .. } => page.update_scroll(),
             Self::Season { page, .. } => page.update_scroll(),
             Self::Episode { page, .. } => page.update_scroll(),
+            Self::Directory { dir, .. } => dir.update_scroll(),
             Self::Home => Task::none(),
             Self::Wishlist(wishlist) => wishlist.update_scroll(),
-            _ => todo!(),
         }
     }
 }

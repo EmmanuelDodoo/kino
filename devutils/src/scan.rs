@@ -125,19 +125,20 @@ pub fn scan_dir(
     preferred_subtitle_code: Option<String>,
     preferred_audio_code: Option<String>,
 ) -> Option<()> {
-    tracing::debug!("Scanning directory {}", dir.path);
+    let path = dir.path.display();
+    tracing::debug!("Scanning directory {}", path);
     let discoverer = if discoverer {
         gstreamer::init()
-            .with_ctx_log(|| format!("Scan directory gstreamer init error on {}", dir.path));
+            .with_ctx_log(|| format!("Scan directory gstreamer init error on {}", path));
 
         Discoverer::new(gstreamer::ClockTime::from_seconds(5))
-            .with_ctx_log(|| format!("Scan directory discoverer error on {}", dir.path))
+            .with_ctx_log(|| format!("Scan directory discoverer error on {}", path))
     } else {
         None
     };
 
     let mut db = Database::open(db)
-        .with_ctx_log(|| format!("Scan directory DB opening error on {}.", dir.path))?;
+        .with_ctx_log(|| format!("Scan directory DB opening error on {}.", path))?;
 
     scan_dir_helper(
         &mut db,
@@ -208,11 +209,12 @@ pub fn scan_dir_helper(
     preferred_subtitle_code: Option<&str>,
     preferred_audio_code: Option<&str>,
 ) -> Option<()> {
+    let path = dir.path.display();
     let default_source = SourceSet::from_str(&dir.source);
 
     match dir.media_type {
         MediaType::Movies => {
-            tracing::debug!("Scanning movie directory {}", dir.path);
+            tracing::debug!("Scanning movie directory {}", path);
             struct DirMovie {
                 id: MovieId,
                 tombstone: bool,
@@ -225,7 +227,7 @@ pub fn scan_dir_helper(
             }
 
             let videos = scan_video_dir(&dir.path, discoverer, movie_depth, None)
-                .with_ctx_log(|| format!("Scanning movies in dir {}", dir.path))?;
+                .with_ctx_log(|| format!("Scanning movies in dir {}", path))?;
 
             tracing::debug!("Fetching Directory movies");
 
@@ -256,7 +258,7 @@ pub fn scan_dir_helper(
                         },
                     ))
                 })
-                .with_ctx_log(|| format!("Scanning directory {} movies", dir.path))?;
+                .with_ctx_log(|| format!("Scanning directory {} movies", path))?;
 
             let mut dir_movies = {
                 // todo: Db could return an iterator instead?
@@ -312,7 +314,7 @@ pub fn scan_dir_helper(
                         succ.log()
                     }
                     Err(err) => {
-                        err.with_ctx_log(|| format!("Movie {name} in Dir {} insertion", dir.path));
+                        err.with_ctx_log(|| format!("Movie {name} in Dir {} insertion", path));
                     }
                 };
 
@@ -390,10 +392,7 @@ pub fn scan_dir_helper(
                 .collect();
 
             db.insert_remove_movies(deletes).with_ctx_log(|| {
-                format!(
-                    "Scan movies failed to perform insert remove on {}",
-                    dir.path
-                )
+                format!("Scan movies failed to perform insert remove on {}", path)
             });
         }
         MediaType::Shows => {
@@ -424,9 +423,9 @@ pub fn scan_dir_helper(
                 source: SourceSet,
             }
 
-            tracing::debug!("Scanning shows directory {}", dir.path);
+            tracing::debug!("Scanning shows directory {}", path);
             let shows = scan_shows(&dir.path, discoverer)
-                .with_ctx_log(|| format!("Scanning shows in dir {}", dir.path))?;
+                .with_ctx_log(|| format!("Scanning shows in dir {}", path))?;
 
             tracing::debug!("Fetching Directory shows");
             let dir_shows = db
@@ -449,7 +448,7 @@ pub fn scan_dir_helper(
                         },
                     ))
                 })
-                .with_ctx_log(|| format!("Scanning directory {} shows", dir.path))?;
+                .with_ctx_log(|| format!("Scanning directory {} shows", path))?;
 
             let mut dir_shows = {
                 let mut map = HashMap::new();
@@ -492,7 +491,7 @@ pub fn scan_dir_helper(
                         }
                     }
                     Err(err) => {
-                        err.with_ctx_log(|| format!("Show {name} in Dir {} insertion", dir.path));
+                        err.with_ctx_log(|| format!("Show {name} in Dir {} insertion", path));
                         continue;
                     }
                 };
@@ -564,10 +563,7 @@ pub fn scan_dir_helper(
                         ))
                     })
                     .with_ctx_log(|| {
-                        format!(
-                            "Scanning show {show_name} seasons in directory {}",
-                            dir.path
-                        )
+                        format!("Scanning show {show_name} seasons in directory {}", path)
                     })
                 else {
                     continue;
@@ -620,7 +616,7 @@ pub fn scan_dir_helper(
                             err.with_ctx_log(|| {
                                 format!(
                                     "Show {show_name} season {season_number} in Dir {} insertion",
-                                    dir.path
+                                    path
                                 )
                             });
                             continue;
@@ -754,7 +750,7 @@ pub fn scan_dir_helper(
                                 succ.log();
                             }
                             Err(err) => {
-                                err.with_ctx_log(|| format!("Show {show_name} season {season_number} episode {episode_number} in Dir {} insertion", dir.path));
+                                err.with_ctx_log(|| format!("Show {show_name} season {season_number} episode {episode_number} in Dir {} insertion", path));
                             }
                         }
 
@@ -836,7 +832,7 @@ pub fn scan_dir_helper(
                         })
                         .collect();
 
-                    db.insert_remove_episodes(deletes).with_ctx_log(|| format!("Scan show {show_name} season {season_number} episodes failed to insert remove on {}", dir.path));
+                    db.insert_remove_episodes(deletes).with_ctx_log(|| format!("Scan show {show_name} season {season_number} episodes failed to insert remove on {}", path));
                 }
 
                 tracing::debug!("Performing season insert/remove");
@@ -855,7 +851,7 @@ pub fn scan_dir_helper(
                 db.insert_remove_seasons(deletes).with_ctx_log(|| {
                     format!(
                         "Scan show {show_name} failed to insert/remove seasons on {}",
-                        dir.path
+                        path
                     )
                 });
             }
@@ -876,7 +872,7 @@ pub fn scan_dir_helper(
             db.insert_remove_shows(deletes).with_ctx_log(|| {
                 format!(
                     "Scan shows failed to perform insert remove shows on {}",
-                    dir.path
+                    path
                 )
             });
         }

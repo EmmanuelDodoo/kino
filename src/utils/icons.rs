@@ -135,6 +135,7 @@ pub const COPY: char = '\u{e864}';
 pub const RENAME: char = '\u{e85b}';
 pub const FILE_UP: char = '\u{e85c}';
 pub const FOLDER_ADD: char = '\u{e85d}';
+pub const FOLDER: char = '\u{e86d}';
 pub const UPLOAD: char = '\u{e86b}';
 
 fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {

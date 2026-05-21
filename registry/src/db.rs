@@ -277,7 +277,10 @@ impl Database {
         number: u16,
         map: fn(&Row<'_>) -> rusqlite::Result<T>,
     ) -> rusqlite::Result<Option<T>> {
-        let sql = format!("{} WHERE show_id=:show AND season_number=:number", Self::SEASON_QUERY);
+        let sql = format!(
+            "{} WHERE show_id=:show AND season_number=:number",
+            Self::SEASON_QUERY
+        );
 
         let mut statement = self.prepare_cached(&sql)?;
 
@@ -982,7 +985,7 @@ impl Database {
 
             for dir in inserts {
                 params.push(ToSqlOutput::from(dir.id));
-                params.push(ToSqlOutput::from(dir.path));
+                params.push(ToSqlOutput::from(dir.path.display().to_string()));
                 params.push(ToSqlOutput::from(dir.active));
                 params.push(ToSqlOutput::from(dir.media_type));
                 params.push(ToSqlOutput::from(dir.source));
@@ -1010,7 +1013,7 @@ impl Database {
                     sql,
                     &[
                         (":id", &ToSqlOutput::from(dir.id)),
-                        (":path", &ToSqlOutput::from(dir.path)),
+                        (":path", &ToSqlOutput::from(dir.path.display().to_string())),
                         (":active", &ToSqlOutput::from(dir.active)),
                         (":type", &ToSqlOutput::from(dir.media_type)),
                         (":source", &ToSqlOutput::from(dir.source)),

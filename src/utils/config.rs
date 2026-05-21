@@ -149,6 +149,7 @@ pub struct GeneralSettings {
     pub preferred_audio_codec: Option<String>,
     pub tmdb_rating: bool,
     pub default_source: SourceSet,
+    pub show_dirs: bool,
 }
 
 impl GeneralSettings {
@@ -168,6 +169,7 @@ impl GeneralSettings {
             preferred_audio_codec: Some("en".into()),
             tmdb_rating: true,
             default_source: SourceSet::Tmdb,
+            show_dirs: false,
         }
     }
 
@@ -187,6 +189,7 @@ impl GeneralSettings {
             preferred_audio_codec: Some("en".into()),
             tmdb_rating: true,
             default_source: SourceSet::Tmdb,
+            show_dirs: true,
         }
     }
 }

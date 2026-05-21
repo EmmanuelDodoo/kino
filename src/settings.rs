@@ -143,6 +143,8 @@ pub enum GeneralMessage {
     Search(String),
     IncrSearch,
     DecrSearch,
+    ShowDirs(bool),
+    ToggleShowDirs,
 }
 
 #[derive(Debug, Clone)]
@@ -495,6 +497,14 @@ impl Settings {
                 GeneralMessage::DecrRecents => {
                     let value = self.config.general.recents_limit.unwrap_or(0) - 1;
                     self.config.general.recents_limit = Some(value.max(-1));
+                    Task::none()
+                }
+                GeneralMessage::ShowDirs(show) => {
+                    self.config.general.show_dirs = show;
+                    Task::none()
+                }
+                GeneralMessage::ToggleShowDirs => {
+                    self.config.general.show_dirs = !self.config.general.show_dirs;
                     Task::none()
                 }
             },
@@ -1270,9 +1280,10 @@ impl Settings {
             preferred_subtitle_codec,
             preferred_audio_codec,
             default_source,
+            show_dirs,
         } = &self.config.general;
 
-        let general = draw_general(refresh_interval, recents_limit, search_limit)
+        let general = draw_general(refresh_interval, recents_limit, search_limit, *show_dirs)
             .map(SettingsMessage::General);
 
         let appearance = draw_appearance(layout, theme).map(SettingsMessage::Appearance);
@@ -2100,6 +2111,7 @@ fn draw_general<'a>(
     refresh_interval: &Duration,
     recents_limit: &Option<i32>,
     search_limit: &Option<i32>,
+    show_dirs: bool,
 ) -> Element<'a, GeneralMessage> {
     let refresh_interval = {
         let label = label_maker("Refresh Interval(seconds) ");
@@ -2176,12 +2188,27 @@ fn draw_general<'a>(
         row!(label, space::horizontal(), input).align_y(Vertical::Center)
     };
 
+    let show_dirs = {
+        let label = label_maker("Show Directories on sidebar ");
+
+        let label = button(label)
+            .padding(0)
+            .on_press(GeneralMessage::ToggleShowDirs)
+            .style(styles::button::text);
+
+        let toggle = toggler(show_dirs).on_toggle(GeneralMessage::ShowDirs);
+
+        row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
+    };
+
     let content = column!(
         refresh_interval,
         horizontal_rule(),
         recents_limit,
         horizontal_rule(),
-        search_limit
+        search_limit,
+        horizontal_rule(),
+        show_dirs,
     )
     .spacing(SECTION_SPACING);
 

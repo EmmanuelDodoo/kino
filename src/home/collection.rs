@@ -8,8 +8,8 @@ use super::{
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{self, Layout, Scroll, empty, styles};
-use iced::{Border, Padding};
 use iced::{
+    Border, Padding,
     Element, Length, Task,
     alignment::Vertical,
     time::Instant,

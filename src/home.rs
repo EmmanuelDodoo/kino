@@ -18,6 +18,7 @@ use std::path::PathBuf;
 
 mod collection;
 mod collections;
+mod directory;
 mod draws;
 mod episode;
 mod movie;
@@ -33,9 +34,9 @@ use crate::app::{EpisodeUpdate, MediaUpdateKind, MovieUpdate, SeasonUpdate, Show
 use devutils::source::{SourceId, SourceSet};
 use draws::*;
 use registry::models::{
-    Audio, AudioId, Collection, CollectionId, CollectionView, Episode, EpisodeId, Media, Movie,
-    MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Subtitle, SubtitleId, VideoInfo,
-    VideoInfoId, Wish, WishId, WishKind,
+    Audio, AudioId, Collection, CollectionId, CollectionView, Directory, Episode, EpisodeId, Media,
+    Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Subtitle, SubtitleId,
+    VideoInfo, VideoInfoId, Wish, WishId, WishKind,
     collection::{
         ItemId, Items,
         triggers::{self, Comparison, DeleteId, DeleteTrigger, InsertId, InsertTrigger, Logic},
@@ -54,6 +55,7 @@ use crate::utils::{
 
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};
+use directory::{DirectoryMessage, DirectoryPage};
 pub use episode::{EpisodeItem, EpisodeItemTask};
 use episode::{EpisodePage, EpisodePageMessage};
 pub use movie::{MovieItem, MovieItemTask};
@@ -782,6 +784,11 @@ enum State {
         seasons: Vec<SeasonItem>,
         episodes: Vec<EpisodeItem>,
     },
+    Directory {
+        dir: Directory,
+        shows: Vec<ShowItem>,
+        movies: Vec<MovieItem>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -793,6 +800,7 @@ pub enum HomeMessage {
     Movies(MoviesMessage),
     Shows(TvShowsMessage),
     Collection(CollectionMessage),
+    Directory(DirectoryMessage),
     Collections(CollectionsMessage),
     Wishlist(WishlistMessage),
     MoviePage(MoviePageMessage),
@@ -848,6 +856,8 @@ pub struct Home {
 
     collections: Vec<SimpleCollection>,
 
+    directories: Vec<Directory>,
+
     layout: Layout,
     sort: Sort,
     filters: Filter,
@@ -883,6 +893,14 @@ impl Home {
             offset: None,
         });
 
+        let dirs = Task::done(Message::Fetch {
+            id: FetchId::Directories,
+            filters,
+            sort,
+            limit: None,
+            offset: None,
+        });
+
         let collections = Task::done(Message::Fetch {
             id: FetchId::CollectionsSimple,
             filters,
@@ -891,7 +909,7 @@ impl Home {
             offset: None,
         });
 
-        let tasks = collections.chain(recents);
+        let tasks = Task::batch([collections, recents, dirs]);
 
         (Self::new(layout, filters, sort, recent_limit), tasks)
     }
@@ -912,6 +930,7 @@ impl Home {
             state: State::Loading,
             scroll: Scroll::new(),
             collections: Vec::default(),
+            directories: Vec::default(),
             view: ViewState::None,
             recent_limit,
             scanning: false,
@@ -1087,6 +1106,15 @@ impl Home {
                 };
 
                 page.collection_update(message)
+                    .map(|hsg| Task::done(Message::Home(hsg)))
+                    .unwrap_or_default()
+            }
+            HomeMessage::Directory(message) => {
+                let Some(page) = self.current_page_mut() else {
+                    return Task::none();
+                };
+
+                page.directory_update(message)
                     .map(|hsg| Task::done(Message::Home(hsg)))
                     .unwrap_or_default()
             }
@@ -2363,6 +2391,14 @@ impl Home {
                                 }
 
                                 for media in episodes {
+                                    media.selected = false;
+                                }
+                            }
+                            State::Directory { movies, shows, .. } => {
+                                for media in movies {
+                                    media.selected = false;
+                                }
+                                for media in shows {
                                     media.selected = false;
                                 }
                             }
@@ -3673,7 +3709,9 @@ impl Home {
                     (State::Loading, _)
                     | (State::Episode { .. }, _)
                     | (State::Movie { .. }, _)
-                    | (State::Collections(_), _) => Task::none(),
+                    | (State::Collections(_), _)
+                    | (State::Directory { .. }, ItemId::Season(_))
+                    | (State::Directory { .. }, ItemId::Episode(_)) => Task::none(),
                     (State::Wishlist(_), _) => Task::none(),
                     (State::Recent { shows, .. }, ItemId::Show(id)) => {
                         if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
@@ -3761,6 +3799,22 @@ impl Home {
                         }
 
                         self.focused = Some(ItemId::Episode(id));
+                        Task::none()
+                    }
+                    (State::Directory { shows, .. }, ItemId::Show(id)) => {
+                        if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
+                            show.go_mut(is_hovered, now);
+                        };
+
+                        self.focused = Some(ItemId::Show(id));
+                        Task::none()
+                    }
+                    (State::Directory { movies, .. }, ItemId::Movie(id)) => {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
+                            movie.go_mut(is_hovered, now);
+                        }
+
+                        self.focused = Some(ItemId::Movie(id));
                         Task::none()
                     }
                 }
@@ -3851,25 +3905,8 @@ impl Home {
             .and_then(|kind| self.pages.get_mut(kind))
     }
 
-    fn side(&self) -> Element<'_, HomeMessage> {
-        let header = {
-            let color = |theme: &Theme| {
-                let color = theme.palette().primary.base.color.scale_alpha(0.85);
-
-                text::Style { color: Some(color) }
-            };
-
-            // let icon = icons::icon(icons::LOGO).size(H3).style(color);
-            let text = display("kino").style(color);
-
-            container(
-                row!(text)
-                    .padding([5, 10])
-                    .align_y(Vertical::Center)
-                    .spacing(12.0),
-            )
-            // .center_x(Length::Fill)
-        };
+    fn side_no_dirs(&self) -> Element<'_, HomeMessage> {
+        let current = self.current_page().map(|page| page.kind());
 
         let collections = self
             .collections
@@ -3881,8 +3918,8 @@ impl Home {
                         unicode,
                         &collection.name,
                         HomeMessage::Goto(PageKind::Collection(collection.id)),
-                        self.current_page()
-                            .map(|page| page.is_collection(&collection.id))
+                        current
+                            .map(|kind| kind.is_collection(&collection.id))
                             .unwrap_or_default(),
                         Some(view_unicode(collection.view)),
                     );
@@ -3895,8 +3932,8 @@ impl Home {
                         unicode,
                         &collection.name,
                         HomeMessage::Goto(PageKind::Collection(collection.id)),
-                        self.current_page()
-                            .map(|page| page.is_collection(&collection.id))
+                        current
+                            .map(|kind| kind.is_collection(&collection.id))
                             .unwrap_or_default(),
                         None,
                     );
@@ -3911,21 +3948,21 @@ impl Home {
                 icons::HOME,
                 "Home",
                 HomeMessage::Goto(PageKind::Home),
-                self.current_page().map(Page::is_home).unwrap_or_default(),
-                None,
-            ),
-            icon_button(
-                icons::SHOW,
-                "Shows",
-                HomeMessage::Goto(Page::goto_shows()),
-                self.current_page().map(Page::is_shows).unwrap_or_default(),
+                current.map(PageKind::is_home).unwrap_or_default(),
                 None,
             ),
             icon_button(
                 icons::MOVIE,
                 "Movies",
                 HomeMessage::Goto(Page::goto_movies()),
-                self.current_page().map(Page::is_movies).unwrap_or_default(),
+                current.map(PageKind::is_movies).unwrap_or_default(),
+                None,
+            ),
+            icon_button(
+                icons::SHOW,
+                "Shows",
+                HomeMessage::Goto(Page::goto_shows()),
+                current.map(PageKind::is_shows).unwrap_or_default(),
                 None,
             ),
         )
@@ -3962,15 +3999,6 @@ impl Home {
                     .unwrap_or_default(),
                 None
             ),
-            // icon_button(
-            //     icons::COMMENT,
-            //     "Comments",
-            //     HomeMessage::Goto(Page::goto_comments()),
-            //     self.current_page()
-            //         .map(Page::is_comments)
-            //         .unwrap_or_default(),
-            //         None
-            // ),
             icon_button(
                 icons::SETTINGS,
                 "Settings",
@@ -3985,6 +4013,163 @@ impl Home {
             .spacing(4.0)
             .padding([0, 5])
             .height(Length::Fill);
+
+        content.into()
+    }
+
+    fn side_dirs(&self) -> Element<'_, HomeMessage> {
+        let current = self.current_page().map(|page| page.kind());
+
+        let collections = self
+            .collections
+            .iter()
+            .filter_map(|collection| match collection.view {
+                CollectionView::Pinned => {
+                    let unicode = Icon::new(collection.icon).unicode();
+                    let content = icon_button(
+                        unicode,
+                        &collection.name,
+                        HomeMessage::Goto(PageKind::Collection(collection.id)),
+                        current
+                            .map(|kind| kind.is_collection(&collection.id))
+                            .unwrap_or_default(),
+                        Some(view_unicode(collection.view)),
+                    );
+
+                    Some(content)
+                }
+                CollectionView::Shown => {
+                    let unicode = Icon::new(collection.icon).unicode();
+                    let content = icon_button(
+                        unicode,
+                        &collection.name,
+                        HomeMessage::Goto(PageKind::Collection(collection.id)),
+                        current
+                            .map(|kind| kind.is_collection(&collection.id))
+                            .unwrap_or_default(),
+                        None,
+                    );
+
+                    Some(content)
+                }
+                CollectionView::Hidden => None,
+            });
+
+        let directories = self.directories.iter().map(|dir| {
+            let icon = if dir.is_movie() {
+                icons::MOVIE
+            } else {
+                icons::SHOW
+            };
+
+            icon_button(
+                icon,
+                &dir.name,
+                HomeMessage::Goto(PageKind::Directory(dir.id)),
+                current
+                    .map(|kind| kind.is_directory(&dir.id))
+                    .unwrap_or_default(),
+                None,
+            )
+        });
+
+        let collections = column(directories)
+            .extend(collections)
+            .push(icon_button(
+                icons::ADD,
+                "New collection",
+                HomeMessage::NewCollection,
+                false,
+                None,
+            ))
+            .spacing(12.0)
+            .width(Length::Fill);
+
+        let collections = scrollable(collections)
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        let bottom = column!(
+            icon_button(
+                icons::MOVIE,
+                "Movies",
+                HomeMessage::Goto(Page::goto_movies()),
+                current.map(PageKind::is_movies).unwrap_or_default(),
+                None,
+            ),
+            icon_button(
+                icons::SHOW,
+                "Shows",
+                HomeMessage::Goto(Page::goto_shows()),
+                current.map(PageKind::is_shows).unwrap_or_default(),
+                None,
+            ),
+            icon_button(
+                icons::TODO,
+                "Wishlist",
+                HomeMessage::Goto(PageKind::Wishlist),
+                current.map(PageKind::is_wishlist).unwrap_or_default(),
+                None
+            ),
+            icon_button(
+                icons::LIBRARY,
+                "Collections",
+                HomeMessage::Goto(PageKind::Collections),
+                current.map(PageKind::is_collections).unwrap_or_default(),
+                None
+            ),
+            icon_button(
+                icons::SETTINGS,
+                "Settings",
+                HomeMessage::Settings,
+                false,
+                None
+            )
+        )
+        .spacing(12.0);
+
+        let content = column!(
+            container(icon_button(
+                icons::HOME,
+                "Home",
+                HomeMessage::Goto(PageKind::Home),
+                current.map(PageKind::is_home).unwrap_or_default(),
+                None,
+            ))
+            .padding(Padding::ZERO.bottom(12)),
+            collections,
+            rule::horizontal(1.0),
+            bottom,
+        )
+        .spacing(4.0)
+        .padding([0, 5])
+        .height(Length::Fill);
+
+        content.into()
+    }
+
+    fn side(&self, show_dirs: bool) -> Element<'_, HomeMessage> {
+        let header = {
+            let color = |theme: &Theme| {
+                let color = theme.palette().primary.base.color.scale_alpha(0.85);
+
+                text::Style { color: Some(color) }
+            };
+
+            let text = display("kino").style(color);
+
+            container(
+                row!(text)
+                    .padding([5, 10])
+                    .align_y(Vertical::Center)
+                    .spacing(12.0),
+            )
+        };
+        let content = if show_dirs {
+            self.side_dirs()
+        } else {
+            self.side_no_dirs()
+        };
 
         let content = column!(header, space::vertical().height(24.0), content,)
             .width(300.0)
@@ -4636,6 +4821,16 @@ impl Home {
                 movies.len() + shows.len() + seasons.len() + episodes.len(),
                 None,
             ),
+            State::Directory { dir, shows, movies } => {
+                let items = shows.len() + movies.len();
+                let name = if dir.is_movie() {
+                    if items > 1 { "movie" } else { "movies" }
+                } else {
+                    if items > 1 { "show" } else { "shows" }
+                };
+
+                (dir.name.as_str(), items, Some(name))
+            }
         };
         let item_name = match item_name {
             Some(name) => name,
@@ -4859,15 +5054,25 @@ impl Home {
                     episodes.iter().peekable(),
                 )
                 .map(HomeMessage::Collection),
+            (State::Directory { dir, shows, movies }, Some(Page::Directory { dir: page, .. })) => {
+                page.view(
+                    now,
+                    self.layout,
+                    dir,
+                    movies.iter().peekable(),
+                    shows.iter().peekable(),
+                )
+                .map(HomeMessage::Directory)
+            }
             unreached => {
                 todo!("{unreached:?}")
             }
         }
     }
 
-    pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, HomeMessage> {
+    pub fn view(&self, theme: &Theme, now: Instant, show_dirs: bool) -> Element<'_, HomeMessage> {
         let content = container(
-            row!(self.side(), self.content_area(now))
+            row!(self.side(show_dirs), self.content_area(now))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(0),
@@ -5071,6 +5276,10 @@ impl Home {
                     || seasons.iter().any(|season| season.is_animating(now))
                     || episodes.iter().any(|episode| episode.is_animating(now))
             }
+            State::Directory { shows, movies, .. } => {
+                shows.iter().any(|show| show.is_animating(now))
+                    || movies.iter().any(|movie| movie.is_animating(now))
+            }
         }
     }
 
@@ -5174,6 +5383,7 @@ impl Home {
             State::Collection { collection, .. } => {
                 (FetchId::Collection(collection.collection.id), None)
             }
+            State::Directory { dir, .. } => (FetchId::Directory(dir.id), None),
         };
 
         self.state = State::Loading;
@@ -5193,7 +5403,16 @@ impl Home {
         };
         let rsg = Task::done(rsg);
 
-        Task::batch([rsg, self.content_refresh()])
+        let dsg = Message::Fetch {
+            id: FetchId::Directories,
+            filters: self.filters,
+            sort: self.sort,
+            limit: None,
+            offset: None,
+        }
+        .tasked();
+
+        Task::batch([dsg, rsg, self.content_refresh()])
     }
 
     fn layout_toggle(&mut self) -> Task<Message> {
@@ -5318,6 +5537,13 @@ impl Home {
 
                 tasks.map(|csg| Message::Home(HomeMessage::Collection(csg)))
             }
+            PageKind::Directory(id) => {
+                let (dir, tasks) = DirectoryPage::boot(id);
+
+                self.pages.insert(kind, Page::Directory { dir, id });
+
+                tasks.map(|dsg| Message::Home(HomeMessage::Directory(dsg)))
+            }
             PageKind::Collections => {
                 let (collections, task) = Collections::boot();
 
@@ -5385,6 +5611,37 @@ impl Home {
         self.state = state;
 
         self.update_page_scroll()
+    }
+
+    pub fn fetched_directories(&mut self, mut directories: Vec<Directory>) -> Task<Message> {
+        directories.sort_by(|x, y| {
+            alphanumeric_sort::compare_str(x.name.to_lowercase(), y.name.to_lowercase())
+        });
+
+        self.directories = directories;
+        self.update_page_scroll()
+    }
+
+    pub fn fetched_directory(
+        &mut self,
+        dir: Directory,
+        mut movies: Vec<MovieItem>,
+        mut shows: Vec<ShowItem>,
+    ) -> Task<Message> {
+        let scroll = self.update_page_scroll();
+
+        if let Some(View::Selection(selected)) = self.view.as_ref() {
+            for media in &mut movies {
+                media.selected = selected.contains(&media.item.id.into());
+            }
+            for media in &mut shows {
+                media.selected = selected.contains(&media.item.id.into());
+            }
+        }
+
+        self.state = State::Directory { dir, shows, movies };
+
+        scroll
     }
 
     pub fn fetch_collections_simple(
@@ -5662,7 +5919,8 @@ impl Home {
         match &mut self.state {
             State::Movies(movies)
             | State::Recent { movies, .. }
-            | State::Collection { movies, .. } => {
+            | State::Collection { movies, .. }
+            | State::Directory { movies, .. } => {
                 if let Some(movie) = movies.iter_mut().find(|thumbnail| thumbnail.item.id == id) {
                     movie.task(task, now);
                 }
@@ -5683,7 +5941,10 @@ impl Home {
         now: Instant,
     ) -> Task<Message> {
         match &mut self.state {
-            State::Shows(shows) | State::Recent { shows, .. } | State::Collection { shows, .. } => {
+            State::Shows(shows)
+            | State::Recent { shows, .. }
+            | State::Collection { shows, .. }
+            | State::Directory { shows, .. } => {
                 if let Some(show) = shows.iter_mut().find(|thumbnail| thumbnail.item.id == id) {
                     show.task(task, now);
                 }
@@ -5896,6 +6157,7 @@ fn fetch_kind(
         PageKind::Episode(id) => FetchId::Episode(id),
         PageKind::Movie(id) => FetchId::Movie(id),
         PageKind::Collection(id) => FetchId::Collection(id),
+        PageKind::Directory(id) => FetchId::Directory(id),
     };
 
     fetch_kind_aux(id, filters, sort, limit, offset)
