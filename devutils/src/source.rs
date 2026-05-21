@@ -1,7 +1,7 @@
 use core::{Context, Result, variants};
 use registry::{
     db::Query,
-    models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId, WishKind},
+    models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId, WishKind, sources},
 };
 use reqwest::{
     Client, ClientBuilder,
@@ -80,14 +80,14 @@ impl SourceSet {
 
     pub fn movie_request<'a>(&self, id: MovieId, name: String) -> Option<(Query<'a>, String)> {
         match self {
-            Self::None => None,
+            Self::None => sources::none::movie_request(id),
             Self::Tmdb => tmdb::TMDB::movie_request(id, name),
         }
     }
 
     pub fn show_request<'a>(&self, id: ShowId, name: String) -> Option<(Query<'a>, String)> {
         match self {
-            Self::None => None,
+            Self::None => sources::none::show_request(id),
             Self::Tmdb => tmdb::TMDB::show_request(id, name),
         }
     }
@@ -99,7 +99,7 @@ impl SourceSet {
         number: u16,
     ) -> Option<(Query<'a>, String)> {
         match self {
-            Self::None => None,
+            Self::None => sources::none::season_request(id),
             Self::Tmdb => {
                 let parent = tmdb::TMDB::id_from_str(parent);
                 tmdb::TMDB::season_request(id, parent, number)
@@ -115,7 +115,7 @@ impl SourceSet {
         number: u16,
     ) -> Option<(Query<'a>, String)> {
         match self {
-            Self::None => None,
+            Self::None => sources::none::episode_request(id),
             Self::Tmdb => {
                 let parent = tmdb::TMDB::id_from_str(parent);
                 tmdb::TMDB::episode_request(id, parent, season, number)
@@ -130,7 +130,7 @@ impl SourceSet {
         kind: WishKind,
     ) -> Option<(Query<'a>, String)> {
         match self {
-            Self::None => None,
+            Self::None => sources::none::wish_request(id),
             Self::Tmdb => tmdb::TMDB::wish_request(id, name, kind),
         }
     }

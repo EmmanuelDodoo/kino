@@ -2,8 +2,8 @@ use rusqlite::types::{ToSqlOutput, Value};
 use rusqlite::{Result, Row};
 use uuid::Uuid;
 
-use super::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId};
 use crate::db::{Operation, Query, Table};
+use crate::models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RequestId(Uuid);

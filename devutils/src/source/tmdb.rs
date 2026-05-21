@@ -1,6 +1,6 @@
 use core::error::{Context, ContextLog, Error, Log, Result, bail};
 use registry::db::Query;
-use registry::models::tmdb::{Media, Request, RequestId, Status, WishType};
+use registry::models::sources::tmdb::{Media, Request, RequestId, Status, WishType};
 use registry::models::{EpisodeId, ItemId, MovieId, SeasonId, ShowId, WishId, wish};
 use rusqlite::Connection;
 use rusqlite::types::{ToSqlOutput, Value};

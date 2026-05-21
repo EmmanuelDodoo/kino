@@ -10,7 +10,7 @@ pub mod image;
 pub mod movies;
 pub mod seasons;
 pub mod shows;
-pub mod tmdb;
+pub mod sources;
 pub mod video;
 pub mod wish;
 
