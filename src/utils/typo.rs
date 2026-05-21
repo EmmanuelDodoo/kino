@@ -1,31 +1,22 @@
 use iced::font::{Family, Font, Stretch, Style, Weight};
 use iced::widget::text::{self, Ellipsis, Text};
 
-static INTER: &[u8] = include_bytes!("../../resources/fonts/Inter-Regular.ttf");
-const INTER_NAME: &str = "Inter";
+static REGULAR: &[u8] = include_bytes!("../../resources/fonts/Inter-VariableFont_slnt,wght.ttf");
+static REGULAR_IT: &[u8] = include_bytes!("../../resources/fonts/Inter-italic.var.ttf");
+const REGULAR_NAME: &str = "Inter";
 
-static INTER_IT: &[u8] = include_bytes!("../../resources/fonts/Inter-Italic.ttf");
-const INTER_NAME_IT: &str = "Inter-IT";
+static MONO: &[u8] = include_bytes!("../../resources/fonts/JetBrainsMono-VariableFont_wght.ttf");
+static MONO_IT: &[u8] =
+    include_bytes!("../../resources/fonts/JetBrainsMono-Italic-VariableFont_wght.ttf");
+const MONO_NAME: &str = "JetBrains Mono";
 
-static INTER_SB: &[u8] = include_bytes!("../../resources/fonts/Inter-SemiBold.ttf");
-const INTER_NAME_SB: &str = "Inter-SB";
+static FRAUNCES: &[u8] =
+    include_bytes!("../../resources/fonts/Fraunces-VariableFont_SOFT,WONK,opsz,wght.ttf");
+static FRAUNCES_IT: &[u8] =
+    include_bytes!("../../resources/fonts/Fraunces-Italic-VariableFont_SOFT,WONK,opsz,wght.ttf");
+const FRAUNCES_NAME: &str = "Fraunces";
 
-static INTER_MD: &[u8] = include_bytes!("../../resources/fonts/Inter-Medium.ttf");
-const INTER_NAME_MD: &str = "Inter-MD";
-
-static INTER_SB_IT: &[u8] = include_bytes!("../../resources/fonts/Inter-SemiBoldItalic.ttf");
-const INTER_NAME_SB_IT: &str = "Inter-SB-IT";
-
-static JB: &[u8] = include_bytes!("../../resources/fonts/JetBrainsMono-Regular.ttf");
-const JB_NAME: &str = "JetBrains Mono";
-
-static JB_SB: &[u8] = include_bytes!("../../resources/fonts/JetBrainsMono-SemiBold.ttf");
-const JB_NAME_SB: &str = "JetBrains-SB";
-
-static FRAUNCES: &[u8] = include_bytes!("../../resources/fonts/Fraunces-SemiBold.ttf");
-const FRAUNCES_NAME: &str = "Fraunces-SB";
-
-static ROBOTO_MD: &[u8] = include_bytes!("../../resources/fonts/Roboto-Medium.ttf");
+static ROBOTO_MD: &[u8] = include_bytes!("../../resources/fonts/Roboto-VariableFont_wdth,wght.ttf");
 pub const DEFAULT_SUBTITLE_FONT_NAME: &str = "Roboto-MD";
 
 pub const RATIO: f32 = 1.125;
@@ -42,14 +33,12 @@ pub const H8: f32 = H7 / RATIO;
 #[rustfmt::skip]
 pub fn typo_fonts() -> Vec<std::borrow::Cow<'static, [u8]>> {
     [
-        INTER.into(),
-        INTER_SB.into(),
-        INTER_MD.into(),
-        INTER_IT.into(),
-        INTER_SB_IT.into(),
-        JB.into(),
-        JB_SB.into(),
+        REGULAR.into(),
+        REGULAR_IT.into(),
+        MONO.into(),
+        MONO_IT.into(),
         FRAUNCES.into(),
+        FRAUNCES_IT.into(),
         ROBOTO_MD.into(),
     ]
     .to_vec()
@@ -65,7 +54,7 @@ pub fn display_font() -> Font {
 
 pub fn mono_font() -> Font {
     Font {
-        family: Family::Name(JB_NAME),
+        family: Family::Name(MONO_NAME),
         weight: Weight::Normal,
         style: Style::Normal,
         stretch: Stretch::Normal,
@@ -74,7 +63,7 @@ pub fn mono_font() -> Font {
 
 pub fn mono_bold_font() -> Font {
     Font {
-        family: Family::Name(JB_NAME_SB),
+        family: Family::Name(MONO_NAME),
         weight: Weight::Semibold,
         style: Style::Normal,
         stretch: Stretch::Normal,
@@ -83,7 +72,7 @@ pub fn mono_bold_font() -> Font {
 
 pub fn regular_font() -> Font {
     Font {
-        family: Family::Name(INTER_NAME),
+        family: Family::Name(REGULAR_NAME),
         weight: Weight::Normal,
         style: Style::Normal,
         stretch: Stretch::Normal,
@@ -92,7 +81,7 @@ pub fn regular_font() -> Font {
 
 pub fn italic_font() -> Font {
     Font {
-        family: Family::Name(INTER_NAME_IT),
+        family: Family::Name(REGULAR_NAME),
         weight: Weight::Normal,
         style: Style::Italic,
         stretch: Stretch::Normal,
@@ -101,7 +90,7 @@ pub fn italic_font() -> Font {
 
 pub fn bold_italic_font() -> Font {
     Font {
-        family: Family::Name(INTER_NAME_SB_IT),
+        family: Family::Name(REGULAR_NAME),
         weight: Weight::Semibold,
         style: Style::Italic,
         stretch: Stretch::Normal,
@@ -110,7 +99,7 @@ pub fn bold_italic_font() -> Font {
 
 pub fn bold_font() -> Font {
     Font {
-        family: Family::Name(INTER_NAME_SB),
+        family: Family::Name(REGULAR_NAME),
         weight: Weight::Semibold,
         style: Style::Normal,
         stretch: Stretch::Normal,
@@ -119,7 +108,7 @@ pub fn bold_font() -> Font {
 
 pub fn medium_font() -> Font {
     Font {
-        family: Family::Name(INTER_NAME_MD),
+        family: Family::Name(REGULAR_NAME),
         weight: Weight::Medium,
         style: Style::Normal,
         stretch: Stretch::Normal,
@@ -127,31 +116,52 @@ pub fn medium_font() -> Font {
 }
 
 pub fn mono<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
-    Text::new(text).size(P).font(mono_font()).ellipsis(Ellipsis::End)
+    Text::new(text)
+        .size(P)
+        .font(mono_font())
+        .ellipsis(Ellipsis::End)
 }
 
 pub fn display<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
-    Text::new(text).size(H2).font(display_font()).ellipsis(Ellipsis::End)
+    Text::new(text)
+        .size(H2)
+        .font(display_font())
+        .ellipsis(Ellipsis::End)
 }
 
 pub fn mono_bold<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
-    Text::new(text).size(P).font(mono_bold_font()).ellipsis(Ellipsis::End)
+    Text::new(text)
+        .size(P)
+        .font(mono_bold_font())
+        .ellipsis(Ellipsis::End)
 }
 
 pub fn sized_bold<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
-    Text::new(text).size(size).font(bold_font()).ellipsis(Ellipsis::End)
+    Text::new(text)
+        .size(size)
+        .font(bold_font())
+        .ellipsis(Ellipsis::End)
 }
 
 pub fn sized_medium<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
-    Text::new(text).size(size).font(medium_font()).ellipsis(Ellipsis::End)
+    Text::new(text)
+        .size(size)
+        .font(medium_font())
+        .ellipsis(Ellipsis::End)
 }
 
 pub fn sized_italic<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
-    Text::new(text).size(size).font(italic_font()).ellipsis(Ellipsis::End)
+    Text::new(text)
+        .size(size)
+        .font(italic_font())
+        .ellipsis(Ellipsis::End)
 }
 
 pub fn sized_regular<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
-    Text::new(text).size(size).font(regular_font()).ellipsis(Ellipsis::End)
+    Text::new(text)
+        .size(size)
+        .font(regular_font())
+        .ellipsis(Ellipsis::End)
 }
 
 pub fn regular<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
