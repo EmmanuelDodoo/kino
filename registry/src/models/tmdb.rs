@@ -546,7 +546,7 @@ impl Request {
 
         let sql = "DELETE FROM tmdb WHERE media_id=:id";
 
-        let params = [(":media_id", ToSqlOutput::from(id))];
+        let params = [(":id", ToSqlOutput::from(id))];
 
         Query {
             id: id.inner(),
