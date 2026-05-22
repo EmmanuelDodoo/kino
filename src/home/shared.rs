@@ -170,6 +170,7 @@ pub fn progress<'a, Message: 'a>(
     color: Option<Color>,
     primary: bool,
 ) -> Element<'a, Message> {
+    let progress_icon = progress_icon(progress);
     let progress = (progress * 1000.0).round() / 10.0;
     let text = mono_bold(format!("{}%", progress))
         .size(H8)
@@ -187,8 +188,7 @@ pub fn progress<'a, Message: 'a>(
             }
         });
 
-    let progress = progress_icon(progress);
-    let icon = icon(progress).size(H6).style(move |theme: &Theme| {
+    let icon = icon(progress_icon).size(H6).style(move |theme: &Theme| {
         if color.is_some() {
             text::Style { color }
         } else {

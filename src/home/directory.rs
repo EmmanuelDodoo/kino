@@ -145,8 +145,7 @@ impl DirectoryPage {
         } else {
             let movies = {
                 let movies = {
-                    let content = movies
-                        .map(|movie| movie.list(now, add, select, hover, play, movies::unique));
+                    let content = movies.map(|movie| movie.list(now, add, select, hover, play));
 
                     column(content).spacing(16.0)
                 };

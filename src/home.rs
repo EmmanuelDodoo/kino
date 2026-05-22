@@ -4218,7 +4218,6 @@ impl Home {
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
                             |id| HomeMessage::Play(ItemId::Movie(id)),
-                            movies::unique,
                         )
                     });
 

@@ -107,7 +107,6 @@ impl Movies {
                 MoviesMessage::Details,
                 MoviesMessage::Hovered,
                 MoviesMessage::Play,
-                unique,
             )
         });
 
@@ -168,19 +167,4 @@ impl Movies {
     pub fn update_scroll(&mut self) -> Task<()> {
         operation::scroll_to(self.scroll.id.clone(), self.scroll.offset)
     }
-}
-
-pub fn unique<'a, Message: 'a>(movie: &Movie) -> Element<'a, Message> {
-    use iced::font::{Font, Weight};
-
-    let release = text(movie.release_year()).size(H8).font(Font {
-        weight: Weight::Semibold,
-        ..Default::default()
-    });
-    let icon = icon(CALENDAR).size(H7);
-
-    row!(icon, release)
-        .align_y(Vertical::Center)
-        .spacing(3.0)
-        .into()
 }

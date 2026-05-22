@@ -362,9 +362,18 @@ impl MovieItem {
         on_select: impl Fn(MovieId) -> Message + 'a,
         on_hover: impl Fn(MovieId, bool) -> Message + 'a,
         on_play: impl Fn(MovieId) -> Message + 'a,
-        unique: impl Fn(&Movie) -> Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let unique = unique(&self.item);
+        let unique = {
+            use iced::font::{Font, Weight};
+
+            let release = text(self.item.release_year()).size(H8).font(Font {
+                weight: Weight::Semibold,
+                ..Default::default()
+            });
+            let icon = icon(CALENDAR).size(H7);
+
+            row!(icon, release).align_y(Vertical::Center).spacing(3.0)
+        };
 
         let background_inter = self.background.interpolate(0.0, 1.0, now);
         let icon_inter = self.icon.interpolate(0.0, 1.0, now);
