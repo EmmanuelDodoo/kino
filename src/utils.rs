@@ -159,15 +159,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
         background_color,
     } = description;
 
-    let font = if font == typo::DEFAULT_SUBTITLE_FONT_NAME {
-        Font {
-            family: Family::name(typo::DEFAULT_SUBTITLE_FONT_NAME),
-            weight: Weight::Medium,
-            ..Default::default()
-        }
-    } else {
-        Family::name(font).into()
-    };
+    let font = Font::with_family(font.as_str());
 
     let content = typo::regular(subtitles)
         .size((*size).max(5))

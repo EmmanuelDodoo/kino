@@ -16,8 +16,8 @@ static FRAUNCES_IT: &[u8] =
     include_bytes!("../../resources/fonts/Fraunces-Italic-VariableFont_SOFT,WONK,opsz,wght.ttf");
 const FRAUNCES_NAME: &str = "Fraunces";
 
-static ROBOTO_MD: &[u8] = include_bytes!("../../resources/fonts/Roboto-VariableFont_wdth,wght.ttf");
-pub const DEFAULT_SUBTITLE_FONT_NAME: &str = "Roboto-MD";
+static SUBTITLES: &[u8] = include_bytes!("../../resources/fonts/Roboto-VariableFont_wdth,wght.ttf");
+pub const DEFAULT_SUBTITLE_FONT_NAME: &str = "Roboto";
 
 pub const RATIO: f32 = 1.125;
 pub const H1: f32 = H2 * RATIO;
@@ -39,7 +39,7 @@ pub fn typo_fonts() -> Vec<std::borrow::Cow<'static, [u8]>> {
         MONO_IT.into(),
         FRAUNCES.into(),
         FRAUNCES_IT.into(),
-        ROBOTO_MD.into(),
+        SUBTITLES.into(),
     ]
     .to_vec()
 }
