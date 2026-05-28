@@ -21,6 +21,7 @@ use registry::models::{self, Wish, WishId, WishKind};
 pub enum WishlistMessage {
     Scroll(scrollable::Viewport),
     Hover(WishId, bool),
+    Shown(WishId, bool),
     New,
     Select(WishId),
     Edit(WishId),
@@ -61,6 +62,7 @@ impl Wishlist {
                 let msg = HomeMessage::WishHovered(id, is_hovered);
                 Some(msg)
             }
+            WishlistMessage::Shown(_, _) => None,
             WishlistMessage::Scroll(viewport) => {
                 self.scroll.offset = viewport.absolute_offset();
                 None
@@ -234,7 +236,7 @@ impl WishThumbnail {
             Self::HEIGHT,
             |id| Some(WishlistMessage::Select(id)),
             WishlistMessage::Hover,
-            WishlistMessage::Hover,
+            WishlistMessage::Shown,
         )
     }
 

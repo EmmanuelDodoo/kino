@@ -1007,7 +1007,7 @@ fn to_handle(img: devutils::Image) -> Handle {
 
 pub fn fade_in(now: Instant) -> Animation<bool> {
     Animation::new(false)
-        .duration(Duration::from_millis(500))
+        .duration(Duration::from_millis(250))
         .easing(Easing::EaseInOut)
         .go(true, now)
 }
@@ -1250,7 +1250,6 @@ pub fn card_poster_helper<'a, Message: 'a>(
     };
 
     match poster {
-        // todo: Could make this a linear gradient skeleton
         Image::Ready { allocation } => view(allocation.handle()).into(),
         Image::Shown {
             allocation,
@@ -1259,6 +1258,7 @@ pub fn card_poster_helper<'a, Message: 'a>(
             .opacity(fade_in.interpolate(0.0, 1.0, now))
             .scale(scale * fade_in.interpolate(1.15, 1.0, now))
             .into(),
+        // todo: Could make this a linear gradient skeleton
         Image::Loading(_) => empty().into(),
         Image::Default => match DEFAULT_POSTER.as_ref() {
             Some(handle) => view(handle).into(),
