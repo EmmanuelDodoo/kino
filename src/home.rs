@@ -833,6 +833,7 @@ pub enum HomeMessage {
     Scroll(scrollable::Viewport),
     RefreshContent,
     Hovered(ItemId, bool),
+    Shown(ItemId, bool),
     WishHovered(WishId, bool),
     WishCompletion(WishId),
     MovieEdit(MovieEditMessage),
@@ -3825,6 +3826,111 @@ impl Home {
                     }
                 }
             }
+            HomeMessage::Shown(id, shown) => {
+                //
+
+                match (&mut self.state, id) {
+                    (State::Loading, _)
+                    | (State::Episode { .. }, _)
+                    | (State::Movie { .. }, _)
+                    | (State::Collections(_), _)
+                    | (State::Directory { .. }, ItemId::Season(_))
+                    | (State::Directory { .. }, ItemId::Episode(_)) => Task::none(),
+                    (State::Wishlist(_), _) => Task::none(),
+                    (State::Recent { shows, .. }, ItemId::Show(id)) => {
+                        if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
+                            show.fade_in(shown, now);
+                        };
+                        Task::none()
+                    }
+                    (State::Recent { movies, .. }, ItemId::Movie(id)) => {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
+                            movie.fade_in(shown, now);
+                        }
+
+                        Task::none()
+                    }
+                    (State::Recent { .. }, _) => Task::none(),
+                    (State::Shows(shows), ItemId::Show(id)) => {
+                        if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
+                            show.fade_in(shown, now);
+                        };
+
+                        Task::none()
+                    }
+                    (State::Shows(_), _) => Task::none(),
+                    (State::Movies(movies), ItemId::Movie(id)) => {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
+                            movie.fade_in(shown, now);
+                        }
+
+                        Task::none()
+                    }
+                    (State::Movies(_), _) => Task::none(),
+                    (State::Show { seasons, .. }, ItemId::Season(id)) => {
+                        if let Some(season) = seasons.iter_mut().find(|season| season.item.id == id)
+                        {
+                            season.fade_in(shown, now);
+                        }
+                        Task::none()
+                    }
+                    (State::Show { .. }, _) => Task::none(),
+                    (State::Season { episodes, .. }, ItemId::Episode(id)) => {
+                        if let Some(episode) =
+                            episodes.iter_mut().find(|episode| episode.item.id == id)
+                        {
+                            episode.fade_in(shown, now);
+                        }
+
+                        Task::none()
+                    }
+                    (State::Season { .. }, _) => Task::none(),
+                    (State::Collection { shows, .. }, ItemId::Show(id)) => {
+                        if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
+                            show.fade_in(shown, now);
+                        };
+
+                        Task::none()
+                    }
+                    (State::Collection { movies, .. }, ItemId::Movie(id)) => {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
+                            movie.fade_in(shown, now);
+                        }
+
+                        Task::none()
+                    }
+                    (State::Collection { seasons, .. }, ItemId::Season(id)) => {
+                        if let Some(season) = seasons.iter_mut().find(|show| show.item.id == id) {
+                            season.fade_in(shown, now);
+                        };
+
+                        Task::none()
+                    }
+                    (State::Collection { episodes, .. }, ItemId::Episode(id)) => {
+                        if let Some(episode) =
+                            episodes.iter_mut().find(|episode| episode.item.id == id)
+                        {
+                            episode.fade_in(shown, now);
+                        }
+
+                        Task::none()
+                    }
+                    (State::Directory { shows, .. }, ItemId::Show(id)) => {
+                        if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
+                            show.fade_in(shown, now);
+                        };
+
+                        Task::none()
+                    }
+                    (State::Directory { movies, .. }, ItemId::Movie(id)) => {
+                        if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
+                            movie.fade_in(shown, now);
+                        }
+
+                        Task::none()
+                    }
+                }
+            }
             HomeMessage::Scroll(viewport) => {
                 self.scroll.offset = viewport.absolute_offset();
                 Task::none()
@@ -4206,6 +4312,7 @@ impl Home {
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
+                            |id, shown| HomeMessage::Shown(ItemId::Movie(id), shown),
                             |id| HomeMessage::Play(ItemId::Movie(id)),
                         )
                     });
@@ -4223,6 +4330,7 @@ impl Home {
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
+                            |id, shown| HomeMessage::Shown(ItemId::Movie(id), shown),
                             |id| HomeMessage::Play(ItemId::Movie(id)),
                         )
                     });
@@ -4236,6 +4344,7 @@ impl Home {
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Movie(id))),
                             |id| HomeMessage::Goto(PageKind::Movie(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Movie(id), hovered),
+                            |id, shown| HomeMessage::Shown(ItemId::Movie(id), shown),
                             |id| HomeMessage::Play(ItemId::Movie(id)),
                         )
                     });
@@ -4261,6 +4370,7 @@ impl Home {
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
+                            |id, shown| HomeMessage::Shown(ItemId::Show(id), shown),
                             |id| HomeMessage::Play(ItemId::Show(id)),
                         )
                     });
@@ -4278,6 +4388,7 @@ impl Home {
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
+                            |id, shown| HomeMessage::Shown(ItemId::Show(id), shown),
                             |id| HomeMessage::Play(ItemId::Show(id)),
                         )
                     });
@@ -4291,6 +4402,7 @@ impl Home {
                             |id| HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id))),
                             |id| HomeMessage::Goto(PageKind::Show(id)),
                             |id, hovered| HomeMessage::Hovered(ItemId::Show(id), hovered),
+                            |id, shown| HomeMessage::Shown(ItemId::Show(id), shown),
                             |id| HomeMessage::Play(ItemId::Show(id)),
                         )
                     });

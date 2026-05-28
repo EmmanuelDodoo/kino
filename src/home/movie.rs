@@ -225,7 +225,7 @@ impl MovieItem {
 
     pub fn is_animating(&self, now: Instant) -> bool {
         let poster = match &self.poster {
-            Image::Ready { fade_in, .. } => fade_in.is_animating(now),
+            Image::Shown { fade_in, .. } => fade_in.is_animating(now),
             _ => false,
         };
 
@@ -261,8 +261,9 @@ impl MovieItem {
         };
 
         match &self.poster {
-            Image::Ready { allocation, .. } => view(allocation.handle()),
-            Image::Loading => empty().into(),
+            Image::Ready { allocation } => view(allocation.handle()),
+            Image::Shown { allocation, .. } => view(allocation.handle()),
+            Image::Loading(_) => empty().into(),
             Image::Default => match DEFAULT_POSTER.as_ref() {
                 Some(handle) => view(handle).into(),
                 _ => empty().into(),
@@ -289,6 +290,10 @@ impl MovieItem {
         }
     }
 
+    pub fn fade_in(&mut self, shown: bool, now: Instant) {
+        self.poster.fade_in(shown, now);
+    }
+
     pub fn task(&mut self, task: ThumbnailTaskKind, now: Instant) {
         match task {
             ThumbnailTaskKind::Samples { main, accent } => {
@@ -296,10 +301,12 @@ impl MovieItem {
                 self.sample_text = Some(accent);
             }
             ThumbnailTaskKind::Image(Ok(allocation)) => {
-                self.poster = Image::Ready {
-                    allocation,
-                    fade_in: fade_in(now),
-                };
+                let mut poster = Image::Ready { allocation };
+                if matches!(&self.poster, Image::Loading(true)) {
+                    poster.fade_in(true, now);
+                }
+
+                self.poster = poster;
             }
             ThumbnailTaskKind::Image(Err(error)) => {
                 tracing::error!("Movie Thumbnail poster allocation error: \n{error}");
@@ -313,6 +320,7 @@ impl MovieItem {
         on_add: impl Fn(MovieId) -> Message + 'a,
         on_select: impl Fn(MovieId) -> Message + 'a + Clone,
         on_hover: impl Fn(MovieId, bool) -> Message + 'a + Clone,
+        on_show: impl Fn(MovieId, bool) -> Message + 'a,
         on_play: impl Fn(MovieId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let background_inter = self.background.interpolate(0.0, 1.0, now);
@@ -353,7 +361,7 @@ impl MovieItem {
             float_anim: Some(&self.float),
         };
 
-        card.view(now, Self::WIDTH, Self::HEIGHT, on_select, on_hover)
+        card.view(now, Self::WIDTH, Self::HEIGHT, on_select, on_hover, on_show)
     }
 
     pub fn list<'a, Message: 'a + Clone>(
@@ -362,6 +370,7 @@ impl MovieItem {
         on_add: impl Fn(MovieId) -> Message + 'a,
         on_select: impl Fn(MovieId) -> Message + 'a,
         on_hover: impl Fn(MovieId, bool) -> Message + 'a,
+        on_show: impl Fn(MovieId, bool) -> Message + 'a,
         on_play: impl Fn(MovieId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let unique = {
@@ -395,7 +404,7 @@ impl MovieItem {
             overlay: Some(list_overlay(icon_inter, background_inter)),
         };
 
-        list.view(now, on_select, on_hover, on_play)
+        list.view(now, on_select, on_hover, on_show, on_play)
     }
 
     pub fn compact<'a, Message: 'a + Clone>(
@@ -404,6 +413,7 @@ impl MovieItem {
         on_add: impl Fn(MovieId) -> Message + 'a,
         on_select: impl Fn(MovieId) -> Message + 'a,
         on_hover: impl Fn(MovieId, bool) -> Message + 'a,
+        on_show: impl Fn(MovieId, bool) -> Message + 'a,
         on_play: impl Fn(MovieId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let id = self.item.id;
@@ -419,6 +429,13 @@ impl MovieItem {
             recent: Some(compact_recent(self.item.recent_short())),
         };
 
-        compact.view(now, (on_add)(id), (on_select)(id), on_hover, (on_play)(id))
+        compact.view(
+            now,
+            on_hover,
+            on_show,
+            (on_add)(id),
+            (on_select)(id),
+            (on_play)(id),
+        )
     }
 }

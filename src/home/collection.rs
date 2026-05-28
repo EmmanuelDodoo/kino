@@ -30,6 +30,7 @@ pub enum Message {
     Scroll(scrollable::Viewport),
     PlayItem(ItemId),
     HoveredItem(bool, ItemId),
+    ShownItem(bool, ItemId),
     DetailsItem(ItemId),
     Add(ItemId),
     Play(Items),
@@ -106,6 +107,7 @@ impl CollectionPage {
                 let msg = HomeMessage::Hovered(item, hovered);
                 Some(msg)
             }
+            Message::ShownItem(shown, item) => Some(HomeMessage::Shown(item, shown)),
             Message::DetailsItem(item) => {
                 let kind = match item {
                     ItemId::Movie(id) => PageKind::Movie(id),
@@ -371,8 +373,8 @@ impl CollectionPage {
         } else {
             let movies = {
                 let movies = {
-                    let content =
-                        movies.map(|thumbnail| thumbnail.list(now, add, select, hover, play));
+                    let content = movies
+                        .map(|thumbnail| thumbnail.list(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -389,7 +391,7 @@ impl CollectionPage {
             let shows = {
                 let shows = {
                     let content =
-                        shows.map(|thumbnail| thumbnail.list(now, add, select, hover, play));
+                        shows.map(|thumbnail| thumbnail.list(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -405,8 +407,8 @@ impl CollectionPage {
         } else {
             let seasons = {
                 let seasons = {
-                    let content =
-                        seasons.map(|thumbnail| thumbnail.list(now, add, select, hover, play));
+                    let content = seasons
+                        .map(|thumbnail| thumbnail.list(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -422,8 +424,8 @@ impl CollectionPage {
         } else {
             let episodes = {
                 let episodes = {
-                    let content =
-                        episodes.map(|thumbnail| thumbnail.list(now, add, select, hover, play));
+                    let content = episodes
+                        .map(|thumbnail| thumbnail.list(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -458,8 +460,8 @@ impl CollectionPage {
         } else {
             let movies = {
                 let movies = {
-                    let content =
-                        movies.map(|thumbnail| thumbnail.compact(now, add, select, hover, play));
+                    let content = movies
+                        .map(|thumbnail| thumbnail.compact(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -475,8 +477,8 @@ impl CollectionPage {
         } else {
             let shows = {
                 let shows = {
-                    let content =
-                        shows.map(|thumbnail| thumbnail.compact(now, add, select, hover, play));
+                    let content = shows
+                        .map(|thumbnail| thumbnail.compact(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -491,8 +493,8 @@ impl CollectionPage {
         } else {
             let seasons = {
                 let seasons = {
-                    let content =
-                        seasons.map(|thumbnail| thumbnail.compact(now, add, select, hover, play));
+                    let content = seasons
+                        .map(|thumbnail| thumbnail.compact(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -507,8 +509,8 @@ impl CollectionPage {
         } else {
             let episodes = {
                 let episodes = {
-                    let content =
-                        episodes.map(|thumbnail| thumbnail.compact(now, add, select, hover, play));
+                    let content = episodes
+                        .map(|thumbnail| thumbnail.compact(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -541,20 +543,21 @@ impl CollectionPage {
         let content = if movies.peek().is_none() {
             content
         } else {
-            let movies =
-                {
-                    let movies = movies.map(|movie| movie.card(now, add, select, hover, play));
+            let movies = {
+                let movies = movies.map(|movie| movie.card(now, add, select, hover, shown, play));
 
-                    let movies = grid(movies).spacing(16).fluid(MovieItem::WIDTH).height(
-                        if self.movies_shown {
+                let movies =
+                    grid(movies)
+                        .spacing(16)
+                        .fluid(MovieItem::WIDTH)
+                        .height(if self.movies_shown {
                             grid::aspect_ratio(MovieItem::WIDTH, MovieItem::HEIGHT)
                         } else {
                             grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
-                        },
-                    );
+                        });
 
-                    self.movie_expandable(movies)
-                };
+                self.movie_expandable(movies)
+            };
             content.push(movies)
         };
 
@@ -563,7 +566,7 @@ impl CollectionPage {
         } else {
             let shows =
                 {
-                    let shows = shows.map(|show| show.card(now, add, select, hover, play));
+                    let shows = shows.map(|show| show.card(now, add, select, hover, shown, play));
 
                     let shows = grid(shows).spacing(16).fluid(ShowItem::WIDTH).height(
                         if self.shows_shown {
@@ -583,7 +586,8 @@ impl CollectionPage {
             content
         } else {
             let seasons = {
-                let seasons = seasons.map(|season| season.card(now, add, select, hover, play));
+                let seasons =
+                    seasons.map(|season| season.card(now, add, select, hover, shown, play));
 
                 let seasons = grid(seasons).spacing(16).fluid(SeasonItem::WIDTH).height(
                     if self.seasons_shown {
@@ -603,7 +607,8 @@ impl CollectionPage {
             content
         } else {
             let episodes = {
-                let episodes = episodes.map(|episode| episode.card(now, add, select, hover, play));
+                let episodes =
+                    episodes.map(|episode| episode.card(now, add, select, hover, shown, play));
 
                 let episodes = grid(episodes).spacing(16).fluid(EpisodeItem::WIDTH).height(
                     if self.episodes_shown {
@@ -728,6 +733,10 @@ fn select(item: impl Into<ItemId>) -> Message {
 
 fn hover(item: impl Into<ItemId>, hovered: bool) -> Message {
     Message::HoveredItem(hovered, item.into())
+}
+
+fn shown(item: impl Into<ItemId>, shown: bool) -> Message {
+    Message::ShownItem(shown, item.into())
 }
 
 fn play(item: impl Into<ItemId>) -> Message {

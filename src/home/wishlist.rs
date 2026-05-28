@@ -174,7 +174,7 @@ impl WishThumbnail {
 
     pub fn is_animating(&self, now: Instant) -> bool {
         let poster = match &self.poster {
-            Image::Ready { fade_in, .. } => fade_in.is_animating(now),
+            Image::Shown { fade_in, .. } => fade_in.is_animating(now),
             _ => false,
         };
 
@@ -198,7 +198,7 @@ impl WishThumbnail {
                 self.sample_text = Some(accent);
             }
             ThumbnailTaskKind::Image(Ok(allocation)) => {
-                self.poster = Image::Ready {
+                self.poster = Image::Shown {
                     allocation,
                     fade_in: fade_in(now),
                 };
@@ -233,6 +233,7 @@ impl WishThumbnail {
             Self::WIDTH,
             Self::HEIGHT,
             |id| Some(WishlistMessage::Select(id)),
+            WishlistMessage::Hover,
             WishlistMessage::Hover,
         )
     }

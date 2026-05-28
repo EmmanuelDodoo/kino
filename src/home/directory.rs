@@ -22,6 +22,7 @@ pub enum Message {
     Scroll(scrollable::Viewport),
     PlayItem(ItemId),
     HoveredItem(bool, ItemId),
+    ShownItem(bool, ItemId),
     DetailsItem(ItemId),
     Add(ItemId),
     ToggleMovies(bool),
@@ -82,6 +83,7 @@ impl DirectoryPage {
                 let msg = HomeMessage::Hovered(item, hovered);
                 Some(msg)
             }
+            Message::ShownItem(shown, item) => Some(HomeMessage::Shown(item, shown)),
             Message::Add(item) => {
                 let msg = HomeMessage::OpenView(ViewMessage::Add(item));
                 Some(msg)
@@ -145,7 +147,8 @@ impl DirectoryPage {
         } else {
             let movies = {
                 let movies = {
-                    let content = movies.map(|movie| movie.list(now, add, select, hover, play));
+                    let content =
+                        movies.map(|movie| movie.list(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -162,7 +165,7 @@ impl DirectoryPage {
             let shows = {
                 let shows = {
                     let content =
-                        shows.map(|thumbnail| thumbnail.list(now, add, select, hover, play));
+                        shows.map(|thumbnail| thumbnail.list(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -200,8 +203,8 @@ impl DirectoryPage {
         } else {
             let movies = {
                 let movies = {
-                    let content =
-                        movies.map(|thumbnail| thumbnail.compact(now, add, select, hover, play));
+                    let content = movies
+                        .map(|thumbnail| thumbnail.compact(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -217,8 +220,8 @@ impl DirectoryPage {
         } else {
             let shows = {
                 let shows = {
-                    let content =
-                        shows.map(|thumbnail| thumbnail.compact(now, add, select, hover, play));
+                    let content = shows
+                        .map(|thumbnail| thumbnail.compact(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
                 };
@@ -251,20 +254,21 @@ impl DirectoryPage {
         let content = if movies.peek().is_none() {
             content
         } else {
-            let movies =
-                {
-                    let movies = movies.map(|movie| movie.card(now, add, select, hover, play));
+            let movies = {
+                let movies = movies.map(|movie| movie.card(now, add, select, hover, shown, play));
 
-                    let movies = grid(movies).spacing(16).fluid(MovieItem::WIDTH).height(
-                        if self.movies_shown {
+                let movies =
+                    grid(movies)
+                        .spacing(16)
+                        .fluid(MovieItem::WIDTH)
+                        .height(if self.movies_shown {
                             grid::aspect_ratio(MovieItem::WIDTH, MovieItem::HEIGHT)
                         } else {
                             grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
-                        },
-                    );
+                        });
 
-                    movies
-                };
+                movies
+            };
             content.push(movies)
         };
 
@@ -273,7 +277,7 @@ impl DirectoryPage {
         } else {
             let shows =
                 {
-                    let shows = shows.map(|show| show.card(now, add, select, hover, play));
+                    let shows = shows.map(|show| show.card(now, add, select, hover, shown, play));
 
                     let shows = grid(shows).spacing(16).fluid(ShowItem::WIDTH).height(
                         if self.shows_shown {
@@ -318,6 +322,10 @@ fn select(id: impl Into<ItemId>) -> Message {
 
 fn hover(item: impl Into<ItemId>, hovered: bool) -> Message {
     Message::HoveredItem(hovered, item.into())
+}
+
+fn shown(item: impl Into<ItemId>, shown: bool) -> Message {
+    Message::ShownItem(shown, item.into())
 }
 
 fn play(item: impl Into<ItemId>) -> Message {

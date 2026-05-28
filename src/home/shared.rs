@@ -12,7 +12,8 @@ use iced::{
     widget::{
         self, button, center, column, container, image,
         image::{Allocation, Handle},
-        markdown, mouse_area, responsive, row, rule, scrollable, space, stack, text, tooltip as tp,
+        markdown, mouse_area, responsive, row, rule, scrollable, sensor, space, stack, text,
+        tooltip as tp,
     },
 };
 use registry::models::{
@@ -466,9 +467,12 @@ pub enum ThumbnailTaskKind {
 pub enum Image {
     Ready {
         allocation: Allocation,
+    },
+    Shown {
+        allocation: Allocation,
         fade_in: Animation<bool>,
     },
-    Loading,
+    Loading(bool),
     Default,
 }
 
@@ -491,9 +495,28 @@ impl Image {
 
                 let images = image::allocate(poster.path.clone()).map(ThumbnailTaskKind::Image);
 
-                (Self::Loading, Task::batch([sample, images]))
+                (Self::Loading(false), Task::batch([sample, images]))
             }
             None => (Self::Default, Task::none()),
+        }
+    }
+
+    pub fn fade_in(&mut self, shown: bool, now: Instant) {
+        match std::mem::replace(self, Self::Loading(shown)) {
+            Image::Shown { allocation, .. } if !shown => {
+                //
+                *self = Image::Ready { allocation }
+            }
+            Image::Ready { allocation } if shown => {
+                *self = Image::Shown {
+                    allocation,
+                    fade_in: fade_in(now),
+                }
+            }
+            Image::Loading(_) => *self = Image::Loading(shown),
+            img => {
+                *self = img;
+            }
         }
     }
 }
@@ -535,7 +558,7 @@ impl CollectionThumbnail {
             },
         );
 
-        let collage = Image::Loading;
+        let collage = Image::Loading(false);
         (
             Self {
                 collage,
@@ -547,7 +570,7 @@ impl CollectionThumbnail {
 
     pub fn is_animating(&self, now: Instant) -> bool {
         match &self.collage {
-            Image::Ready { fade_in, .. } => fade_in.is_animating(now),
+            Image::Shown { fade_in, .. } => fade_in.is_animating(now),
             _ => false,
         }
     }
@@ -555,7 +578,7 @@ impl CollectionThumbnail {
     pub fn task(&mut self, task: CollectionTaskKind, now: Instant) {
         match task {
             CollectionTaskKind::Image(Ok(allocation)) => {
-                self.collage = Image::Ready {
+                self.collage = Image::Shown {
                     allocation,
                     fade_in: fade_in(now),
                 };
@@ -568,7 +591,7 @@ impl CollectionThumbnail {
 
     pub fn collage<'a, Message: 'a>(&'a self, now: Instant) -> Element<'a, Message> {
         match &self.collage {
-            Image::Loading | Image::Default => {
+            Image::Loading(_) | Image::Default => {
                 let len = self.collection.name.len().min(2);
                 let name = self.collection.name.get(..len).unwrap_or_default();
 
@@ -586,7 +609,13 @@ impl CollectionThumbnail {
                     })
                     .into()
             }
-            Image::Ready {
+            Image::Ready { allocation } => image(allocation.handle())
+                .border_radius(IMAGE_RADIUS)
+                .height(Self::HEIGHT)
+                .width(Self::WIDTH)
+                .content_fit(ContentFit::Contain)
+                .into(),
+            Image::Shown {
                 allocation,
                 fade_in,
             } => image(allocation.handle())
@@ -620,7 +649,13 @@ impl CollectionThumbnail {
 
         let img: Element<'_, Message> = {
             match &self.collage {
-                Image::Ready {
+                Image::Ready { allocation } => image(allocation.handle())
+                    .border_radius(IMAGE_RADIUS)
+                    .width(Self::CARD_WIDTH)
+                    .height(Length::Fill)
+                    .content_fit(ContentFit::Fill)
+                    .into(),
+                Image::Shown {
                     allocation,
                     fade_in,
                 } => image(allocation.handle())
@@ -632,7 +667,7 @@ impl CollectionThumbnail {
                     .scale(fade_in.interpolate(1.2, 1.0, now))
                     .into(),
 
-                Image::Loading | Image::Default => {
+                Image::Loading(_) | Image::Default => {
                     let len = self.collection.name.len().min(2);
                     let name = self.collection.name.get(..len).unwrap_or_default();
 
@@ -997,6 +1032,7 @@ impl<'a, T: Copy, Message: 'a + Clone> Card<'a, T, Message> {
         height: impl Into<Length>,
         on_select: impl Fn(T) -> Option<Message> + 'a,
         on_hover: impl Fn(T, bool) -> Message + 'a,
+        on_show: impl Fn(T, bool) -> Message + 'a,
     ) -> Element<'a, Message> {
         let width = width.into();
         let height = height.into();
@@ -1057,6 +1093,12 @@ impl<'a, T: Copy, Message: 'a + Clone> Card<'a, T, Message> {
                 .interaction(mouse::Interaction::Pointer),
             None => content,
         };
+
+        let content = item_sensor(
+            content,
+            (on_show)(self.item, true),
+            (on_show)(self.item, false),
+        );
 
         content.into()
     }
@@ -1208,14 +1250,16 @@ pub fn card_poster_helper<'a, Message: 'a>(
     };
 
     match poster {
-        Image::Ready {
+        // todo: Could make this a linear gradient skeleton
+        Image::Ready { allocation } => view(allocation.handle()).into(),
+        Image::Shown {
             allocation,
             fade_in,
         } => view(allocation.handle())
             .opacity(fade_in.interpolate(0.0, 1.0, now))
             .scale(scale * fade_in.interpolate(1.15, 1.0, now))
             .into(),
-        Image::Loading => empty().into(),
+        Image::Loading(_) => empty().into(),
         Image::Default => match DEFAULT_POSTER.as_ref() {
             Some(handle) => view(handle).into(),
             _ => empty().into(),
@@ -1240,6 +1284,7 @@ impl<'a, T: Copy, Message: 'a + Clone> List<'a, T, Message> {
         now: Instant,
         on_select: impl Fn(T) -> Message + 'a,
         on_hover: impl Fn(T, bool) -> Message + 'a,
+        on_show: impl Fn(T, bool) -> Message + 'a,
         on_play: impl Fn(T) -> Message + 'a,
     ) -> Element<'a, Message> {
         let details = row!(
@@ -1294,6 +1339,12 @@ impl<'a, T: Copy, Message: 'a + Clone> List<'a, T, Message> {
         let content = mouse_area(content)
             .on_exit((on_hover)(self.item, false))
             .on_enter((on_hover)(self.item, true));
+
+        let content = item_sensor(
+            content,
+            (on_show)(self.item, true),
+            (on_show)(self.item, false),
+        );
 
         content.into()
     }
@@ -1382,9 +1433,10 @@ impl<'a, T: Copy, Message: 'a + Clone> Compact<'a, T, Message> {
     pub fn view(
         self,
         now: Instant,
+        on_hover: impl Fn(T, bool) -> Message + 'a,
+        on_show: impl Fn(T, bool) -> Message + 'a,
         on_add: Message,
         on_select: Message,
-        on_hover: impl Fn(T, bool) -> Message + 'a,
         on_play: Message,
     ) -> Element<'a, Message> {
         let img = compact_poster(self.poster, now, on_play);
@@ -1423,6 +1475,12 @@ impl<'a, T: Copy, Message: 'a + Clone> Compact<'a, T, Message> {
             .on_exit((on_hover)(self.item, false))
             .on_enter((on_hover)(self.item, true));
 
+        let content = item_sensor(
+            content,
+            (on_show)(self.item, true),
+            (on_show)(self.item, false),
+        );
+
         content.into()
     }
 }
@@ -1451,7 +1509,8 @@ pub fn compact_poster<'a, Message: 'a + Clone>(
         };
 
         match poster {
-            Image::Ready {
+            Image::Ready { allocation } => view(allocation.handle()).into(),
+            Image::Shown {
                 allocation,
                 fade_in,
             } => view(allocation.handle())
@@ -1462,7 +1521,7 @@ pub fn compact_poster<'a, Message: 'a + Clone>(
                 Some(handle) => view(handle).into(),
                 None => empty().into(),
             },
-            Image::Loading => empty().into(),
+            Image::Loading(_) => empty().into(),
         }
     };
 
@@ -1570,14 +1629,15 @@ pub fn image_poster<'a, Message: 'a>(
     };
 
     match poster {
-        Image::Ready {
+        Image::Ready { allocation } => view(allocation.handle()).into(),
+        Image::Shown {
             allocation,
             fade_in,
         } => view(allocation.handle())
             .opacity(fade_in.interpolate(0.0, 1.0, now))
             .scale(fade_in.interpolate(1.2, 1.0, now))
             .into(),
-        Image::Loading => empty().into(),
+        Image::Loading(_) => empty().into(),
         Image::Default => match DEFAULT_POSTER.as_ref() {
             Some(handle) => view(handle).into(),
             _ => empty().into(),
@@ -1924,4 +1984,17 @@ pub fn page_layout<'a, Message: 'a>(
             }
         })
         .into()
+}
+
+pub fn item_sensor<'a, Message: 'a + Clone>(
+    content: impl Into<Element<'a, Message>>,
+    show: Message,
+    hide: Message,
+) -> sensor::Sensor<'a, (), Message> {
+    use iced::Size;
+
+    sensor(content)
+        // .delay(iced::time::milliseconds(100))
+        .on_show(move |_| show.clone())
+        .on_hide(hide)
 }

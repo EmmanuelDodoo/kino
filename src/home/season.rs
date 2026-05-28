@@ -25,6 +25,7 @@ pub enum Message {
     AddSelf,
     Add(EpisodeId),
     Hovered(EpisodeId, bool),
+    Shown(EpisodeId, bool),
     Details(EpisodeId),
     Resume,
     Edit,
@@ -81,6 +82,7 @@ impl SeasonPage {
 
                 Some(msg)
             }
+            Message::Shown(id, shown) => Some(HomeMessage::Shown(id.into(), shown)),
             Message::AddSelf => {
                 let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Season(self.id)));
 
@@ -136,6 +138,7 @@ impl SeasonPage {
                 Message::Add,
                 Message::Details,
                 Message::Hovered,
+                Message::Shown,
                 Message::Play,
             )
         });
@@ -156,6 +159,7 @@ impl SeasonPage {
                 Message::Add,
                 Message::Details,
                 Message::Hovered,
+                Message::Shown,
                 Message::Play,
             )
         });
@@ -176,6 +180,7 @@ impl SeasonPage {
                 Message::Add,
                 Message::Details,
                 Message::Hovered,
+                Message::Shown,
                 Message::Play,
             )
         });
@@ -348,7 +353,7 @@ impl SeasonItem {
 
     pub fn is_animating(&self, now: Instant) -> bool {
         let poster = match &self.poster {
-            Image::Ready { fade_in, .. } => fade_in.is_animating(now),
+            Image::Shown { fade_in, .. } => fade_in.is_animating(now),
             _ => false,
         };
 
@@ -384,8 +389,9 @@ impl SeasonItem {
         };
 
         match &self.poster {
+            Image::Shown { allocation, .. } => view(allocation.handle()),
             Image::Ready { allocation, .. } => view(allocation.handle()),
-            Image::Loading => empty().into(),
+            Image::Loading(_) => empty().into(),
             Image::Default => match DEFAULT_POSTER.as_ref() {
                 Some(handle) => view(handle).into(),
                 _ => empty().into(),
@@ -412,6 +418,10 @@ impl SeasonItem {
         }
     }
 
+    pub fn fade_in(&mut self, shown: bool, now: Instant) {
+        self.poster.fade_in(shown, now);
+    }
+
     pub fn task(&mut self, task: ThumbnailTaskKind, now: Instant) {
         match task {
             ThumbnailTaskKind::Samples { main, accent } => {
@@ -419,10 +429,12 @@ impl SeasonItem {
                 self.sample_text = Some(accent);
             }
             ThumbnailTaskKind::Image(Ok(allocation)) => {
-                self.poster = Image::Ready {
-                    allocation,
-                    fade_in: fade_in(now),
-                };
+                let mut poster = Image::Ready { allocation };
+                if matches!(&self.poster, Image::Loading(true)) {
+                    poster.fade_in(true, now);
+                }
+
+                self.poster = poster;
             }
             ThumbnailTaskKind::Image(Err(error)) => {
                 tracing::error!("Season Thumbnail poster allocation error: \n{error}");
@@ -436,6 +448,7 @@ impl SeasonItem {
         on_add: impl Fn(SeasonId) -> Message + 'a,
         on_select: impl Fn(SeasonId) -> Message + 'a + Clone,
         on_hover: impl Fn(SeasonId, bool) -> Message + 'a + Clone,
+        on_show: impl Fn(SeasonId, bool) -> Message + 'a,
         on_play: impl Fn(SeasonId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let background_inter = self.background.interpolate(0.0, 1.0, now);
@@ -484,7 +497,7 @@ impl SeasonItem {
             float_anim: Some(&self.float),
         };
 
-        card.view(now, Self::WIDTH, Self::HEIGHT, on_select, on_hover)
+        card.view(now, Self::WIDTH, Self::HEIGHT, on_select, on_hover, on_show)
     }
 
     pub fn list<'a, Message: 'a + Clone>(
@@ -493,6 +506,7 @@ impl SeasonItem {
         on_add: impl Fn(SeasonId) -> Message + 'a,
         on_select: impl Fn(SeasonId) -> Message + 'a,
         on_hover: impl Fn(SeasonId, bool) -> Message + 'a,
+        on_show: impl Fn(SeasonId, bool) -> Message + 'a,
         on_play: impl Fn(SeasonId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let episodes = self.item.episodes;
@@ -522,7 +536,7 @@ impl SeasonItem {
             overlay: Some(list_overlay(icon_inter, background_inter)),
         };
 
-        list.view(now, on_select, on_hover, on_play)
+        list.view(now, on_select, on_hover, on_show, on_play)
     }
 
     pub fn compact<'a, Message: 'a + Clone>(
@@ -531,6 +545,7 @@ impl SeasonItem {
         on_add: impl Fn(SeasonId) -> Message + 'a,
         on_select: impl Fn(SeasonId) -> Message + 'a,
         on_hover: impl Fn(SeasonId, bool) -> Message + 'a,
+        on_show: impl Fn(SeasonId, bool) -> Message + 'a,
         on_play: impl Fn(SeasonId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let id = self.item.id;
@@ -546,6 +561,13 @@ impl SeasonItem {
             recent: Some(compact_recent(self.item.recent_short())),
         };
 
-        compact.view(now, (on_add)(id), (on_select)(id), on_hover, (on_play)(id))
+        compact.view(
+            now,
+            on_hover,
+            on_show,
+            (on_add)(id),
+            (on_select)(id),
+            (on_play)(id),
+        )
     }
 }

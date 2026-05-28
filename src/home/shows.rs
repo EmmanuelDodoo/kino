@@ -11,6 +11,7 @@ use registry::models::{ItemId, Show, ShowId};
 #[derive(Debug, Clone, Copy)]
 pub enum TvShowsMessage {
     Hovered(ShowId, bool),
+    Shown(ShowId, bool),
     Add(ShowId),
     Details(ShowId),
     Play(ShowId),
@@ -44,6 +45,7 @@ impl TvShows {
 
                 Some(msg)
             }
+            TvShowsMessage::Shown(id, shown) => Some(HomeMessage::Shown(id.into(), shown)),
             TvShowsMessage::Add(id) => {
                 let msg = HomeMessage::OpenView(ViewMessage::Add(ItemId::Show(id)));
 
@@ -82,6 +84,7 @@ impl TvShows {
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
                 TvShowsMessage::Hovered,
+                TvShowsMessage::Shown,
                 TvShowsMessage::Play,
             )
         });
@@ -110,6 +113,7 @@ impl TvShows {
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
                 TvShowsMessage::Hovered,
+                TvShowsMessage::Shown,
                 TvShowsMessage::Play,
             )
         });
@@ -138,6 +142,7 @@ impl TvShows {
                 TvShowsMessage::Add,
                 TvShowsMessage::Details,
                 TvShowsMessage::Hovered,
+                TvShowsMessage::Shown,
                 TvShowsMessage::Play,
             )
         });

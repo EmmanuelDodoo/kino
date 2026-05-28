@@ -14,6 +14,7 @@ use registry::models::{ItemId, Media, Movie, MovieId};
 #[derive(Debug, Clone, Copy)]
 pub enum MoviesMessage {
     Hovered(MovieId, bool),
+    Shown(MovieId, bool),
     Play(MovieId),
     Add(MovieId),
     Details(MovieId),
@@ -47,6 +48,7 @@ impl Movies {
 
                 Some(msg)
             }
+            MoviesMessage::Shown(id, shown) => Some(HomeMessage::Shown(id.into(), shown)),
             MoviesMessage::Play(id) => {
                 let msg = HomeMessage::Play(ItemId::Movie(id));
                 Some(msg)
@@ -77,6 +79,7 @@ impl Movies {
                 MoviesMessage::Add,
                 MoviesMessage::Details,
                 MoviesMessage::Hovered,
+                MoviesMessage::Shown,
                 MoviesMessage::Play,
             )
         });
@@ -106,6 +109,7 @@ impl Movies {
                 MoviesMessage::Add,
                 MoviesMessage::Details,
                 MoviesMessage::Hovered,
+                MoviesMessage::Shown,
                 MoviesMessage::Play,
             )
         });
@@ -134,6 +138,7 @@ impl Movies {
                 MoviesMessage::Add,
                 MoviesMessage::Details,
                 MoviesMessage::Hovered,
+                MoviesMessage::Shown,
                 MoviesMessage::Play,
             )
         });
