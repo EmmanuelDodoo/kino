@@ -2167,6 +2167,9 @@ impl Home {
                 let old = self.collections.remove(index);
                 let remove = Message::RemoveCollection(old.id).tasked();
 
+                self.command = false;
+                self.view = ViewState::None;
+
                 Task::batch([remove, self.back(now, true), self.close_view(true, now)])
             }
             HomeMessage::RemoveCollectionItems(collection, items) => {
@@ -2430,6 +2433,9 @@ impl Home {
                 let msg = Message::RemoveMedia(*id);
 
                 let remove = Task::done(msg);
+
+                self.command = false;
+                self.view = ViewState::None;
 
                 Task::batch([self.back(now, true), remove, self.close_view(true, now)])
             }
