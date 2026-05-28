@@ -339,11 +339,12 @@ impl EpisodeItem {
         &'a self,
         now: Instant,
         on_add: impl Fn(EpisodeId) -> Message + 'a,
-        on_select: impl Fn(EpisodeId) -> Message + 'a,
-        on_hover: impl Fn(EpisodeId, bool) -> Message + 'a,
+        on_select: impl Fn(EpisodeId) -> Message + 'a + Clone,
+        on_hover: impl Fn(EpisodeId, bool) -> Message + 'a + Clone,
         on_play: impl Fn(EpisodeId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let background_inter = self.background.interpolate(0.0, 1.0, now);
+        let on_select = move |arg: EpisodeId| Some((on_select)(arg));
 
         let sample = self.sample_text;
         let duration =
@@ -360,6 +361,8 @@ impl EpisodeItem {
             self.item.as_ref(),
             on_add,
             on_play,
+            on_select.clone(),
+            on_hover.clone(),
             self.sample_color,
             self.sample_text,
             background_inter,
@@ -377,8 +380,6 @@ impl EpisodeItem {
             overlay: Some(overlay),
             float_anim: Some(&self.float),
         };
-
-        let on_select = move |arg: EpisodeId| Some((on_select)(arg));
 
         card.view(now, Self::WIDTH, Self::HEIGHT, on_select, on_hover)
     }

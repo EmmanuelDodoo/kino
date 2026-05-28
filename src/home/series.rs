@@ -417,11 +417,12 @@ impl ShowItem {
         &'a self,
         now: Instant,
         on_add: impl Fn(ShowId) -> Message + 'a,
-        on_select: impl Fn(ShowId) -> Message + 'a,
-        on_hover: impl Fn(ShowId, bool) -> Message + 'a,
+        on_select: impl Fn(ShowId) -> Message + 'a + Clone,
+        on_hover: impl Fn(ShowId, bool) -> Message + 'a + Clone,
         on_play: impl Fn(ShowId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let background_inter = self.background.interpolate(0.0, 1.0, now);
+        let on_select = move |arg: ShowId| Some((on_select)(arg));
 
         let sample = self.sample_text;
         let seasons = self.item.seasons;
@@ -442,6 +443,8 @@ impl ShowItem {
             self.item.as_ref(),
             on_add,
             on_play,
+            on_select.clone(),
+            on_hover.clone(),
             self.sample_color,
             self.sample_text,
             background_inter,
@@ -459,8 +462,6 @@ impl ShowItem {
             overlay: Some(overlay),
             float_anim: Some(&self.float),
         };
-
-        let on_select = move |arg: ShowId| Some((on_select)(arg));
 
         card.view(now, Self::WIDTH, Self::HEIGHT, on_select, on_hover)
     }

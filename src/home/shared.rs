@@ -1066,6 +1066,8 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     media: &'a T,
     on_add: impl Fn(T::Id) -> Message + 'a,
     on_play: impl Fn(T::Id) -> Message + 'a,
+    on_select: impl Fn(T::Id) -> Option<Message> + 'a,
+    on_hover: impl Fn(T::Id, bool) -> Message + 'a,
     sample_color: Option<Color>,
     sample_text: Option<Color>,
     background_inter: f32,
@@ -1132,6 +1134,11 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
                         ..default
                     }
                 });
+
+            let play = mouse_area(play)
+                .on_enter((on_hover)(media.id(), true))
+                .on_press((on_play)(media.id()));
+
             row!(space::horizontal(), play, space::horizontal())
                 .height(Length::FillPortion(2))
                 .width(Length::Fill)
@@ -1140,12 +1147,16 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
         })
     };
 
-    mouse_area(
+    let content = mouse_area(
         column!(top, play, bottom)
             .width(Length::Fill)
             .height(Length::Fill),
-    )
-    .on_press((on_play)(media.id()))
+    );
+
+    match (on_select)(media.id()) {
+        Some(message) => content.on_press(message),
+        None => content,
+    }
     .into()
 }
 
