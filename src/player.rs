@@ -20,7 +20,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     path::PathBuf,
 };
-use widgets::{marquee, throbber};
+use widgets::{marquee, menu, throbber};
 
 pub mod comment;
 pub mod playlist;
@@ -433,7 +433,7 @@ pub enum ManagerMessage {
     ToggleMute,
     PlayPrevious,
     PlayNext,
-    SpeedReset,
+    SetSpeed(f64),
     SeekFront(bool),
     SeekBack(bool),
     TogglePlay,
@@ -450,6 +450,7 @@ pub enum ManagerMessage {
     Error(String),
     CommentMessage(CommentMessage),
     ClearIndicator,
+    SpeedToggle(bool),
     None,
 }
 
@@ -470,6 +471,8 @@ pub struct Manager {
 
     modal: Option<Modal>,
     panel: Option<Panel>,
+
+    speed_toggle: bool,
 }
 
 impl Manager {
@@ -523,6 +526,7 @@ impl Manager {
             next: AutoState::Idle,
             modal: None,
             panel: None,
+            speed_toggle: false,
         }
     }
 
@@ -825,7 +829,7 @@ impl Manager {
             ManagerMessage::AddCollection => self.collection_add(),
             ManagerMessage::OpenConfig => self.video_config(),
             ManagerMessage::Comment => self.video_comment(),
-            ManagerMessage::SpeedReset => self.speed_reset(),
+            ManagerMessage::SetSpeed(speed) => self.set_speed(speed),
             ManagerMessage::CloseView => self.close_view(),
             ManagerMessage::CollectionAddMessage(csg) => {
                 let Some(Modal::CollectionAdd {
@@ -1443,6 +1447,10 @@ impl Manager {
                 self.indicator.take();
                 Task::none()
             }
+            ManagerMessage::SpeedToggle(toggle) => {
+                self.speed_toggle = toggle;
+                Task::none()
+            }
         }
     }
 
@@ -1560,9 +1568,9 @@ impl Manager {
 
     fn media_controls(&self) -> Element<'_, ManagerMessage> {
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
-        let tp = tp::Position::Top;
+        let tp = tp::Position::Bottom;
 
-        let left = {
+        let volume = {
             let volume = slider(
                 0.0..=1.0,
                 if self.settings.muted {
@@ -1578,22 +1586,61 @@ impl Manager {
 
             let volume_text = format!("{:.0}", self.settings.volume * 100.0);
 
-            let volume = tooltip(volume, volume_text, tp);
+            tooltip(volume, volume_text, tp)
+        };
 
-            let speed = container(
-                mono_bold(format!("{:.02}x", self.settings.speed)).size(icon_size / (typo::RATIO)),
+        let speed = {
+            let current = self.settings.speed;
+            let overlay = move |speed: f64| {
+                let style = if current == speed {
+                    styles::button::text_primary
+                } else {
+                    styles::button::text
+                };
+
+                button(mono_bold(format!("{speed:.2}✕")))
+                    .padding(0)
+                    .on_press(ManagerMessage::SetSpeed(speed))
+                    .style(style)
+                    .into()
+            };
+
+            let opts = [0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.]
+                .into_iter()
+                .map(overlay);
+
+            let opts = column(opts).spacing(4).align_x(Horizontal::Right);
+
+            let opts = container(opts).padding([5, 8]).style(|theme| {
+                let default = styles::container::bw3(theme);
+                let background = default.background.map(|bg| bg.scale_alpha(0.9));
+                let border = default.border.rounded(5.0);
+
+                container::Style {
+                    background,
+                    border,
+                    ..default
+                }
+            });
+
+            let current = container(
+                mono_bold(format!("{:.2}✕", self.settings.speed)).size(icon_size / (typo::RATIO)),
             )
             .style(styles::container::text);
-            let speed = tooltip(
-                button(speed)
-                    .padding(0)
-                    .style(styles::button::text_slate)
-                    .on_press(ManagerMessage::SpeedReset),
-                "Playback speed",
-                tp,
-            );
 
-            let subtitles = if self.settings.show_subtitles {
+            let speed = menu(current, opts)
+                .toggle(self.speed_toggle)
+                .top()
+                .auto_close(true)
+                .on_toggle(ManagerMessage::SpeedToggle);
+
+            let speed = tooltip(speed, "Playback speed", tp);
+
+            speed
+        };
+
+        let subtitles = {
+            if self.settings.show_subtitles {
                 tooltip(
                     sized_button(icons::SUBTITLES_OFF, icon_size)
                         .on_press(ManagerMessage::ToggleSubtitles)
@@ -1609,9 +1656,11 @@ impl Manager {
                     "Subtitles on",
                     tp,
                 )
-            };
+            }
+        };
 
-            let mute = if self.settings.muted {
+        let mute = {
+            if self.settings.muted {
                 tooltip(
                     sized_button(icons::MUTE, icon_size)
                         .on_press(ManagerMessage::ToggleMute)
@@ -1627,20 +1676,22 @@ impl Manager {
                     "Mute",
                     tp,
                 )
-            };
+            }
+        };
 
-            row!(subtitles, speed, mute, volume)
-                .spacing(4.0)
-                .align_y(Vertical::Center)
-        }
-        .width(Self::WIDTH);
+        let left = row!(subtitles, speed, mute, volume)
+            .spacing(4.0)
+            .align_y(Vertical::Center)
+            .width(Self::WIDTH);
 
+        let tp = tp::Position::Bottom;
         let middle = {
             let size = if self.is_fullscreen {
                 H2 * typo::RATIO
             } else {
                 H2
             };
+
             let play: Element<'_, ManagerMessage> = match &self.state {
                 State::Idle => sized_button(icons::PLAY, size)
                     .style(styles::button::text_slate)
@@ -1790,11 +1841,12 @@ impl Manager {
             .spacing(8)
             .width(Length::Fill);
 
-        let content: Element<'_, ManagerMessage> = if self.show_controls || self.is_eos() {
-            content.into()
-        } else {
-            space::horizontal().height(75).into()
-        };
+        let content: Element<'_, ManagerMessage> =
+            if self.show_controls || self.is_eos() || self.speed_toggle {
+                content.into()
+            } else {
+                space::horizontal().height(75).into()
+            };
 
         let content = mouse_area(content)
             .on_exit(ManagerMessage::CursorExit)
@@ -2321,14 +2373,22 @@ impl Manager {
         task.map(Message::Player)
     }
 
-    fn speed_increase(&mut self) -> Task<Message> {
+    fn set_speed(&mut self, speed: f64) -> Task<Message> {
+        let speed = speed.clamp(0.1, 3.0);
+        self.speed_toggle = false;
+
+        if self.settings.speed == speed {
+            return Task::none();
+        }
+
+        self.settings.speed = speed;
+
         match &mut self.state {
             State::Ready { player, .. } => {
-                self.settings.speed += self.settings.speed_change_amt;
                 match player
                     .video
                     .set_speed(self.settings.speed)
-                    .context("Speed Increase Failed")
+                    .with_context(|| format!("Set speed {speed:.2} Failed"))
                 {
                     Ok(_) => Task::none(),
                     Err(error) => Message::anyhow(error).tasked(),
@@ -2336,40 +2396,20 @@ impl Manager {
             }
             _ => Task::none(),
         }
+    }
+
+    fn speed_increase(&mut self) -> Task<Message> {
+        let speed = self.settings.speed + self.settings.speed_change_amt;
+        self.set_speed(speed)
     }
 
     fn speed_decrease(&mut self) -> Task<Message> {
-        match &mut self.state {
-            State::Ready { player, .. } => {
-                self.settings.speed -= self.settings.speed_change_amt;
-                match player
-                    .video
-                    .set_speed(self.settings.speed)
-                    .context("Speed Decrease Failed")
-                {
-                    Ok(_) => Task::none(),
-                    Err(error) => Message::anyhow(error).tasked(),
-                }
-            }
-            _ => Task::none(),
-        }
+        let speed = self.settings.speed - self.settings.speed_change_amt;
+        self.set_speed(speed)
     }
 
     fn speed_reset(&mut self) -> Task<Message> {
-        match &mut self.state {
-            State::Ready { player, .. } if player.video.speed() != 1.0 => {
-                self.settings.speed = 1.0;
-                match player
-                    .video
-                    .set_speed(self.settings.speed)
-                    .context("Speed Reset Failed")
-                {
-                    Ok(_) => Task::none(),
-                    Err(error) => Message::anyhow(error).tasked(),
-                }
-            }
-            _ => Task::none(),
-        }
+        self.set_speed(1.0)
     }
 
     fn subtitles_toggle(&mut self) -> Task<Message> {

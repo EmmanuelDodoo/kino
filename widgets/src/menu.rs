@@ -29,6 +29,7 @@ pub struct Menu<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer> {
     on_toggle: Option<Box<dyn Fn(bool) -> Message + 'a>>,
     position: Position,
     auto_close: bool,
+    toggled: bool,
 }
 
 impl<'a, Message, Theme, Renderer> Menu<'a, Message, Theme, Renderer> {
@@ -43,7 +44,12 @@ impl<'a, Message, Theme, Renderer> Menu<'a, Message, Theme, Renderer> {
             on_toggle: None,
             position: Position::Top,
             auto_close: true,
+            toggled: false,
         }
+    }
+
+    pub fn toggle(self, toggled: bool) -> Self {
+        Self { toggled, ..self }
     }
 
     /// Sets the position for the overlayed menu
@@ -63,6 +69,38 @@ impl<'a, Message, Theme, Renderer> Menu<'a, Message, Theme, Renderer> {
     pub fn auto_close(self, auto_close: bool) -> Self {
         Self { auto_close, ..self }
     }
+
+    /// Sets the postion to [`Position::Top`]
+    pub fn top(self) -> Self {
+        Self {
+            position: Position::Top,
+            ..self
+        }
+    }
+
+    /// Sets the postion to [`Position::Bottom`]
+    pub fn bottom(self) -> Self {
+        Self {
+            position: Position::Bottom,
+            ..self
+        }
+    }
+
+    /// Sets the postion to [`Position::Left`]
+    pub fn left(self) -> Self {
+        Self {
+            position: Position::Left,
+            ..self
+        }
+    }
+
+    /// Sets the postion to [`Position::Right`]
+    pub fn right(self) -> Self {
+        Self {
+            position: Position::Right,
+            ..self
+        }
+    }
 }
 
 impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
@@ -80,7 +118,7 @@ where
 
     fn state(&self) -> tree::State {
         tree::State::new(State {
-            is_open: false,
+            is_open: self.toggled,
             overlay_click: false,
             overlay_captured: false,
             // overlay_in_bounds: false,
