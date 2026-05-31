@@ -217,7 +217,7 @@ impl ShowPage {
                 page_tags(values)
             };
 
-            page_title(tags, show.item.name(), details)
+            page_title(tags, show.item.name(), details, show.item.status)
         };
 
         let header = page_header(
@@ -503,6 +503,7 @@ impl ShowItem {
             synopsis: Some(synopsis(self.item.synopsis())),
             bottom: Some(list_bottom(
                 self.item.id,
+                self.item.status,
                 self.item.progress(),
                 self.item.duration_full(),
                 unique,
@@ -531,7 +532,7 @@ impl ShowItem {
             item: id,
             title: compact_title(self.item.name(), self.hovered),
             ratings: ratings(self.item.rating(), false),
-            progress: Some(compact_progress(self.item.progress())),
+            progress: Some(compact_progress(self.item.status, self.item.progress())),
             duration: Some(compact_duration(self.item.duration_short())),
             recent: Some(compact_recent(self.item.recent_short())),
         };

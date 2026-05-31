@@ -1578,6 +1578,8 @@ pub fn draw_movie_edit<'a>(
 
     let watched = media_mark(state.watched, MovieEditMessage::MarkWatched);
 
+    let archive = media_archive(state.archive, MovieEditMessage::Archive);
+
     let videos = draw_videos(videos, state.selected_video, MovieEditMessage::Video);
 
     let audio = draw_audio(audio, state.selected_audio, MovieEditMessage::Audio);
@@ -1615,8 +1617,8 @@ pub fn draw_movie_edit<'a>(
     );
 
     let content: Element<'_, MovieEditMessage> = column!(
-        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, poster,
-        backdrop, refetch, remove,
+        name, overview, ratings, watched, archive, videos, audio, subtitles, source, source_id,
+        poster, backdrop, refetch, remove,
     )
     .spacing(24)
     .into();
@@ -1635,6 +1637,8 @@ pub fn draw_show_edit<'a>(state: &'a ShowEditState) -> Element<'a, HomeMessage> 
     let ratings = media_rating(&state.ratings, ShowEditMessage::Rating);
 
     let watched = media_mark(state.watched, ShowEditMessage::MarkWatched);
+
+    let archive = media_archive(state.archive, ShowEditMessage::Archive);
 
     let source = media_source(
         &state.source,
@@ -1662,7 +1666,8 @@ pub fn draw_show_edit<'a>(state: &'a ShowEditState) -> Element<'a, HomeMessage> 
     );
 
     let content: Element<'_, ShowEditMessage> = column!(
-        name, overview, ratings, watched, source, source_id, poster, backdrop, refetch, remove,
+        name, overview, ratings, watched, archive, source, source_id, poster, backdrop, refetch,
+        remove,
     )
     .spacing(24)
     .into();
@@ -1682,6 +1687,8 @@ pub fn draw_season_edit<'a>(state: &'a SeasonEditState) -> Element<'a, HomeMessa
 
     let watched = media_mark(state.watched, SeasonEditMessage::MarkWatched);
 
+    let archive = media_archive(state.archive, SeasonEditMessage::Archive);
+
     let source = media_source(&state.source, None::<fn(_) -> SeasonEditMessage>);
 
     let source_id = media_source_id(state.source, &state.source_id, SeasonEditMessage::SourceId);
@@ -1699,7 +1706,7 @@ pub fn draw_season_edit<'a>(state: &'a SeasonEditState) -> Element<'a, HomeMessa
     );
 
     let content: Element<'_, SeasonEditMessage> = column!(
-        name, overview, ratings, watched, source, source_id, poster, refetch, remove
+        name, overview, ratings, watched, archive, source, source_id, poster, refetch, remove
     )
     .spacing(24)
     .into();
@@ -1723,6 +1730,8 @@ pub fn draw_episode_edit<'a>(
     let ratings = media_rating(&state.ratings, EpisodeEditMessage::Rating);
 
     let watched = media_mark(state.watched, EpisodeEditMessage::MarkWatched);
+
+    let archive = media_archive(state.archive, EpisodeEditMessage::Archive);
 
     let videos = draw_videos(videos, state.selected_video, EpisodeEditMessage::Video);
 
@@ -1752,8 +1761,8 @@ pub fn draw_episode_edit<'a>(
     );
 
     let content: Element<'_, EpisodeEditMessage> = column!(
-        name, overview, ratings, watched, videos, audio, subtitles, source, source_id, poster,
-        refetch, remove
+        name, overview, ratings, watched, archive, videos, audio, subtitles, source, source_id,
+        poster, refetch, remove
     )
     .spacing(24)
     .into();
@@ -2102,6 +2111,24 @@ fn media_mark<'a, Message: 'a + Clone>(
         .into()
 }
 
+fn media_archive<'a, Message: 'a + Clone>(
+    archive: bool,
+    on_toggle: impl Fn(bool) -> Message + 'a,
+) -> Element<'a, Message> {
+    let label = media_label("Archive");
+    let help = help(
+        "Preserve entries for media that has been archived, compressed, or moved elsewhere. Archived media remains in your library but cannot be played until it becomes available again.",
+        H7,
+    );
+    let label = row!(label, help).spacing(4).align_y(Vertical::Center);
+
+    let content = checkbox(archive).size(P).on_toggle(on_toggle);
+
+    row!(label, space::horizontal(), content)
+        .align_y(Vertical::Center)
+        .into()
+}
+
 fn media_source<'a, Message: 'a + Clone>(
     source: &'a SourceSet,
     on_select: Option<impl Fn(SourceSet) -> Message + 'a>,
@@ -2233,4 +2260,12 @@ fn media_layout<'a>(
         .padding([8, 12])
         .align_y(Vertical::Top)
         .into()
+}
+
+fn help<'a, Message: 'a>(label: &'a str, size: f32) -> tp::Tooltip<'a, Message> {
+    tooltip(
+        icons::icon(icons::HELP).size(size),
+        label,
+        tp::Position::Right,
+    )
 }

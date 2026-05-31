@@ -137,6 +137,7 @@ pub const FILE_UP: char = '\u{e85c}';
 pub const FOLDER_ADD: char = '\u{e85d}';
 pub const FOLDER: char = '\u{e86d}';
 pub const UPLOAD: char = '\u{e86b}';
+pub const ARCHIVED: char = '\u{e86e}';
 
 fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
     let fnt: Font = Font::new(name);

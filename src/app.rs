@@ -32,6 +32,7 @@ use registry::models::{
         Items,
         triggers::{DeleteTrigger, InsertTrigger},
     },
+    media,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -64,6 +65,7 @@ pub enum MediaUpdateKind {
     Subtitle(SubtitleId),
     SourceId(SourceId),
     MarkWatched(u32),
+    Status(media::Status),
 }
 
 #[derive(Clone, Debug)]
@@ -648,6 +650,7 @@ impl App {
                             continue;
                         }
                         MediaUpdateKind::MarkWatched(count) => Movie::mark_watched(id, count),
+                        MediaUpdateKind::Status(status) => Movie::set_status(id, status),
                     };
 
                     if let Some(succ) = query
@@ -765,6 +768,7 @@ impl App {
                             continue;
                         }
                         MediaUpdateKind::MarkWatched(count) => Show::mark_watched(id, count),
+                        MediaUpdateKind::Status(status) => Show::set_status(id, status),
                     };
 
                     if let Some(succ) = query
@@ -879,6 +883,7 @@ impl App {
                             continue;
                         }
                         MediaUpdateKind::MarkWatched(count) => Season::mark_watched(id, count),
+                        MediaUpdateKind::Status(status) => Season::set_status(id, status),
                         MediaUpdateKind::Video(_)
                         | MediaUpdateKind::Audio(_)
                         | MediaUpdateKind::Subtitle(_) => {
@@ -958,6 +963,7 @@ impl App {
                             continue;
                         }
                         MediaUpdateKind::MarkWatched(count) => Episode::mark_watched(id, count),
+                        MediaUpdateKind::Status(status) => Episode::set_status(id, status),
                     };
 
                     if let Some(succ) = query
@@ -2560,6 +2566,11 @@ impl App {
                     .get_video(id)
                     .with_context(|| format!("Failed to fetch movie {id}"))
                     .context("Could not retrieve movie")?;
+
+                let Some(item) = item else {
+                    return Ok((Playlist::empty(), vec!["Movie Archived".to_owned()]));
+                };
+
                 if item.path.try_exists()? {
                     tracing::debug!("Movie {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))
@@ -2578,6 +2589,11 @@ impl App {
                     .get_video(id)
                     .with_context(|| format!("Failed to fetch episode {id}"))
                     .context("Could not retrieve episode")?;
+
+                let Some(item) = item else {
+                    return Ok((Playlist::empty(), vec!["Episode Archived".to_owned()]));
+                };
+
                 if item.path.try_exists()? {
                     tracing::debug!("Episode {} Play item fetched", item.name);
                     Ok((Playlist::single(item), vec![]))

@@ -454,7 +454,9 @@ impl Database {
             .collect()
     }
 
-    pub fn get_video(&self, id: impl Into<VideoId>) -> rusqlite::Result<Video> {
+    pub fn get_video(&self, id: impl Into<VideoId>) -> rusqlite::Result<Option<Video>> {
+        use rusqlite::OptionalExtension;
+
         let id = id.into();
         let is_movie = matches!(id, VideoId::Movie(_));
 
@@ -472,21 +474,25 @@ impl Database {
 
         let mut statement = self.prepare_cached(sql)?;
 
-        let mut video = statement.query_row(
-            &[
-                (":id", &ToSqlOutput::from(id)),
-                (":status", &ToSqlOutput::from(Status::Normal)),
-            ],
-            map,
-        )?;
+        let mut video = statement
+            .query_row(
+                &[
+                    (":id", &ToSqlOutput::from(id)),
+                    (":status", &ToSqlOutput::from(Status::Normal)),
+                ],
+                map,
+            )
+            .optional()?;
 
-        let subs = self.get_video_subtitles(video.id)?;
-        let audios = self.get_video_audios(video.id)?;
-        let info = self.get_video_info(video.id)?;
+        if let Some(video) = video.as_mut() {
+            let subs = self.get_video_subtitles(video.id)?;
+            let audios = self.get_video_audios(video.id)?;
+            let info = self.get_video_info(video.id)?;
 
-        video.set_subtitles(subs);
-        video.set_audios(audios);
-        video.set_videos(info);
+            video.set_subtitles(subs);
+            video.set_audios(audios);
+            video.set_videos(info);
+        }
 
         Ok(video)
     }

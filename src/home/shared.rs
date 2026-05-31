@@ -166,30 +166,35 @@ fn progress_icon(progress: f32) -> char {
     }
 }
 
-pub fn progress<'a, Message: 'a>(
+fn status_progress<'a, Message: 'a>(
+    status: models::media::Status,
     progress: f32,
     color: Option<Color>,
     primary: bool,
 ) -> Element<'a, Message> {
-    let progress_icon = progress_icon(progress);
-    let progress = (progress * 1000.0).round() / 10.0;
-    let text = mono_bold(format!("{}%", progress))
-        .size(H8)
-        .style(move |theme: &Theme| {
-            if color.is_some() {
-                text::Style { color }
-            } else {
-                text::Style {
-                    color: if primary {
-                        Some(theme.palette().primary.strong.text)
-                    } else {
-                        None
-                    },
-                }
-            }
-        });
+    let (value_icon, value) = match status {
+        models::media::Status::Archived => (ARCHIVED, medium("Archived")),
+        _ => {
+            let value = (progress * 1000.0).round() / 10.0;
+            (progress_icon(progress), mono_bold(format!("{value}%")))
+        }
+    };
 
-    let icon = icon(progress_icon).size(H6).style(move |theme: &Theme| {
+    let text = value.size(H8).style(move |theme: &Theme| {
+        if color.is_some() {
+            text::Style { color }
+        } else {
+            text::Style {
+                color: if primary {
+                    Some(theme.palette().primary.strong.text)
+                } else {
+                    None
+                },
+            }
+        }
+    });
+
+    let icon = icon(value_icon).size(H6).style(move |theme: &Theme| {
         if color.is_some() {
             text::Style { color }
         } else {
@@ -1129,7 +1134,7 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     };
 
     let top = {
-        let progress = progress(media.progress(), sample, true);
+        let progress = status_progress(media.status(), media.progress(), sample, true);
         let add = mouse_area(icon(BOOKMARK).size(H4).style(color)).on_press((on_add)(media.id()));
 
         container(
@@ -1400,13 +1405,14 @@ pub fn list_title<'a, Message: 'a>(title: &'a str, hovered: bool) -> Element<'a,
 
 pub fn list_bottom<'a, T, Message: 'a + Clone>(
     id: T,
+    status: models::media::Status,
     progress: f32,
     duration: String,
     unique: impl Into<Element<'a, Message>>,
     on_add: impl Fn(T) -> Message + 'a,
 ) -> Element<'a, Message> {
     row!(
-        self::progress(progress, None, false),
+        self::status_progress(status, progress, None, false),
         self::duration(duration),
         unique.into(),
         space::horizontal(),
@@ -1549,9 +1555,18 @@ pub fn compact_title<'a, Message: 'a + Clone>(
         .into()
 }
 
-pub fn compact_progress<'a, Message: 'a>(progress: f32) -> Element<'a, Message> {
-    let progress = (progress * 1000.0).round() / 10.0;
-    let text = mono_bold(format!("{}%", progress)).size(H7);
+pub fn compact_progress<'a, Message: 'a>(
+    status: models::media::Status,
+    progress: f32,
+) -> Element<'a, Message> {
+    let text = match status {
+        models::media::Status::Archived => medium("Archived"),
+        _ => {
+            let progress = (progress * 1000.0).round() / 10.0;
+            mono_bold(format!("{}%", progress))
+        }
+    }
+    .size(H7);
 
     container(text)
         .align_y(Vertical::Center)
@@ -1746,12 +1761,19 @@ pub fn page_title<'a, Message: 'a>(
     top: impl Into<Element<'a, Message>>,
     title: impl text::IntoFragment<'a>,
     details: impl Into<Element<'a, Message>>,
+    status: models::media::Status,
 ) -> Element<'a, Message> {
     let title = sized_bold(title, H3)
         .width(Length::FillPortion(2))
         .height(32);
 
-    column!(top.into(), title, details.into())
+    let status = if matches!(status, models::media::Status::Archived) {
+        Some(Element::from(sized_medium("Archived", H8)))
+    } else {
+        None
+    };
+
+    column!(top.into(), title, details.into(), status)
         .spacing(4.0)
         .into()
 }

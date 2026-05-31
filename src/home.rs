@@ -41,7 +41,7 @@ use registry::models::{
         ItemId, Items,
         triggers::{self, Comparison, DeleteId, DeleteTrigger, InsertId, InsertTrigger, Logic},
     },
-    wish,
+    media, wish,
 };
 use registry::{
     filter::{self, Filter, SearchFilter},
@@ -314,6 +314,7 @@ pub enum MovieEditMessage {
     PickBackdrop,
     Refetch,
     Remove,
+    Archive(bool),
     Save,
 }
 
@@ -331,6 +332,7 @@ pub enum ShowEditMessage {
     PickBackdrop,
     Refetch,
     Remove,
+    Archive(bool),
     Save,
 }
 
@@ -345,6 +347,7 @@ pub enum SeasonEditMessage {
     PickPoster,
     Refetch,
     Remove,
+    Archive(bool),
     Save,
 }
 
@@ -363,6 +366,7 @@ pub enum EpisodeEditMessage {
     PickPoster,
     Refetch,
     Remove,
+    Archive(bool),
     Save,
 }
 
@@ -482,6 +486,7 @@ pub struct MovieEditState {
     watched: bool,
     poster: Option<PathBuf>,
     backdrop: Option<PathBuf>,
+    archive: bool,
 }
 
 impl MovieEditState {
@@ -503,6 +508,7 @@ impl MovieEditState {
             watched: false,
             poster: None,
             backdrop: None,
+            archive: matches!(movie.status, media::Status::Archived),
         }
     }
 
@@ -527,6 +533,7 @@ pub struct ShowEditState {
     watched: bool,
     poster: Option<PathBuf>,
     backdrop: Option<PathBuf>,
+    archive: bool,
 }
 
 impl ShowEditState {
@@ -545,6 +552,7 @@ impl ShowEditState {
             watched: false,
             poster: None,
             backdrop: None,
+            archive: matches!(show.status, media::Status::Archived),
         }
     }
 
@@ -568,6 +576,7 @@ pub struct SeasonEditState {
     source_id: String,
     watched: bool,
     poster: Option<PathBuf>,
+    archive: bool,
 }
 
 impl SeasonEditState {
@@ -585,6 +594,7 @@ impl SeasonEditState {
             source_id: String::default(),
             watched: false,
             poster: None,
+            archive: matches!(season.status, media::Status::Archived),
         }
     }
 
@@ -611,6 +621,7 @@ pub struct EpisodeEditState {
     source_id: String,
     watched: bool,
     poster: Option<PathBuf>,
+    archive: bool,
 }
 
 impl EpisodeEditState {
@@ -631,6 +642,7 @@ impl EpisodeEditState {
             source_id: String::default(),
             watched: false,
             poster: None,
+            archive: matches!(episode.status, media::Status::Archived),
         }
     }
 
@@ -1647,6 +1659,9 @@ impl Home {
                     MovieEditMessage::MarkWatched(watched) => {
                         state.watched = watched;
                     }
+                    MovieEditMessage::Archive(archive) => {
+                        state.archive = archive;
+                    }
                     MovieEditMessage::Remove => {
                         let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
                             id: state.id.into(),
@@ -1736,6 +1751,15 @@ impl Home {
                             updates.push(MediaUpdateKind::SourceId(source_id))
                         };
 
+                        let status = if state.archive {
+                            media::Status::Archived
+                        } else {
+                            media::Status::Normal
+                        };
+                        if movie.item.status != status {
+                            updates.push(MediaUpdateKind::Status(status))
+                        }
+
                         let prev_source = SourceSet::from_str(movie.item.source());
 
                         let prev_source = (prev_source != state.source)
@@ -1798,6 +1822,9 @@ impl Home {
                     }
                     ShowEditMessage::MarkWatched(watched) => {
                         state.watched = watched;
+                    }
+                    ShowEditMessage::Archive(archive) => {
+                        state.archive = archive;
                     }
                     ShowEditMessage::Remove => {
                         let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
@@ -1867,6 +1894,15 @@ impl Home {
                             updates.push(MediaUpdateKind::SourceId(source_id))
                         };
 
+                        let status = if state.archive {
+                            media::Status::Archived
+                        } else {
+                            media::Status::Normal
+                        };
+                        if show.item.status != status {
+                            updates.push(MediaUpdateKind::Status(status))
+                        }
+
                         let prev_source = SourceSet::from_str(show.item.source());
 
                         let prev_source = (prev_source != state.source)
@@ -1926,6 +1962,9 @@ impl Home {
                     }
                     SeasonEditMessage::MarkWatched(watched) => {
                         state.watched = watched;
+                    }
+                    SeasonEditMessage::Archive(archive) => {
+                        state.archive = archive;
                     }
                     SeasonEditMessage::Refetch => {
                         let State::Season { season, .. } = &self.state else {
@@ -1988,6 +2027,15 @@ impl Home {
                             updates.push(MediaUpdateKind::SourceId(source_id))
                         };
 
+                        let status = if state.archive {
+                            media::Status::Archived
+                        } else {
+                            media::Status::Normal
+                        };
+                        if season.item.status != status {
+                            updates.push(MediaUpdateKind::Status(status))
+                        }
+
                         let update = SeasonUpdate {
                             id: state.id,
                             source: state.source,
@@ -2041,6 +2089,9 @@ impl Home {
                     }
                     EpisodeEditMessage::MarkWatched(watched) => {
                         state.watched = watched;
+                    }
+                    EpisodeEditMessage::Archive(archive) => {
+                        state.archive = archive;
                     }
                     EpisodeEditMessage::Refetch => {
                         let State::Episode { episode, .. } = &self.state else {
@@ -2098,6 +2149,15 @@ impl Home {
                         {
                             updates.push(MediaUpdateKind::Rating(ratings));
                         };
+
+                        let status = if state.archive {
+                            media::Status::Archived
+                        } else {
+                            media::Status::Normal
+                        };
+                        if episode.item.status != status {
+                            updates.push(MediaUpdateKind::Status(status))
+                        }
 
                         if state.watched {
                             updates
@@ -2296,12 +2356,6 @@ impl Home {
                     SelectionMessage::Select(item) => {
                         let new = !selected.contains(&item);
 
-                        if new {
-                            selected.push(item);
-                        } else {
-                            selected.retain(|selected| *selected != item);
-                        }
-
                         match (item, &mut self.state) {
                             (ItemId::Movie(id), State::Recent { movies, .. })
                             | (ItemId::Movie(id), State::Movies(movies))
@@ -2309,7 +2363,18 @@ impl Home {
                                 if let Some(media) =
                                     movies.iter_mut().find(|item| item.item.id == id)
                                 {
-                                    media.selected = new;
+                                    let archived =
+                                        matches!(media.item.status, media::Status::Archived);
+
+                                    if !archived {
+                                        if new {
+                                            selected.push(item);
+                                        } else {
+                                            selected.retain(|selected| *selected != item);
+                                        }
+
+                                        media.selected = new;
+                                    }
                                 }
                             }
                             (ItemId::Show(id), State::Recent { shows, .. })
@@ -2318,7 +2383,18 @@ impl Home {
                                 if let Some(media) =
                                     shows.iter_mut().find(|item| item.item.id == id)
                                 {
-                                    media.selected = new;
+                                    let archived =
+                                        matches!(media.item.status, media::Status::Archived);
+
+                                    if !archived {
+                                        if new {
+                                            selected.push(item);
+                                        } else {
+                                            selected.retain(|selected| *selected != item);
+                                        }
+
+                                        media.selected = new;
+                                    }
                                 }
                             }
                             (ItemId::Season(id), State::Show { seasons, .. })
@@ -2326,7 +2402,18 @@ impl Home {
                                 if let Some(media) =
                                     seasons.iter_mut().find(|item| item.item.id == id)
                                 {
-                                    media.selected = new;
+                                    let archived =
+                                        matches!(media.item.status, media::Status::Archived);
+
+                                    if !archived {
+                                        if new {
+                                            selected.push(item);
+                                        } else {
+                                            selected.retain(|selected| *selected != item);
+                                        }
+
+                                        media.selected = new;
+                                    }
                                 }
                             }
                             (ItemId::Episode(id), State::Season { episodes, .. })
@@ -2334,7 +2421,18 @@ impl Home {
                                 if let Some(media) =
                                     episodes.iter_mut().find(|item| item.item.id == id)
                                 {
-                                    media.selected = new;
+                                    let archived =
+                                        matches!(media.item.status, media::Status::Archived);
+
+                                    if !archived {
+                                        if new {
+                                            selected.push(item);
+                                        } else {
+                                            selected.retain(|selected| *selected != item);
+                                        }
+
+                                        media.selected = new;
+                                    }
                                 }
                             }
                             _ => {}
@@ -4879,36 +4977,64 @@ impl Home {
 
     fn content_area(&self, now: Instant) -> Element<'_, HomeMessage> {
         let (title, items, item_name) = match &self.state {
-            State::Recent { shows, movies } => ("Recents", shows.len() + movies.len(), None),
+            State::Recent { shows, movies } => {
+                ("Recents".to_owned(), shows.len() + movies.len(), None)
+            }
             State::Shows(shows) => {
                 let shows = shows.len();
                 let name = if shows > 1 { "shows" } else { "show" };
 
-                ("Shows", shows, Some(name))
+                ("Shows".to_owned(), shows, Some(name))
             }
             State::Movies(movies) => {
                 let movies = movies.len();
                 let name = if movies > 1 { "movies" } else { "movie" };
 
-                ("Movies", movies, Some(name))
+                ("Movies".to_owned(), movies, Some(name))
             }
             State::Show { show, seasons, .. } => {
                 let seasons = seasons.len();
-                let name = if seasons > 1 { "seasons" } else { "season" };
+                let items = if seasons > 1 { "seasons" } else { "season" };
+                let name = if matches!(show.item.status, media::Status::Archived) {
+                    format!("{} - Archived", show.item.name())
+                } else {
+                    show.item.name().to_owned()
+                };
 
-                (show.item.name(), seasons, Some(name))
+                (name, seasons, Some(items))
             }
-            State::Movie { movie, .. } => (movie.item.name(), 0, Some("movie")),
+            State::Movie { movie, .. } => {
+                let name = if matches!(movie.item.status, media::Status::Archived) {
+                    format!("{} - Archived", movie.item.name())
+                } else {
+                    movie.item.name().to_owned()
+                };
+
+                (name, 0, Some("movie"))
+            }
             State::Season {
                 season, episodes, ..
             } => {
                 let episodes = episodes.len();
-                let name = if episodes > 1 { "episodes" } else { "episode" };
+                let items = if episodes > 1 { "episodes" } else { "episode" };
+                let name = if matches!(season.item.status, media::Status::Archived) {
+                    format!("{} - Archived", season.item.name())
+                } else {
+                    season.item.name().to_owned()
+                };
 
-                (season.item.name(), episodes, Some(name))
+                (name, episodes, Some(items))
             }
-            State::Episode { episode, .. } => (episode.item.name(), 0, Some("episode")),
-            State::Loading => ("Loading", 0, None),
+            State::Episode { episode, .. } => {
+                let name = if matches!(episode.item.status, media::Status::Archived) {
+                    format!("{} - Archived", episode.item.name())
+                } else {
+                    episode.item.name().to_owned()
+                };
+
+                (name, 0, Some("episode"))
+            }
+            State::Loading => ("Loading".to_owned(), 0, None),
             State::Collections(collections) => {
                 let collections = collections.len();
                 let name = if collections > 1 {
@@ -4917,13 +5043,13 @@ impl Home {
                     "collection"
                 };
 
-                ("Collections", collections, Some(name))
+                ("Collections".to_owned(), collections, Some(name))
             }
             State::Wishlist(wishlist) => {
                 let wishes = wishlist.len();
                 let name = if wishes > 1 { "wishes" } else { "wish" };
 
-                ("Wishlist", wishes, Some(name))
+                ("Wishlist".to_owned(), wishes, Some(name))
             }
             State::Collection {
                 collection,
@@ -4934,7 +5060,7 @@ impl Home {
                 seasons,
                 episodes,
             } => (
-                collection.collection.name.as_str(),
+                collection.collection.name.clone(),
                 movies.len() + shows.len() + seasons.len() + episodes.len(),
                 None,
             ),
@@ -4946,9 +5072,10 @@ impl Home {
                     if items > 1 { "show" } else { "shows" }
                 };
 
-                (dir.name.as_str(), items, Some(name))
+                (dir.name.clone(), items, Some(name))
             }
         };
+
         let item_name = match item_name {
             Some(name) => name,
             None => {
