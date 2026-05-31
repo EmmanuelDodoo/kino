@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use super::{
     AudioId, Media, SeasonId, ShowId, SubtitleId, VideoInfoId, datetime_to_sql, image::Image,
-    naivedate_to_sql,
+    media::*, naivedate_to_sql,
 };
 use crate::db::{Operation, Query, Table};
 
@@ -74,6 +74,7 @@ pub struct Episode {
     pub video_id: Option<VideoInfoId>,
     pub audio_id: Option<AudioId>,
     pub subtitle_id: Option<SubtitleId>,
+    pub status: Status,
 }
 
 impl Episode {
@@ -138,6 +139,7 @@ impl Episode {
 
         let show_name = row.get::<_, String>("show_name")?;
         let season_number = row.get::<_, u16>("season_number")?;
+        let status = Status::from_row(row)?;
 
         Ok(Self {
             id,
@@ -164,6 +166,7 @@ impl Episode {
             show_name,
             season_number,
             show,
+            status,
         })
     }
 
@@ -193,6 +196,7 @@ impl Episode {
             show_name: _show_name,
             season_number: _season_number,
             show: _show,
+            status,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -222,6 +226,7 @@ impl Episode {
         let duration = i64::try_from(*duration).expect("duration cannot be expressed as i64");
         let duration = ToSqlOutput::from(duration);
         let comments = ToSqlOutput::from(*comments);
+        let status = ToSqlOutput::from(*status);
 
         vec![
             (":id", id),
@@ -240,12 +245,13 @@ impl Episode {
             (":duration", duration),
             (":comments", comments),
             (":episode_number", number),
+            (":status", status),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO episode (id, season_id, name, original_name,  path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :episode_number) ON CONFLICT(season_id, path) DO UPDATE SET duration=:duration, removed=FALSE";
+        let sql = "INSERT INTO episode (id, season_id, name, original_name,  path, poster, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, comment_count, episode_number, status) VALUES (:id, :season, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :comments, :episode_number, :status) ON CONFLICT(season_id, path) DO UPDATE SET duration=:duration, status=:status";
 
         let params = self.insert_params();
 
@@ -260,8 +266,12 @@ impl Episode {
 
     #[must_use]
     pub fn remove<'a>(id: EpisodeId) -> Query<'a> {
-        let sql = "UPDATE episode SET removed=TRUE WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(id))];
+        let status = Status::Tombstone;
+        let sql = "UPDATE episode SET status=:status WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
 
         Query {
             id: id.0,
@@ -393,6 +403,23 @@ impl Episode {
         }
     }
 
+    #[must_use]
+    pub fn set_status<'a>(id: EpisodeId, status: Status) -> Query<'a> {
+        let sql = "UPDATE episode SET status=:status WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Episode,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         show: ShowId,
         season: SeasonId,
@@ -431,6 +458,7 @@ impl Episode {
             audio_id: None,
             subtitle_id: None,
             source: String::default(),
+            status: Status::Normal,
 
             // Not saved within episode table so these values are okay
             show_name: String::default(),
@@ -500,5 +528,9 @@ impl Media for Episode {
 
     fn source(&self) -> &str {
         &self.source
+    }
+
+    fn status(&self) -> Status {
+        self.status
     }
 }

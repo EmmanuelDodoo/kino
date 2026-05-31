@@ -14,6 +14,7 @@ pub mod shows;
 pub mod sources;
 pub mod video;
 pub mod wish;
+pub use media::Media;
 
 pub use collection::ItemId;
 pub use collection::{Collection, CollectionId, CollectionView, SimpleCollection};
@@ -27,101 +28,6 @@ pub use video::*;
 pub use wish::*;
 
 use crate::db::{Operation, Query, Table};
-
-pub trait Media {
-    type Id: Copy + Clone + std::hash::Hash + PartialEq + Eq + Send;
-
-    fn name(&self) -> &str;
-
-    fn id(&self) -> Self::Id;
-
-    fn duration(&self) -> u64;
-
-    fn added(&self) -> DateTime<Local>;
-
-    fn release(&self) -> NaiveDate;
-
-    fn recent(&self) -> Option<DateTime<Local>>;
-
-    fn progress(&self) -> f32;
-
-    fn watch_count(&self) -> u32;
-
-    fn rating(&self) -> Option<f32>;
-
-    fn comments(&self) -> u32;
-
-    fn synopsis(&self) -> &str;
-
-    fn poster(&self) -> Option<&Image>;
-
-    fn backdrop(&self) -> Option<&str>;
-
-    fn source(&self) -> &str;
-
-    fn release_year(&self) -> String {
-        use chrono::Datelike;
-
-        self.release().year().to_string()
-    }
-
-    fn release_my(&self) -> String {
-        let release = self.release();
-
-        format!("{}", release.format("%b, %Y"))
-    }
-
-    fn added_my(&self) -> String {
-        let added = self.added();
-
-        format!("{}", added.format("%b, %Y"))
-    }
-
-    fn added_humaized(&self) -> String {
-        humanize_datetime(self.added(), Local::now())
-    }
-
-    /// Duration in `(hrs) hours (mins) minutes` format.
-    fn duration_full(&self) -> String {
-        duration_full(self.duration())
-    }
-
-    /// Duration in the `(hrs)h (mins)m` format.
-    fn duration_short(&self) -> String {
-        let duration = self.duration();
-
-        if duration < 60 {
-            return format!("{duration:02}s");
-        }
-
-        let hrs = duration / 3600;
-        let hrs = if hrs > 0 {
-            format!("{hrs}h")
-        } else {
-            String::default()
-        };
-
-        let mins = (duration % 3600) / 60;
-        let mins = if mins > 0 {
-            format!("{mins}m")
-        } else {
-            String::default()
-        };
-
-        format!("{hrs} {mins}")
-    }
-
-    fn recent_short(&self) -> Option<String> {
-        let recent = self.recent();
-
-        recent.map(|recent| format!("{}", recent.format("%b %d, %Y")))
-    }
-
-    fn recent_humanized(&self) -> Option<String> {
-        self.recent()
-            .map(|recent| humanize_datetime(recent, Local::now()))
-    }
-}
 
 pub fn humanize_datetime(from: DateTime<Local>, to: DateTime<Local>) -> String {
     use std::time::Duration;
@@ -502,4 +408,140 @@ pub fn duration_full(duration: u64) -> String {
     let secs = (duration % 3600) % 60;
 
     format!("{hrs}{mins:02}:{secs:02}")
+}
+
+pub mod media {
+    use super::*;
+    use rusqlite::Result;
+
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum Status {
+        Normal = 0,
+        Tombstone = 1,
+        Archived = 2,
+    }
+
+    impl Status {
+        pub fn from_row(row: &Row<'_>) -> Result<Self> {
+            let status = row.get::<_, u8>("status")?;
+
+            Ok(match status {
+                0 => Self::Normal,
+                1 => Self::Tombstone,
+                2 => Self::Archived,
+                _ => Self::Normal,
+            })
+        }
+    }
+
+    impl std::fmt::Display for Status {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", *self as u8)
+        }
+    }
+
+    impl From<Status> for ToSqlOutput<'_> {
+        fn from(value: Status) -> Self {
+            let code = value as u8;
+
+            ToSqlOutput::from(code)
+        }
+    }
+
+    pub trait Media {
+        type Id: Copy + Clone + std::hash::Hash + PartialEq + Eq + Send;
+
+        fn name(&self) -> &str;
+
+        fn id(&self) -> Self::Id;
+
+        fn duration(&self) -> u64;
+
+        fn added(&self) -> DateTime<Local>;
+
+        fn release(&self) -> NaiveDate;
+
+        fn recent(&self) -> Option<DateTime<Local>>;
+
+        fn progress(&self) -> f32;
+
+        fn watch_count(&self) -> u32;
+
+        fn rating(&self) -> Option<f32>;
+
+        fn comments(&self) -> u32;
+
+        fn synopsis(&self) -> &str;
+
+        fn poster(&self) -> Option<&Image>;
+
+        fn backdrop(&self) -> Option<&str>;
+
+        fn source(&self) -> &str;
+
+        fn release_year(&self) -> String {
+            use chrono::Datelike;
+
+            self.release().year().to_string()
+        }
+
+        fn release_my(&self) -> String {
+            let release = self.release();
+
+            format!("{}", release.format("%b, %Y"))
+        }
+
+        fn added_my(&self) -> String {
+            let added = self.added();
+
+            format!("{}", added.format("%b, %Y"))
+        }
+
+        fn added_humaized(&self) -> String {
+            humanize_datetime(self.added(), Local::now())
+        }
+
+        /// Duration in `(hrs) hours (mins) minutes` format.
+        fn duration_full(&self) -> String {
+            duration_full(self.duration())
+        }
+
+        /// Duration in the `(hrs)h (mins)m` format.
+        fn duration_short(&self) -> String {
+            let duration = self.duration();
+
+            if duration < 60 {
+                return format!("{duration:02}s");
+            }
+
+            let hrs = duration / 3600;
+            let hrs = if hrs > 0 {
+                format!("{hrs}h")
+            } else {
+                String::default()
+            };
+
+            let mins = (duration % 3600) / 60;
+            let mins = if mins > 0 {
+                format!("{mins}m")
+            } else {
+                String::default()
+            };
+
+            format!("{hrs} {mins}")
+        }
+
+        fn recent_short(&self) -> Option<String> {
+            let recent = self.recent();
+
+            recent.map(|recent| format!("{}", recent.format("%b %d, %Y")))
+        }
+
+        fn recent_humanized(&self) -> Option<String> {
+            self.recent()
+                .map(|recent| humanize_datetime(recent, Local::now()))
+        }
+
+        fn status(&self) -> Status;
+    }
 }

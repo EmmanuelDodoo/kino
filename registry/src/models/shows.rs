@@ -3,7 +3,9 @@ use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
-use super::{DirectoryId, Media, SeasonId, datetime_to_sql, image::Image, naivedate_to_sql};
+use super::{
+    DirectoryId, Media, SeasonId, datetime_to_sql, image::Image, media::*, naivedate_to_sql,
+};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -63,6 +65,7 @@ pub struct Show {
     duration: u64,
     comments: u32,
     source: String,
+    pub status: Status,
 }
 
 impl Show {
@@ -118,6 +121,7 @@ impl Show {
 
         let comments = row.get::<_, u32>("comment_count")?;
         let source = row.get::<_, String>("source")?;
+        let status = Status::from_row(row)?;
 
         Ok(Self {
             id,
@@ -140,6 +144,7 @@ impl Show {
             duration,
             comments,
             source,
+            status,
         })
     }
 
@@ -165,6 +170,7 @@ impl Show {
             duration: _duration,
             comments: _comments,
             source: _source,
+            status,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -184,6 +190,7 @@ impl Show {
         let synopsis = ToSqlOutput::from(synopsis.clone());
         let release = naivedate_to_sql(release);
         let added = datetime_to_sql(added);
+        let status = ToSqlOutput::from(*status);
 
         vec![
             (":id", id),
@@ -197,12 +204,13 @@ impl Show {
             (":synopsis", synopsis),
             (":release", release),
             (":added", added),
+            (":status", status),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO tv_show (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added) ON CONFLICT(directory, path) DO UPDATE SET removed=FALSE";
+        let sql = "INSERT INTO tv_show (id, directory, path, name, original_name, poster, backdrop, tags, synopsis, release, created_at, status) VALUES (:id, :directory, :path, :name, :original_name, :poster, :backdrop, :tags, :synopsis, :release, :added, :status) ON CONFLICT(directory, path) DO UPDATE SET status=:status";
 
         let params = self.insert_params();
 
@@ -217,9 +225,13 @@ impl Show {
 
     #[must_use]
     pub fn remove<'a>(id: ShowId) -> Query<'a> {
-        let sql = "UPDATE tv_show SET removed=TRUE WHERE id=:id";
+        let status = Status::Tombstone;
+        let sql = "UPDATE tv_show SET status=:status WHERE id=:id";
 
-        let params = [(":id", ToSqlOutput::from(id))];
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
 
         Query {
             id: id.0,
@@ -300,6 +312,24 @@ impl Show {
         }
     }
 
+    #[must_use]
+    pub fn set_status<'a>(id: ShowId, status: Status) -> Query<'a> {
+        let sql = "UPDATE tv_show SET status=:status WHERE id=:id";
+
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Show,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,
@@ -335,6 +365,7 @@ impl Show {
             duration: 0,
             comments: 0,
             source: String::default(),
+            status: Status::Normal,
         };
 
         let query = new.insert();
@@ -399,5 +430,9 @@ impl Media for Show {
 
     fn source(&self) -> &str {
         &self.source
+    }
+
+    fn status(&self) -> Status {
+        self.status
     }
 }

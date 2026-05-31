@@ -4,7 +4,7 @@ use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
 use super::{
-    AudioId, DirectoryId, Media, SubtitleId, VideoInfoId, datetime_to_sql, image::Image,
+    AudioId, DirectoryId, Media, SubtitleId, VideoInfoId, datetime_to_sql, image::Image, media::*,
     naivedate_to_sql,
 };
 use crate::db::{Operation, Query, Table};
@@ -64,6 +64,7 @@ pub struct Movie {
     pub audio_id: Option<AudioId>,
     pub subtitle_id: Option<SubtitleId>,
     source: String,
+    pub status: Status,
 }
 
 impl Movie {
@@ -131,6 +132,8 @@ impl Movie {
         let subtitle_id = Self::subtitle_maybe(row)?;
         let audio_id = Self::audio_maybe(row)?;
 
+        let status = Status::from_row(row)?;
+
         Ok(Self {
             id,
             directory,
@@ -153,6 +156,7 @@ impl Movie {
             video_id,
             subtitle_id,
             audio_id,
+            status,
         })
     }
 
@@ -179,6 +183,7 @@ impl Movie {
             video_id: _video,
             audio_id: _audio,
             subtitle_id: _sub,
+            status,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -207,6 +212,7 @@ impl Movie {
             .unwrap_or(ToSqlOutput::Owned(Value::Null));
         let duration = i64::try_from(*duration).expect("duration cannot be expressed as i64");
         let duration = ToSqlOutput::from(duration);
+        let status = ToSqlOutput::from(*status);
 
         vec![
             (":id", id),
@@ -225,12 +231,13 @@ impl Movie {
             (":progress", progress),
             (":last_watched", last_watched),
             (":duration", duration),
+            (":status", status),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO movie (id, directory, path, name, original_name,  poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration) VALUES (:id, :directory, :path, :name, :original_name,  :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration) ON CONFLICT(directory, path) DO UPDATE SET duration=:duration, removed=FALSE";
+        let sql = "INSERT INTO movie (id, directory, path, name, original_name,  poster, backdrop, tags, synopsis, release, created_at, watch_count, rating, progress, last_watched, duration, status) VALUES (:id, :directory, :path, :name, :original_name,  :poster, :backdrop, :tags, :synopsis, :release, :added, :watch_count, :rating, :progress, :last_watched, :duration, :status) ON CONFLICT(directory, path) DO UPDATE SET duration=:duration, status=:status";
 
         let params = self.insert_params();
 
@@ -245,8 +252,12 @@ impl Movie {
 
     #[must_use]
     pub fn remove<'a>(id: MovieId) -> Query<'a> {
-        let sql = "UPDATE movie SET removed=TRUE WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(id))];
+        let status = Status::Tombstone;
+        let sql = "UPDATE movie SET status=:status WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
 
         Query {
             id: id.0,
@@ -395,6 +406,23 @@ impl Movie {
         }
     }
 
+    #[must_use]
+    pub fn set_status<'a>(id: MovieId, status: Status) -> Query<'a> {
+        let sql = "UPDATE movie SET status=:status WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,
@@ -431,6 +459,7 @@ impl Movie {
             video_id: None,
             audio_id: None,
             subtitle_id: None,
+            status: Status::Normal,
         };
 
         let query = new.insert();
@@ -496,5 +525,9 @@ impl Media for Movie {
 
     fn source(&self) -> &str {
         &self.source
+    }
+
+    fn status(&self) -> Status {
+        self.status
     }
 }

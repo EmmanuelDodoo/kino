@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 12;
+PRAGMA user_version = 13;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -52,7 +52,7 @@ CREATE TABLE tv_show (
 	recent_season        TEXT     ,
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
-	removed		     BOOLEAN DEFAULT FALSE,
+	status		     INTEGER NOT NULL,
 	request		     TEXT,
 	source		     TEXT NOT NULL DEFAULT 'none',
 	UNIQUE(directory, path),
@@ -80,7 +80,7 @@ CREATE TABLE season (
 	recent_episode       TEXT     ,
 	duration             INTEGER NOT NULL DEFAULT 0   ,
 	comment_count        INTEGER NOT NULL DEFAULT 0   ,
-	removed		     BOOLEAN DEFAULT FALSE,
+	status		     INTEGER NOT NULL,
 	request		     TEXT,
 	source		     TEXT NOT NULL DEFAULT 'none',
 	UNIQUE(show_id, path),
@@ -111,7 +111,7 @@ CREATE TABLE episode (
 	video_id	     TEXT,
 	subtitle_id	     TEXT ,
 	audio_id	     TEXT,
-	removed		     BOOLEAN DEFAULT FALSE,
+	status		     INTEGER NOT NULL,
 	request		     TEXT,
 	source		     TEXT NOT NULL DEFAULT 'none',
 	UNIQUE(season_id, path),
@@ -146,7 +146,7 @@ CREATE TABLE movie (
 	video_id	     TEXT,
 	subtitle_id	     TEXT,
 	audio_id	     TEXT,
-	removed		     BOOLEAN DEFAULT FALSE,
+	status		     INTEGER NOT NULL,
 	request		     TEXT,
 	source		     TEXT NOT NULL DEFAULT 'none',
 	UNIQUE(directory, path),
@@ -403,7 +403,7 @@ CREATE TABLE media_fts_index (
 	media_type TEXT NOT NULL,
 	media_id TEXT NOT NULL,
 	poster TEXT,
-	removed BOOLEAN DEFAULT FALSE
+	status		     INTEGER NOT NULL
 );
 
 CREATE TRIGGER fts_movie_insert_tr AFTER INSERT ON movie
@@ -411,8 +411,8 @@ BEGIN
 	INSERT INTO media_fts (name, synopsis, tags)
 	VALUES (NEW.name, NEW.synopsis, NEW.tags);
 
-	INSERT INTO media_fts_index (rowid, media_type, media_id, poster)
-	VALUES (last_insert_rowid(), 'movie', NEW.id, NEW.poster);
+	INSERT INTO media_fts_index (rowid, media_type, media_id, poster, status)
+	VALUES (last_insert_rowid(), 'movie', NEW.id, NEW.poster, NEW.status);
 END;
 
 CREATE TRIGGER fts_show_insert_tr AFTER INSERT ON tv_show
@@ -420,8 +420,8 @@ BEGIN
 	INSERT INTO media_fts (name, synopsis, tags)
 	VALUES (NEW.name, NEW.synopsis, NEW.tags);
 
-	INSERT INTO media_fts_index (rowid, media_type, media_id, poster)
-	VALUES (last_insert_rowid(), 'show', NEW.id, NEW.poster);
+	INSERT INTO media_fts_index (rowid, media_type, media_id, poster, status)
+	VALUES (last_insert_rowid(), 'show', NEW.id, NEW.poster, NEW.status);
 END;
 
 CREATE TRIGGER fts_season_insert_tr AFTER INSERT ON season
@@ -429,8 +429,8 @@ BEGIN
 	INSERT INTO media_fts (name, synopsis)
 	VALUES (NEW.name, NEW.synopsis);
 
-	INSERT INTO media_fts_index (rowid, media_type, media_id, poster)
-	VALUES (last_insert_rowid(), 'season', NEW.id, NEW.poster);
+	INSERT INTO media_fts_index (rowid, media_type, media_id, poster, status)
+	VALUES (last_insert_rowid(), 'season', NEW.id, NEW.poster, NEW.status);
 END;
 
 CREATE TRIGGER fts_episode_insert_tr AFTER INSERT ON episode
@@ -438,8 +438,8 @@ BEGIN
 	INSERT INTO media_fts (name, synopsis)
 	VALUES (NEW.name, NEW.synopsis);
 
-	INSERT INTO media_fts_index (rowid, media_type, media_id, poster)
-	VALUES (last_insert_rowid(), 'episode', NEW.id, NEW.poster);
+	INSERT INTO media_fts_index (rowid, media_type, media_id, poster, status)
+	VALUES (last_insert_rowid(), 'episode', NEW.id, NEW.poster, NEW.status);
 END;
 
 CREATE TRIGGER fts_movie_update_tr
@@ -453,7 +453,7 @@ BEGIN
 
     UPDATE media_fts_index
     SET poster = NEW.poster,
-    removed = NEW.removed
+    status = NEW.status
     WHERE media_type = 'movie' AND media_id = NEW.id;
 
 END;
@@ -469,7 +469,7 @@ BEGIN
 
     UPDATE media_fts_index
     SET poster = NEW.poster,
-    removed = NEW.removed
+    status = NEW.status
     WHERE media_type = 'show' AND media_id = NEW.id;
 END;
 
@@ -483,7 +483,7 @@ BEGIN
 
     UPDATE media_fts_index
     SET poster = NEW.poster,
-    removed = NEW.removed
+    status = NEW.status
     WHERE media_type = 'season' AND media_id = NEW.id;
 END;
 
@@ -497,7 +497,7 @@ BEGIN
 
     UPDATE media_fts_index
     SET poster = NEW.poster,
-    removed = NEW.removed
+    status = NEW.status
     WHERE media_type = 'episode' AND media_id = NEW.id;
 END;
 
@@ -862,4 +862,15 @@ duration = COALESCE((
 		SELECT SUM(season.comment_count) FROM season WHERE season.show_id = NEW.show_id
 ),0) 
     WHERE id = NEW.show_id;
+
+END;
+
+CREATE TRIGGER season_status_update_tr AFTER UPDATE OF status ON season
+BEGIN
+    UPDATE episode SET status=NEW.status WHERE season_id=NEW.id;
+END;
+
+CREATE TRIGGER show_status_update_tr AFTER UPDATE OF status ON tv_show
+BEGIN
+	UPDATE season SET status=NEW.status WHERE show_id=NEW.id;
 END;

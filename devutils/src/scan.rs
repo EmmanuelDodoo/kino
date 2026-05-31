@@ -5,7 +5,7 @@ use gstreamer_pbutils::Discoverer;
 use registry::db::Database;
 use registry::models::{
     Audio, AudioId, Directory, DirectoryId, Episode, EpisodeId, MediaType, Movie, MovieId, Season,
-    SeasonId, Show, ShowId, Subtitle, SubtitleId, VideoId, VideoInfoId, video,
+    SeasonId, Show, ShowId, Subtitle, SubtitleId, VideoId, VideoInfoId, media::Status, video,
 };
 use rusqlite::OptionalExtension;
 use rusqlite::types::{ToSqlOutput, ValueRef};
@@ -217,7 +217,7 @@ pub fn scan_dir_helper(
             tracing::debug!("Scanning movie directory {}", path);
             struct DirMovie {
                 id: MovieId,
-                tombstone: bool,
+                status: Status,
                 scanned: bool,
                 request: Option<String>,
                 source: SourceSet,
@@ -235,7 +235,8 @@ pub fn scan_dir_helper(
                 .get_dir_movies(dir.id, |row| {
                     let id = MovieId::from_row(row)?;
                     let path = row.get::<_, String>("path")?;
-                    let tombstone = row.get::<_, bool>("removed")?;
+                    let status = Status::from_row(row)?;
+                    let scanned = matches!(status, Status::Archived);
 
                     let request = row.get::<_, Option<String>>("request")?;
                     let source = SourceSet::from_row(row, "source")?;
@@ -248,8 +249,8 @@ pub fn scan_dir_helper(
                         path,
                         DirMovie {
                             id,
-                            tombstone,
-                            scanned: false,
+                            status,
+                            scanned,
                             request,
                             source,
                             subtitle,
@@ -271,6 +272,7 @@ pub fn scan_dir_helper(
 
             for movie in videos {
                 let mut dir_movie = dir_movies.get_mut(&movie.path);
+
                 let pick_sub = !dir_movie
                     .as_ref()
                     .map(|movie| movie.subtitle)
@@ -284,13 +286,12 @@ pub fn scan_dir_helper(
                     .map(|movie| movie.audio)
                     .unwrap_or_default();
 
-                if dir_movie
-                    .as_ref()
-                    .map(|mv| mv.tombstone)
-                    .unwrap_or_default()
-                    && !restore
-                {
-                    continue;
+                if let Some(movie) = &dir_movie {
+                    match movie.status {
+                        Status::Archived => continue,
+                        Status::Tombstone if !restore => continue,
+                        _ => {}
+                    }
                 }
 
                 let name = process_name(&movie.name)
@@ -398,7 +399,7 @@ pub fn scan_dir_helper(
         MediaType::Shows => {
             struct DirEpisode {
                 id: EpisodeId,
-                tombstone: bool,
+                status: Status,
                 scanned: bool,
                 source: SourceSet,
                 request: Option<String>,
@@ -410,7 +411,7 @@ pub fn scan_dir_helper(
             struct DirSeason {
                 id: SeasonId,
                 scanned: bool,
-                tombstone: bool,
+                status: Status,
                 request: Option<String>,
                 source: SourceSet,
             }
@@ -418,7 +419,7 @@ pub fn scan_dir_helper(
             struct DirShow {
                 id: ShowId,
                 scanned: bool,
-                tombstone: bool,
+                status: Status,
                 request: Option<String>,
                 source: SourceSet,
             }
@@ -432,7 +433,8 @@ pub fn scan_dir_helper(
                 .get_dir_shows(dir.id, |row| {
                     let id = ShowId::from_row(row)?;
                     let path = row.get::<_, String>("path")?;
-                    let tombstone = row.get::<_, bool>("removed")?;
+                    let status = Status::from_row(row)?;
+                    let scanned = matches!(status, Status::Archived);
 
                     let request = row.get::<_, Option<String>>("request")?;
                     let source = SourceSet::from_row(row, "source")?;
@@ -441,8 +443,8 @@ pub fn scan_dir_helper(
                         path,
                         DirShow {
                             id,
-                            scanned: false,
-                            tombstone,
+                            scanned,
+                            status,
                             request,
                             source,
                         },
@@ -459,13 +461,12 @@ pub fn scan_dir_helper(
             for show in shows {
                 let mut dir_show = dir_shows.get_mut(&show.path);
 
-                if dir_show
-                    .as_ref()
-                    .map(|show| show.tombstone)
-                    .unwrap_or_default()
-                    && !restore
-                {
-                    continue;
+                if let Some(show) = &dir_show {
+                    match show.status {
+                        Status::Archived => continue,
+                        Status::Tombstone if !restore => continue,
+                        _ => {}
+                    }
                 }
 
                 let ShowPrim { path, seasons } = show;
@@ -546,7 +547,8 @@ pub fn scan_dir_helper(
                     .get_show_seasons_removed(show, |row| {
                         let id = SeasonId::from_row(row)?;
                         let path = row.get::<_, String>("path")?;
-                        let tombstone = row.get::<_, bool>("removed")?;
+                        let status = Status::from_row(row)?;
+                        let scanned = matches!(status, Status::Archived);
 
                         let request = row.get::<_, Option<String>>("request")?;
                         let source = SourceSet::from_row(row, "source")?;
@@ -555,8 +557,8 @@ pub fn scan_dir_helper(
                             path,
                             DirSeason {
                                 id,
-                                scanned: false,
-                                tombstone,
+                                scanned,
+                                status,
                                 request,
                                 source,
                             },
@@ -578,13 +580,12 @@ pub fn scan_dir_helper(
                 for season in seasons {
                     let mut dir_season = dir_seasons.get_mut(&season.path);
 
-                    if dir_season
-                        .as_ref()
-                        .map(|sea| sea.tombstone)
-                        .unwrap_or_default()
-                        && !restore
-                    {
-                        continue;
+                    if let Some(season) = &dir_season {
+                        match season.status {
+                            Status::Archived => continue,
+                            Status::Tombstone if !restore => continue,
+                            _ => {}
+                        }
                     }
 
                     let SeasonPrim { path, episodes } = season;
@@ -674,7 +675,8 @@ pub fn scan_dir_helper(
                     let Some(dir_episodes) = db.get_season_episodes_removed(season, |row| {
                         let id = EpisodeId::from_row(row)?;
                         let path = row.get::<_, String>("path")?;
-                        let tombstone = row.get::<_, bool>("removed")?;
+                        let status = Status::from_row(row)?;
+                    let scanned = matches!(status, Status::Archived);
 
                         let request = row.get::<_, Option<String>>("request")?;
                         let source = SourceSet::from_row(row, "source")?;
@@ -686,8 +688,8 @@ pub fn scan_dir_helper(
                             path,
                             DirEpisode {
                                 id,
-                                tombstone,
-                                scanned: false,
+                                status,
+                                scanned,
                                 request,
                                 source,
                                 subtitle,
@@ -717,8 +719,12 @@ pub fn scan_dir_helper(
                         let pick_aud =
                             !dir_ep.as_ref().map(|movie| movie.audio).unwrap_or_default();
 
-                        if dir_ep.as_ref().map(|ep| ep.tombstone).unwrap_or_default() && !restore {
-                            continue;
+                        if let Some(episode) = &dir_ep {
+                            match episode.status {
+                                Status::Archived => continue,
+                                Status::Tombstone if !restore => continue,
+                                _ => {}
+                            }
                         }
 
                         let number = process_episode(&episode.path).log_err();

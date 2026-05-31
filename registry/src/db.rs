@@ -3,6 +3,7 @@ use crate::models::{
     Audio, AudioId, CollectionId, Comment, CommentId, Directory, DirectoryId, EpisodeId, MovieId,
     SearchItem, SeasonId, ShowId, Subtitle, SubtitleId, Video, VideoId, VideoInfo,
     collection::{self, ItemId, Items},
+    media::Status,
 };
 use crate::sort::{self, Sort};
 use core::error::Context;
@@ -74,6 +75,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 12,
         sql: include_str!("../../resources/db/migrations/12.sql"),
+    },
+    Migration {
+        version: 13,
+        sql: include_str!("../../resources/db/migrations/13.sql"),
     },
 ];
 
@@ -167,8 +172,9 @@ impl Database {
             .unwrap_or_default();
 
         let sql = format!(
-            "{} WHERE NOT removed {filter} {sort} LIMIT :limit OFFSET :offset",
-            Self::MOVIE_QUERY
+            "{} WHERE status != {} {filter} {sort} LIMIT :limit OFFSET :offset",
+            Self::MOVIE_QUERY,
+            Status::Tombstone
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -222,8 +228,9 @@ impl Database {
             .unwrap_or_default();
 
         let sql = format!(
-            "{} WHERE not removed {filter} {sort} LIMIT :limit OFFSET :offset",
+            "{} WHERE status != {} {filter} {sort} LIMIT :limit OFFSET :offset",
             Self::SHOW_QUERY,
+            Status::Tombstone
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -254,8 +261,9 @@ impl Database {
             .unwrap_or_default();
 
         let sql = format!(
-            "{} WHERE NOT season.removed AND season.show_id=:show {filter} {sort} LIMIT :limit OFFSET :offset",
+            "{} WHERE season.status != {} AND season.show_id=:show {filter} {sort} LIMIT :limit OFFSET :offset",
             Self::SEASON_QUERY,
+            Status::Tombstone,
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -342,8 +350,9 @@ impl Database {
             .unwrap_or_default();
 
         let sql = format!(
-            "{} WHERE NOT removed AND season_id=:season {filter} {sort} LIMIT :limit OFFSET :offset",
+            "{} WHERE status != {} AND season_id=:season {filter} {sort} LIMIT :limit OFFSET :offset",
             Self::EPISODE_QUERY,
+            Status::Tombstone,
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -456,14 +465,20 @@ impl Database {
         };
 
         let sql = if is_movie {
-            "SELECT movie.name, movie.id, movie.progress, movie.duration, movie.watch_count, movie.video_id, movie.subtitle_id, movie.audio_id, movie.generate_poster, movie.fetched, movie.path, directory.path AS directory_path FROM movie JOIN directory ON movie.directory=directory.id WHERE movie.id=:id AND NOT movie.removed"
+            "SELECT movie.name, movie.id, movie.progress, movie.duration, movie.watch_count, movie.video_id, movie.subtitle_id, movie.audio_id, movie.generate_poster, movie.fetched, movie.path, directory.path AS directory_path FROM movie JOIN directory ON movie.directory=directory.id WHERE movie.id=:id AND movie.status=:status "
         } else {
-            "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.video_id, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE episode.id=:id AND NOT episode.removed"
+            "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.video_id, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE episode.id=:id AND episode.status=:status"
         };
 
         let mut statement = self.prepare_cached(sql)?;
 
-        let mut video = statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)?;
+        let mut video = statement.query_row(
+            &[
+                (":id", &ToSqlOutput::from(id)),
+                (":status", &ToSqlOutput::from(Status::Normal)),
+            ],
+            map,
+        )?;
 
         let subs = self.get_video_subtitles(video.id)?;
         let audios = self.get_video_audios(video.id)?;
@@ -496,7 +511,7 @@ impl Database {
             .map(|query| format!("ORDER BY {query}"))
             .unwrap_or_default();
 
-        let query = "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.video_id, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE NOT episode.removed";
+        let query = "SELECT episode.id, episode.name, episode.progress, episode.duration, episode.watch_count, episode.video_id, episode.subtitle_id, episode.audio_id, episode.generate_poster, episode.fetched, episode.episode_number, episode.path, directory.path AS directory_path, tv_show.path AS show_path, tv_show.name AS show_name, season.path AS season_path, season.season_number FROM episode JOIN season ON episode.season_id=season.id JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory=directory.id WHERE episode.status=:status";
 
         let sql =
             format!("{query} AND season.id=:season {filter} {sort} LIMIT :limit OFFSET :offset",);
@@ -509,6 +524,7 @@ impl Database {
                     (":season", &ToSqlOutput::from(season)),
                     (":limit", &ToSqlOutput::from(limit)),
                     (":offset", &ToSqlOutput::from(offset)),
+                    (":status", &ToSqlOutput::from(Status::Normal)),
                 ],
                 Video::from_episode,
             )?
@@ -715,8 +731,9 @@ impl Database {
                 .map(|query| format!("ORDER BY {query}"))
                 .unwrap_or_default();
             let sql = format!(
-                "{} WHERE NOT removed AND movie.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
+                "{} WHERE status != {} AND movie.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
                 Self::MOVIE_QUERY,
+                Status::Tombstone
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
@@ -738,8 +755,9 @@ impl Database {
 
             let vars = repeat(shows.len());
             let sql = format!(
-                "{} WHERE NOT removed AND tv_show.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
-                Self::SHOW_QUERY
+                "{} WHERE status != {} AND tv_show.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
+                Self::SHOW_QUERY,
+                Status::Tombstone
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
@@ -761,8 +779,9 @@ impl Database {
 
             let vars = repeat(seasons.len());
             let sql = format!(
-                "{} WHERE NOT season.removed AND season.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
-                Self::SEASON_QUERY
+                "{} WHERE season.status != {} AND season.id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
+                Self::SEASON_QUERY,
+                Status::Tombstone,
             );
             let mut statement = self.prepare_cached(&sql)?;
             statement
@@ -785,8 +804,9 @@ impl Database {
             let vars = repeat(episodes.len());
 
             let sql = format!(
-                "{} WHERE NOT removed AND id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
-                Self::EPISODE_QUERY
+                "{} WHERE status != {} AND id IN ({vars}) {filter} {sort} LIMIT {limit} OFFSET {offset}",
+                Self::EPISODE_QUERY,
+                Status::Tombstone,
             );
 
             let mut statement = self.prepare_cached(&sql)?;
@@ -1090,9 +1110,10 @@ impl Database {
             f.tags
             FROM media_fts f
             INNER JOIN media_fts_index i on f.rowid = i.rowid
-            WHERE media_fts MATCH :term {filter} AND NOT i.removed
+            WHERE media_fts MATCH :term {filter} AND i.status != {}
             ORDER BY rank
-            LIMIT {limit}"
+            LIMIT {limit}",
+            Status::Tombstone,
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -1126,11 +1147,11 @@ impl Database {
         let mut rng = thread_rng();
         let media = [0, 1, 2, 3].choose(&mut rng).unwrap();
 
-        let (getter, media, removed) = match media {
-            0 => (Self::MOVIE_QUERY, "movie", "removed"),
-            1 => (Self::SHOW_QUERY, "show", "removed"),
-            2 => (Self::SEASON_QUERY, "season", "season.removed"),
-            3 => (Self::EPISODE_QUERY, "episode", "removed"),
+        let (getter, media, status) = match media {
+            0 => (Self::MOVIE_QUERY, "movie", "status"),
+            1 => (Self::SHOW_QUERY, "show", "status"),
+            2 => (Self::SEASON_QUERY, "season", "season.status"),
+            3 => (Self::EPISODE_QUERY, "episode", "status"),
             _ => unreachable!(),
         };
 
@@ -1141,7 +1162,8 @@ impl Database {
         };
 
         let sql = format!(
-            "{getter} WHERE NOT {removed} AND {table}progress < 0.85 ORDER BY RANDOM() * (6 - {table}rating) LIMIT 1",
+            "{getter} WHERE {status} != {} AND {table}progress < 0.85 ORDER BY RANDOM() * (6 - {table}rating) LIMIT 1",
+            Status::Tombstone,
         );
 
         let mut statement = self.prepare_cached(&sql)?;
@@ -1279,7 +1301,10 @@ impl Database {
         if !inserts.is_empty() {
             let vars = repeat(inserts.len());
 
-            let insert = format!("UPDATE movie SET removed=FALSE WHERE id IN ({vars})");
+            let insert = format!(
+                "UPDATE movie SET status={} WHERE id IN ({vars})",
+                Status::Normal
+            );
 
             let params = inserts
                 .into_iter()
@@ -1297,7 +1322,10 @@ impl Database {
         if !deletes.is_empty() {
             let vars = repeat(deletes.len());
 
-            let delete = format!("UPDATE movie SET removed=TRUE WHERE id IN ({vars})");
+            let delete = format!(
+                "UPDATE movie SET status={} WHERE id IN ({vars})",
+                Status::Tombstone
+            );
 
             let params = deletes
                 .into_iter()
@@ -1327,7 +1355,10 @@ impl Database {
         if !inserts.is_empty() {
             let vars = repeat(inserts.len());
 
-            let insert = format!("UPDATE tv_show SET removed=FALSE WHERE id IN ({vars})");
+            let insert = format!(
+                "UPDATE tv_show SET status={} WHERE id IN ({vars})",
+                Status::Normal
+            );
 
             let params = inserts
                 .into_iter()
@@ -1345,7 +1376,10 @@ impl Database {
         if !deletes.is_empty() {
             let vars = repeat(deletes.len());
 
-            let delete = format!("UPDATE tv_show SET removed=TRUE WHERE id IN ({vars})");
+            let delete = format!(
+                "UPDATE tv_show SET status={} WHERE id IN ({vars})",
+                Status::Tombstone
+            );
 
             let params = deletes
                 .into_iter()
@@ -1375,7 +1409,10 @@ impl Database {
         if !inserts.is_empty() {
             let vars = repeat(inserts.len());
 
-            let insert = format!("UPDATE season SET removed=FALSE WHERE id IN ({vars})");
+            let insert = format!(
+                "UPDATE season SET status={} WHERE id IN ({vars})",
+                Status::Normal
+            );
 
             let params = inserts
                 .into_iter()
@@ -1393,7 +1430,10 @@ impl Database {
         if !deletes.is_empty() {
             let vars = repeat(deletes.len());
 
-            let delete = format!("UPDATE season SET removed=TRUE WHERE id IN ({vars})");
+            let delete = format!(
+                "UPDATE season SET status={} WHERE id IN ({vars})",
+                Status::Tombstone
+            );
 
             let params = deletes
                 .into_iter()
@@ -1426,7 +1466,10 @@ impl Database {
         if !inserts.is_empty() {
             let vars = repeat(inserts.len());
 
-            let insert = format!("UPDATE episode SET removed=FALSE WHERE id IN ({vars})");
+            let insert = format!(
+                "UPDATE episode SET status={} WHERE id IN ({vars})",
+                Status::Normal
+            );
 
             let params = inserts
                 .into_iter()
@@ -1444,7 +1487,10 @@ impl Database {
         if !deletes.is_empty() {
             let vars = repeat(deletes.len());
 
-            let delete = format!("UPDATE episode SET removed=TRUE WHERE id IN ({vars})");
+            let delete = format!(
+                "UPDATE episode SET status={} WHERE id IN ({vars})",
+                Status::Tombstone
+            );
 
             let params = deletes
                 .into_iter()

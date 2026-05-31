@@ -3,7 +3,7 @@ use rusqlite::Row;
 use rusqlite::types::{ToSqlOutput, Value};
 use uuid::Uuid;
 
-use super::{EpisodeId, Media, ShowId, datetime_to_sql, image::Image, naivedate_to_sql};
+use super::{EpisodeId, Media, ShowId, datetime_to_sql, image::Image, media::*, naivedate_to_sql};
 use crate::db::{Operation, Query, Table};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -71,6 +71,7 @@ pub struct Season {
     comments: u32,
     pub number: u16,
     source: String,
+    pub status: Status,
 }
 
 impl Season {
@@ -121,6 +122,7 @@ impl Season {
         let source = row.get::<_, String>("source")?;
 
         let show_name = row.get::<_, String>("show_name")?;
+        let status = Status::from_row(row)?;
 
         Ok(Self {
             id,
@@ -144,6 +146,7 @@ impl Season {
             comments,
             number,
             source,
+            status,
         })
     }
 
@@ -170,6 +173,7 @@ impl Season {
             comments,
             number,
             source: _source,
+            status,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -204,6 +208,8 @@ impl Season {
         let recent_episode =
             recent_episode.map_or(ToSqlOutput::Owned(Value::Null), ToSqlOutput::from);
 
+        let status = ToSqlOutput::from(*status);
+
         vec![
             (":id", id),
             (":show", show),
@@ -223,12 +229,13 @@ impl Season {
             (":duration", duration),
             (":comments", comments),
             (":season_number", number),
+            (":status", status),
         ]
     }
 
     #[must_use]
     pub fn insert<'a>(&self) -> Query<'a> {
-        let sql = "INSERT INTO season (id, show_id, name, original_name, path, poster, synopsis,release, created_at, watch_count, episode_count, rating, progress, last_watched, recent_episode, duration, comment_count, season_number) VALUES (:id, :show, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :episodes, :rating, :progress, :last_watched, :recent_episode, :duration, :comments, :season_number) ON CONFLICT(show_id, path) DO UPDATE SET removed=FALSE";
+        let sql = "INSERT INTO season (id, show_id, name, original_name, path, poster, synopsis,release, created_at, watch_count, episode_count, rating, progress, last_watched, recent_episode, duration, comment_count, season_number, status) VALUES (:id, :show, :name, :original_name, :path, :poster, :synopsis, :release, :added, :watch_count, :episodes, :rating, :progress, :last_watched, :recent_episode, :duration, :comments, :season_number, :status) ON CONFLICT(show_id, path) DO UPDATE SET status=:status";
 
         let params = self.insert_params();
 
@@ -243,8 +250,12 @@ impl Season {
 
     #[must_use]
     pub fn remove<'a>(id: SeasonId) -> Query<'a> {
-        let sql = "UPDATE season SET removed=TRUE WHERE id=:id";
-        let params = [(":id", ToSqlOutput::from(id))];
+        let status = Status::Tombstone;
+        let sql = "UPDATE season SET status=:status WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
 
         Query {
             id: id.0,
@@ -325,6 +336,22 @@ impl Season {
         }
     }
 
+    #[must_use]
+    pub fn set_status<'a>(id: SeasonId, status: Status) -> Query<'a> {
+        let sql = "UPDATE season SET status=:status WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Season,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
 
     pub fn new<'a>(show: ShowId, name: String, path: String, number: u16) -> (Self, Query<'a>) {
         let added = Local::now();
@@ -355,6 +382,7 @@ impl Season {
             comments: 0,
             number,
             source: String::default(),
+            status: Status::Normal,
 
             // Not saved within season table so this is okay
             show_name: String::default(),
@@ -423,5 +451,9 @@ impl Media for Season {
 
     fn source(&self) -> &str {
         &self.source
+    }
+
+    fn status(&self) -> Status {
+        self.status
     }
 }
