@@ -1190,7 +1190,6 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
                 .height(Length::FillPortion(2))
                 .width(Length::Fill)
                 .align_y(Vertical::Center)
-                .into()
         })
     };
 

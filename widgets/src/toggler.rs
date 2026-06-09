@@ -69,7 +69,7 @@ where
             is_toggled,
             on_toggle: None,
             label: None,
-            width: Length::Shrink,
+            width: Length::Fit,
             size: Self::DEFAULT_SIZE,
             text_size: None,
             text_line_height: text::LineHeight::default(),
@@ -213,7 +213,7 @@ where
         ))
     }
 
-    fn diff(&self, tree: &mut Tree) {
+    fn diff(&mut self, tree: &mut Tree) {
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
         if state.animation.value() != self.is_toggled {
@@ -224,7 +224,7 @@ where
     fn size(&self) -> Size<Length> {
         Size {
             width: self.width,
-            height: Length::Shrink,
+            height: Length::Fit,
         }
     }
 
@@ -255,7 +255,7 @@ where
                         label,
                         widget::text::Format {
                             width: self.width,
-                            height: Length::Shrink,
+                            height: Length::Fit,
                             line_height: self.text_line_height,
                             size: self.text_size,
                             font: self.font,

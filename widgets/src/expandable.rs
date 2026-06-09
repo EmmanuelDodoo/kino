@@ -45,8 +45,8 @@ impl<'a, Message, Theme, Renderer> Expandable<'a, Message, Theme, Renderer> {
             spacing: 0.0,
             duration: Duration::from_millis(200),
             easing: Easing::Linear,
-            width: Length::Shrink,
-            height: Length::Shrink,
+            width: Length::Fit,
+            height: Length::Fit,
             on_expand: None,
         }
     }
@@ -111,18 +111,14 @@ where
         tree::State::new(State::new(self.expanded, self.duration, self.easing))
     }
 
-    fn children(&self) -> Vec<tree::Tree> {
-        vec![tree::Tree::new(&self.root), tree::Tree::new(&self.content)]
-    }
-
-    fn diff(&self, tree: &mut tree::Tree) {
+    fn diff(&mut self, tree: &mut tree::Tree) {
         // let state = tree.state.downcast_mut::<State>();
         // if state.expanded != self.expanded {
         //     state.expanded = self.expanded;
         //     state.go_mut(Instant::now());
         // }
 
-        tree.diff_children(&[&self.root, &self.content])
+        tree.diff_children(&mut [&mut self.root, &mut self.content])
     }
 
     fn layout(

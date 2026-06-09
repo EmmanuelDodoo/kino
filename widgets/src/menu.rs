@@ -125,12 +125,8 @@ where
         })
     }
 
-    fn children(&self) -> Vec<tree::Tree> {
-        vec![tree::Tree::new(&self.base), tree::Tree::new(&self.overlay)]
-    }
-
-    fn diff(&self, tree: &mut tree::Tree) {
-        tree.diff_children(&[&self.base, &self.overlay]);
+    fn diff(&mut self, tree: &mut tree::Tree) {
+        tree.diff_children(&mut [&mut self.base, &mut self.overlay]);
     }
 
     fn layout(

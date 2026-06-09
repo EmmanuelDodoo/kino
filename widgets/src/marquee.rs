@@ -315,7 +315,7 @@ where
         }
     }
 
-    fn diff(&self, tree: &mut tree::Tree) {
+    fn diff(&mut self, tree: &mut tree::Tree) {
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
         if !self.animate && !state.hovering {

@@ -361,18 +361,14 @@ where
         tree::State::new(State::new())
     }
 
-    fn children(&self) -> Vec<tree::Tree> {
-        vec![tree::Tree::new(&self.base), tree::Tree::new(&self.content)]
-    }
-
-    fn diff(&self, tree: &mut tree::Tree) {
+    fn diff(&mut self, tree: &mut tree::Tree) {
         let state = tree.state.downcast_mut::<State>();
 
         if self.toggle != state.animation_value() {
             state.go_mut(self.toggle, self.duration, self.easing, Instant::now());
         }
 
-        tree.diff_children(&[&self.base, &self.content]);
+        tree.diff_children(&mut [&mut self.base, &mut self.content]);
     }
 
     fn layout(
