@@ -2,7 +2,7 @@ use iced::animation::{Animation, Easing};
 use std::path::{Path, PathBuf};
 
 use core::variants;
-
+pub use length::InterpolableLength;
 pub mod config;
 pub use config::*;
 pub mod icons;
@@ -606,5 +606,71 @@ pub mod modal {
         Message: 'a + Clone,
     {
         stack![base.into(), mouse_area(modal)].into()
+    }
+}
+
+mod length {
+    use iced::animation::Interpolable;
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct InterpolableLength(pub iced::Length);
+
+    impl InterpolableLength {
+        // todo: FillPortion(0) takes the entire length. Otherwise this would ideally
+        // be set to it
+        pub const FILL_ZERO: Self = Self(iced::Length::FillPortion(1));
+        pub const FIXED_ZERO: Self = Self(iced::Length::Fixed(0.0));
+    }
+
+    impl Interpolable for InterpolableLength {
+        fn interpolated(&self, other: Self, ratio: f32) -> Self {
+            match (self.0, other.0) {
+                (iced::Length::Fixed(x), iced::Length::Fixed(y)) => {
+                    let value = x.interpolated(y, ratio);
+                    Self(iced::Length::Fixed(value))
+                }
+                (iced::Length::FillPortion(x), iced::Length::FillPortion(y)) => {
+                    let value = ((x as f32).interpolated(y as f32, ratio)).round();
+
+                    Self(iced::Length::FillPortion(value as u16))
+                }
+                _ => other,
+            }
+        }
+    }
+
+    impl From<iced::Length> for InterpolableLength {
+        fn from(value: iced::Length) -> Self {
+            Self(value)
+        }
+    }
+
+    impl From<InterpolableLength> for iced::Length {
+        fn from(value: InterpolableLength) -> Self {
+            value.0
+        }
+    }
+
+    impl From<i8> for InterpolableLength {
+        fn from(value: i8) -> Self {
+            Self((value as f32).into())
+        }
+    }
+
+    impl From<u16> for InterpolableLength {
+        fn from(value: u16) -> Self {
+            Self((value as f32).into())
+        }
+    }
+    impl From<i16> for InterpolableLength {
+        fn from(value: i16) -> Self {
+            Self((value as f32).into())
+        }
+    }
+
+    impl From<f32> for InterpolableLength {
+        fn from(value: f32) -> Self {
+            Self((value).into())
+        }
     }
 }

@@ -510,7 +510,7 @@ impl Settings {
             },
             SettingsMessage::Appearance(asg) => match asg {
                 AppearanceMessage::Theme(theme) => {
-                    self.config.general.theme = theme;
+                    self.config.general.set_theme(theme);
                     Task::none()
                 }
                 AppearanceMessage::Layout(layout) => {
@@ -1271,6 +1271,7 @@ impl Settings {
             recents_limit,
             search_limit,
             theme,
+            theme_iced: _unused,
             scan_discoverer,
             auth_token,
             movie_depth,

@@ -140,6 +140,8 @@ pub struct GeneralSettings {
     pub recents_limit: Option<i32>,
     pub search_limit: Option<i32>,
     pub theme: AppTheme,
+    #[serde(skip)]
+    pub theme_iced: iced::Theme,
     pub scan_discoverer: bool,
     pub auth_token: String,
     pub movie_depth: u8,
@@ -154,10 +156,13 @@ pub struct GeneralSettings {
 
 impl GeneralSettings {
     fn defaults() -> Self {
+        let theme = AppTheme::default();
+
         Self {
             layout: Layout::default(),
             refresh_interval: Duration::from_secs(600),
-            theme: AppTheme::default(),
+            theme_iced: theme.into(),
+            theme,
             recents_limit: Some(5),
             search_limit: Some(5),
             scan_discoverer: true,
@@ -174,10 +179,13 @@ impl GeneralSettings {
     }
 
     fn debug_defaults() -> Self {
+        let theme = AppTheme::default();
+
         Self {
             layout: Layout::default(),
             refresh_interval: Duration::from_secs(120),
-            theme: AppTheme::default(),
+            theme_iced: theme.into(),
+            theme,
             recents_limit: Some(5),
             search_limit: Some(5),
             scan_discoverer: false,
@@ -191,6 +199,11 @@ impl GeneralSettings {
             default_source: SourceSet::Tmdb,
             show_dirs: true,
         }
+    }
+
+    pub fn set_theme(&mut self, theme: AppTheme) {
+        self.theme = theme;
+        self.theme_iced = theme.into();
     }
 }
 
@@ -338,7 +351,11 @@ impl Config {
     }
 
     pub fn theme(&self) -> iced::Theme {
-        self.general.theme.into()
+        self.general.theme_iced.clone()
+    }
+
+    pub fn theme_ref(&self) -> &iced::Theme {
+        &self.general.theme_iced
     }
 
     pub fn layout(&self) -> Layout {

@@ -2350,7 +2350,7 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let theme = self.theme().unwrap();
+        let theme = self.theme_ref();
         let content: Element<'_, Message> = match self.screen {
             Screen::Home => self
                 .home
@@ -2381,11 +2381,15 @@ impl App {
         .into()
     }
 
-    pub fn theme(&self) -> Option<Theme> {
+    pub fn theme_ref(&self) -> &Theme {
         match self.settings.as_ref() {
-            Some(settings) => Some(settings.config.theme()),
-            None => Some(self.config.theme()),
+            Some(settings) => settings.config.theme_ref(),
+            None => self.config.theme_ref(),
         }
+    }
+
+    pub fn theme(&self) -> Theme {
+        self.theme_ref().clone()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

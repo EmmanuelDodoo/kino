@@ -9,7 +9,7 @@ use iced::{
     widget::{
         self, button, center, checkbox, column, combo_box, container, image, mouse_area, operation,
         pick_list, row, rule, scrollable, slider, space, stack, text, text_editor, text_input,
-        tooltip as tp,
+        tooltip as tp, transition,
     },
     window,
 };
@@ -27,8 +27,8 @@ pub mod playlist;
 use crate::app::Message;
 use crate::home::shared::Icon;
 use crate::utils::{
-    self, FontState, PlayerAction, VideoSettings, cancel_btn, convert_color_str, draw_subtitles,
-    duration_string, empty,
+    self, FontState, InterpolableLength, PlayerAction, VideoSettings, cancel_btn,
+    convert_color_str, draw_subtitles, duration_string, empty,
     icons::{self, CANCEL, sized_button},
     modal::modal,
     modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo,
@@ -70,7 +70,9 @@ struct Config {
 #[derive(Debug, Clone)]
 enum Panel {
     Playlist,
+    PlaylistClosing,
     Comments(Option<(widget::Id, text_editor::Content)>),
+    CommentsClosing,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -445,6 +447,7 @@ pub enum ManagerMessage {
     CollectionAddMessage(CollectionAddMessage),
     Playlist(PlaylistMessge),
     ClosePanel,
+    PanelClosed,
     Subs(Option<String>),
     Config(ConfigMessage),
     Error(String),
@@ -938,6 +941,10 @@ impl Manager {
                 }
             },
             ManagerMessage::ClosePanel => self.close_panel(),
+            ManagerMessage::PanelClosed => {
+                self.panel.take();
+                Task::none()
+            }
             ManagerMessage::Subs(subs) => {
                 let Some(Player { subtitles, .. }) = self.player_mut() else {
                     return Task::none();
@@ -1977,7 +1984,7 @@ impl Manager {
         }
     }
 
-    pub fn view(&self, theme: &Theme, now: Instant) -> Element<'_, ManagerMessage> {
+    pub fn view<'a>(&'a self, theme: &'a Theme, now: Instant) -> Element<'a, ManagerMessage> {
         let content = stack!(
             self.video_elem(),
             column!(
@@ -2002,35 +2009,87 @@ impl Manager {
                 ..Default::default()
             });
 
-        let content: Element<'_, ManagerMessage> = match &self.panel {
-            Some(Panel::Playlist) => row!(
-                content,
-                draw_playlist(&self.playlist, self.settings.auto_next)
-            )
-            .height(Length::Fill)
-            .into(),
-            Some(Panel::Comments(new)) => match &self.state {
-                State::Ready {
-                    player,
-                    comments,
-                    awake: _awake,
-                    thumbnails_handle: _handle,
-                } => row!(
-                    content,
-                    draw_comments(
-                        new,
-                        comments,
-                        player.position as u64,
-                        self.settings.comment_span,
-                        theme,
-                        now,
-                    )
+        let content: Element<'_, ManagerMessage> = {
+            fn trans<'a>(
+                init: bool,
+                view: impl Fn(Length) -> Element<'a, ManagerMessage> + 'a,
+            ) -> transition::Transition<
+                'a,
+                ManagerMessage,
+                iced::Theme,
+                iced::Renderer,
+                Animation<bool>,
+            > {
+                let length = Length::Fixed(350.0);
+
+                transition(
+                    init,
+                    move || Animation::new(!init),
+                    move |animation, now| {
+                        let length = InterpolableLength::from(length);
+                        let length =
+                            animation.interpolate(InterpolableLength::FIXED_ZERO, length, now);
+
+                        view(length.0)
+                    },
                 )
-                .height(Length::Fill)
-                .into(),
-                _ => content.into(),
-            },
-            None => content.into(),
+            }
+
+            match &self.panel {
+                Some(panel) => 'panel: {
+                    let trans = match panel {
+                        Panel::Playlist => trans(true, |width| {
+                            draw_playlist(&self.playlist, self.settings.auto_next, width)
+                        }),
+                        Panel::PlaylistClosing => trans(false, |width| {
+                            draw_playlist(&self.playlist, self.settings.auto_next, width)
+                        })
+                        .on_finish(ManagerMessage::PanelClosed),
+                        Panel::Comments(new) => match &self.state {
+                            State::Ready {
+                                player,
+                                comments,
+                                awake: _awake,
+                                thumbnails_handle: _handle,
+                            } => trans(true, move |width| {
+                                draw_comments(
+                                    new,
+                                    comments,
+                                    player.position as u64,
+                                    self.settings.comment_span,
+                                    theme,
+                                    width,
+                                    now,
+                                )
+                            }),
+                            _ => break 'panel content.into(),
+                        },
+                        Panel::CommentsClosing => match &self.state {
+                            State::Ready {
+                                player,
+                                comments,
+                                awake: _awake,
+                                thumbnails_handle: _handle,
+                            } => trans(false, move |width| {
+                                draw_comments(
+                                    &None,
+                                    comments,
+                                    player.position as u64,
+                                    self.settings.comment_span,
+                                    theme,
+                                    width,
+                                    now,
+                                )
+                            })
+                            .on_finish(ManagerMessage::PanelClosed),
+                            _ => break 'panel content.into(),
+                        },
+                    };
+
+                    row!(content, trans).height(Length::Fill).into()
+                }
+                None => content.into(),
+            }
         };
 
         match &self.modal {
@@ -2719,7 +2778,16 @@ impl Manager {
     }
 
     pub fn close_panel(&mut self) -> Task<Message> {
-        self.panel = None;
+        match self.panel {
+            Some(Panel::Playlist) => {
+                self.panel = Some(Panel::PlaylistClosing);
+            }
+            Some(Panel::Comments(_)) => {
+                self.panel = Some(Panel::CommentsClosing);
+            }
+            Some(Panel::CommentsClosing) | Some(Panel::PlaylistClosing) | None => {}
+        }
+
         Task::none()
     }
 
@@ -3143,7 +3211,11 @@ fn handle_clicks(click: MouseClick) -> Option<ManagerMessage> {
     Some(msg)
 }
 
-fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, ManagerMessage> {
+fn draw_playlist<'a>(
+    playlist: &'a Playlist,
+    auto_next: bool,
+    width: impl Into<Length>,
+) -> Element<'a, ManagerMessage> {
     let rule_height = 1.0;
     let padding = [6, 12];
 
@@ -3299,11 +3371,10 @@ fn draw_playlist<'a>(playlist: &'a Playlist, auto_next: bool) -> Element<'a, Man
 
     let content = column!(title, content, actions)
         .height(Length::Fill)
+        .padding([3, 0])
         .spacing(0);
 
-    let content = panel_container(content).padding([3, 0]);
-
-    content.into()
+    panel_container(content, width).into()
 }
 
 fn draw_comments<'a>(
@@ -3312,6 +3383,7 @@ fn draw_comments<'a>(
     position: u64,
     span: u64,
     theme: &Theme,
+    width: impl Into<Length>,
     now: Instant,
 ) -> Element<'a, ManagerMessage> {
     let rule_height = 1.0;
@@ -3422,13 +3494,10 @@ fn draw_comments<'a>(
         new.map(ManagerMessage::CommentMessage)
     )
     .spacing(20)
+    .padding([3, 6])
     .align_x(Horizontal::Center);
 
-    let content = panel_container(content)
-        .padding([3, 6])
-        .align_x(Horizontal::Center);
-
-    content.into()
+    panel_container(content, width)
 }
 
 fn draw_collection_add<'a>(
@@ -4230,10 +4299,12 @@ fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
 
 fn panel_container<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,
-) -> container::Container<'a, Message> {
+    width: impl Into<Length>,
+) -> Element<'a, Message> {
     container(content)
         .style(styles::container::bw3)
-        .width(Length::FillPortion(2))
+        .width(width)
+        .into()
 }
 
 fn keep_awake() -> Result<keepawake::KeepAwake, keepawake::Error> {
