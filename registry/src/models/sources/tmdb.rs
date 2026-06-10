@@ -589,6 +589,48 @@ impl Request {
         }
     }
 
+    pub fn season_sync<'a>(id: &'a str, parent: &'a str) -> Query<'a> {
+        let status = Status::Data;
+        let sql = "UPDATE tmdb SET status=:status, tmdb_id=(SELECT tmdb_id FROM tmdb WHERE tmdb.id=:parent) WHERE id=:id";
+
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+            (":parent", ToSqlOutput::from(parent)),
+        ];
+
+        let id = Uuid::try_parse(id).expect("Valid tmdb season request id");
+
+        Query {
+            id,
+            table: Table::TMDBRequest,
+            op: Operation::Update,
+            sql,
+            params: params.to_vec(),
+        }
+    }
+
+    pub fn episode_sync<'a>(id: &'a str, parent: &'a str) -> Query<'a> {
+        let status = Status::Data;
+        let sql = "UPDATE tmdb SET status=:status, tmdb_id=(SELECT tmdb_id FROM tmdb WHERE tmdb.id=:parent), name=(SELECT number FROM tmdb WHERE tmdb.id=:parent) WHERE id=:id";
+
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":status", ToSqlOutput::from(status)),
+            (":parent", ToSqlOutput::from(parent)),
+        ];
+
+        let id = Uuid::try_parse(id).expect("Valid tmdb episode request id");
+
+        Query {
+            id,
+            table: Table::TMDBRequest,
+            op: Operation::Update,
+            sql,
+            params: params.to_vec(),
+        }
+    }
+
     pub fn new(media: Media) -> Self {
         let status = if matches!(media, Media::Season { .. } | Media::Episode { .. }) {
             Status::Waiting

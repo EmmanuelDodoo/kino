@@ -119,6 +119,14 @@ impl SourceImpl for TMDB {
     fn source_id(s: &str) -> Option<SourceId> {
         s.parse::<u32>().ok().map(SourceId::Tmdb)
     }
+
+    fn season_sync<'a>(id: &'a str, parent: &'a str) -> Option<Query<'a>> {
+        Some(Request::season_sync(id, parent))
+    }
+
+    fn episode_sync<'a>(id: &'a str, parent: &'a str) -> Option<Query<'a>> {
+        Some(Request::episode_sync(id, parent))
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]

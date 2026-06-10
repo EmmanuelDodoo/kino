@@ -206,6 +206,20 @@ impl SourceSet {
             Self::Tmdb => tmdb::TMDB::source_id(s),
         }
     }
+
+    pub fn season_sync<'a>(&self, id: &'a str, parent: &'a str) -> Option<Query<'a>> {
+        match self {
+            Self::None => None,
+            Self::Tmdb => tmdb::TMDB::season_sync(id, parent),
+        }
+    }
+
+    pub fn episode_sync<'a>(&self, id: &'a str, parent: &'a str) -> Option<Query<'a>> {
+        match self {
+            Self::None => None,
+            Self::Tmdb => tmdb::TMDB::episode_sync(id, parent),
+        }
+    }
 }
 
 impl From<SourceSet> for ToSqlOutput<'_> {
@@ -268,6 +282,11 @@ pub trait SourceImpl {
     fn delete_wish<'a>(wish: WishId) -> Option<Query<'a>>;
 
     fn source_id(s: &str) -> Option<SourceId>;
+
+    /// For when a pre-existing show gets updated with a new season
+    fn season_sync<'a>(id: &'a str, parent: &'a str) -> Option<Query<'a>>;
+
+    fn episode_sync<'a>(id: &'a str, parent: &'a str) -> Option<Query<'a>>;
 }
 
 pub(crate) fn poster_path<P: AsRef<Path>, Id: std::fmt::Display>(path: &P, id: &Id) -> PathBuf {

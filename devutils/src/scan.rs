@@ -460,6 +460,7 @@ pub fn scan_dir_helper(
 
             for show in shows {
                 let mut dir_show = dir_shows.get_mut(&show.path);
+                let new_show = dir_show.is_none();
 
                 if let Some(show) = &dir_show {
                     match show.status {
@@ -579,6 +580,7 @@ pub fn scan_dir_helper(
 
                 for season in seasons {
                     let mut dir_season = dir_seasons.get_mut(&season.path);
+                    let new_season = dir_season.is_none();
 
                     if let Some(season) = &dir_season {
                         match season.status {
@@ -666,7 +668,24 @@ pub fn scan_dir_helper(
                                 season_source(source)
                             }
                         },
-                        None => season_source(show_source),
+                        None => {
+                            let (source, request) = season_source(show_source);
+
+                            if !new_show {
+                                if let Some((id, parent)) =
+                                    request.as_deref().zip(show_request.as_deref())
+                                {
+                                    if let Some(query) = source.season_sync(id, parent) {
+                                        let _ = query.execute(db).with_ctx_log(|| {
+                                        format!(
+                                            "Scan: Failed season sync {id} request on source {source:?}"
+                                        )
+                                    });
+                                    };
+                                }
+                            }
+                            (source, request)
+                        }
                     };
 
                     tracing::debug!("Scanning {name} episodes");
@@ -762,7 +781,7 @@ pub fn scan_dir_helper(
 
                         let episode_source = |source: SourceSet| {
                             let Some(parent) = season_request.as_deref() else {
-                                return;
+                                return (source, None);
                             };
 
                             let Some((query, request)) = source.episode_request(
@@ -771,11 +790,11 @@ pub fn scan_dir_helper(
                                 season_number,
                                 episode_number,
                             ) else {
-                                return;
+                                return (source, None);
                             };
 
                             let Some(succ) = query.execute(db).with_ctx_log(|| format!("Scan show {show_name} season {season_number} episode {episode_number} source {source:?}")) else {
-                                return;
+                            return (source, None);
                             };
 
                             succ.log();
@@ -789,6 +808,8 @@ pub fn scan_dir_helper(
                                 ],
                             )
 .with_ctx_log(|| format!("Scan show {show_name} season {season_number} episode {episode_number} failed to update source & request"));
+
+                            (source, Some(request))
                         };
 
                         match dir_ep {
@@ -797,10 +818,26 @@ pub fn scan_dir_helper(
                                 None => {
                                     let source = dir_episode.source.merge(season_source);
 
-                                    episode_source(source)
+                                    episode_source(source);
                                 }
                             },
-                            None => episode_source(season_source),
+                            None => {
+                                let (source, request) = episode_source(season_source);
+
+                                if !new_season {
+                                    if let Some((id, parent)) =
+                                        request.as_deref().zip(show_request.as_deref())
+                                    {
+                                        if let Some(query) = source.episode_sync(id, parent) {
+                                            let _ = query.execute(db).with_ctx_log(|| {
+                                        format!(
+                                            "Scan: Failed episode sync {id} request on source {source:?}"
+                                        )
+                                    });
+                                        };
+                                    }
+                                }
+                            }
                         }
 
                         save_video_metadata(
