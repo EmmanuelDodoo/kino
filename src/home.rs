@@ -315,6 +315,9 @@ pub enum MovieEditMessage {
     Refetch,
     Remove,
     Archive(bool),
+    VideoExpanded(bool),
+    AudioExpanded(bool),
+    SubsExpanded(bool),
     Save,
 }
 
@@ -367,6 +370,9 @@ pub enum EpisodeEditMessage {
     Refetch,
     Remove,
     Archive(bool),
+    VideoExpanded(bool),
+    AudioExpanded(bool),
+    SubsExpanded(bool),
     Save,
 }
 
@@ -487,6 +493,9 @@ pub struct MovieEditState {
     poster: Option<PathBuf>,
     backdrop: Option<PathBuf>,
     archive: bool,
+
+    // vas
+    expands: u8,
 }
 
 impl MovieEditState {
@@ -509,6 +518,7 @@ impl MovieEditState {
             poster: None,
             backdrop: None,
             archive: matches!(movie.status, media::Status::Archived),
+            expands: 7,
         }
     }
 
@@ -518,6 +528,40 @@ impl MovieEditState {
 
     pub fn invalid_name(&self) -> bool {
         self.name.trim().is_empty()
+    }
+
+    fn get_expand(&self, bit: u8) -> bool {
+        let value = (self.expands >> bit) & 1;
+        value != 0
+    }
+
+    fn set_expand(&mut self, bit: u8, value: bool) {
+        let value = value as u8;
+        self.expands = (self.expands & !(1 << bit)) | (value << bit);
+    }
+
+    pub fn expanded_video(&self) -> bool {
+        self.get_expand(2)
+    }
+
+    pub fn video_expand(&mut self, expand: bool) {
+        self.set_expand(2, expand);
+    }
+
+    pub fn expanded_audio(&self) -> bool {
+        self.get_expand(1)
+    }
+
+    pub fn audio_expand(&mut self, expand: bool) {
+        self.set_expand(1, expand);
+    }
+
+    pub fn expanded_subs(&self) -> bool {
+        self.get_expand(0)
+    }
+
+    pub fn subs_expand(&mut self, expand: bool) {
+        self.set_expand(0, expand);
     }
 }
 
@@ -622,6 +666,9 @@ pub struct EpisodeEditState {
     watched: bool,
     poster: Option<PathBuf>,
     archive: bool,
+
+    // vas
+    expands: u8,
 }
 
 impl EpisodeEditState {
@@ -643,6 +690,7 @@ impl EpisodeEditState {
             watched: false,
             poster: None,
             archive: matches!(episode.status, media::Status::Archived),
+            expands: 7,
         }
     }
 
@@ -652,6 +700,40 @@ impl EpisodeEditState {
 
     pub fn invalid_name(&self) -> bool {
         self.name.trim().is_empty()
+    }
+
+    fn get_expand(&self, bit: u8) -> bool {
+        let value = (self.expands >> bit) & 1;
+        value != 0
+    }
+
+    fn set_expand(&mut self, bit: u8, value: bool) {
+        let value = value as u8;
+        self.expands = (self.expands & !(1 << bit)) | (value << bit);
+    }
+
+    pub fn expanded_video(&self) -> bool {
+        self.get_expand(2)
+    }
+
+    pub fn video_expand(&mut self, expand: bool) {
+        self.set_expand(2, expand);
+    }
+
+    pub fn expanded_audio(&self) -> bool {
+        self.get_expand(1)
+    }
+
+    pub fn audio_expand(&mut self, expand: bool) {
+        self.set_expand(1, expand);
+    }
+
+    pub fn expanded_subs(&self) -> bool {
+        self.get_expand(0)
+    }
+
+    pub fn subs_expand(&mut self, expand: bool) {
+        self.set_expand(0, expand);
     }
 }
 
@@ -1659,6 +1741,15 @@ impl Home {
                     MovieEditMessage::MarkWatched(watched) => {
                         state.watched = watched;
                     }
+                    MovieEditMessage::VideoExpanded(expanded) => {
+                        state.video_expand(expanded);
+                    }
+                    MovieEditMessage::AudioExpanded(expanded) => {
+                        state.audio_expand(expanded);
+                    }
+                    MovieEditMessage::SubsExpanded(expanded) => {
+                        state.subs_expand(expanded);
+                    }
                     MovieEditMessage::Archive(archive) => {
                         state.archive = archive;
                     }
@@ -2092,6 +2183,15 @@ impl Home {
                     }
                     EpisodeEditMessage::Archive(archive) => {
                         state.archive = archive;
+                    }
+                    EpisodeEditMessage::VideoExpanded(expanded) => {
+                        state.video_expand(expanded);
+                    }
+                    EpisodeEditMessage::AudioExpanded(expanded) => {
+                        state.audio_expand(expanded);
+                    }
+                    EpisodeEditMessage::SubsExpanded(expanded) => {
+                        state.subs_expand(expanded);
                     }
                     EpisodeEditMessage::Refetch => {
                         let State::Episode { episode, .. } = &self.state else {

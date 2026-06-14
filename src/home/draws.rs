@@ -1580,15 +1580,29 @@ pub fn draw_movie_edit<'a>(
 
     let archive = media_archive(state.archive, MovieEditMessage::Archive);
 
-    let videos = draw_videos(videos, state.selected_video, MovieEditMessage::Video);
+    let videos = draw_videos(
+        videos,
+        state.expanded_video(),
+        state.selected_video,
+        MovieEditMessage::Video,
+        MovieEditMessage::VideoExpanded,
+    );
 
-    let audio = draw_audio(audio, state.selected_audio, MovieEditMessage::Audio);
+    let audio = draw_audio(
+        audio,
+        state.expanded_audio(),
+        state.selected_audio,
+        MovieEditMessage::Audio,
+        MovieEditMessage::AudioExpanded,
+    );
 
     let subtitles = draw_subs(
         subs,
+        state.expanded_subs(),
         state.selected_sub,
         MovieEditMessage::Subtitle,
         MovieEditMessage::SubDelete,
+        MovieEditMessage::SubsExpanded,
     );
 
     let source = media_source(
@@ -1733,15 +1747,29 @@ pub fn draw_episode_edit<'a>(
 
     let archive = media_archive(state.archive, EpisodeEditMessage::Archive);
 
-    let videos = draw_videos(videos, state.selected_video, EpisodeEditMessage::Video);
+    let videos = draw_videos(
+        videos,
+        state.expanded_video(),
+        state.selected_video,
+        EpisodeEditMessage::Video,
+        EpisodeEditMessage::VideoExpanded,
+    );
 
-    let audio = draw_audio(audio, state.selected_audio, EpisodeEditMessage::Audio);
+    let audio = draw_audio(
+        audio,
+        state.expanded_audio(),
+        state.selected_audio,
+        EpisodeEditMessage::Audio,
+        EpisodeEditMessage::AudioExpanded,
+    );
 
     let subtitles = draw_subs(
         subs,
+        state.expanded_subs(),
         state.selected_sub,
         EpisodeEditMessage::Subtitle,
         EpisodeEditMessage::SubDelete,
+        EpisodeEditMessage::SubsExpanded,
     );
 
     let source = media_source(&state.source, None::<fn(_) -> EpisodeEditMessage>);
@@ -1775,8 +1803,10 @@ pub fn draw_episode_edit<'a>(
 
 fn draw_videos<'a, Message: 'a + Clone, F>(
     videos: &'a [VideoInfo],
+    expanded: bool,
     selected: Option<VideoInfoId>,
     on_select: F,
+    on_expand: impl Fn(bool) -> Message + 'a,
 ) -> Element<'a, Message>
 where
     F: Fn(VideoInfoId) -> Message + 'a + Clone,
@@ -1785,12 +1815,19 @@ where
         return empty();
     }
 
-    let label = mouse_area(
-        row!(media_label("Videos"))
+    let label = {
+        let icon = if expanded {
+            icons::CHEV_UP
+        } else {
+            icons::CHEV_DOWN
+        };
+        let icon = icons::icon(icon).size(P);
+
+        row!(media_label("Video"), space::horizontal(), icon)
             .width(Length::Fill)
-            .padding([2, 2]),
-    )
-    .interaction(mouse::Interaction::Pointer);
+            .padding([2, 2])
+    };
+
     let size = H7;
 
     let rad = table::column(empty(), |video: &VideoInfo| {
@@ -1853,15 +1890,18 @@ where
 
     expandable(label, content)
         .width(Length::Fill)
-        .expanded(true)
+        .expanded(expanded)
+        .on_expand(on_expand)
         .spacing(0)
         .into()
 }
 
 fn draw_audio<'a, Message: 'a + Clone, F>(
     audio: &'a [Audio],
+    expanded: bool,
     selected: Option<AudioId>,
     on_select: F,
+    on_expand: impl Fn(bool) -> Message + 'a,
 ) -> Element<'a, Message>
 where
     F: Fn(AudioId) -> Message + 'a + Clone,
@@ -1870,14 +1910,20 @@ where
         return empty();
     }
 
-    let size = H7;
-    let label = mouse_area(
-        row!(media_label("Audios"))
-            .width(Length::Fill)
-            .padding([2, 2]),
-    )
-    .interaction(mouse::Interaction::Pointer);
+    let label = {
+        let icon = if expanded {
+            icons::CHEV_UP
+        } else {
+            icons::CHEV_DOWN
+        };
+        let icon = icons::icon(icon).size(P);
 
+        row!(media_label("Audio"), space::horizontal(), icon)
+            .width(Length::Fill)
+            .padding([2, 2])
+    };
+
+    let size = H7;
     let radio = table::column(empty(), |audio: &Audio| {
         radio("", audio.id, selected, on_select.clone())
             .size(12)
@@ -1955,31 +2001,40 @@ where
 
     expandable(label, content)
         .width(Length::Fill)
-        .expanded(true)
+        .expanded(expanded)
+        .on_expand(on_expand)
         .spacing(0)
         .into()
 }
 
-fn draw_subs<'a, Message: 'a + Clone, F, D>(
+fn draw_subs<'a, Message: 'a + Clone, F>(
     subs: &'a [Subtitle],
+    expanded: bool,
     selected: Option<SubtitleId>,
     on_select: F,
-    on_delete: D,
+    on_delete: impl Fn(SubtitleId) -> Message + 'a,
+    on_expand: impl Fn(bool) -> Message + 'a,
 ) -> Element<'a, Message>
 where
     F: Fn(SubtitleId) -> Message + 'a + Clone,
-    D: Fn(SubtitleId) -> Message + 'a,
 {
     if subs.is_empty() {
         return empty();
     }
 
-    let label = mouse_area(
-        row!(media_label("Subtitles"))
+    let label = {
+        let icon = if expanded {
+            icons::CHEV_UP
+        } else {
+            icons::CHEV_DOWN
+        };
+        let icon = icons::icon(icon).size(P);
+
+        row!(media_label("Subtitle"), space::horizontal(), icon)
             .width(Length::Fill)
-            .padding([2, 2]),
-    )
-    .interaction(mouse::Interaction::Pointer);
+            .padding([2, 2])
+    };
+
     let size = H7;
 
     let radio = table::column(empty(), |sub: &Subtitle| {
@@ -2031,7 +2086,8 @@ where
 
     expandable(label, content)
         .width(Length::Fill)
-        .expanded(true)
+        .expanded(expanded)
+        .on_expand(on_expand)
         .spacing(0)
         .into()
 }
@@ -2251,13 +2307,13 @@ fn media_layout<'a>(
             .width(Length::Fill)
     };
 
-    let content = scrollable(content).spacing(4).height(Length::Fill);
+    let content = scrollable(content).spacing(6).height(Length::Fill);
 
     let content = column!(content, actions).spacing(28);
 
     modal_container(content)
         .width(500)
-        .padding([8, 12])
+        .padding([8, 10])
         .align_y(Vertical::Top)
         .into()
 }

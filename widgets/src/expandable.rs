@@ -112,11 +112,11 @@ where
     }
 
     fn diff(&mut self, tree: &mut tree::Tree) {
-        // let state = tree.state.downcast_mut::<State>();
-        // if state.expanded != self.expanded {
-        //     state.expanded = self.expanded;
-        //     state.go_mut(Instant::now());
-        // }
+        let state = tree.state.downcast_mut::<State>();
+        if state.expanded != self.expanded {
+            state.expanded = self.expanded;
+            state.go_mut(Instant::now());
+        }
 
         tree.diff_children(&mut [&mut self.root, &mut self.content])
     }
