@@ -1138,7 +1138,7 @@ impl App {
 
                         let dir_movies = match self
                             .db
-                            .get_dir_movies(id, movie_map)
+                            .get_dir_movies_filtered(id, limit, offset, filter, sort, movie_map)
                             .with_context(|| format!("Getting directory {id} movies"))
                         {
                             Ok(movies) => movies,
@@ -1147,7 +1147,7 @@ impl App {
 
                         let dir_shows = match self
                             .db
-                            .get_dir_shows(id, show_map)
+                            .get_dir_shows_filtered(id, limit, offset, filter, sort, show_map)
                             .with_context(|| format!("Getting directory {id} shows"))
                         {
                             Ok(shows) => shows,

@@ -138,6 +138,47 @@ impl Database {
             .collect()
     }
 
+    pub fn get_dir_movies_filtered<T>(
+        &self,
+        dir: DirectoryId,
+        limit: Option<i32>,
+        offset: Option<i32>,
+        filter: Filter,
+        sort: Sort,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
+        let limit = limit.unwrap_or(-1);
+        let offset = offset.unwrap_or(-1);
+
+        let filter = filter
+            .query(None)
+            .map(|query| format!("AND {query}"))
+            .unwrap_or_default();
+        let sort = sort
+            .query(None)
+            .map(|query| format!("ORDER BY {query}"))
+            .unwrap_or_default();
+
+        let sql = format!(
+            "{} WHERE directory_id=:dir AND status != {} {filter} {sort} LIMIT :limit OFFSET :offset",
+            Self::MOVIE_QUERY,
+            Status::Tombstone
+        );
+
+        let mut statement = self.prepare_cached(&sql)?;
+
+        statement
+            .query_map(
+                &[
+                    (":limit", &ToSqlOutput::from(limit)),
+                    (":offset", &ToSqlOutput::from(offset)),
+                    (":dir", &ToSqlOutput::from(dir)),
+                ],
+                map,
+            )?
+            .collect()
+    }
+
     pub fn get_dir_shows<T>(
         &self,
         dir: DirectoryId,
@@ -148,6 +189,46 @@ impl Database {
 
         statement
             .query_map(&[(":dir", &ToSqlOutput::from(dir))], map)?
+            .collect()
+    }
+
+    pub fn get_dir_shows_filtered<T>(
+        &self,
+        dir: DirectoryId,
+        limit: Option<i32>,
+        offset: Option<i32>,
+        filter: Filter,
+        sort: Sort,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
+        let limit = limit.unwrap_or(-1);
+        let offset = offset.unwrap_or(-1);
+
+        let filter = filter
+            .query(None)
+            .map(|query| format!("AND {query}"))
+            .unwrap_or_default();
+        let sort = sort
+            .query(None)
+            .map(|query| format!("ORDER BY {query}"))
+            .unwrap_or_default();
+
+        let sql = format!(
+            "{} WHERE directory_id=:dir AND status != {} {filter} {sort} LIMIT :limit OFFSET :offset",
+            Self::SHOW_QUERY,
+            Status::Tombstone
+        );
+
+        let mut statement = self.prepare_cached(&sql)?;
+        statement
+            .query_map(
+                &[
+                    (":limit", &ToSqlOutput::from(limit)),
+                    (":offset", &ToSqlOutput::from(offset)),
+                    (":dir", &ToSqlOutput::from(dir)),
+                ],
+                map,
+            )?
             .collect()
     }
 
