@@ -128,9 +128,7 @@ where
         limits: &layout::Limits,
     ) -> layout::Node {
         let state = tree.state.downcast_mut::<State>();
-        let factor = state
-            .animation
-            .interpolate_with(std::convert::identity, Instant::now());
+        let factor = state.animation.interpolate(0.0, 1.0, Instant::now());
 
         state.factor = factor;
 
@@ -144,6 +142,9 @@ where
         let root_size = root.size();
 
         let content = {
+            let shrink = Size::new(0.0, root_size.height + spacing);
+            let limits = &limits.shrink(shrink);
+
             let full = self
                 .content
                 .as_widget_mut()
@@ -157,7 +158,7 @@ where
                 .layout(
                     &mut tree.children[1],
                     renderer,
-                    &limits.max_height(max_height),
+                    &limits.max_height(max_height).width(full.width),
                 )
                 .move_to(Point::new(0.0, root_size.height + spacing))
         };
@@ -208,7 +209,7 @@ where
             );
         }
 
-        if state.factor < 0.5 {
+        if state.factor < 0.15 {
             return;
         }
 
@@ -418,7 +419,7 @@ where
 
 struct State {
     expanded: bool,
-    animation: Animation<f32>,
+    animation: Animation<bool>,
     factor: f32,
 }
 
@@ -426,14 +427,12 @@ impl State {
     fn new(expanded: bool, duration: Duration, easing: Easing) -> Self {
         State {
             expanded,
-            animation: Animation::new(f32::from(expanded))
-                .duration(duration)
-                .easing(easing),
+            animation: Animation::new(expanded).duration(duration).easing(easing),
             factor: 0.0,
         }
     }
 
     fn go_mut(&mut self, now: Instant) {
-        self.animation.go_mut(f32::from(self.expanded), now);
+        self.animation.go_mut(self.expanded, now);
     }
 }
