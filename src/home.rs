@@ -5445,9 +5445,7 @@ impl Home {
                 let modalize = |content, overlay| modalize(content, overlay, toggle);
 
                 match view {
-                    View::CollectionConfig(config) => {
-                        modalize(content, draw_config(config)).right()
-                    }
+                    View::CollectionConfig(config) => modalize(content, draw_config(config)),
                     View::Search(state, None) => modalize(
                         content,
                         draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true),
@@ -5486,8 +5484,7 @@ impl Home {
                     } => modalize(
                         content,
                         draw_collection_triggers(*view_inserts, itriggers, dtriggers),
-                    )
-                    .right(),
+                    ),
                     View::Selection(selected) => {
                         let selection = container(draw_selection(selected.len()))
                             .style(styles::container::dark);
@@ -5501,7 +5498,6 @@ impl Home {
 
                                 modal::Style { blur, ..default }
                             })
-                            .right()
                     }
                     View::WishNew(state) => modalize(content, draw_wishlist(state)),
                     View::WishDrawer(id) => {
@@ -5515,7 +5511,7 @@ impl Home {
 
                         let overlay = draw_wish(wish, now);
 
-                        modalize(content, overlay).right()
+                        modalize(content, overlay)
                     }
                     View::RemoveWish { name, .. } => {
                         modalize(content, draw_delete_confirm(name, HomeMessage::RemoveWish))
