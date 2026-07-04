@@ -263,7 +263,7 @@ where
 
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
-        let max = state.max_width(
+        let max = state.max_size(
             renderer,
             self.end,
             self.font,
@@ -274,9 +274,9 @@ where
         let width = limits.max().width;
 
         // available space - space for current
-        let free_width = width - (max + self.spacing);
+        let free_width = width - (max.width + self.spacing);
 
-        let max_no = (free_width / (max + self.spacing).max(1.0)) as usize;
+        let max_no = (free_width / (max.width + self.spacing).max(1.0)) as usize;
 
         let l = self.current.saturating_sub(self.start);
         let r = self.end.saturating_sub(self.current);
@@ -287,27 +287,19 @@ where
         let right_ellipsis = (self.current + right) < self.end;
 
         let mut width = 0.0;
-        let mut height = 0.0;
+        let height = max.height;
         let mut pages = Vec::new();
         let mut nodes = Vec::new();
 
         let mut proc = |page: Page| {
-            let (page, size) = PageState::new(
-                renderer,
-                page,
-                self.font,
-                self.size,
-                self.padding,
-                self.ellipsis.as_ref(),
-            );
+            let page = PageState::new(renderer, page, self.font, self.size, self.ellipsis.as_ref());
 
             pages.push(page);
 
-            let node = layout::Node::new(size).translate([width, 0.0]);
+            let node = layout::Node::new(max).translate([width, 0.0]);
             nodes.push(node);
 
-            width += size.width + self.spacing;
-            height = size.height.max(height);
+            width += max.width + self.spacing;
         };
 
         if left_ellipsis {
@@ -592,9 +584,8 @@ impl<P: text::Paragraph> PageState<P> {
         page: Page,
         font: Option<Renderer::Font>,
         size: Option<Pixels>,
-        padding: Padding,
         ellipsis: Option<&Ellipsis<Renderer::Font>>,
-    ) -> (Self, Size)
+    ) -> Self
     where
         Renderer: text::Renderer<Font = P::Font>,
     {
@@ -652,11 +643,7 @@ impl<P: text::Paragraph> PageState<P> {
 
         let text = text::paragraph::Plain::new(text);
 
-        let size = text.min_bounds().expand(padding);
-
-        let new = Self { text, page };
-
-        (new, size)
+        Self { text, page }
     }
 }
 
@@ -675,7 +662,7 @@ impl<P: text::Paragraph> State<P> {
         }
     }
 
-    fn max_width<Renderer>(
+    fn max_size<Renderer>(
         &mut self,
         renderer: &Renderer,
         end: usize,
@@ -683,7 +670,7 @@ impl<P: text::Paragraph> State<P> {
         size: Option<Pixels>,
         padding: Padding,
         ellipsis: Option<&Ellipsis<Renderer::Font>>,
-    ) -> f32
+    ) -> Size
     where
         Renderer: text::Renderer<Font = P::Font>,
     {
@@ -728,18 +715,21 @@ impl<P: text::Paragraph> State<P> {
 
         self.reference.update(ellipsis);
 
-        let ellipsis = self.reference.min_bounds().expand(padding).width;
+        let ellipsis = self.reference.min_bounds();
 
         let max = end.to_string();
         let max = text(renderer, max.deref(), font, size);
 
         self.reference.update(max);
 
-        self.reference
-            .min_bounds()
-            .expand(padding)
-            .width
-            .max(ellipsis)
+        let end = self.reference.min_bounds();
+
+        if end.width >= ellipsis.width {
+            end
+        } else {
+            ellipsis
+        }
+        .expand(padding)
     }
 }
 
