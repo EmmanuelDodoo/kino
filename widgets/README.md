@@ -47,3 +47,9 @@
 <div align="center">
     <img src="showcase/modal.gif", width="300px" alt="Modal"/> 
 </div>
+
+##  Pagination 
+
+<div align="center">
+    <img src="showcase/pagination.gif", width="300px" alt="Pagination"/> 
+</div>
