@@ -54,7 +54,7 @@ pub struct Episode {
     original_name: String,
     pub show_name: String,
     pub season_number: u16,
-    path: String,
+    pub path: String,
     pub poster: Option<Image>,
     // Join from show
     pub backdrop: Option<String>,
@@ -409,6 +409,23 @@ impl Episode {
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Episode,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_path<'a>(id: EpisodeId, path: String) -> Query<'a> {
+        let sql = "UPDATE episode SET path=:path WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":path", ToSqlOutput::from(path)),
         ];
 
         Query {

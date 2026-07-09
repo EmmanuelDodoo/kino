@@ -142,6 +142,13 @@ impl std::fmt::Display for MediaType {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DirectoryId(Uuid);
 
+impl DirectoryId {
+    pub(crate) fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
+        row.get::<_, String>("directory")
+            .map(|id| Self(Uuid::try_parse(&id).unwrap()))
+    }
+}
+
 impl From<DirectoryId> for ToSqlOutput<'_> {
     fn from(value: DirectoryId) -> Self {
         ToSqlOutput::from(value.0.to_string())

@@ -87,6 +87,28 @@ pub fn tooltip<'a, Message: 'a>(
     .gap(2.0)
 }
 
+pub fn path_container<'a, Message>(
+    path: impl iced::widget::text::IntoFragment<'a>,
+    text_size: f32,
+    rtl: bool,
+) -> iced::widget::Container<'a, Message> {
+    let path = widgets::marquee(path)
+        .size(text_size)
+        .font(typo::mono_font())
+        .direction(rtl);
+
+    iced::widget::container(path)
+        .max_width(250)
+        .style(|theme: &iced::Theme| {
+            let color = theme.palette().secondary.weak.color;
+            let default = styles::container::transparent(theme);
+            let border = default.border.rounded(2.5).color(color).width(1.0);
+
+            iced::widget::container::Style { border, ..default }
+        })
+        .padding([2, 6])
+}
+
 pub fn modal_container<'a, Message: 'a>(
     content: impl Into<iced::Element<'a, Message>>,
 ) -> iced::widget::Container<'a, Message> {
