@@ -4,7 +4,7 @@ use crate::utils::{
     self, AppTheme, Config, FontState, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction,
     Scroll, SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
     convert_color_str, empty, icons, icons::sized_button, modal::modal, modal_container,
-    picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo::*,
+    path_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo::*,
 };
 use devutils::source::SourceSet;
 use iced::{
@@ -1718,13 +1718,13 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
     let folder = {
         let path = trim_path(path, 3);
 
-        let path = marquee(path).font(mono_font()).size(size / RATIO);
+        let path = path_container(path, size / RATIO, false);
 
         let label = sized_bold("Folder: ", size).width(100.0);
 
         let folder = row!(label, path).align_y(Vertical::Center).spacing(8);
 
-        let reselect = sized_button(icons::REPLAY, size / RATIO)
+        let reselect = sized_button(icons::REFRESH, size / RATIO)
             .on_press(SettingsMessage::FolderSelection(
                 FolderSelectionMessage::Reselect,
             ))

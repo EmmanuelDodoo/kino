@@ -31,7 +31,8 @@ use crate::utils::{
     convert_color_str, draw_subtitles, duration_string, empty,
     icons::{self, CANCEL, sized_button},
     modal::modal,
-    modal_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo,
+    modal_container, path_container, picklist_handle, save_btn, styles, toggler, tooltip,
+    trim_path, typo,
 };
 pub use comment::*;
 use devutils::thumbnails::{Image, ThumbnailGenerator};
@@ -3852,13 +3853,10 @@ fn draw_subs<'a>(
         let path: Element<'_, SubtitleConfig> = match path {
             Some(path) => button(
                 row!(
-                    container(marquee(path).font(mono_font()).size(size))
-                        .max_width(250)
-                        .height(20)
-                        .clip(true),
+                    path_container(path, size, false),
                     icons::icon(icons::CANCEL).size(size)
                 )
-                .spacing(4)
+                .spacing(8)
                 .align_y(Vertical::Center),
             )
             .padding([2, 5])

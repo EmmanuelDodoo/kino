@@ -1,7 +1,7 @@
 use super::*;
 use crate::utils::{
-    cancel_btn, empty, icons, icons::*, modal_container, picklist_handle, save_btn, styles,
-    toggler, tooltip, trim_path, typo::*,
+    cancel_btn, empty, icons, icons::*, modal_container, path_container, picklist_handle, save_btn,
+    styles, toggler, tooltip, trim_path, typo::*,
 };
 use registry::models::collection::{
     CollectionView, ItemId,
@@ -1627,12 +1627,16 @@ pub fn draw_movie_edit<'a>(
     let backdrop = media_image(
         "Backdrop: ",
         state.backdrop.as_deref(),
-        MovieEditMessage::PickPoster,
+        MovieEditMessage::PickBackdrop,
     );
+
+    let dir = media_dir(&state.dir);
+
+    let path = media_path(&state.path, MovieEditMessage::PickPath);
 
     let content: Element<'_, MovieEditMessage> = column!(
         name, overview, ratings, watched, archive, videos, audio, subtitles, source, source_id,
-        poster, backdrop, refetch, remove,
+        poster, backdrop, dir, path, refetch, remove,
     )
     .spacing(24)
     .into();
@@ -1676,12 +1680,16 @@ pub fn draw_show_edit<'a>(state: &'a ShowEditState) -> Element<'a, HomeMessage> 
     let backdrop = media_image(
         "Backdrop: ",
         state.backdrop.as_deref(),
-        ShowEditMessage::PickPoster,
+        ShowEditMessage::PickBackdrop,
     );
 
+    let dir = media_dir(&state.dir);
+
+    let path = media_path(&state.path, ShowEditMessage::PickPath);
+
     let content: Element<'_, ShowEditMessage> = column!(
-        name, overview, ratings, watched, archive, source, source_id, poster, backdrop, refetch,
-        remove,
+        name, overview, ratings, watched, archive, source, source_id, poster, backdrop, dir, path,
+        refetch, remove,
     )
     .spacing(24)
     .into();
@@ -1719,8 +1727,13 @@ pub fn draw_season_edit<'a>(state: &'a SeasonEditState) -> Element<'a, HomeMessa
         SeasonEditMessage::PickPoster,
     );
 
+    let dir = media_dir(&state.dir);
+
+    let path = media_path(&state.path, SeasonEditMessage::PickPath);
+
     let content: Element<'_, SeasonEditMessage> = column!(
-        name, overview, ratings, watched, archive, source, source_id, poster, refetch, remove
+        name, overview, ratings, watched, archive, source, source_id, poster, dir, path, refetch,
+        remove
     )
     .spacing(24)
     .into();
@@ -1778,6 +1791,10 @@ pub fn draw_episode_edit<'a>(
 
     let refetch = media_icon_btn(REFRESH, "Refetch").on_press(EpisodeEditMessage::Refetch);
 
+    let dir = media_dir(&state.dir);
+
+    let path = media_path(&state.path, EpisodeEditMessage::PickPath);
+
     let remove = media_icon_btn(DELETE, "Delete")
         .on_press(EpisodeEditMessage::Remove)
         .style(styles::button::danger);
@@ -1790,7 +1807,7 @@ pub fn draw_episode_edit<'a>(
 
     let content: Element<'_, EpisodeEditMessage> = column!(
         name, overview, ratings, watched, archive, videos, audio, subtitles, source, source_id,
-        poster, refetch, remove
+        poster, dir, path, refetch, remove
     )
     .spacing(24)
     .into();
@@ -2260,18 +2277,14 @@ fn media_image<'a, Message: 'a + Clone>(
     let size = H7;
     let label = media_label(label);
 
-    let action: Element<'_, Message> = match path {
+    let content: Element<'_, Message> = match path {
         Some(path) => {
             let path = trim_path(path, 3);
-            let path = marquee(path)
-                .size(size)
-                .width(250)
-                .font(mono_font())
-                .direction(true);
+            let path = path_container(path, size, true);
 
             let redo = text_button(REFRESH).on_press(on_press);
 
-            row!(path, redo)
+            row!(redo, path)
                 .spacing(3.0)
                 .align_y(Vertical::Center)
                 .into()
@@ -2288,7 +2301,40 @@ fn media_image<'a, Message: 'a + Clone>(
         }
     };
 
-    row!(label, space::horizontal(), action)
+    row!(label, space::horizontal(), content)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+fn media_dir<'a, Message: 'a>(path: &'a std::path::Path) -> Element<'a, Message> {
+    let size = H7;
+    let label = media_label("Parent Directory:");
+
+    let path = trim_path(path, 3);
+    let content = path_container(path, size, true);
+
+    row!(label, space::horizontal(), content)
+        .align_y(Vertical::Center)
+        .into()
+}
+
+fn media_path<'a, Message: 'a + Clone>(
+    path: &'a std::path::Path,
+    on_press: Message,
+) -> Element<'a, Message> {
+    let size = H7;
+    let label = media_label("File:");
+
+    let content = {
+        let path = trim_path(path, 3);
+        let path = path_container(path, size, true);
+
+        let redo = text_button(REFRESH).on_press(on_press);
+
+        row!(redo, path).spacing(3.0).align_y(Vertical::Center)
+    };
+
+    row!(label, space::horizontal(), content)
         .align_y(Vertical::Center)
         .into()
 }

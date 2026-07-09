@@ -14,7 +14,7 @@ use iced::{
     window,
 };
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 mod collection;
 mod collections;
@@ -30,7 +30,9 @@ pub mod shared;
 mod shows;
 mod wishlist;
 
-use crate::app::{EpisodeUpdate, MediaUpdateKind, MovieUpdate, SeasonUpdate, ShowUpdate};
+use crate::app::{
+    EpisodeUpdate, FetchPath, MediaUpdateKind, MovieUpdate, SeasonUpdate, ShowUpdate,
+};
 use devutils::source::{SourceId, SourceSet};
 use draws::*;
 use registry::models::{
@@ -318,6 +320,8 @@ pub enum MovieEditMessage {
     VideoExpanded(bool),
     AudioExpanded(bool),
     SubsExpanded(bool),
+    PickPath,
+    Path(Option<PathBuf>),
     Save,
 }
 
@@ -336,6 +340,8 @@ pub enum ShowEditMessage {
     Refetch,
     Remove,
     Archive(bool),
+    PickPath,
+    Path(Option<PathBuf>),
     Save,
 }
 
@@ -351,6 +357,8 @@ pub enum SeasonEditMessage {
     Refetch,
     Remove,
     Archive(bool),
+    PickPath,
+    Path(Option<PathBuf>),
     Save,
 }
 
@@ -373,6 +381,8 @@ pub enum EpisodeEditMessage {
     VideoExpanded(bool),
     AudioExpanded(bool),
     SubsExpanded(bool),
+    PickPath,
+    Path(Option<PathBuf>),
     Save,
 }
 
@@ -493,13 +503,16 @@ pub struct MovieEditState {
     poster: Option<PathBuf>,
     backdrop: Option<PathBuf>,
     archive: bool,
-
     // vas
     expands: u8,
+    path: PathBuf,
+    dir: PathBuf,
 }
 
 impl MovieEditState {
-    fn new(movie: &Movie) -> Self {
+    fn new(movie: &Movie, dir: PathBuf) -> Self {
+        let path = PathBuf::from(&movie.path);
+
         Self {
             id: movie.id,
             name: movie.name().to_owned(),
@@ -519,6 +532,8 @@ impl MovieEditState {
             backdrop: None,
             archive: matches!(movie.status, media::Status::Archived),
             expands: 7,
+            path,
+            dir,
         }
     }
 
@@ -578,10 +593,14 @@ pub struct ShowEditState {
     poster: Option<PathBuf>,
     backdrop: Option<PathBuf>,
     archive: bool,
+    path: PathBuf,
+    dir: PathBuf,
 }
 
 impl ShowEditState {
-    fn new(show: &Show) -> Self {
+    fn new(show: &Show, dir: PathBuf) -> Self {
+        let path = PathBuf::from(&show.path);
+
         Self {
             id: show.id,
             name: show.name().to_owned(),
@@ -597,6 +616,8 @@ impl ShowEditState {
             poster: None,
             backdrop: None,
             archive: matches!(show.status, media::Status::Archived),
+            path,
+            dir,
         }
     }
 
@@ -621,10 +642,14 @@ pub struct SeasonEditState {
     watched: bool,
     poster: Option<PathBuf>,
     archive: bool,
+    path: PathBuf,
+    dir: PathBuf,
 }
 
 impl SeasonEditState {
-    fn new(season: &Season) -> Self {
+    fn new(season: &Season, dir: PathBuf) -> Self {
+        let path = PathBuf::from(&season.path);
+
         Self {
             id: season.id,
             name: season.name().to_owned(),
@@ -639,6 +664,8 @@ impl SeasonEditState {
             watched: false,
             poster: None,
             archive: matches!(season.status, media::Status::Archived),
+            path,
+            dir,
         }
     }
 
@@ -669,10 +696,14 @@ pub struct EpisodeEditState {
 
     // vas
     expands: u8,
+    path: PathBuf,
+    dir: PathBuf,
 }
 
 impl EpisodeEditState {
-    fn new(episode: &Episode) -> Self {
+    fn new(episode: &Episode, dir: PathBuf) -> Self {
+        let path = PathBuf::from(&episode.path);
+
         Self {
             id: episode.id,
             name: episode.name().to_owned(),
@@ -691,6 +722,8 @@ impl EpisodeEditState {
             poster: None,
             archive: matches!(episode.status, media::Status::Archived),
             expands: 7,
+            dir,
+            path,
         }
     }
 
@@ -851,16 +884,22 @@ enum State {
         audio: Vec<Audio>,
         videos: Vec<VideoInfo>,
         memberships: Vec<SimpleCollection>,
+        dir: PathBuf,
+        siblings: HashSet<String>,
     },
     Show {
         show: Box<ShowItem>,
         memberships: Vec<SimpleCollection>,
         seasons: Vec<SeasonItem>,
+        dir: PathBuf,
+        siblings: HashSet<String>,
     },
     Season {
         season: Box<SeasonItem>,
         memberships: Vec<SimpleCollection>,
         episodes: Vec<EpisodeItem>,
+        dir: PathBuf,
+        siblings: HashSet<String>,
     },
     Episode {
         episode: Box<EpisodeItem>,
@@ -868,6 +907,8 @@ enum State {
         audio: Vec<Audio>,
         videos: Vec<VideoInfo>,
         memberships: Vec<SimpleCollection>,
+        dir: PathBuf,
+        siblings: HashSet<String>,
     },
     Collection {
         collection: Box<CollectionThumbnail>,
@@ -1352,7 +1393,7 @@ impl Home {
                         (view, self.update_page_scroll())
                     }
                     ViewMessage::MovieEdit(id) => {
-                        let State::Movie { movie, .. } = &self.state else {
+                        let State::Movie { movie, dir, .. } = &self.state else {
                             return Task::none();
                         };
 
@@ -1360,12 +1401,12 @@ impl Home {
                             return Task::none();
                         }
 
-                        let state = MovieEditState::new(&movie.item);
+                        let state = MovieEditState::new(&movie.item, dir.clone());
 
                         (View::MovieEdit(Box::new(state)), self.update_page_scroll())
                     }
                     ViewMessage::ShowEdit(id) => {
-                        let State::Show { show, .. } = &self.state else {
+                        let State::Show { show, dir, .. } = &self.state else {
                             return Task::none();
                         };
 
@@ -1373,12 +1414,15 @@ impl Home {
                             return Task::none();
                         }
 
-                        let state = ShowEditState::new(&show.item);
+                        let state = ShowEditState::new(&show.item, dir.clone());
 
                         (View::ShowEdit(Box::new(state)), self.update_page_scroll())
                     }
                     ViewMessage::SeasonEdit(id) => {
-                        let State::Season { season, .. } = &self.state else {
+                        let State::Season {
+                            season, dir: show, ..
+                        } = &self.state
+                        else {
                             return Task::none();
                         };
 
@@ -1386,12 +1430,12 @@ impl Home {
                             return Task::none();
                         }
 
-                        let state = SeasonEditState::new(&season.item);
+                        let state = SeasonEditState::new(&season.item, show.clone());
 
                         (View::SeasonEdit(Box::new(state)), self.update_page_scroll())
                     }
                     ViewMessage::EpisodeEdit(id) => {
-                        let State::Episode { episode, .. } = &self.state else {
+                        let State::Episode { episode, dir, .. } = &self.state else {
                             return Task::none();
                         };
 
@@ -1399,7 +1443,7 @@ impl Home {
                             return Task::none();
                         }
 
-                        let state = EpisodeEditState::new(&episode.item);
+                        let state = EpisodeEditState::new(&episode.item, dir.clone());
 
                         (
                             View::EpisodeEdit(Box::new(state)),
@@ -1784,6 +1828,21 @@ impl Home {
                     MovieEditMessage::Backdrop(backdrop) => {
                         state.backdrop = backdrop;
                     }
+                    MovieEditMessage::Path(path) => {
+                        let Some(path) = path else {
+                            return Task::none();
+                        };
+
+                        let State::Movie { siblings, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        let path = match validate_path(&state.dir, &path, siblings, false) {
+                            Ok(path) => path,
+                            Err(msg) => return Task::done(msg),
+                        };
+                        state.path = path;
+                    }
                     MovieEditMessage::PickPoster => {
                         return Task::perform(pick_image(), |path| {
                             Message::Home(HomeMessage::MovieEdit(MovieEditMessage::Poster(path)))
@@ -1792,6 +1851,13 @@ impl Home {
                     MovieEditMessage::PickBackdrop => {
                         return Task::perform(pick_image(), |path| {
                             Message::Home(HomeMessage::MovieEdit(MovieEditMessage::Backdrop(path)))
+                        });
+                    }
+                    MovieEditMessage::PickPath => {
+                        let dir = state.dir.clone();
+
+                        return Task::perform(pick_video(dir), |path| {
+                            Message::Home(HomeMessage::MovieEdit(MovieEditMessage::Path(path)))
                         });
                     }
                     MovieEditMessage::Save => {
@@ -1841,6 +1907,10 @@ impl Home {
                         if let Some(source_id) = state.source.source_id(&state.source_id) {
                             updates.push(MediaUpdateKind::SourceId(source_id))
                         };
+
+                        if state.path != movie.item.path {
+                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
+                        }
 
                         let status = if state.archive {
                             media::Status::Archived
@@ -1945,6 +2015,21 @@ impl Home {
                     ShowEditMessage::Backdrop(backdrop) => {
                         state.backdrop = backdrop;
                     }
+                    ShowEditMessage::Path(path) => {
+                        let Some(path) = path else {
+                            return Task::none();
+                        };
+
+                        let State::Show { siblings, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        let path = match validate_path(&state.dir, &path, siblings, true) {
+                            Ok(path) => path,
+                            Err(msg) => return Task::done(msg),
+                        };
+                        state.path = path;
+                    }
                     ShowEditMessage::PickPoster => {
                         return Task::perform(pick_image(), |path| {
                             Message::Home(HomeMessage::ShowEdit(ShowEditMessage::Poster(path)))
@@ -1953,6 +2038,12 @@ impl Home {
                     ShowEditMessage::PickBackdrop => {
                         return Task::perform(pick_image(), |path| {
                             Message::Home(HomeMessage::ShowEdit(ShowEditMessage::Backdrop(path)))
+                        });
+                    }
+                    ShowEditMessage::PickPath => {
+                        let dir = state.dir.clone();
+                        return Task::perform(pick_folder(dir), |path| {
+                            Message::Home(HomeMessage::ShowEdit(ShowEditMessage::Path(path)))
                         });
                     }
                     ShowEditMessage::Save => {
@@ -1992,6 +2083,10 @@ impl Home {
                         };
                         if show.item.status != status {
                             updates.push(MediaUpdateKind::Status(status))
+                        }
+
+                        if state.path != show.item.path {
+                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
                         }
 
                         let prev_source = SourceSet::from_str(show.item.source());
@@ -2082,9 +2177,30 @@ impl Home {
                     SeasonEditMessage::Poster(poster) => {
                         state.poster = poster;
                     }
+                    SeasonEditMessage::Path(path) => {
+                        let Some(path) = path else {
+                            return Task::none();
+                        };
+
+                        let State::Season { siblings, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        let path = match validate_path(&state.dir, &path, siblings, true) {
+                            Ok(path) => path,
+                            Err(msg) => return Task::done(msg),
+                        };
+                        state.path = path;
+                    }
                     SeasonEditMessage::PickPoster => {
                         return Task::perform(pick_image(), |path| {
                             Message::Home(HomeMessage::SeasonEdit(SeasonEditMessage::Poster(path)))
+                        });
+                    }
+                    SeasonEditMessage::PickPath => {
+                        let dir = state.dir.clone();
+                        return Task::perform(pick_folder(dir), |path| {
+                            Message::Home(HomeMessage::SeasonEdit(SeasonEditMessage::Path(path)))
                         });
                     }
                     SeasonEditMessage::Save => {
@@ -2125,6 +2241,10 @@ impl Home {
                         };
                         if season.item.status != status {
                             updates.push(MediaUpdateKind::Status(status))
+                        }
+
+                        if state.path != season.item.path {
+                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
                         }
 
                         let update = SeasonUpdate {
@@ -2221,11 +2341,34 @@ impl Home {
                     EpisodeEditMessage::Poster(poster) => {
                         state.poster = poster;
                     }
+                    EpisodeEditMessage::Path(path) => {
+                        let Some(path) = path else {
+                            return Task::none();
+                        };
+
+                        let State::Episode { siblings, .. } = &self.state else {
+                            return Task::none();
+                        };
+
+                        let path = match validate_path(&state.dir, &path, siblings, true) {
+                            Ok(path) => path,
+                            Err(msg) => return Task::done(msg),
+                        };
+
+                        state.path = path;
+                    }
                     EpisodeEditMessage::PickPoster => {
                         return Task::perform(pick_image(), |path| {
                             Message::Home(HomeMessage::EpisodeEdit(EpisodeEditMessage::Poster(
                                 path,
                             )))
+                        });
+                    }
+                    EpisodeEditMessage::PickPath => {
+                        let dir = state.dir.clone();
+
+                        return Task::perform(pick_video(dir), |path| {
+                            Message::Home(HomeMessage::EpisodeEdit(EpisodeEditMessage::Path(path)))
                         });
                     }
                     EpisodeEditMessage::Save => {
@@ -2285,6 +2428,10 @@ impl Home {
                         if let Some(source_id) = state.source.source_id(&state.source_id) {
                             updates.push(MediaUpdateKind::SourceId(source_id))
                         };
+
+                        if state.path != episode.item.path {
+                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
+                        }
 
                         let update = EpisodeUpdate {
                             id: state.id,
@@ -5297,6 +5444,8 @@ impl Home {
                     videos,
                     audio,
                     subtitles,
+                    dir: _dir,
+                    siblings: _unused,
                 },
                 Some(Page::Episode { page, .. }),
             ) => {
@@ -5326,6 +5475,8 @@ impl Home {
                     videos,
                     audio,
                     subtitles,
+                    dir: _dir,
+                    siblings: _unused,
                 },
                 Some(Page::Movie { page, .. }),
             ) => {
@@ -5347,6 +5498,8 @@ impl Home {
                     season,
                     episodes,
                     memberships,
+                    dir: _show,
+                    siblings: _unused,
                 },
                 Some(Page::Season { page, .. }),
             ) => page
@@ -5363,6 +5516,8 @@ impl Home {
                     show,
                     seasons,
                     memberships,
+                    dir: _dir,
+                    siblings: _unused,
                 },
                 Some(Page::Show { page, .. }),
             ) => page
@@ -5498,6 +5653,7 @@ impl Home {
 
                                 modal::Style { blur, ..default }
                             })
+                            .right()
                     }
                     View::WishNew(state) => modalize(content, draw_wishlist(state)),
                     View::WishDrawer(id) => {
@@ -6023,14 +6179,21 @@ impl Home {
         }
 
         let memberships = Message::FetchMemberships(show.item.id.into());
+        let paths = Message::FetchPaths(FetchPath::Show {
+            id: show.item.id,
+            dir: show.item.directory,
+        })
+        .tasked();
 
         self.state = State::Show {
             show: Box::new(show),
             seasons,
             memberships: vec![],
+            siblings: HashSet::default(),
+            dir: PathBuf::default(),
         };
 
-        Task::batch([self.update_page_scroll(), Task::done(memberships)])
+        Task::batch([self.update_page_scroll(), Task::done(memberships), paths])
     }
 
     pub fn fetched_movie(&mut self, movie: MovieItem) -> Task<Message> {
@@ -6038,6 +6201,11 @@ impl Home {
         let videos = Message::FetchVideoInfo(movie.item.id.into()).tasked();
         let audio = Message::FetchAudio(movie.item.id.into()).tasked();
         let subtitles = Message::FetchSubtitles(movie.item.id.into()).tasked();
+        let paths = Message::FetchPaths(FetchPath::Movie {
+            id: movie.item.id,
+            dir: movie.item.directory,
+        })
+        .tasked();
 
         self.state = State::Movie {
             movie: Box::new(movie),
@@ -6045,6 +6213,8 @@ impl Home {
             videos: vec![],
             audio: vec![],
             subtitles: vec![],
+            siblings: HashSet::default(),
+            dir: PathBuf::default(),
         };
 
         Task::batch([
@@ -6053,6 +6223,7 @@ impl Home {
             videos,
             audio,
             subtitles,
+            paths,
         ])
     }
 
@@ -6067,14 +6238,21 @@ impl Home {
             }
         }
         let memberships = Message::FetchMemberships(season.item.id.into());
+        let paths = Message::FetchPaths(FetchPath::Season {
+            id: season.item.id,
+            show: season.item.show,
+        })
+        .tasked();
 
         self.state = State::Season {
             season: Box::new(season),
             episodes,
             memberships: vec![],
+            siblings: HashSet::default(),
+            dir: PathBuf::default(),
         };
 
-        Task::batch([self.update_page_scroll(), Task::done(memberships)])
+        Task::batch([self.update_page_scroll(), Task::done(memberships), paths])
     }
 
     pub fn fetched_episode(&mut self, episode: EpisodeItem) -> Task<Message> {
@@ -6082,6 +6260,11 @@ impl Home {
         let videos = Message::FetchVideoInfo(episode.item.id.into()).tasked();
         let audio = Message::FetchAudio(episode.item.id.into()).tasked();
         let subtitles = Message::FetchSubtitles(episode.item.id.into()).tasked();
+        let paths = Message::FetchPaths(FetchPath::Episode {
+            id: episode.item.id,
+            season: episode.item.season,
+        })
+        .tasked();
 
         self.state = State::Episode {
             episode: Box::new(episode),
@@ -6089,6 +6272,8 @@ impl Home {
             videos: vec![],
             audio: vec![],
             subtitles: vec![],
+            siblings: HashSet::default(),
+            dir: PathBuf::default(),
         };
 
         Task::batch([
@@ -6097,6 +6282,7 @@ impl Home {
             videos,
             audio,
             subtitles,
+            paths,
         ])
     }
 
@@ -6246,6 +6432,53 @@ impl Home {
                 *subtitles = fetched;
                 self.update_page_scroll()
             }
+            _ => Task::none(),
+        }
+    }
+
+    pub fn fetched_paths(
+        &mut self,
+        fetched_dir: PathBuf,
+        fetched: HashSet<String>,
+    ) -> Task<Message> {
+        match &mut self.state {
+            State::Movie {
+                siblings: paths,
+                dir,
+                ..
+            } => {
+                *paths = fetched;
+                *dir = fetched_dir;
+                self.update_page_scroll()
+            }
+            State::Show {
+                siblings: paths,
+                dir,
+                ..
+            } => {
+                *paths = fetched;
+                *dir = fetched_dir;
+                self.update_page_scroll()
+            }
+            State::Season {
+                siblings: paths,
+                dir,
+                ..
+            } => {
+                *paths = fetched;
+                *dir = fetched_dir;
+                self.update_page_scroll()
+            }
+            State::Episode {
+                siblings: paths,
+                dir,
+                ..
+            } => {
+                *paths = fetched;
+                *dir = fetched_dir;
+                self.update_page_scroll()
+            }
+
             _ => Task::none(),
         }
     }
@@ -6549,4 +6782,78 @@ async fn pick_image() -> Option<PathBuf> {
         .pick_file()
         .await
         .map(|handle| handle.path().to_path_buf())
+}
+
+async fn pick_folder(parent: PathBuf) -> Option<PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .set_directory(parent)
+        .pick_folder()
+        .await
+        .map(|handle| handle.path().to_path_buf())
+}
+
+async fn pick_video(parent: PathBuf) -> Option<PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .add_filter("", devutils::scan::VIDEO_EXT)
+        .set_directory(parent)
+        .pick_file()
+        .await
+        .map(|handle| handle.path().to_path_buf())
+}
+
+fn validate_path(
+    dir: &Path,
+    path: &Path,
+    siblings: &HashSet<String>,
+    show: bool,
+) -> Result<PathBuf, Message> {
+    let mut dir = dir.components().peekable();
+    let mut path = path.components().peekable();
+    let msg = "Invalid selection. Must remain in the same parent directory";
+
+    loop {
+        match (dir.peek(), path.peek()) {
+            (Some(d), Some(p)) if d == p => {
+                dir.next();
+                path.next();
+                continue;
+            }
+            (Some(_), Some(_)) => {
+                let msg = Message::error(msg, false);
+                return Err(msg);
+            }
+            (None, Some(_)) => {
+                break;
+            }
+            (_, None) => {
+                let msg = Message::error(msg, false);
+                return Err(msg);
+            }
+        }
+    }
+
+    let path = if show {
+        let folder = path.next().expect("match case above caught this");
+
+        if path.peek().is_some() {
+            let msg = Message::error("Invalid folder. Selected folder too deeply nested", false);
+            return Err(msg);
+        }
+
+        let path: &Path = folder.as_ref();
+        path.to_path_buf()
+    } else {
+        path.collect::<PathBuf>()
+    };
+
+    let check = path.display().to_string();
+
+    if siblings.contains(&check) {
+        return Err(Message::error(
+            "Invalid selection. Media already exists",
+            false,
+        ));
+    }
+
+    Ok(path)
 }

@@ -47,7 +47,7 @@ pub struct Movie {
     name: String,
     original_name: String,
     pub directory: DirectoryId,
-    path: String,
+    pub path: String,
     pub poster: Option<Image>,
     pub backdrop: Option<String>,
     pub tags: Vec<String>,
@@ -82,8 +82,7 @@ impl Movie {
 
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Movie> {
         let id = MovieId::from_row(row)?;
-        let directory = row.get::<_, String>("directory")?;
-        let directory = DirectoryId(Uuid::try_parse(&directory).unwrap());
+        let directory = DirectoryId::from_row(row)?;
 
         let path = row.get::<_, String>("path")?;
 
@@ -412,6 +411,23 @@ impl Movie {
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_path<'a>(id: MovieId, path: String) -> Query<'a> {
+        let sql = "UPDATE movie SET path=:path WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":path", ToSqlOutput::from(path)),
         ];
 
         Query {

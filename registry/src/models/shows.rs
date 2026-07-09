@@ -47,7 +47,7 @@ impl From<ShowId> for ToSqlOutput<'_> {
 pub struct Show {
     pub id: ShowId,
     pub directory: DirectoryId,
-    path: String,
+    pub path: String,
     name: String,
     original_name: String,
     pub poster: Option<Image>,
@@ -71,8 +71,7 @@ pub struct Show {
 impl Show {
     pub fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         let id = ShowId::from_row(row)?;
-        let directory = row.get::<_, String>("directory")?;
-        let directory = DirectoryId(Uuid::try_parse(&directory).unwrap());
+        let directory = DirectoryId::from_row(row)?;
 
         let path = row.get::<_, String>("path")?;
 
@@ -319,6 +318,23 @@ impl Show {
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Show,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_path<'a>(id: ShowId, path: String) -> Query<'a> {
+        let sql = "UPDATE tv_show SET path=:path WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":path", ToSqlOutput::from(path)),
         ];
 
         Query {

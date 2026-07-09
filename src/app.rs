@@ -66,6 +66,7 @@ pub enum MediaUpdateKind {
     SourceId(SourceId),
     MarkWatched(u32),
     Status(media::Status),
+    Path(String),
 }
 
 #[derive(Clone, Debug)]
@@ -98,6 +99,14 @@ pub struct EpisodeUpdate {
     pub id: EpisodeId,
     pub source: SourceSet,
     pub updates: Vec<MediaUpdateKind>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FetchPath {
+    Movie { id: MovieId, dir: DirectoryId },
+    Show { id: ShowId, dir: DirectoryId },
+    Season { id: SeasonId, show: ShowId },
+    Episode { id: EpisodeId, season: SeasonId },
 }
 
 #[derive(Clone, Debug)]
@@ -163,6 +172,7 @@ pub enum Message {
     FetchVideoInfo(VideoId),
     FetchAudio(VideoId),
     FetchSubtitles(VideoId),
+    FetchPaths(FetchPath),
     ToggleMembership {
         item: ItemId,
         collections: Vec<(CollectionId, bool)>,
@@ -649,6 +659,7 @@ impl App {
                             source_id = Some(id);
                             continue;
                         }
+                        MediaUpdateKind::Path(path) => Movie::set_path(id, path),
                         MediaUpdateKind::MarkWatched(count) => Movie::mark_watched(id, count),
                         MediaUpdateKind::Status(status) => Movie::set_status(id, status),
                     };
@@ -767,6 +778,7 @@ impl App {
                             source_id = Some(id);
                             continue;
                         }
+                        MediaUpdateKind::Path(path) => Show::set_path(id, path),
                         MediaUpdateKind::MarkWatched(count) => Show::mark_watched(id, count),
                         MediaUpdateKind::Status(status) => Show::set_status(id, status),
                     };
@@ -884,6 +896,7 @@ impl App {
                         }
                         MediaUpdateKind::MarkWatched(count) => Season::mark_watched(id, count),
                         MediaUpdateKind::Status(status) => Season::set_status(id, status),
+                        MediaUpdateKind::Path(path) => Season::set_path(id, path),
                         MediaUpdateKind::Video(_)
                         | MediaUpdateKind::Audio(_)
                         | MediaUpdateKind::Subtitle(_) => {
@@ -962,6 +975,7 @@ impl App {
                             source_id = Some(id);
                             continue;
                         }
+                        MediaUpdateKind::Path(path) => Episode::set_path(id, path),
                         MediaUpdateKind::MarkWatched(count) => Episode::mark_watched(id, count),
                         MediaUpdateKind::Status(status) => Episode::set_status(id, status),
                     };
@@ -1703,6 +1717,38 @@ impl App {
                 };
 
                 self.home.fetched_subs(subtitles)
+            }
+            Message::FetchPaths(fetch) => {
+                let paths = match fetch {
+                    FetchPath::Movie { id, dir } => {
+                        self.db.get_movie_paths(id, dir).with_context(|| {
+                            format!("Failed to retrieve movie paths on id {id}, dir {dir}")
+                        })
+                    }
+                    FetchPath::Show { id, dir } => {
+                        self.db.get_show_paths(id, dir).with_context(|| {
+                            format!("Failed to retrieve show paths on id {id}, dir {dir}")
+                        })
+                    }
+                    FetchPath::Season { id, show } => {
+                        self.db.get_season_paths(id, show).with_context(|| {
+                            format!("Failed to retrieve season paths on id {id}, show {show}")
+                        })
+                    }
+                    FetchPath::Episode { id, season } => {
+                        self.db.get_episode_paths(id, season).with_context(|| {
+                            format!("Failed to retrieve episode paths on id {id}, season {season}")
+                        })
+                    }
+                };
+
+                match paths {
+                    Ok((paths, dir)) => self.home.fetched_paths(dir, paths),
+                    Err(error) => {
+                        let msg = Message::error(error, true);
+                        return Task::done(msg);
+                    }
+                }
             }
             Message::ToggleMembership { item, collections } => {
                 let msg = match self.db.toggle_membership(item, collections) {

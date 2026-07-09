@@ -52,7 +52,7 @@ pub struct Season {
     pub id: SeasonId,
     name: String,
     original_name: String,
-    path: String,
+    pub path: String,
     pub show_name: String,
     pub poster: Option<Image>,
     // Join from show
@@ -342,6 +342,23 @@ impl Season {
         let params = [
             (":id", ToSqlOutput::from(id)),
             (":status", ToSqlOutput::from(status)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Season,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
+    #[must_use]
+    pub fn set_path<'a>(id: SeasonId, path: String) -> Query<'a> {
+        let sql = "UPDATE season SET path=:path WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":path", ToSqlOutput::from(path)),
         ];
 
         Query {

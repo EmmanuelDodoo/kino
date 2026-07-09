@@ -13,8 +13,9 @@ use rusqlite::{
     Connection, Row, ToSql, params_from_iter,
     types::{ToSqlOutput, Value},
 };
+use std::collections::HashSet;
 use std::ops::Deref;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 struct Migration {
@@ -275,6 +276,130 @@ impl Database {
         let mut statement = self.prepare_cached(&sql)?;
 
         statement.query_row(&[(":id", &ToSqlOutput::from(id))], map)
+    }
+
+    pub fn get_movie_paths(
+        &self,
+        id: MovieId,
+        dir: DirectoryId,
+    ) -> rusqlite::Result<(HashSet<String>, PathBuf)> {
+        let sql = "SELECT path FROM movie WHERE directory=:dir AND id !=:id";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        let paths = statement
+            .query_map(
+                &[
+                    (":id", &ToSqlOutput::from(id)),
+                    (":dir", &ToSqlOutput::from(dir)),
+                ],
+                |row| row.get::<_, String>("path"),
+            )?
+            .collect::<rusqlite::Result<HashSet<String>>>()?;
+
+        let mut sql = self.prepare_cached("SELECT path FROM directory WHERE id=:dir")?;
+
+        let dir = sql.query_row(&[(":dir", &ToSqlOutput::from(dir))], |row| {
+            row.get::<_, String>("path")
+        })?;
+
+        Ok((paths, PathBuf::from(dir)))
+    }
+
+    pub fn get_show_paths(
+        &self,
+        id: ShowId,
+        dir: DirectoryId,
+    ) -> rusqlite::Result<(HashSet<String>, PathBuf)> {
+        let sql = "SELECT path FROM tv_show WHERE directory=:dir AND id != :id ";
+        let mut statement = self.prepare_cached(sql)?;
+
+        let paths = statement
+            .query_map(
+                &[
+                    (":id", &ToSqlOutput::from(id)),
+                    (":dir", &ToSqlOutput::from(dir)),
+                ],
+                |row| row.get::<_, String>("path"),
+            )?
+            .collect::<rusqlite::Result<HashSet<String>>>()?;
+
+        let mut sql = self.prepare_cached("SELECT path FROM directory WHERE id=:dir")?;
+
+        let dir = sql.query_row(&[(":dir", &ToSqlOutput::from(dir))], |row| {
+            row.get::<_, String>("path")
+        })?;
+
+        Ok((paths, PathBuf::from(dir)))
+    }
+
+    pub fn get_season_paths(
+        &self,
+        id: SeasonId,
+        show: ShowId,
+    ) -> rusqlite::Result<(HashSet<String>, PathBuf)> {
+        let sql = "SELECT path FROM season WHERE show_id=:show AND id != :id";
+        let mut statement = self.prepare_cached(sql)?;
+
+        let paths = statement
+            .query_map(
+                &[
+                    (":id", &ToSqlOutput::from(id)),
+                    (":show", &ToSqlOutput::from(show)),
+                ],
+                |row| row.get::<_, String>("path"),
+            )?
+            .collect::<rusqlite::Result<HashSet<String>>>()?;
+
+        let sql = "SELECT tv_show.path AS show_path, directory.path AS dir_path FROM tv_show JOIN directory ON tv_show.directory = directory.id WHERE tv_show.id=:show";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        let path = statement.query_row(&[(":show", &ToSqlOutput::from(show))], |row| {
+            let directory = row.get::<_, String>("dir_path")?;
+            let show = row.get::<_, String>("show_path")?;
+
+            let path = [directory, show].iter().collect::<PathBuf>();
+
+            Ok(path)
+        })?;
+
+        Ok((paths, path))
+    }
+
+    pub fn get_episode_paths(
+        &self,
+        id: EpisodeId,
+        season: SeasonId,
+    ) -> rusqlite::Result<(HashSet<String>, PathBuf)> {
+        let sql = "SELECT path FROM episode WHERE season_id=:season AND id != :id";
+        let mut statement = self.prepare_cached(sql)?;
+
+        let paths = statement
+            .query_map(
+                &[
+                    (":id", &ToSqlOutput::from(id)),
+                    (":season", &ToSqlOutput::from(season)),
+                ],
+                |row| row.get::<_, String>("path"),
+            )?
+            .collect::<rusqlite::Result<HashSet<String>>>()?;
+
+        let sql = "SELECT season.path AS season_path, tv_show.path AS show_path, directory.path AS dir_path FROM season JOIN tv_show ON season.show_id=tv_show.id JOIN directory ON tv_show.directory = directory.id WHERE season.id=:season";
+
+        let mut statement = self.prepare_cached(sql)?;
+
+        let path = statement.query_row(&[(":season", &ToSqlOutput::from(season))], |row| {
+            let directory = row.get::<_, String>("dir_path")?;
+            let show = row.get::<_, String>("show_path")?;
+            let season = row.get::<_, String>("season_path")?;
+
+            let path = [directory, show, season].iter().collect::<PathBuf>();
+
+            Ok(path)
+        })?;
+
+        Ok((paths, path))
     }
 
     pub fn get_show<T>(
