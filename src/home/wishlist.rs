@@ -220,7 +220,7 @@ impl WishThumbnail {
 
         let card = Card {
             sample_color: self.sample_color,
-            background_inter,
+            image_zoom: background_inter,
             selected: false,
             item: self.item.id,
             poster: &self.poster,

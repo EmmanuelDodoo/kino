@@ -174,7 +174,7 @@ pub struct MovieItem {
     backdrop: Option<Handle>,
     sample_text: Option<Color>,
     sample_color: Option<Color>,
-    background: Animation<bool>,
+    card: Animation<bool>,
     icon: Animation<bool>,
     float: Animation<bool>,
     _tasks: task::Handle,
@@ -212,7 +212,7 @@ impl MovieItem {
             backdrop,
             sample_color,
             sample_text,
-            background: background_animation(),
+            card: background_animation(),
             icon: icon_animation(),
             float: float_animation(),
             hovered: false,
@@ -229,17 +229,20 @@ impl MovieItem {
             _ => false,
         };
 
-        self.background.is_animating(now)
+        self.card.is_animating(now)
             || self.icon.is_animating(now)
             || self.float.is_animating(now)
             || poster
     }
 
-    pub fn go_mut(&mut self, new_state: bool, at: Instant) {
+    pub fn go_mut(&mut self, new_state: bool, selection: bool, at: Instant) {
         self.hovered = new_state;
-        self.background.go_mut(new_state, at);
         self.icon.go_mut(new_state, at);
-        self.float.go_mut(new_state, at);
+
+        if !selection {
+            self.card.go_mut(new_state, at);
+            self.float.go_mut(new_state, at);
+        }
     }
 
     fn poster_ready(&self) -> bool {
@@ -323,7 +326,8 @@ impl MovieItem {
         on_show: impl Fn(MovieId, bool) -> Message + 'a,
         on_play: impl Fn(MovieId) -> Message + 'a,
     ) -> Element<'a, Message> {
-        let background_inter = self.background.interpolate(0.0, 1.0, now);
+        let background_inter = self.card.interpolate(0.0, 1.0, now);
+        let icon_inter = self.icon.interpolate(0.0, 1.0, now);
         let on_select = move |arg: MovieId| Some((on_select)(arg));
 
         let sample = self.sample_text;
@@ -345,13 +349,13 @@ impl MovieItem {
             on_hover.clone(),
             self.sample_color,
             self.sample_text,
-            background_inter,
+            icon_inter,
             duration,
         );
 
         let card = Card {
             sample_color: self.sample_color,
-            background_inter,
+            image_zoom: background_inter,
             selected: self.selected,
             item: self.item.id,
             poster: &self.poster,
@@ -385,7 +389,6 @@ impl MovieItem {
             row!(icon, release).align_y(Vertical::Center).spacing(3.0)
         };
 
-        let background_inter = self.background.interpolate(0.0, 1.0, now);
         let icon_inter = self.icon.interpolate(0.0, 1.0, now);
         let list = List {
             selected: self.selected,
@@ -402,7 +405,11 @@ impl MovieItem {
                 unique,
                 on_add,
             )),
-            overlay: Some(list_overlay(icon_inter, background_inter)),
+            overlay: Some(list_overlay(
+                self.sample_color,
+                self.sample_text,
+                icon_inter,
+            )),
         };
 
         list.view(now, on_select, on_hover, on_show, on_play)
