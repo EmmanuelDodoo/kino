@@ -439,6 +439,23 @@ impl Movie {
         }
     }
 
+    #[must_use]
+    pub fn set_dir<'a>(id: MovieId, dir: DirectoryId) -> Query<'a> {
+        let sql = "UPDATE movie SET directory=:dir WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":dir", ToSqlOutput::from(dir)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Movies,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,

@@ -67,6 +67,7 @@ pub enum MediaUpdateKind {
     MarkWatched(u32),
     Status(media::Status),
     Path(String),
+    Dir(DirectoryId),
 }
 
 #[derive(Clone, Debug)]
@@ -662,6 +663,7 @@ impl App {
                         MediaUpdateKind::Path(path) => Movie::set_path(id, path),
                         MediaUpdateKind::MarkWatched(count) => Movie::mark_watched(id, count),
                         MediaUpdateKind::Status(status) => Movie::set_status(id, status),
+                        MediaUpdateKind::Dir(dir) => Movie::set_dir(id, dir),
                     };
 
                     if let Some(succ) = query
@@ -781,6 +783,7 @@ impl App {
                         MediaUpdateKind::Path(path) => Show::set_path(id, path),
                         MediaUpdateKind::MarkWatched(count) => Show::mark_watched(id, count),
                         MediaUpdateKind::Status(status) => Show::set_status(id, status),
+                        MediaUpdateKind::Dir(dir) => Show::set_dir(id, dir),
                     };
 
                     if let Some(succ) = query
@@ -899,7 +902,8 @@ impl App {
                         MediaUpdateKind::Path(path) => Season::set_path(id, path),
                         MediaUpdateKind::Video(_)
                         | MediaUpdateKind::Audio(_)
-                        | MediaUpdateKind::Subtitle(_) => {
+                        | MediaUpdateKind::Subtitle(_)
+                        | MediaUpdateKind::Dir(_) => {
                             continue;
                         }
                     };
@@ -978,6 +982,7 @@ impl App {
                         MediaUpdateKind::Path(path) => Episode::set_path(id, path),
                         MediaUpdateKind::MarkWatched(count) => Episode::mark_watched(id, count),
                         MediaUpdateKind::Status(status) => Episode::set_status(id, status),
+                        MediaUpdateKind::Dir(_) => continue,
                     };
 
                     if let Some(succ) = query
