@@ -346,6 +346,23 @@ impl Show {
         }
     }
 
+    #[must_use]
+    pub fn set_dir<'a>(id: ShowId, dir: DirectoryId) -> Query<'a> {
+        let sql = "UPDATE tv_show SET directory=:dir WHERE id=:id";
+        let params = [
+            (":id", ToSqlOutput::from(id)),
+            (":dir", ToSqlOutput::from(dir)),
+        ];
+
+        Query {
+            id: id.0,
+            table: Table::Show,
+            sql,
+            params: params.to_vec(),
+            op: Operation::Update,
+        }
+    }
+
     pub fn new<'a>(
         directory: DirectoryId,
         path: String,

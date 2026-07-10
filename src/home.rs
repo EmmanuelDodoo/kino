@@ -36,9 +36,9 @@ use crate::app::{
 use devutils::source::{SourceId, SourceSet};
 use draws::*;
 use registry::models::{
-    Audio, AudioId, Collection, CollectionId, CollectionView, Directory, Episode, EpisodeId, Media,
-    Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection, Subtitle, SubtitleId,
-    VideoInfo, VideoInfoId, Wish, WishId, WishKind,
+    Audio, AudioId, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode,
+    EpisodeId, Media, MediaType, Movie, MovieId, Season, SeasonId, Show, ShowId, SimpleCollection,
+    Subtitle, SubtitleId, VideoInfo, VideoInfoId, Wish, WishId, WishKind,
     collection::{
         ItemId, Items,
         triggers::{self, Comparison, DeleteId, DeleteTrigger, InsertId, InsertTrigger, Logic},
@@ -306,6 +306,7 @@ pub enum MovieEditMessage {
     Video(VideoInfoId),
     Audio(AudioId),
     Subtitle(SubtitleId),
+    Directory(DirectoryId),
     SubDelete(SubtitleId),
     Source(SourceSet),
     SourceId(String),
@@ -320,6 +321,7 @@ pub enum MovieEditMessage {
     VideoExpanded(bool),
     AudioExpanded(bool),
     SubsExpanded(bool),
+    DirExpanded(bool),
     PickPath,
     Path(Option<PathBuf>),
     Save,
@@ -330,6 +332,7 @@ pub enum ShowEditMessage {
     Name(String),
     Overview(text_editor::Action),
     Rating(String),
+    Directory(DirectoryId),
     Source(SourceSet),
     SourceId(String),
     MarkWatched(bool),
@@ -340,6 +343,7 @@ pub enum ShowEditMessage {
     Refetch,
     Remove,
     Archive(bool),
+    DirExpanded(bool),
     PickPath,
     Path(Option<PathBuf>),
     Save,
@@ -503,14 +507,14 @@ pub struct MovieEditState {
     poster: Option<PathBuf>,
     backdrop: Option<PathBuf>,
     archive: bool,
-    // vas
+    // dvas
     expands: u8,
     path: PathBuf,
-    dir: PathBuf,
+    dir: DirectoryId,
 }
 
 impl MovieEditState {
-    fn new(movie: &Movie, dir: PathBuf) -> Self {
+    fn new(movie: &Movie) -> Self {
         let path = PathBuf::from(&movie.path);
 
         Self {
@@ -533,7 +537,7 @@ impl MovieEditState {
             archive: matches!(movie.status, media::Status::Archived),
             expands: 7,
             path,
-            dir,
+            dir: movie.directory,
         }
     }
 
@@ -578,6 +582,14 @@ impl MovieEditState {
     pub fn subs_expand(&mut self, expand: bool) {
         self.set_expand(0, expand);
     }
+
+    pub fn expanded_dirs(&self) -> bool {
+        self.get_expand(3)
+    }
+
+    pub fn dirs_expand(&mut self, expand: bool) {
+        self.set_expand(3, expand);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -594,11 +606,12 @@ pub struct ShowEditState {
     backdrop: Option<PathBuf>,
     archive: bool,
     path: PathBuf,
-    dir: PathBuf,
+    dir: DirectoryId,
+    dirs_expanded: bool,
 }
 
 impl ShowEditState {
-    fn new(show: &Show, dir: PathBuf) -> Self {
+    fn new(show: &Show) -> Self {
         let path = PathBuf::from(&show.path);
 
         Self {
@@ -617,7 +630,8 @@ impl ShowEditState {
             backdrop: None,
             archive: matches!(show.status, media::Status::Archived),
             path,
-            dir,
+            dir: show.directory,
+            dirs_expanded: false,
         }
     }
 
@@ -884,14 +898,12 @@ enum State {
         audio: Vec<Audio>,
         videos: Vec<VideoInfo>,
         memberships: Vec<SimpleCollection>,
-        dir: PathBuf,
         siblings: HashSet<String>,
     },
     Show {
         show: Box<ShowItem>,
         memberships: Vec<SimpleCollection>,
         seasons: Vec<SeasonItem>,
-        dir: PathBuf,
         siblings: HashSet<String>,
     },
     Season {
@@ -1138,7 +1150,7 @@ impl Home {
     pub fn update(
         &mut self,
         message: HomeMessage,
-        default_sauce: SourceSet,
+        default_source: SourceSet,
         now: Instant,
     ) -> Task<Message> {
         match message {
@@ -1373,7 +1385,7 @@ impl Home {
 
                                 WishNewState::edit(wish)
                             }
-                            None => WishNewState::new(default_sauce),
+                            None => WishNewState::new(default_source),
                         };
 
                         let view = View::WishNew(view);
@@ -1394,7 +1406,7 @@ impl Home {
                         (view, self.update_page_scroll())
                     }
                     ViewMessage::MovieEdit(id) => {
-                        let State::Movie { movie, dir, .. } = &self.state else {
+                        let State::Movie { movie, .. } = &self.state else {
                             return Task::none();
                         };
 
@@ -1402,12 +1414,12 @@ impl Home {
                             return Task::none();
                         }
 
-                        let state = MovieEditState::new(&movie.item, dir.clone());
+                        let state = MovieEditState::new(&movie.item);
 
                         (View::MovieEdit(Box::new(state)), self.update_page_scroll())
                     }
                     ViewMessage::ShowEdit(id) => {
-                        let State::Show { show, dir, .. } = &self.state else {
+                        let State::Show { show, .. } = &self.state else {
                             return Task::none();
                         };
 
@@ -1415,7 +1427,7 @@ impl Home {
                             return Task::none();
                         }
 
-                        let state = ShowEditState::new(&show.item, dir.clone());
+                        let state = ShowEditState::new(&show.item);
 
                         (View::ShowEdit(Box::new(state)), self.update_page_scroll())
                     }
@@ -1774,6 +1786,9 @@ impl Home {
                     MovieEditMessage::Subtitle(id) => {
                         state.selected_sub = Some(id);
                     }
+                    MovieEditMessage::Directory(id) => {
+                        state.dir = id;
+                    }
                     MovieEditMessage::Source(source) => {
                         state.source = source;
                     }
@@ -1795,6 +1810,9 @@ impl Home {
                     MovieEditMessage::SubsExpanded(expanded) => {
                         state.subs_expand(expanded);
                     }
+                    MovieEditMessage::DirExpanded(expanded) => {
+                        state.dirs_expand(expanded);
+                    }
                     MovieEditMessage::Archive(archive) => {
                         state.archive = archive;
                     }
@@ -1804,7 +1822,7 @@ impl Home {
                             name: state.name.clone(),
                         });
 
-                        return self.update(msg, default_sauce, now);
+                        return self.update(msg, default_source, now);
                     }
                     MovieEditMessage::Refetch => {
                         let State::Movie { movie, .. } = &self.state else {
@@ -1818,7 +1836,7 @@ impl Home {
                             source,
                         };
 
-                        return self.update(msg, default_sauce, now);
+                        return self.update(msg, default_source, now);
                     }
                     MovieEditMessage::SubDelete(subtitle) => {
                         return Message::SubtitleDelete(subtitle).tasked();
@@ -1834,14 +1852,6 @@ impl Home {
                             return Task::none();
                         };
 
-                        let State::Movie { siblings, .. } = &self.state else {
-                            return Task::none();
-                        };
-
-                        let path = match validate_path(&state.dir, &path, siblings, false) {
-                            Ok(path) => path,
-                            Err(msg) => return Task::done(msg),
-                        };
                         state.path = path;
                     }
                     MovieEditMessage::PickPoster => {
@@ -1855,18 +1865,43 @@ impl Home {
                         });
                     }
                     MovieEditMessage::PickPath => {
-                        let dir = state.dir.clone();
+                        let Some(dir) = self.directories.iter().find(|dir| dir.id == state.dir)
+                        else {
+                            return Task::none();
+                        };
+
+                        let dir = dir.path.clone();
 
                         return Task::perform(pick_video(dir), |path| {
                             Message::Home(HomeMessage::MovieEdit(MovieEditMessage::Path(path)))
                         });
                     }
                     MovieEditMessage::Save => {
-                        let State::Movie { movie, .. } = &self.state else {
+                        let State::Movie {
+                            movie, siblings, ..
+                        } = &self.state
+                        else {
                             return Task::none();
                         };
 
+                        let Some(dir) = self.directories.iter().find(|dir| dir.id == state.dir)
+                        else {
+                            return Task::none();
+                        };
+
+                        if let Err(error) = validate_path(&dir.path, &state.path, siblings, false) {
+                            return Task::done(error);
+                        };
+
                         let mut updates = vec![];
+
+                        if state.dir != movie.item.directory {
+                            updates.push(MediaUpdateKind::Dir(state.dir))
+                        }
+
+                        if state.path != movie.item.path {
+                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
+                        }
 
                         if !state.invalid_name() && movie.item.name() != state.name() {
                             updates.push(MediaUpdateKind::Name(state.name().to_owned()))
@@ -1908,10 +1943,6 @@ impl Home {
                         if let Some(source_id) = state.source.source_id(&state.source_id) {
                             updates.push(MediaUpdateKind::SourceId(source_id))
                         };
-
-                        if state.path != movie.item.path {
-                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
-                        }
 
                         let status = if state.archive {
                             media::Status::Archived
@@ -1982,11 +2013,17 @@ impl Home {
                     ShowEditMessage::Rating(rating) => {
                         state.ratings = rating;
                     }
+                    ShowEditMessage::Directory(id) => {
+                        state.dir = id;
+                    }
                     ShowEditMessage::MarkWatched(watched) => {
                         state.watched = watched;
                     }
                     ShowEditMessage::Archive(archive) => {
                         state.archive = archive;
+                    }
+                    ShowEditMessage::DirExpanded(expanded) => {
+                        state.dirs_expanded = expanded;
                     }
                     ShowEditMessage::Remove => {
                         let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
@@ -1994,7 +2031,7 @@ impl Home {
                             name: state.name.clone(),
                         });
 
-                        return self.update(msg, default_sauce, now);
+                        return self.update(msg, default_source, now);
                     }
                     ShowEditMessage::Refetch => {
                         let State::Show { show, .. } = &self.state else {
@@ -2008,7 +2045,7 @@ impl Home {
                             source,
                         };
 
-                        return self.update(msg, default_sauce, now);
+                        return self.update(msg, default_source, now);
                     }
                     ShowEditMessage::Poster(poster) => {
                         state.poster = poster;
@@ -2021,14 +2058,6 @@ impl Home {
                             return Task::none();
                         };
 
-                        let State::Show { siblings, .. } = &self.state else {
-                            return Task::none();
-                        };
-
-                        let path = match validate_path(&state.dir, &path, siblings, true) {
-                            Ok(path) => path,
-                            Err(msg) => return Task::done(msg),
-                        };
                         state.path = path;
                     }
                     ShowEditMessage::PickPoster => {
@@ -2042,17 +2071,40 @@ impl Home {
                         });
                     }
                     ShowEditMessage::PickPath => {
-                        let dir = state.dir.clone();
+                        let Some(dir) = self.directories.iter().find(|dir| dir.id == state.dir)
+                        else {
+                            return Task::none();
+                        };
+
+                        let dir = dir.path.clone();
+
                         return Task::perform(pick_folder(dir), |path| {
                             Message::Home(HomeMessage::ShowEdit(ShowEditMessage::Path(path)))
                         });
                     }
                     ShowEditMessage::Save => {
-                        let State::Show { show, .. } = &self.state else {
+                        let State::Show { show, siblings, .. } = &self.state else {
                             return Task::none();
                         };
 
                         let mut updates = vec![];
+
+                        let Some(dir) = self.directories.iter().find(|dir| dir.id == state.dir)
+                        else {
+                            return Task::none();
+                        };
+
+                        if let Err(error) = validate_path(&dir.path, &state.path, siblings, true) {
+                            return Task::done(error);
+                        };
+
+                        if state.dir != show.item.directory {
+                            updates.push(MediaUpdateKind::Dir(state.dir))
+                        }
+
+                        if state.path != show.item.path {
+                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
+                        }
 
                         if !state.invalid_name() && show.item.name() != state.name() {
                             updates.push(MediaUpdateKind::Name(state.name().to_owned()))
@@ -2084,10 +2136,6 @@ impl Home {
                         };
                         if show.item.status != status {
                             updates.push(MediaUpdateKind::Status(status))
-                        }
-
-                        if state.path != show.item.path {
-                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
                         }
 
                         let prev_source = SourceSet::from_str(show.item.source());
@@ -2165,7 +2213,7 @@ impl Home {
                             source,
                         };
 
-                        return self.update(msg, default_sauce, now);
+                        return self.update(msg, default_source, now);
                     }
                     SeasonEditMessage::Remove => {
                         let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
@@ -2173,7 +2221,7 @@ impl Home {
                             name: state.name.clone(),
                         });
 
-                        return self.update(msg, default_sauce, now);
+                        return self.update(msg, default_source, now);
                     }
                     SeasonEditMessage::Poster(poster) => {
                         state.poster = poster;
@@ -2326,7 +2374,7 @@ impl Home {
                             source,
                         };
 
-                        return self.update(msg, default_sauce, now);
+                        return self.update(msg, default_source, now);
                     }
                     EpisodeEditMessage::Remove => {
                         let msg = HomeMessage::OpenView(ViewMessage::RemoveMedia {
@@ -2334,7 +2382,7 @@ impl Home {
                             name: state.name.clone(),
                         });
 
-                        return self.update(msg, default_sauce, now);
+                        return self.update(msg, default_source, now);
                     }
                     EpisodeEditMessage::SubDelete(subtitle) => {
                         return Message::SubtitleDelete(subtitle).tasked();
@@ -5488,7 +5536,6 @@ impl Home {
                     videos,
                     audio,
                     subtitles,
-                    dir: _dir,
                     siblings: _unused,
                 },
                 Some(Page::Movie { page, .. }),
@@ -5529,7 +5576,6 @@ impl Home {
                     show,
                     seasons,
                     memberships,
-                    dir: _dir,
                     siblings: _unused,
                 },
                 Some(Page::Show { page, .. }),
@@ -5701,7 +5747,16 @@ impl Home {
                             return default(content);
                         }
 
-                        modalize(content, draw_movie_edit(state, videos, audio, subtitles)).right()
+                        let dirs = self
+                            .directories
+                            .iter()
+                            .filter(|dir| matches!(dir.media_type, MediaType::Movies));
+
+                        modalize(
+                            content,
+                            draw_movie_edit(state, videos, audio, subtitles, dirs),
+                        )
+                        .right()
                     }
                     View::ShowEdit(state) => {
                         let State::Show { show, .. } = &self.state else {
@@ -5712,7 +5767,12 @@ impl Home {
                             return default(content);
                         }
 
-                        modalize(content, draw_show_edit(state)).right()
+                        let dirs = self
+                            .directories
+                            .iter()
+                            .filter(|dir| matches!(dir.media_type, MediaType::Shows));
+
+                        modalize(content, draw_show_edit(state, dirs)).right()
                     }
                     View::SeasonEdit(state) => {
                         let State::Season { season, .. } = &self.state else {
@@ -6203,7 +6263,6 @@ impl Home {
             seasons,
             memberships: vec![],
             siblings: HashSet::default(),
-            dir: PathBuf::default(),
         };
 
         Task::batch([self.update_page_scroll(), Task::done(memberships), paths])
@@ -6227,7 +6286,6 @@ impl Home {
             audio: vec![],
             subtitles: vec![],
             siblings: HashSet::default(),
-            dir: PathBuf::default(),
         };
 
         Task::batch([
@@ -6455,22 +6513,12 @@ impl Home {
         fetched: HashSet<String>,
     ) -> Task<Message> {
         match &mut self.state {
-            State::Movie {
-                siblings: paths,
-                dir,
-                ..
-            } => {
-                *paths = fetched;
-                *dir = fetched_dir;
+            State::Movie { siblings, .. } => {
+                *siblings = fetched;
                 self.update_page_scroll()
             }
-            State::Show {
-                siblings: paths,
-                dir,
-                ..
-            } => {
-                *paths = fetched;
-                *dir = fetched_dir;
+            State::Show { siblings, .. } => {
+                *siblings = fetched;
                 self.update_page_scroll()
             }
             State::Season {
@@ -6822,7 +6870,7 @@ fn validate_path(
 ) -> Result<PathBuf, Message> {
     let mut dir = dir.components().peekable();
     let mut path = path.components().peekable();
-    let msg = "Invalid selection. Must remain in the same parent directory";
+    let msg = "Media must remain in the same parent directory";
 
     loop {
         match (dir.peek(), path.peek()) {
@@ -6849,7 +6897,7 @@ fn validate_path(
         let folder = path.next().expect("match case above caught this");
 
         if path.peek().is_some() {
-            let msg = Message::error("Invalid folder. Selected folder too deeply nested", false);
+            let msg = Message::error("Selected folder too deeply nested", false);
             return Err(msg);
         }
 
@@ -6863,7 +6911,7 @@ fn validate_path(
 
     if siblings.contains(&check) {
         return Err(Message::error(
-            "Invalid selection. Media already exists",
+            "Media path already exists",
             false,
         ));
     }

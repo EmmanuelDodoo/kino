@@ -1569,6 +1569,7 @@ pub fn draw_movie_edit<'a>(
     videos: &'a [VideoInfo],
     audio: &'a [Audio],
     subs: &'a [Subtitle],
+    dirs: impl Iterator<Item = &'a Directory>,
 ) -> Element<'a, HomeMessage> {
     let name = media_name(&state.placeholder, state.name(), MovieEditMessage::Name);
 
@@ -1630,7 +1631,13 @@ pub fn draw_movie_edit<'a>(
         MovieEditMessage::PickBackdrop,
     );
 
-    let dir = media_dir(&state.dir);
+    let dir = dir_select(
+        dirs,
+        state.dir,
+        MovieEditMessage::Directory,
+        state.expanded_dirs(),
+        MovieEditMessage::DirExpanded,
+    );
 
     let path = media_path(&state.path, MovieEditMessage::PickPath);
 
@@ -1647,7 +1654,10 @@ pub fn draw_movie_edit<'a>(
     )
 }
 
-pub fn draw_show_edit<'a>(state: &'a ShowEditState) -> Element<'a, HomeMessage> {
+pub fn draw_show_edit<'a>(
+    state: &'a ShowEditState,
+    dirs: impl Iterator<Item = &'a Directory>,
+) -> Element<'a, HomeMessage> {
     let name = media_name(&state.placeholder, state.name(), ShowEditMessage::Name);
 
     let overview = media_overview(&state.overview, ShowEditMessage::Overview);
@@ -1683,7 +1693,13 @@ pub fn draw_show_edit<'a>(state: &'a ShowEditState) -> Element<'a, HomeMessage> 
         ShowEditMessage::PickBackdrop,
     );
 
-    let dir = media_dir(&state.dir);
+    let dir = dir_select(
+        dirs,
+        state.dir,
+        ShowEditMessage::Directory,
+        state.dirs_expanded,
+        ShowEditMessage::DirExpanded,
+    );
 
     let path = media_path(&state.path, ShowEditMessage::PickPath);
 
@@ -2083,7 +2099,7 @@ where
             registry::models::SubtitleKind::Loaded { path, .. } => trim_path(path, 3),
         };
 
-        button(marquee(kind).size(size).width(225))
+        button(marquee(kind).size(size).width(225).font(mono_font()))
             .on_press(on_select(sub.id))
             .padding(0)
             .style(styles::button::text)
@@ -2315,6 +2331,66 @@ fn media_dir<'a, Message: 'a>(path: &'a std::path::Path) -> Element<'a, Message>
 
     row!(label, space::horizontal(), content)
         .align_y(Vertical::Center)
+        .into()
+}
+
+fn dir_select<'a, Message: 'a + Clone, F>(
+    dirs: impl Iterator<Item = &'a Directory>,
+    selected: DirectoryId,
+    on_select: F,
+    expanded: bool,
+    on_expand: impl Fn(bool) -> Message + 'a,
+) -> Element<'a, Message>
+where
+    F: Fn(DirectoryId) -> Message + 'a + Clone,
+{
+    let size = H7;
+
+    let label = {
+        let icon = if expanded {
+            icons::CHEV_UP
+        } else {
+            icons::CHEV_DOWN
+        };
+        let icon = icons::icon(icon).size(P);
+
+        row!(media_label("Parent Directory"), space::horizontal(), icon)
+            .width(Length::Fill)
+            .padding([2, 2])
+    };
+
+    let radio = table::column(empty(), |dir: &Directory| {
+        radio("", dir.id, Some(selected), on_select.clone())
+            .size(12)
+            .spacing(0)
+    })
+    .align_y(Vertical::Center);
+
+    let name = table::column(empty(), |dir: &Directory| {
+        button(sized_regular(&dir.name, size))
+            .on_press(on_select(dir.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
+
+    let path = table::column(empty(), |dir: &Directory| {
+        let path = trim_path(&dir.path, 4);
+
+        button(marquee(path).size(size).direction(true).font(mono_font()))
+            .on_press(on_select(dir.id))
+            .padding(0)
+            .style(styles::button::text)
+    })
+    .align_y(Vertical::Center);
+
+    let content = table([radio, name, path], dirs).separator(0);
+
+    expandable(label, content)
+        .width(Length::Fill)
+        .expanded(expanded)
+        .on_expand(on_expand)
+        .spacing(0)
         .into()
 }
 
