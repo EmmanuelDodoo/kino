@@ -2606,7 +2606,8 @@ impl Home {
                         match (item, &mut self.state) {
                             (ItemId::Movie(id), State::Recent { movies, .. })
                             | (ItemId::Movie(id), State::Movies(movies))
-                            | (ItemId::Movie(id), State::Collection { movies, .. }) => {
+                            | (ItemId::Movie(id), State::Collection { movies, .. })
+                            | (ItemId::Movie(id), State::Directory { movies, .. }) => {
                                 if let Some(media) =
                                     movies.iter_mut().find(|item| item.item.id == id)
                                 {
@@ -2626,7 +2627,8 @@ impl Home {
                             }
                             (ItemId::Show(id), State::Recent { shows, .. })
                             | (ItemId::Show(id), State::Shows(shows))
-                            | (ItemId::Show(id), State::Collection { shows, .. }) => {
+                            | (ItemId::Show(id), State::Collection { shows, .. })
+                            | (ItemId::Show(id), State::Directory { shows, .. }) => {
                                 if let Some(media) =
                                     shows.iter_mut().find(|item| item.item.id == id)
                                 {
@@ -2682,7 +2684,17 @@ impl Home {
                                     }
                                 }
                             }
-                            _ => {}
+                            (_, State::Loading)
+                            | (_, State::Recent { .. })
+                            | (_, State::Shows(_))
+                            | (_, State::Movies(_))
+                            | (_, State::Collections(_))
+                            | (_, State::Wishlist(_))
+                            | (_, State::Movie { .. })
+                            | (_, State::Show { .. })
+                            | (_, State::Season { .. })
+                            | (_, State::Episode { .. })
+                            | (_, State::Directory { .. }) => {}
                         }
 
                         self.update_page_scroll()
