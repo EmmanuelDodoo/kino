@@ -1019,7 +1019,7 @@ pub fn fade_in(now: Instant) -> Animation<bool> {
 
 pub struct Card<'a, T, Message> {
     pub sample_color: Option<Color>,
-    pub background_inter: f32,
+    pub image_zoom: f32,
     pub selected: bool,
     pub item: T,
     pub poster: &'a Image,
@@ -1056,7 +1056,7 @@ impl<'a, T: Copy, Message: 'a + Clone> Card<'a, T, Message> {
         .spacing(4.0)
         .padding([4, 6]);
 
-        let img = card_poster_helper(self.poster, 1.0 + (self.background_inter * 0.05), now);
+        let img = card_poster_helper(self.poster, 1.0 + (self.image_zoom * 0.05), now);
 
         let content = stack![img, overlay].width(width).height(Length::Fill);
 
@@ -1117,7 +1117,7 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     on_hover: impl Fn(T::Id, bool) -> Message + 'a,
     sample_color: Option<Color>,
     sample_text: Option<Color>,
-    background_inter: f32,
+    icon_inter: f32,
     unique: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
     let padding = [3, 6];
@@ -1159,7 +1159,7 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
             let play = icon(PLAY).size(size).style(move |_| {
                 let color = sample_text
                     .unwrap_or(Color::WHITE)
-                    .scale_alpha(background_inter);
+                    .scale_alpha(icon_inter);
                 text::Style { color: Some(color) }
             });
 
@@ -1172,7 +1172,7 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
                     let default = container::background(sample_color.unwrap_or(Color::BLACK));
                     let background = default
                         .background
-                        .map(|background| background.scale_alpha(background_inter));
+                        .map(|background| background.scale_alpha(icon_inter));
                     let border = default.border.rounded(size * 2.0);
 
                     container::Style {
@@ -1355,42 +1355,76 @@ impl<'a, T: Copy, Message: 'a + Clone> List<'a, T, Message> {
 }
 
 pub fn list_overlay<'a, Message: 'a + Clone>(
+    sample_color: Option<Color>,
+    sample_text: Option<Color>,
     icon_inter: f32,
-    background_inter: f32,
 ) -> Element<'a, Message> {
-    let size = H1 * 1.5;
+    responsive(move |parent| {
+        let main = parent.width.min(parent.height);
+        let size = (main * 0.25).max(45.0);
 
-    let play = icon(PLAY)
-        .size(size)
-        .align_x(Horizontal::Center)
-        .height(size)
-        .style(move |_| {
-            let color = Color::WHITE.scale_alpha(icon_inter);
+        let play = icon(PLAY).size(size).style(move |_| {
+            let color = sample_text.unwrap_or(Color::WHITE).scale_alpha(icon_inter);
             text::Style { color: Some(color) }
         });
 
-    let play = center(play)
-        .width(background_inter * size)
-        .height(background_inter * size)
-        .style(move |theme| {
-            let default = styles::container::dark(theme);
-            let background = default
-                .background
-                .map(|background| background.scale_alpha(background_inter));
-            let border = default.border.rounded(IMAGE_RADIUS);
+        let play = container(play)
+            .width(size * 1.25)
+            .height(size * 1.25)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
+            .style(move |_| {
+                let default = container::background(sample_color.unwrap_or(Color::BLACK));
+                let background = default
+                    .background
+                    .map(|background| background.scale_alpha(icon_inter));
+                let border = default.border.rounded(size * 2.0);
 
-            container::Style {
-                border,
-                background,
-                ..default
-            }
-        });
+                container::Style {
+                    border,
+                    background,
+                    ..default
+                }
+            });
 
-    row!(space::horizontal(), play, space::horizontal())
-        .height(Length::Fill)
-        .width(Length::Fill)
-        .align_y(Vertical::Center)
-        .into()
+        row!(space::horizontal(), play, space::horizontal())
+            .height(Length::FillPortion(2))
+            .width(Length::Fill)
+            .align_y(Vertical::Center)
+    })
+    .into()
+
+    // let play = icon(PLAY)
+    //     .size(size)
+    //     .align_x(Horizontal::Center)
+    //     .height(size)
+    //     .style(move |_| {
+    //         let color = Color::WHITE.scale_alpha(icon_inter);
+    //         text::Style { color: Some(color) }
+    //     });
+
+    // let play = center(play)
+    //     .width(icon_inter * size)
+    //     .height(icon_inter * size)
+    //     .style(move |theme| {
+    //         let default = styles::container::dark(theme);
+    //         let background = default
+    //             .background
+    //             .map(|background| background.scale_alpha(icon_inter));
+    //         let border = default.border.rounded(IMAGE_RADIUS);
+    //
+    //         container::Style {
+    //             border,
+    //             background,
+    //             ..default
+    //         }
+    //     });
+    //
+    // row!(space::horizontal(), play, space::horizontal())
+    //     .height(Length::Fill)
+    //     .width(Length::Fill)
+    //     .align_y(Vertical::Center)
+    //     .into()
 }
 
 pub fn list_title<'a, Message: 'a>(title: &'a str, hovered: bool) -> Element<'a, Message> {
@@ -1603,7 +1637,7 @@ pub fn background_animation() -> Animation<bool> {
 pub fn icon_animation() -> Animation<bool> {
     Animation::new(false)
         .duration(iced::time::Duration::from_millis(100))
-        .easing(Easing::EaseOut)
+        .easing(Easing::EaseInOut)
 }
 
 pub fn float_animation() -> Animation<bool> {

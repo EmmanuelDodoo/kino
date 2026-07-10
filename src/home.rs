@@ -1076,6 +1076,7 @@ impl Home {
     }
 
     fn unfocus(&mut self, now: Instant) {
+        let selection = self.view.is_selection();
         match &mut self.state {
             State::Collection {
                 shows,
@@ -1085,44 +1086,44 @@ impl Home {
                 ..
             } => {
                 for show in shows {
-                    show.go_mut(false, now);
+                    show.go_mut(false, selection, now);
                 }
                 for movie in movies {
-                    movie.go_mut(false, now)
+                    movie.go_mut(false, selection, now)
                 }
                 for episode in episodes {
-                    episode.go_mut(false, now)
+                    episode.go_mut(false, selection, now)
                 }
                 for season in seasons {
-                    season.go_mut(false, now)
+                    season.go_mut(false, selection, now)
                 }
             }
             State::Recent { shows, movies } => {
                 for show in shows {
-                    show.go_mut(false, now);
+                    show.go_mut(false, selection, now);
                 }
                 for movie in movies {
-                    movie.go_mut(false, now)
+                    movie.go_mut(false, selection, now)
                 }
             }
             State::Shows(shows) => {
                 for show in shows {
-                    show.go_mut(false, now);
+                    show.go_mut(false, selection, now);
                 }
             }
             State::Movies(movies) => {
                 for movie in movies {
-                    movie.go_mut(false, now)
+                    movie.go_mut(false, selection, now)
                 }
             }
             State::Show { seasons, .. } => {
                 for season in seasons {
-                    season.go_mut(false, now)
+                    season.go_mut(false, selection, now)
                 }
             }
             State::Season { episodes, .. } => {
                 for episode in episodes {
-                    episode.go_mut(false, now)
+                    episode.go_mut(false, selection, now)
                 }
             }
             State::Wishlist(wishlist) => {
@@ -4067,7 +4068,7 @@ impl Home {
                 Task::none()
             }
             HomeMessage::Hovered(id, is_hovered) => {
-                let is_hovered = is_hovered && !self.view.is_selection();
+                let selection = self.view.is_selection();
 
                 match (&mut self.state, id) {
                     (State::Loading, _)
@@ -4079,14 +4080,14 @@ impl Home {
                     (State::Wishlist(_), _) => Task::none(),
                     (State::Recent { shows, .. }, ItemId::Show(id)) => {
                         if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
-                            show.go_mut(is_hovered, now);
+                            show.go_mut(is_hovered, selection, now);
                         };
                         self.focused = Some(ItemId::Show(id));
                         Task::none()
                     }
                     (State::Recent { movies, .. }, ItemId::Movie(id)) => {
                         if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
-                            movie.go_mut(is_hovered, now);
+                            movie.go_mut(is_hovered, selection, now);
                         }
 
                         self.focused = Some(ItemId::Movie(id));
@@ -4095,7 +4096,7 @@ impl Home {
                     (State::Recent { .. }, _) => Task::none(),
                     (State::Shows(shows), ItemId::Show(id)) => {
                         if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
-                            show.go_mut(is_hovered, now);
+                            show.go_mut(is_hovered, selection, now);
                         };
 
                         self.focused = Some(ItemId::Show(id));
@@ -4104,7 +4105,7 @@ impl Home {
                     (State::Shows(_), _) => Task::none(),
                     (State::Movies(movies), ItemId::Movie(id)) => {
                         if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
-                            movie.go_mut(is_hovered, now);
+                            movie.go_mut(is_hovered, selection, now);
                         }
 
                         self.focused = Some(ItemId::Movie(id));
@@ -4114,7 +4115,7 @@ impl Home {
                     (State::Show { seasons, .. }, ItemId::Season(id)) => {
                         if let Some(season) = seasons.iter_mut().find(|season| season.item.id == id)
                         {
-                            season.go_mut(is_hovered, now);
+                            season.go_mut(is_hovered, selection, now);
                         }
                         self.focused = Some(ItemId::Season(id));
                         Task::none()
@@ -4124,7 +4125,7 @@ impl Home {
                         if let Some(episode) =
                             episodes.iter_mut().find(|episode| episode.item.id == id)
                         {
-                            episode.go_mut(is_hovered, now);
+                            episode.go_mut(is_hovered, selection, now);
                         }
 
                         self.focused = Some(ItemId::Episode(id));
@@ -4133,7 +4134,7 @@ impl Home {
                     (State::Season { .. }, _) => Task::none(),
                     (State::Collection { shows, .. }, ItemId::Show(id)) => {
                         if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
-                            show.go_mut(is_hovered, now);
+                            show.go_mut(is_hovered, selection, now);
                         };
 
                         self.focused = Some(ItemId::Show(id));
@@ -4141,7 +4142,7 @@ impl Home {
                     }
                     (State::Collection { movies, .. }, ItemId::Movie(id)) => {
                         if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
-                            movie.go_mut(is_hovered, now);
+                            movie.go_mut(is_hovered, selection, now);
                         }
 
                         self.focused = Some(ItemId::Movie(id));
@@ -4149,7 +4150,7 @@ impl Home {
                     }
                     (State::Collection { seasons, .. }, ItemId::Season(id)) => {
                         if let Some(season) = seasons.iter_mut().find(|show| show.item.id == id) {
-                            season.go_mut(is_hovered, now);
+                            season.go_mut(is_hovered, selection, now);
                         };
 
                         self.focused = Some(ItemId::Season(id));
@@ -4159,7 +4160,7 @@ impl Home {
                         if let Some(episode) =
                             episodes.iter_mut().find(|episode| episode.item.id == id)
                         {
-                            episode.go_mut(is_hovered, now);
+                            episode.go_mut(is_hovered, selection, now);
                         }
 
                         self.focused = Some(ItemId::Episode(id));
@@ -4167,7 +4168,7 @@ impl Home {
                     }
                     (State::Directory { shows, .. }, ItemId::Show(id)) => {
                         if let Some(show) = shows.iter_mut().find(|show| show.item.id == id) {
-                            show.go_mut(is_hovered, now);
+                            show.go_mut(is_hovered, selection, now);
                         };
 
                         self.focused = Some(ItemId::Show(id));
@@ -4175,7 +4176,7 @@ impl Home {
                     }
                     (State::Directory { movies, .. }, ItemId::Movie(id)) => {
                         if let Some(movie) = movies.iter_mut().find(|movie| movie.item.id == id) {
-                            movie.go_mut(is_hovered, now);
+                            movie.go_mut(is_hovered, selection, now);
                         }
 
                         self.focused = Some(ItemId::Movie(id));
