@@ -1889,10 +1889,6 @@ impl Home {
                             return Task::none();
                         };
 
-                        if let Err(error) = validate_path(&dir.path, &state.path, siblings, false) {
-                            return Task::done(error);
-                        };
-
                         let mut updates = vec![];
 
                         if state.dir != movie.item.directory {
@@ -1900,7 +1896,13 @@ impl Home {
                         }
 
                         if state.path != movie.item.path {
-                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
+                            let path = match validate_path(&dir.path, &state.path, siblings, false)
+                            {
+                                Ok(path) => path,
+                                Err(msg) => return Task::done(msg),
+                            };
+
+                            updates.push(MediaUpdateKind::Path(path.display().to_string()));
                         }
 
                         if !state.invalid_name() && movie.item.name() != state.name() {
@@ -2094,16 +2096,16 @@ impl Home {
                             return Task::none();
                         };
 
-                        if let Err(error) = validate_path(&dir.path, &state.path, siblings, true) {
-                            return Task::done(error);
-                        };
-
                         if state.dir != show.item.directory {
                             updates.push(MediaUpdateKind::Dir(state.dir))
                         }
 
                         if state.path != show.item.path {
-                            updates.push(MediaUpdateKind::Path(state.path.display().to_string()))
+                            let path = match validate_path(&dir.path, &state.path, siblings, true) {
+                                Ok(path) => path,
+                                Err(msg) => return Task::done(msg),
+                            };
+                            updates.push(MediaUpdateKind::Path(path.display().to_string()))
                         }
 
                         if !state.invalid_name() && show.item.name() != state.name() {
@@ -6910,10 +6912,7 @@ fn validate_path(
     let check = path.display().to_string();
 
     if siblings.contains(&check) {
-        return Err(Message::error(
-            "Media path already exists",
-            false,
-        ));
+        return Err(Message::error("Media path already exists", false));
     }
 
     Ok(path)

@@ -1576,7 +1576,7 @@ impl Manager {
 
     fn media_controls(&self) -> Element<'_, ManagerMessage> {
         let icon_size = if self.is_fullscreen { H4 } else { H5 };
-        let tp = tp::Position::Bottom;
+        let tp = tp::Position::Top;
 
         let volume = {
             let volume = slider(
@@ -1642,7 +1642,7 @@ impl Manager {
                 .auto_close(true)
                 .on_toggle(ManagerMessage::SpeedToggle);
 
-            let speed = tooltip(speed, "Playback speed", tp);
+            let speed = tooltip(speed, "Playback speed", tp::Position::Bottom);
 
             speed
         };
@@ -1692,7 +1692,6 @@ impl Manager {
             .align_y(Vertical::Center)
             .width(Self::WIDTH);
 
-        let tp = tp::Position::Bottom;
         let middle = {
             let size = if self.is_fullscreen {
                 H2 * typo::RATIO
