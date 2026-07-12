@@ -327,14 +327,29 @@ where
                         match key {
                             Key::Named(key::Named::ArrowUp) => {
                                 change(increment(current_value));
+                                shell.capture_event();
                             }
                             Key::Named(key::Named::ArrowDown) => {
                                 change(decrement(current_value));
+                                shell.capture_event();
                             }
                             _ => (),
                         }
+                    }
+                }
+                Event::Keyboard(keyboard::Event::KeyReleased { key, .. }) => {
+                    if cursor.is_over(layout.bounds()) {
+                        match key {
+                            Key::Named(key::Named::ArrowUp) | Key::Named(key::Named::ArrowDown) => {
+                                if let Some(on_release) = self.on_release.clone() {
+                                    shell.publish(on_release);
+                                }
+                                state.is_dragging = false;
 
-                        shell.capture_event();
+                                shell.capture_event();
+                            }
+                            _ => (),
+                        }
                     }
                 }
                 Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
