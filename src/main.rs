@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(dead_code, unused_imports)]
 use iced::{
-    Color, ContentFit, Element, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation,
-    Shadow, Size, Subscription, Task, Theme, Vector,
+    Color, ContentFit, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation, Shadow,
+    Size, Subscription, Task, Vector,
     advanced::{self, Widget, layout, mouse, overlay, widget::tree},
     alignment::{Horizontal, Vertical},
     animation::{self, Animation, Easing},
@@ -28,8 +28,8 @@ mod app;
 mod home;
 mod player;
 mod settings;
-pub mod utils;
 pub mod theme;
+pub mod utils;
 
 use app::App;
 use registry::db;
@@ -41,6 +41,7 @@ use registry::models::{
 use registry::sort;
 use registry::sort::*;
 use std::sync::LazyLock;
+use theme::Theme;
 use utils::config::Config;
 use utils::icons;
 use utils::icons::*;
@@ -48,6 +49,8 @@ use utils::typo;
 use utils::typo::*;
 use utils::{Layout, cancel_btn, empty, save_btn, styles, tooltip};
 use widgets::{menu, modal, pagination};
+
+type Element<'a, Message> = iced::Element<'a, Message, Theme, iced::Renderer>;
 
 // fn test_main() -> iced::Result {
 #[rustfmt::skip]
@@ -80,21 +83,21 @@ fn main() -> iced::Result {
         _ => BootMode::Prod,
     };
 
-    iced::application::timed(
-        mode,
-        App::update,
-        App::subscription,
-        App::view
-    )
-        .theme(App::theme)
-
     // iced::application::timed(
-    //     Playground::boot,
-    //     Playground::update,
-    //     Playground::subscription,
-    //     Playground::view,
+    //     mode,
+    //     App::update,
+    //     App::subscription,
+    //     App::view
     // )
-    //     .theme(Playground::theme)
+    //     .theme(App::theme)
+
+    iced::application::timed(
+        Playground::boot,
+        Playground::update,
+        Playground::subscription,
+        Playground::view,
+    )
+        .theme(Playground::theme)
 
         .settings(iced::Settings {
             default_font: regular_font(),
@@ -106,7 +109,7 @@ fn main() -> iced::Result {
         .window(window::Settings {
             icon: Some(icon),
             size: Size::new(1280.0, 800.0),
-            exit_on_close_request: false,
+            // exit_on_close_request: false,
             ..Default::default()
         })
         .run()
@@ -146,6 +149,8 @@ enum Message {
     Family(font::Family),
     Fonts(Result<Vec<font::Family>, font::Error>),
     Page(pagination::Page),
+    Temp(bool),
+    Theme(Theme),
     None,
 }
 
@@ -154,20 +159,25 @@ struct Playground {
     selected: Option<font::Family>,
     state: combo_box::State<font::Family>,
     current: usize,
+    temp: bool,
+    theme: Option<Theme>,
 }
 
 impl Playground {
     fn boot() -> (Self, Task<Message>) {
         let now = Instant::now();
+        let task = font::list().map(Message::Fonts);
 
         let new = Self {
             now,
-            selected: None,
+            selected: Some(font::Family::Name("Copperplate Gothic Bold")),
             state: combo_box::State::new(vec![]),
             current: 15,
+            temp: false,
+            theme: None,
         };
 
-        (new, Task::none())
+        (new, task)
     }
 
     fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
@@ -176,19 +186,18 @@ impl Playground {
         match message {
             Message::None => {
                 println!("Received None");
-                Task::none()
             }
             Message::Fonts(Ok(fams)) => {
                 self.state = combo_box::State::new(fams);
-                Task::none()
             }
             Message::Fonts(Err(error)) => {
                 println!("{error:?}");
-                Task::none()
             }
             Message::Family(family) => {
                 self.selected = Some(family);
-                Task::none()
+            }
+            Message::Theme(theme) => {
+                self.theme = Some(theme);
             }
             Message::Page(page) => {
                 dbg!(page);
@@ -198,16 +207,61 @@ impl Playground {
                         self.current = left + (right - left) / 2;
                     }
                 }
-
-                Task::none()
+            }
+            Message::Temp(temp) => {
+                self.temp = temp;
             }
         }
+
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let content = pagination(1, self.current, 1250).on_select(Message::Page);
-        let content = container(content).max_width(500);
+        let themes = pick_list(self.theme.as_ref(), Theme::ALL, Theme::to_string)
+            .placeholder("Select theme")
+            .on_select(Message::Theme)
+            .padding([5, 10])
+            .font(self.selected.unwrap_or_default());
 
+        let families = combo_box(
+            &self.state,
+            "Select font",
+            self.selected.as_ref(),
+            Message::Family,
+        )
+        .width(500);
+
+        let pages = {
+            let a = pagination(1, self.current, 1250)
+                .on_select(Message::Page)
+                .font(self.selected.unwrap_or_default().into());
+            let b = pagination(1, self.current, 1250)
+                .on_select(Message::Page)
+                .font(self.selected.unwrap_or_default().into())
+                .buttoned();
+
+            let pages = column!(a, b).spacing(16);
+
+            container(pages).max_width(500)
+        };
+
+        let toggles = {
+            let a = utils::toggler(self.temp).on_toggle(Message::Temp);
+            let b = widget::checkbox(self.temp).on_toggle(Message::Temp);
+
+            row!(a, b).spacing(16)
+        };
+
+        let throbbers = {
+            let a = widgets::throbber::linear();
+            let b = widgets::throbber::circular();
+
+            row!(a, b).spacing(16)
+        };
+
+        let content = column!(families, themes, pages, toggles, throbbers)
+            .spacing(40)
+            .align_x(Horizontal::Center);
         let content = center(content);
 
         content.into()
@@ -218,7 +272,6 @@ impl Playground {
     }
 
     fn theme(&self) -> Option<Theme> {
-        // Some(Theme::CatppuccinLatte)
-        Some(Theme::Dracula)
+        self.theme.clone()
     }
 }
