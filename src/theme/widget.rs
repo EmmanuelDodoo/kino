@@ -682,7 +682,7 @@ pub mod menu {
             background: schema.background.weak.color.into(),
             border: Border {
                 width: 1.0,
-                radius: schema.radii.selectors.into(),
+                radius: schema.radii.boxes.into(),
                 color: schema.background.strong.color,
             },
             text_color: schema.background.weak.text,
@@ -1219,10 +1219,10 @@ pub mod toggler {
                 if is_toggled {
                     base.base.color
                 } else {
-                    background.strong.color
+                    background.weak.color
                 }
             }
-            Status::Disabled { .. } => background.weak.color,
+            Status::Disabled { .. } => background.strong.color,
         };
 
         let foreground = match status {
@@ -1240,7 +1240,7 @@ pub mod toggler {
                         ..base.base.text
                     }
                 } else {
-                    background.weak.color
+                    background.strong.color
                 }
             }
             Status::Disabled { .. } => background.base.color.scale_alpha(0.5),
@@ -1402,7 +1402,7 @@ pub mod throbber {
 
             Style {
                 background: None,
-                track_color: schema.background.weak.color,
+                track_color: schema.primary.base.color.scale_alpha(0.3),
                 bar_color: schema.primary.base.color,
             }
         }
