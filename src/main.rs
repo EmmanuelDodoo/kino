@@ -29,6 +29,7 @@ mod home;
 mod player;
 mod settings;
 pub mod utils;
+pub mod theme;
 
 use app::App;
 use registry::db;

@@ -8,7 +8,6 @@ pub use config::*;
 pub mod icons;
 pub mod styles;
 pub mod typo;
-pub mod theme;
 
 pub fn toggler<'a, Message>(is_checked: bool) -> widgets::toggler::Toggler<'a, Message> {
     widgets::toggler::Toggler::new(is_checked).size(typo::H6)

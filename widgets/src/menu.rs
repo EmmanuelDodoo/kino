@@ -6,10 +6,10 @@ use iced::{
     },
 };
 
-pub fn menu<'a, Message>(
-    base: impl Into<Element<'a, Message>>,
-    overlay: impl Into<Element<'a, Message>>,
-) -> Menu<'a, Message> {
+pub fn menu<'a, Message, Theme>(
+    base: impl Into<Element<'a, Message, Theme>>,
+    overlay: impl Into<Element<'a, Message, Theme>>,
+) -> Menu<'a, Message, Theme> {
     Menu::new(base, overlay)
 }
 
