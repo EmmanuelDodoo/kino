@@ -23,10 +23,8 @@ iced = { git = "https://github.com/iced-rs/iced", rev = "38d19f8", features = [
   "advanced",
   "canvas",
   "highlighter",
-  "hot",
   "image",
   "markdown",
-  "svg",
   "tokio",
   "wgpu",
 ] }
