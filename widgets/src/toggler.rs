@@ -1,7 +1,7 @@
 //! Modified version of [`iced::widget::toggler`] with animation support.
 
 use iced::{
-    Background, Border, Color, Element, Event, Length, Pixels, Rectangle, Size, Theme,
+    Border, Element, Event, Length, Pixels, Rectangle, Size,
     advanced::{
         Layout, Shell, Widget, layout, renderer, text,
         widget::{self, Tree, tree},
@@ -10,7 +10,9 @@ use iced::{
     animation::{Animation, Easing},
     border, mouse,
     time::{Duration, Instant},
-    touch, window,
+    touch,
+    widget::toggler::{Catalog, Status, Style, StyleFn},
+    window,
 };
 
 pub fn toggler<'a, Message, Theme, Renderer>(
@@ -479,134 +481,5 @@ where
 
     fn interpolate(&self) -> f32 {
         self.animation.interpolate(0.0, 1.0, self.now)
-    }
-}
-
-/// The possible status of a [`Toggler`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Status {
-    /// The [`Toggler`] can be interacted with.
-    Active {
-        /// Indicates whether the [`Toggler`] is toggled.
-        is_toggled: bool,
-    },
-    /// The [`Toggler`] is being hovered.
-    Hovered {
-        /// Indicates whether the [`Toggler`] is toggled.
-        is_toggled: bool,
-    },
-    /// The [`Toggler`] is disabled.
-    Disabled {
-        /// Indicates whether the [`Toggler`] is toggled.
-        is_toggled: bool,
-    },
-}
-
-/// The appearance of a toggler.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Style {
-    /// The background [`Color`] of the toggler.
-    pub background: Background,
-    /// The width of the background border of the toggler.
-    pub background_border_width: f32,
-    /// The [`Color`] of the background border of the toggler.
-    pub background_border_color: Color,
-    /// The foreground [`Color`] of the toggler.
-    pub foreground: Background,
-    /// The width of the foreground border of the toggler.
-    pub foreground_border_width: f32,
-    /// The [`Color`] of the foreground border of the toggler.
-    pub foreground_border_color: Color,
-    /// The text [`Color`] of the toggler.
-    pub text_color: Option<Color>,
-    /// The border radius of the toggler.
-    ///
-    /// If `None`, the toggler will be perfectly round.
-    pub border_radius: Option<border::Radius>,
-    /// The ratio of separation between the background and the toggle in relative height.
-    pub padding_ratio: f32,
-}
-
-/// The theme catalog of a [`Toggler`].
-pub trait Catalog: Sized {
-    /// The item class of the [`Catalog`].
-    type Class<'a>;
-
-    /// The default class produced by the [`Catalog`].
-    fn default<'a>() -> Self::Class<'a>;
-
-    /// The [`Style`] of a class with the given status.
-    fn style(&self, class: &Self::Class<'_>, status: Status) -> Style;
-}
-
-/// A styling function for a [`Toggler`].
-///
-/// This is just a boxed closure: `Fn(&Theme, Status) -> Style`.
-pub type StyleFn<'a, Theme> = Box<dyn Fn(&Theme, Status) -> Style + 'a>;
-
-impl Catalog for Theme {
-    type Class<'a> = StyleFn<'a, Self>;
-
-    fn default<'a>() -> Self::Class<'a> {
-        Box::new(default)
-    }
-
-    fn style(&self, class: &Self::Class<'_>, status: Status) -> Style {
-        class(self, status)
-    }
-}
-
-/// The default style of a [`Toggler`].
-pub fn default(theme: &Theme, status: Status) -> Style {
-    let palette = theme.palette();
-
-    let background = match status {
-        Status::Active { is_toggled } | Status::Hovered { is_toggled } => {
-            if is_toggled {
-                palette.primary.base.color
-            } else {
-                palette.background.strong.color
-            }
-        }
-        Status::Disabled { is_toggled } => {
-            if is_toggled {
-                palette.background.strong.color
-            } else {
-                palette.background.weak.color
-            }
-        }
-    };
-
-    let foreground = match status {
-        Status::Active { is_toggled } => {
-            if is_toggled {
-                palette.primary.base.text
-            } else {
-                palette.background.base.color
-            }
-        }
-        Status::Hovered { is_toggled } => {
-            if is_toggled {
-                Color {
-                    a: 0.5,
-                    ..palette.primary.base.text
-                }
-            } else {
-                palette.background.weak.color
-            }
-        }
-        Status::Disabled { .. } => palette.background.weakest.color,
-    };
-
-    Style {
-        background: background.into(),
-        foreground: foreground.into(),
-        foreground_border_width: 0.0,
-        foreground_border_color: Color::TRANSPARENT,
-        background_border_width: 0.0,
-        background_border_color: Color::TRANSPARENT,
-        text_color: None,
-        border_radius: None,
-        padding_ratio: 0.1,
     }
 }

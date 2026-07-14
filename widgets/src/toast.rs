@@ -81,36 +81,38 @@ pub struct Settings {
     pub close_font: iced::Font,
 }
 
-pub fn manager<'a, Message>(
-    content: impl Into<Element<'a, Message>>,
+pub fn manager<'a, Message, Theme>(
+    content: impl Into<Element<'a, Message, Theme>>,
     toasts: &'a [Toast],
     on_close: impl Fn(usize) -> Message + 'a,
     settings: Settings,
-) -> Manager<'a, Message>
+) -> Manager<'a, Message, Theme>
 where
     Message: 'a + Clone,
+    Theme: 'a + Catalog,
 {
     Manager::new(content, toasts, on_close, settings)
 }
 
 /// A widget for displaying toasts on top of content
-pub struct Manager<'a, Message>
+pub struct Manager<'a, Message, Theme = iced::Theme>
 where
     Message: 'a,
 {
-    content: Element<'a, Message>,
-    toasts: Vec<Element<'a, Message>>,
+    content: Element<'a, Message, Theme>,
+    toasts: Vec<Element<'a, Message, Theme>>,
     timeout: u64,
     on_close: Box<dyn Fn(usize) -> Message + 'a>,
 }
 
-impl<'a, Message> Manager<'a, Message>
+impl<'a, Message, Theme> Manager<'a, Message, Theme>
 where
     Message: 'a + Clone,
+    Theme: 'a + Catalog,
 {
     /// Creates a new [`Manager`].
     pub fn new(
-        content: impl Into<Element<'a, Message>>,
+        content: impl Into<Element<'a, Message, Theme>>,
         toasts: &'a [Toast],
         on_close: impl Fn(usize) -> Message + 'a,
         settings: Settings,
@@ -119,24 +121,22 @@ where
             .iter()
             .enumerate()
             .map(|(index, toast)| {
+                let class = Theme::toast_status(toast.status);
                 let side = container(space())
-                    .style(|theme| match toast.status {
-                        Status::Info => container::primary(theme),
-                        Status::Warn => container::warning(theme),
-                        Status::Error => container::danger(theme),
-                        Status::Success => container::success(theme),
-                    })
+                    .class(class)
                     .width(5.0)
                     .height(Length::Fill);
+
                 let content = text(toast.message.as_str()).size(settings.text_size);
 
+                let class = Theme::button_text();
                 let close = button(
                     text(settings.close_icon)
                         .font(settings.close_font)
                         .size(settings.close_size),
                 )
                 .on_press((on_close)(index))
-                .style(iced::widget::button::text);
+                .class(class);
 
                 container(
                     row!(side, content, space::horizontal(), close)
@@ -144,16 +144,7 @@ where
                         .align_y(Vertical::Center)
                         .spacing(5),
                 )
-                .style(|theme| {
-                    let default = container::rounded_box(theme);
-                    let border = default
-                        .border
-                        .rounded(5)
-                        .width(0.5)
-                        .color(default.text_color.unwrap_or_default());
-
-                    container::Style { border, ..default }
-                })
+                .class(Theme::container_rounded())
                 .clip(true)
                 .max_width(500)
                 .height(Length::Shrink)
@@ -505,5 +496,41 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
             })
             .max()
             .unwrap_or_default()
+    }
+}
+
+pub trait Catalog: container::Catalog + button::Catalog + text::Catalog {
+    fn toast_status<'a>(status: Status) -> <Self as container::Catalog>::Class<'a>;
+
+    fn button_text<'a>() -> <Self as button::Catalog>::Class<'a>;
+
+    fn container_rounded<'a>() -> <Self as container::Catalog>::Class<'a>;
+}
+
+impl Catalog for iced::Theme {
+    fn toast_status<'a>(status: Status) -> <Self as container::Catalog>::Class<'a> {
+        match status {
+            Status::Info => Box::new(container::primary),
+            Status::Success => Box::new(container::success),
+            Status::Warn => Box::new(container::warning),
+            Status::Error => Box::new(container::danger),
+        }
+    }
+
+    fn container_rounded<'a>() -> <Self as container::Catalog>::Class<'a> {
+        Box::new(|theme: &iced::Theme| {
+            let default = container::rounded_box(theme);
+            let border = default
+                .border
+                .rounded(5)
+                .width(0.5)
+                .color(default.text_color.unwrap_or_default());
+
+            container::Style { border, ..default }
+        })
+    }
+
+    fn button_text<'a>() -> <Self as button::Catalog>::Class<'a> {
+        Box::new(button::text)
     }
 }

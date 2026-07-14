@@ -12,10 +12,10 @@ use iced::{
     window,
 };
 
-pub fn expandable<'a, Message>(
-    root: impl Into<Element<'a, Message>>,
-    content: impl Into<Element<'a, Message>>,
-) -> Expandable<'a, Message> {
+pub fn expandable<'a, Message, Theme>(
+    root: impl Into<Element<'a, Message, Theme>>,
+    content: impl Into<Element<'a, Message, Theme>>,
+) -> Expandable<'a, Message, Theme> {
     Expandable::new(root, content)
 }
 
