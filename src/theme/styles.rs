@@ -1,9 +1,12 @@
-use super::{Pair, Radii, Theme, Triplet};
+use super::{Pair, Palette, Radii, Theme, Triplet, Variant};
 use iced::{
     Background, Color, Shadow, Vector,
     border::{self, Border},
     color, widget,
 };
+
+const SLATE: Color = Color::from_rgb8(144, 161, 185);
+const SLATE2: Color = Color::from_rgb8(202, 213, 226);
 
 pub mod container {
     use super::*;
@@ -21,12 +24,172 @@ pub mod container {
         }
     }
 
-    fn style(radii: &Radii, pair: Pair) -> Style {
+    fn styled(theme: &Theme, palette: Palette, variant: Variant) -> Style {
+        let schema = theme.schema();
+        let pair = palette.triplet(schema).variant(variant);
+
         Style {
             background: Some(pair.color.into()),
             text_color: Some(pair.text),
-            border: border::rounded(radii.boxes),
+            border: border::rounded(schema.radii.boxes),
             ..Style::default()
+        }
+    }
+
+    pub fn sw(theme: &Theme) -> Style {
+        styled(theme, Palette::Secondary, Variant::Weak)
+    }
+
+    pub fn sb(theme: &Theme) -> Style {
+        styled(theme, Palette::Secondary, Variant::Base)
+    }
+
+    pub fn ss(theme: &Theme) -> Style {
+        styled(theme, Palette::Secondary, Variant::Strong)
+    }
+
+    pub fn pw(theme: &Theme) -> Style {
+        styled(theme, Palette::Primary, Variant::Weak)
+    }
+
+    pub fn pb(theme: &Theme) -> Style {
+        styled(theme, Palette::Primary, Variant::Base)
+    }
+
+    pub fn ps(theme: &Theme) -> Style {
+        styled(theme, Palette::Primary, Variant::Strong)
+    }
+
+    pub fn bw(theme: &Theme) -> Style {
+        styled(theme, Palette::Background, Variant::Weak)
+    }
+
+    pub fn bb(theme: &Theme) -> Style {
+        styled(theme, Palette::Background, Variant::Base)
+    }
+
+    pub fn bs(theme: &Theme) -> Style {
+        styled(theme, Palette::Background, Variant::Strong)
+    }
+
+    pub fn anw(theme: &Theme) -> Style {
+        styled(theme, Palette::Accent, Variant::Weak)
+    }
+
+    pub fn anb(theme: &Theme) -> Style {
+        styled(theme, Palette::Accent, Variant::Base)
+    }
+
+    pub fn ans(theme: &Theme) -> Style {
+        styled(theme, Palette::Accent, Variant::Strong)
+    }
+
+    pub fn nw(theme: &Theme) -> Style {
+        styled(theme, Palette::Neutral, Variant::Weak)
+    }
+
+    pub fn nb(theme: &Theme) -> Style {
+        styled(theme, Palette::Neutral, Variant::Base)
+    }
+
+    pub fn ns(theme: &Theme) -> Style {
+        styled(theme, Palette::Neutral, Variant::Strong)
+    }
+
+    pub fn iw(theme: &Theme) -> Style {
+        styled(theme, Palette::Info, Variant::Weak)
+    }
+
+    pub fn ib(theme: &Theme) -> Style {
+        styled(theme, Palette::Info, Variant::Base)
+    }
+
+    pub fn is(theme: &Theme) -> Style {
+        styled(theme, Palette::Info, Variant::Strong)
+    }
+
+    pub fn suw(theme: &Theme) -> Style {
+        styled(theme, Palette::Success, Variant::Weak)
+    }
+
+    pub fn sub(theme: &Theme) -> Style {
+        styled(theme, Palette::Success, Variant::Base)
+    }
+
+    pub fn sus(theme: &Theme) -> Style {
+        styled(theme, Palette::Success, Variant::Strong)
+    }
+
+    pub fn ww(theme: &Theme) -> Style {
+        styled(theme, Palette::Warning, Variant::Weak)
+    }
+
+    pub fn wb(theme: &Theme) -> Style {
+        styled(theme, Palette::Warning, Variant::Base)
+    }
+
+    pub fn ws(theme: &Theme) -> Style {
+        styled(theme, Palette::Warning, Variant::Strong)
+    }
+
+    pub fn dw(theme: &Theme) -> Style {
+        styled(theme, Palette::Danger, Variant::Weak)
+    }
+
+    pub fn db(theme: &Theme) -> Style {
+        styled(theme, Palette::Danger, Variant::Base)
+    }
+
+    pub fn ds(theme: &Theme) -> Style {
+        styled(theme, Palette::Danger, Variant::Strong)
+    }
+
+    pub fn bordered(theme: &Theme) -> Style {
+        let schema = theme.schema();
+
+        Style {
+            background: Some(schema.background.base.color.into()),
+            text_color: Some(schema.background.base.text),
+            border: border::rounded(schema.radii.boxes)
+                .width(1.0)
+                .color(schema.background.weak.color),
+            ..Style::default()
+        }
+    }
+
+    pub fn text(theme: &Theme) -> Style {
+        let schema = theme.schema();
+        let text_color = SLATE;
+
+        Style {
+            text_color: Some(text_color),
+            background: None,
+            border: border::rounded(schema.radii.boxes),
+            ..Default::default()
+        }
+    }
+
+    pub fn text_pb(theme: &Theme) -> Style {
+        let schema = theme.schema();
+        let text_color = schema.primary.base.color;
+
+        Style {
+            text_color: Some(text_color),
+            background: None,
+            border: border::rounded(schema.radii.boxes),
+            ..Default::default()
+        }
+    }
+
+    pub fn text_ps(theme: &Theme) -> Style {
+        let schema = theme.schema();
+        let text_color = schema.primary.strong.color;
+
+        Style {
+            text_color: Some(text_color),
+            background: None,
+            border: border::rounded(schema.radii.boxes),
+            ..Default::default()
         }
     }
 
@@ -73,61 +236,12 @@ pub mod container {
 
     /// A [`Container`] with a dark background and white text.
     pub fn dark(theme: &Theme) -> Style {
-        style(
-            &theme.schema().radii,
-            Pair {
-                color: color!(0x111111),
-                text: Color::WHITE,
-            },
-        )
-    }
-
-    /// A [`Container`] with a primary background color.
-    pub fn primary(theme: &Theme) -> Style {
-        let schema = theme.schema();
-        style(&schema.radii, schema.primary.base)
-    }
-
-    /// A [`Container`] with a secondary background color.
-    pub fn secondary(theme: &Theme) -> Style {
-        let schema = theme.schema();
-        style(&schema.radii, schema.secondary.base)
-    }
-
-    /// A [`Container`] with a accent background color.
-    pub fn accent(theme: &Theme) -> Style {
-        let schema = theme.schema();
-        style(&schema.radii, schema.accent.base)
-    }
-
-    /// A [`Container`] with a neutral background color.
-    pub fn neutral(theme: &Theme) -> Style {
-        let schema = theme.schema();
-        style(&schema.radii, schema.neutral.base)
-    }
-
-    /// A [`Container`] with a info background color.
-    pub fn info(theme: &Theme) -> Style {
-        let schema = theme.schema();
-        style(&schema.radii, schema.info.base)
-    }
-
-    /// A [`Container`] with a success background color.
-    pub fn success(theme: &Theme) -> Style {
-        let schema = theme.schema();
-        style(&schema.radii, schema.success.base)
-    }
-
-    /// A [`Container`] with a warning background color.
-    pub fn warning(theme: &Theme) -> Style {
-        let schema = theme.schema();
-        style(&schema.radii, schema.warning.base)
-    }
-
-    /// A [`Container`] with a danger background color.
-    pub fn danger(theme: &Theme) -> Style {
-        let schema = theme.schema();
-        style(&schema.radii, schema.danger.base)
+        Style {
+            background: Some(color!(0x111111).into()),
+            text_color: Some(Color::WHITE),
+            border: border::rounded(theme.schema().radii.boxes),
+            ..Style::default()
+        }
     }
 }
 
@@ -166,6 +280,14 @@ pub mod text {
     /// Text with the primary color.
     pub fn primary(theme: &Theme) -> Style {
         style(theme.schema().primary.base)
+    }
+
+    pub fn ps(theme: &Theme) -> Style {
+        style(theme.schema().primary.strong)
+    }
+
+    pub fn pw(theme: &Theme) -> Style {
+        style(theme.schema().primary.weak)
     }
 
     /// Text with the secondary color.
@@ -222,84 +344,76 @@ pub mod button {
 
     /// A background button; denoting a main action.
     pub fn background(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.background;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Background, status)
     }
 
     /// A primary button; denoting a main action.
     pub fn primary(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.primary;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Primary, status)
     }
 
     /// A secondary button; denoting a main action.
     pub fn secondary(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.secondary;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Secondary, status)
     }
 
     /// A accent button; denoting a main action.
     pub fn accent(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.accent;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Accent, status)
     }
 
     /// A neutral button; denoting a main action.
     pub fn neutral(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.neutral;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Neutral, status)
     }
 
     /// A info button; denoting a main action.
     pub fn info(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.info;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Info, status)
     }
 
     /// A success button; denoting a main action.
     pub fn success(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.success;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Success, status)
     }
 
     /// A warning button; denoting a main action.
     pub fn warning(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.warning;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Warning, status)
     }
 
     /// A danger button; denoting a main action.
     pub fn danger(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let triplet = schema.danger;
-        styled(schema.radii, triplet, status)
+        styled(theme, Palette::Danger, status)
     }
 
     /// A text button
     pub fn text(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-        let base = Style {
-            text_color: schema.background.base.text,
-            border: border::rounded(schema.radii.fields),
-            ..Style::default()
-        };
+        text_base(theme, theme.schema().background.base.text, status)
+    }
 
-        match status {
-            Status::Active | Status::Pressed => base,
-            Status::Hovered => Style {
-                text_color: schema.background.base.text.scale_alpha(0.8),
-                ..base
-            },
-            Status::Disabled => disabled(base),
-        }
+    pub fn text_white(theme: &Theme, status: Status) -> Style {
+        text_base(theme, Color::WHITE, status)
+    }
+
+    pub fn text_danger(theme: &Theme, status: Status) -> Style {
+        text_base(theme, theme.schema().danger.base.color, status)
+    }
+
+    pub fn text_primary(theme: &Theme, status: Status) -> Style {
+        text_base(theme, theme.schema().primary.base.color, status)
+    }
+
+    pub fn text_background(theme: &Theme, status: Status) -> Style {
+        text_base(theme, theme.schema().background.base.color, status)
+    }
+
+    pub fn text_secondary(theme: &Theme, status: Status) -> Style {
+        text_base(theme, theme.schema().secondary.base.color, status)
+    }
+
+    pub fn text_slate(theme: &Theme, status: Status) -> Style {
+        text_base(theme, SLATE, status)
     }
 
     pub fn subtle(theme: &Theme, status: Status) -> Style {
@@ -309,8 +423,7 @@ pub mod button {
         let base = Style {
             background: Some(Background::Color(pair.color)),
             text_color: pair.text,
-            border: border::rounded(schema.radii.fields),
-            ..Style::default()
+            ..base(theme)
         };
 
         match status {
@@ -327,12 +440,66 @@ pub mod button {
         }
     }
 
-    fn styled(radii: Radii, triplet: Triplet, status: Status) -> Style {
+    pub fn weak_primary(theme: &Theme, status: Status) -> Style {
+        let schema = theme.schema();
+        let pair = Pair {
+            color: schema.background.weak.color,
+            text: schema.primary.strong.color,
+        };
+
+        let base = Style {
+            background: Some(Background::Color(pair.color)),
+            text_color: pair.text,
+            ..base(theme)
+        };
+
+        match status {
+            Status::Active => base,
+            Status::Pressed => Style {
+                background: Some(Background::Color(schema.neutral.base.color)),
+                ..base
+            },
+            Status::Hovered => Style {
+                background: Some(schema.background.strong.color.into()),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
+    pub fn subtle_primary(theme: &Theme, status: Status) -> Style {
+        let schema = theme.schema();
+        let palette = schema.primary;
+
+        let base = Style {
+            background: Some(Background::Color(palette.strong.color)),
+            text_color: palette.strong.text,
+            ..base(theme)
+        };
+
+        match status {
+            Status::Active => base,
+            Status::Pressed => Style {
+                background: Some(Background::Color(palette.strong.color)),
+
+                ..base
+            },
+            Status::Hovered => Style {
+                background: Some(Background::Color(palette.strong.color.scale_alpha(0.75))),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
+    fn styled(theme: &Theme, palette: Palette, status: Status) -> Style {
+        let schema = theme.schema();
+        let triplet = palette.triplet(schema);
+
         let style = |pair: Pair| Style {
             background: Some(Background::Color(pair.color)),
             text_color: pair.text,
-            border: border::rounded(radii.fields),
-            ..Style::default()
+            ..base(theme)
         };
 
         match status {
@@ -350,6 +517,29 @@ pub mod button {
                 .map(|background| background.scale_alpha(0.5)),
             text_color: style.text_color.scale_alpha(0.8),
             ..style
+        }
+    }
+
+    fn base(theme: &Theme) -> Style {
+        Style {
+            border: border::rounded(theme.schema().radii.fields),
+            ..Style::default()
+        }
+    }
+
+    fn text_base(theme: &Theme, color: Color, status: Status) -> Style {
+        let base = Style {
+            text_color: color,
+            ..base(theme)
+        };
+
+        match status {
+            Status::Active | Status::Pressed => base,
+            Status::Hovered => Style {
+                text_color: color.scale_alpha(0.8),
+                ..base
+            },
+            Status::Disabled => disabled(base),
         }
     }
 }
@@ -492,11 +682,10 @@ pub mod text_input {
         move |theme: &Theme, status| {
             let danger = theme.schema().danger.strong.color;
             let default = default(theme, status);
-            let border = default.border;
             let border = if invalid && matches!(status, text_input::Status::Focused { .. }) {
-                border.color(danger)
+                default.border.color(danger)
             } else {
-                border
+                default.border
             };
 
             text_input::Style { border, ..default }
@@ -791,7 +980,26 @@ pub mod markdown {
 
     impl Catalog for Theme {
         fn code_block<'a>() -> <Self as widget::container::Catalog>::Class<'a> {
-            Box::new(container::neutral)
+            Box::new(container::nb)
+        }
+    }
+
+    impl From<&Theme> for Style {
+        fn from(value: &Theme) -> Self {
+            let schema = value.schema();
+
+            Self {
+                font: iced::Font::default(),
+                inline_code_padding: iced::padding::horizontal(4).vertical(2),
+                inline_code_highlight: Highlight {
+                    background: schema.primary.weak.color.scale_alpha(0.5).into(),
+                    border: iced::border::rounded(schema.radii.boxes),
+                },
+                inline_code_color: schema.background.base.text,
+                inline_code_font: iced::Font::MONOSPACE,
+                code_block_font: iced::Font::MONOSPACE,
+                link_color: schema.primary.base.color,
+            }
         }
     }
 }
@@ -1324,10 +1532,10 @@ pub mod toast {
     impl Catalog for Theme {
         fn toast_status<'a>(status: Status) -> <Self as widget::container::Catalog>::Class<'a> {
             match status {
-                Status::Info => Box::new(container::primary),
-                Status::Success => Box::new(container::success),
-                Status::Warn => Box::new(container::warning),
-                Status::Error => Box::new(container::danger),
+                Status::Info => Box::new(container::pb),
+                Status::Success => Box::new(container::sub),
+                Status::Warn => Box::new(container::wb),
+                Status::Error => Box::new(container::db),
             }
         }
 
