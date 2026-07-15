@@ -224,7 +224,7 @@ pub enum Theme {
 }
 
 impl Theme {
-    pub const ALL: &[Self] = &[
+    pub const DEFAULTS: &[Self] = &[
         Self::Abyss,
         Self::Autumn,
         Self::Black,
@@ -262,6 +262,22 @@ impl Theme {
 
     pub fn from_custom(custom: Custom) -> Self {
         custom.into()
+    }
+
+    pub fn is_custom(&self) -> bool {
+        matches!(self, Self::Custom(_))
+    }
+
+    pub fn all(&self) -> Vec<Self> {
+        if self.is_custom() {
+            let mut values = vec![self.clone()];
+
+            values.extend_from_slice(Self::DEFAULTS);
+
+            values
+        } else {
+            Self::DEFAULTS.to_vec()
+        }
     }
 }
 

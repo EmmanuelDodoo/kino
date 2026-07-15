@@ -81,6 +81,8 @@ pub struct GeneralSettings {
     pub recents_limit: Option<i32>,
     pub search_limit: Option<i32>,
     pub theme: Theme,
+    #[serde(skip)]
+    pub themes: Vec<Theme>,
     pub scan_discoverer: bool,
     pub auth_token: String,
     pub movie_depth: u8,
@@ -99,6 +101,7 @@ impl GeneralSettings {
             layout: Layout::default(),
             refresh_interval: Duration::from_secs(600),
             theme: Theme::default(),
+            themes: vec![],
             recents_limit: Some(5),
             search_limit: Some(5),
             scan_discoverer: true,
@@ -119,6 +122,7 @@ impl GeneralSettings {
             layout: Layout::default(),
             refresh_interval: Duration::from_secs(120),
             theme: Theme::default(),
+            themes: vec![],
             recents_limit: Some(5),
             search_limit: Some(5),
             scan_discoverer: false,
@@ -132,6 +136,10 @@ impl GeneralSettings {
             default_source: SourceSet::Tmdb,
             show_dirs: true,
         }
+    }
+
+    fn load_themes(&mut self) {
+        self.themes = self.theme.all()
     }
 
     pub fn set_theme(&mut self, theme: Theme) {
@@ -224,6 +232,7 @@ impl Config {
         let dir = dir.as_ref();
         let log = dir.join(Self::LOG_FILE);
         self.config_dir = Some(dir.to_path_buf());
+        self.general.load_themes();
 
         match OpenOptions::new().append(true).create(true).open(log) {
             Ok(log) => {
