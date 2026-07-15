@@ -1269,6 +1269,7 @@ impl Settings {
             recents_limit,
             search_limit,
             theme,
+            themes,
             scan_discoverer,
             auth_token,
             movie_depth,
@@ -1284,7 +1285,7 @@ impl Settings {
         let general = draw_general(refresh_interval, recents_limit, search_limit, *show_dirs)
             .map(SettingsMessage::General);
 
-        let appearance = draw_appearance(layout, theme).map(SettingsMessage::Appearance);
+        let appearance = draw_appearance(layout, theme, themes).map(SettingsMessage::Appearance);
 
         let media = draw_media(
             &self.directories,
@@ -2201,7 +2202,11 @@ fn draw_general<'a>(
     section("General", content)
 }
 
-fn draw_appearance<'a>(layout: &'a Layout, theme: &'a Theme) -> Element<'a, AppearanceMessage> {
+fn draw_appearance<'a>(
+    layout: &'a Layout,
+    theme: &'a Theme,
+    themes: &'a [Theme],
+) -> Element<'a, AppearanceMessage> {
     let layouts = {
         let handle = picklist_handle(TEXT_SIZE);
         let label = label_maker("Content layout ");
@@ -2222,7 +2227,7 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a Theme) -> Element<'a, Appe
 
         let label = label_maker("Theme ");
 
-        let theme = pick_list(Some(theme), Theme::ALL, ToString::to_string)
+        let theme = pick_list(Some(theme), themes, ToString::to_string)
             .font(regular_font())
             .on_select(AppearanceMessage::Theme)
             .handle(handle.clone())

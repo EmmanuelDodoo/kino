@@ -217,7 +217,7 @@ impl Playground {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let themes = pick_list(self.theme.as_ref(), Theme::ALL, Theme::to_string)
+        let themes = pick_list(self.theme.as_ref(), Theme::DEFAULTS, Theme::to_string)
             .placeholder("Select theme")
             .on_select(Message::Theme)
             .padding([5, 10])
