@@ -124,8 +124,6 @@ Below are the available application Themes. Most of these are derived from [Dais
 
 - Autumn,
 
-- Bumblebee,
-
 - Black,
 
 - Ember,
@@ -133,3 +131,5 @@ Below are the available application Themes. Most of these are derived from [Dais
 - Fantasy,
 
 - Luxury,
+
+- Winter,
