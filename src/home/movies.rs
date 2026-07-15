@@ -1,10 +1,12 @@
 use super::movie::MovieItem;
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll};
 use iced::{
-    Element, Length, Padding, Task,
+    Length, Padding, Task,
     alignment::Vertical,
     time::Instant,
     widget::{self, column, container, grid, operation, row, scrollable, text},

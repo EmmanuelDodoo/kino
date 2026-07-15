@@ -3,7 +3,7 @@
 use std::fmt::Display;
 
 use iced::{
-    Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Length, Point, Rectangle, Renderer, Size, Vector,
     advanced::{
         Layout, Shell, layout, overlay, renderer,
         widget::{self, Operation, Tree},
@@ -97,7 +97,8 @@ where
 /// A widget for displaying toasts on top of content
 pub struct Manager<'a, Message, Theme = iced::Theme>
 where
-    Message: 'a,
+    Message: 'a + Clone,
+    Theme: 'a + Catalog,
 {
     content: Element<'a, Message, Theme>,
     toasts: Vec<Element<'a, Message, Theme>>,
@@ -168,7 +169,11 @@ where
     }
 }
 
-impl<'a, Message> Widget<Message, Theme, Renderer> for Manager<'a, Message> {
+impl<'a, Message, Theme> Widget<Message, Theme, Renderer> for Manager<'a, Message, Theme>
+where
+    Message: 'a + Clone,
+    Theme: 'a + Catalog,
+{
     fn size(&self) -> Size<Length> {
         self.content.as_widget().size()
     }
@@ -335,26 +340,29 @@ impl<'a, Message> Widget<Message, Theme, Renderer> for Manager<'a, Message> {
     }
 }
 
-impl<'a, Message> From<Manager<'a, Message>> for Element<'a, Message>
+impl<'a, Message, Theme> From<Manager<'a, Message, Theme>> for Element<'a, Message, Theme>
 where
-    Message: 'a,
+    Message: 'a + Clone,
+    Theme: 'a + Catalog,
 {
-    fn from(value: Manager<'a, Message>) -> Self {
+    fn from(value: Manager<'a, Message, Theme>) -> Self {
         Element::new(value)
     }
 }
 
-struct Overlay<'a, 'b, Message> {
+struct Overlay<'a, 'b, Message, Theme> {
     position: Point,
     viewport: Rectangle,
-    toasts: &'b mut [Element<'a, Message>],
+    toasts: &'b mut [Element<'a, Message, Theme>],
     state: &'b mut [Tree],
     instants: &'b mut [Option<Instant>],
     on_close: &'b dyn Fn(usize) -> Message,
     timeout_secs: u64,
 }
 
-impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Message> {
+impl<Message, Theme> overlay::Overlay<Message, Theme, Renderer>
+    for Overlay<'_, '_, Message, Theme>
+{
     fn layout(&mut self, renderer: &Renderer, bounds: Size) -> layout::Node {
         let limits = layout::Limits::new(Size::ZERO, bounds);
 

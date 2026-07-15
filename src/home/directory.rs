@@ -1,9 +1,11 @@
 use super::{HomeMessage, MovieItem, PageKind, ShowItem, ViewMessage, movies};
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{self, Layout, Scroll, empty, styles};
+use crate::utils::{self, Layout, Scroll, empty};
 use iced::{
-    Element, Length, Padding, Task,
+    Length, Padding, Task,
     alignment::Vertical,
     time::Instant,
     widget::{

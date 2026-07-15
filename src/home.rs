@@ -1,6 +1,8 @@
+use crate::Element;
+use crate::theme::{self, Theme};
 use core::variants;
 use iced::{
-    Element, Length, Padding, Subscription, Task, Theme,
+    Length, Padding, Subscription, Task,
     alignment::{Horizontal, Vertical},
     animation::Animation,
     border::Border,
@@ -52,7 +54,7 @@ use registry::{
 
 use crate::app::{FetchId, Message, WishMessage};
 use crate::utils::{
-    HomeAction, Layout, Scroll, empty, icons, icons::*, picklist_handle, styles, tooltip, typo::*,
+    HomeAction, Layout, Scroll, empty, icons, icons::*, picklist_handle, tooltip, typo::*,
 };
 
 use collection::{CollectionMessage, CollectionPage};
@@ -4671,7 +4673,7 @@ impl Home {
     fn side(&self, show_dirs: bool) -> Element<'_, HomeMessage> {
         let header = {
             let color = |theme: &Theme| {
-                let color = theme.palette().primary.base.color.scale_alpha(0.85);
+                let color = theme.schema().primary.base.color.scale_alpha(0.85);
 
                 text::Style { color: Some(color) }
             };
@@ -4695,7 +4697,7 @@ impl Home {
             .width(300.0)
             .height(Length::Fill);
 
-        let content = container(content).style(styles::container::bw3);
+        let content = container(content).style(theme::container::db);
 
         content.into()
     }
@@ -4873,7 +4875,7 @@ impl Home {
         let comp = |icon: char, msg: FilterMessage| {
             icons::sized_button(icon, size * RATIO)
                 .padding([5, 5])
-                .style(styles::button::subtlest)
+                .style(theme::button::danger)
                 .on_press(HomeMessage::Filter(msg))
         };
 
@@ -5025,7 +5027,7 @@ impl Home {
             let mode = sized_medium(self.filters.mode.to_string(), H8);
 
             let button = button(mode)
-                .style(styles::button::background)
+                .style(theme::button::background)
                 .padding(padding)
                 .on_press(HomeMessage::Filter(FilterMessage::Mode));
 
@@ -5034,7 +5036,7 @@ impl Home {
 
         let clear = button(sized_medium("Clear", H8))
             .padding(padding)
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(HomeMessage::Filter(FilterMessage::Clear));
 
         let content = row!(
@@ -5082,7 +5084,7 @@ impl Home {
                     let icon = button(icon)
                         .padding(0)
                         .on_press(HomeMessage::Sort(SortMessage::ReverseSort(sort)))
-                        .style(styles::button::text_primary);
+                        .style(theme::button::text_primary);
 
                     let content = row!(content, icon).spacing(2.0).align_y(Vertical::Center);
 
@@ -5098,13 +5100,13 @@ impl Home {
             .on_press(msg)
             .style(move |theme, status| {
                 let default = if enable {
-                    styles::button::background(theme, status)
+                    theme::button::background(theme, status)
                 } else if SortKind::HIDDEN.is_empty() {
-                    styles::button::subtler(theme, status)
+                    theme::button::danger(theme, status)
                 } else {
-                    styles::button::subtle_primary(theme, status)
+                    theme::button::subtle_primary(theme, status)
                 };
-                let border = Border::default().width(2.0).rounded(5.0);
+                let border = Border::default().width(2.0);
 
                 button::Style { border, ..default }
             });
@@ -5114,12 +5116,12 @@ impl Home {
 
         let clear = button(h8("Clear"))
             .padding([2, 5])
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(HomeMessage::Sort(SortMessage::Clear));
 
         let reverse = button(h8("Reverse"))
             .padding([2, 5])
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(HomeMessage::Sort(SortMessage::ToggleReverse));
 
         let base = icon(ELLIPSIS_HOR).size(size);
@@ -5135,7 +5137,7 @@ impl Home {
                 }))
                 .spacing(8),
             )
-            .style(styles::container::bw2)
+            .style(theme::container::db)
             .padding([3, 6]);
 
             menu(base, hidden)
@@ -5189,9 +5191,9 @@ impl Home {
             tooltip(
                 button(content)
                     .style(if self.filters.is_any() {
-                        styles::button::background
+                        theme::button::background
                     } else {
-                        styles::button::text_primary
+                        theme::button::text_primary
                     })
                     .on_press(HomeMessage::ToggleFilter)
                     .padding([5, 5]),
@@ -5214,9 +5216,9 @@ impl Home {
             tooltip(
                 button(content)
                     .style(if self.sort.is_empty() {
-                        styles::button::background
+                        theme::button::background
                     } else {
-                        styles::button::text_primary
+                        theme::button::text_primary
                     })
                     .on_press(HomeMessage::ToggleSort)
                     .padding([5, 5]),
@@ -5454,7 +5456,7 @@ impl Home {
                 .align_x(Horizontal::Right)
                 .padding(padding)
                 .style(|theme| {
-                    let default = styles::container::bw3(theme);
+                    let default = theme::container::db(theme);
                     let background = default.background.map(|back| back.scale_alpha(0.5));
 
                     container::Style {
@@ -5637,13 +5639,13 @@ impl Home {
                 .height(Length::Fill)
                 .padding(0),
         )
-        .style(styles::container::bb);
+        .style(theme::container::bb);
 
         fn modalize<'a>(
             content: impl Into<Element<'a, HomeMessage>>,
             overlay: impl Into<Element<'a, HomeMessage>>,
             toggle: bool,
-        ) -> modal::Modal<'a, HomeMessage> {
+        ) -> modal::Modal<'a, HomeMessage, Theme> {
             modal(content, overlay)
                 .toggle(toggle)
                 .on_toggle_complete(HomeMessage::ViewAnimated)
@@ -5702,14 +5704,14 @@ impl Home {
                         draw_collection_triggers(*view_inserts, itriggers, dtriggers),
                     ),
                     View::Selection(selected) => {
-                        let selection = container(draw_selection(selected.len()))
-                            .style(styles::container::dark);
+                        let selection =
+                            container(draw_selection(selected.len())).style(theme::container::dark);
 
                         modalize(content, selection.into())
                             .passthrough(true)
                             .on_blur_maybe(None)
                             .style(|theme| {
-                                let default = modal::default(theme);
+                                let default = theme::modal::default(theme);
                                 let blur = default.blur.scale_alpha(0.2);
 
                                 modal::Style { blur, ..default }
@@ -6755,9 +6757,9 @@ fn icon_button<'a>(
         button(content)
             .style(move |theme, status| {
                 if current {
-                    styles::button::background_primary(theme, status)
+                    theme::button::danger(theme, status)
                 } else {
-                    styles::button::subtlest(theme, status)
+                    theme::button::danger(theme, status)
                 }
             })
             .on_press(message),
