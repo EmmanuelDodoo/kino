@@ -214,7 +214,7 @@ pub enum Theme {
     Autumn,
     Luxury,
     Ember,
-    Bumblebee,
+    Winter,
     Fantasy,
     Black,
     #[default]
@@ -228,10 +228,10 @@ impl Theme {
         Self::Abyss,
         Self::Autumn,
         Self::Black,
-        Self::Bumblebee,
         Self::Ember,
         Self::Fantasy,
         Self::Luxury,
+        Self::Winter,
     ];
 
     pub fn schema(&self) -> &Schema {
@@ -239,7 +239,7 @@ impl Theme {
             Self::Abyss => &variants::ABYSS,
             Self::Black => &variants::BLACK,
             Self::Fantasy => &variants::FANTASY,
-            Self::Bumblebee => &variants::BUMBLEBEE,
+            Self::Winter => &variants::WINTER,
             Self::Ember => &variants::EMBER,
             Self::Luxury => &variants::LUXURY,
             Self::Autumn => &variants::AUTUMN,
@@ -252,7 +252,7 @@ impl Theme {
             Self::Abyss => "Abyss",
             Self::Black => "Black",
             Self::Fantasy => "Fantasy",
-            Self::Bumblebee => "Bumblebee",
+            Self::Winter => "Winter",
             Self::Ember => "Ember",
             Self::Luxury => "Luxury",
             Self::Autumn => "Autumn",
@@ -284,8 +284,9 @@ impl Theme {
 impl theme::Base for Theme {
     fn default(preference: theme::Mode) -> Self {
         match preference {
-            theme::Mode::Light => Self::Bumblebee,
-            _ => Self::Ember,
+            theme::Mode::Light => Self::Winter,
+            theme::Mode::Dark => Self::Ember,
+            theme::Mode::None => Self::Abyss,
         }
     }
 

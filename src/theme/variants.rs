@@ -10,7 +10,7 @@ pub static LUXURY: LazyLock<Schema> = LazyLock::new(|| luxury());
 
 pub static FANTASY: LazyLock<Schema> = LazyLock::new(|| fantasy());
 
-pub static BUMBLEBEE: LazyLock<Schema> = LazyLock::new(|| bumblebee());
+pub static WINTER: LazyLock<Schema> = LazyLock::new(|| winter());
 
 pub static AUTUMN: LazyLock<Schema> = LazyLock::new(|| autumn());
 
@@ -299,53 +299,53 @@ fn fantasy() -> Schema {
     }
 }
 
-fn bumblebee() -> Schema {
+fn winter() -> Schema {
     Schema {
         background: Triplet {
             weak: Pair {
                 color: color!(255, 255, 255),
-                text: color!(22, 22, 22),
+                text: color!(57, 78, 106),
             },
             base: Pair {
-                color: color!(245, 245, 245),
-                text: color!(22, 22, 22),
+                color: color!(242, 247, 254),
+                text: color!(57, 78, 106),
             },
             strong: Pair {
-                color: color!(228, 228, 228),
-                text: color!(22, 22, 22),
+                color: color!(227, 233, 244),
+                text: color!(57, 78, 106),
             },
         },
         primary: Triplet::generate(Pair {
-            color: color!(253, 199, 0),
-            text: color!(115, 62, 10),
+            color: color!(0, 105, 255),
+            text: color!(206, 228, 255),
         }),
         secondary: Triplet::generate(Pair {
-            color: color!(255, 137, 4),
-            text: color!(124, 40, 8),
+            color: color!(70, 58, 162),
+            text: color!(213, 215, 238),
         }),
         accent: Triplet::generate(Pair {
-            color: color!(0, 0, 0),
-            text: color!(255, 255, 255),
+            color: color!(193, 72, 172),
+            text: color!(14, 2, 11),
         }),
         neutral: Triplet::generate(Pair {
-            color: color!(67, 63, 58),
-            text: color!(230, 228, 227),
+            color: color!(2, 20, 49),
+            text: color!(197, 203, 210),
         }),
         info: Triplet::generate(Pair {
-            color: color!(0, 186, 254),
-            text: color!(1, 74, 112),
+            color: color!(148, 231, 251),
+            text: color!(8, 19, 21),
         }),
         success: Triplet::generate(Pair {
-            color: color!(0, 211, 144),
-            text: color!(0, 76, 57),
+            color: color!(120, 207, 209),
+            text: color!(6, 15, 16),
         }),
         warning: Triplet::generate(Pair {
-            color: color!(252, 183, 0),
-            text: color!(121, 50, 5),
+            color: color!(239, 215, 188),
+            text: color!(20, 17, 13),
         }),
         danger: Triplet::generate(Pair {
-            color: color!(255, 98, 102),
-            text: color!(128, 21, 24),
+            color: color!(229, 139, 139),
+            text: color!(18, 7, 7),
         }),
         radii: Radii {
             boxes: 16.0,
