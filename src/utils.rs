@@ -56,15 +56,15 @@ pub fn tooltip<'a, Message: 'a>(
 
     tooltip(
         content,
-        container(typo::sized_regular(label, typo::H8))
+        container(typo::sized_medium(label, typo::H8))
             .clip(true)
             .max_width(350)
             .max_height(100)
-            .padding([3, 6])
+            .padding([5, 10])
             .style(|theme: &Theme| {
                 let schema = theme.schema();
                 let color = schema.neutral.strong.color;
-                let default = theme::styles::container::db(theme);
+                let default = theme::styles::container::nw(theme);
                 let shadow = Shadow {
                     color,
                     blur_radius: schema.radii.boxes,
@@ -109,12 +109,7 @@ pub fn modal_container<'a, Message: 'a>(
 
     container(content)
         .padding([8, 12])
-        .style(|theme| {
-            let default = theme::styles::container::db(theme);
-            let border = default.border;
-
-            container::Style { border, ..default }
-        })
+        .style(theme::styles::container::bb)
         .clip(true)
         .align_y(Vertical::Center)
         .align_x(Horizontal::Center)
@@ -143,6 +138,22 @@ pub fn picklist_handle(size: f32) -> iced::widget::pick_list::Handle<iced::Font>
         closed: down,
         open: up,
     }
+}
+
+pub fn input_actions<'a, Message: 'a + Clone>(
+    increase: Message,
+    decrease: Message,
+) -> Element<'a, Message> {
+    let incr = iced::widget::button(icons::icon(icons::CHEV_UP).size(12))
+        .padding([2, 2])
+        .style(theme::button::subtle_inv)
+        .on_press(increase);
+    let decr = iced::widget::button(icons::icon(icons::CHEV_DOWN).size(12))
+        .padding([2, 2])
+        .style(theme::button::subtle_inv)
+        .on_press(decrease);
+
+    iced::widget::column!(incr, decr).spacing(2.0).into()
 }
 
 pub fn trim_path(path: &Path, components: usize) -> String {

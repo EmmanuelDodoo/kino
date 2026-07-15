@@ -31,6 +31,7 @@ use crate::utils::{
     self, FontState, InterpolableLength, PlayerAction, VideoSettings, cancel_btn,
     convert_color_str, draw_subtitles, duration_string, empty,
     icons::{self, CANCEL, sized_button},
+    input_actions,
     modal::modal,
     modal_container, path_container, picklist_handle, save_btn, toggler, tooltip, trim_path, typo,
 };
@@ -44,6 +45,7 @@ use registry::models::{
 use typo::*;
 
 use crate::Element;
+const LIST_PADDING: [f32; 2] = [5.0, 10.0];
 
 #[derive(Debug)]
 enum Modal {
@@ -1622,7 +1624,7 @@ impl Manager {
             let opts = column(opts).spacing(4).align_x(Horizontal::Right);
 
             let opts = container(opts).padding([5, 8]).style(|theme| {
-                let default = theme::container::db(theme);
+                let default = theme::container::bb(theme);
                 let background = default.background.map(|bg| bg.scale_alpha(0.9));
 
                 container::Style {
@@ -1969,7 +1971,10 @@ impl Manager {
                 let content = container(icon).padding(padding).style(move |theme| {
                     let default = theme::container::dark(theme);
 
+                    let border = default.border.rounded(100.0);
+
                     container::Style {
+                        border,
                         background: default
                             .background
                             .map(|background| background.scale_alpha(alpha)),
@@ -3523,9 +3528,9 @@ fn draw_collection_add<'a>(
         ))
         .style(move |theme, status| {
             if selected {
-                theme::button::danger(theme, status)
+                theme::button::subtle(theme, status)
             } else {
-                theme::button::danger(theme, status)
+                theme::button::text(theme, status)
             }
         })
         .into()
@@ -3668,7 +3673,6 @@ fn draw_video<'a>(
     config: &'a Config,
     videos: &'a [VideoInfo],
     size: f32,
-    padding: Padding,
     spacing: f32,
 ) -> Element<'a, VideoConfig> {
     let width = 200;
@@ -3769,7 +3773,8 @@ fn draw_video<'a>(
             pick_list(config.selected_video.clone(), videos, video_info_to_string)
                 .handle(handle)
                 .on_select(VideoConfig::CurrentVideo)
-                .padding(padding)
+                .font(regular_font())
+                .padding(LIST_PADDING)
                 .text_size(size)
                 .into()
         };
@@ -3798,7 +3803,8 @@ fn draw_video<'a>(
         .handle(handle)
         .ellipsis(text::Ellipsis::End)
         .on_select(VideoConfig::Fit)
-        .padding(padding)
+        .font(regular_font())
+        .padding(LIST_PADDING)
         .text_size(size);
 
         row!(label, space::horizontal(), pick)
@@ -3868,7 +3874,8 @@ fn draw_subs<'a>(
                 .handle(handle)
                 .ellipsis(text::Ellipsis::End)
                 .on_select(SubtitleConfig::CurrentText)
-                .padding(padding)
+                .font(regular_font())
+                .padding(LIST_PADDING)
                 .text_size(size)
                 .into()
         };
@@ -3883,18 +3890,7 @@ fn draw_subs<'a>(
             let label = label_maker("Subtitle Offset(seconds): ");
             let offset = format!("{:.02}", config.subtitle_offset);
 
-            let actions = {
-                let incr = button(icons::icon(icons::CHEV_UP).size(10))
-                    .padding([2, 2])
-                    .style(theme::button::danger)
-                    .on_press(SubtitleConfig::OffsetIncr);
-                let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
-                    .padding([2, 2])
-                    .style(theme::button::danger)
-                    .on_press(SubtitleConfig::OffsetDecr);
-
-                column!(incr, decr).spacing(2.0)
-            };
+            let actions = input_actions(SubtitleConfig::OffsetIncr, SubtitleConfig::OffsetDecr);
 
             let input = text_input("", &offset)
                 .width(input_width)
@@ -3923,18 +3919,7 @@ fn draw_subs<'a>(
 
             let amt = format!("{}", settings.subtitles.size);
 
-            let actions = {
-                let incr = button(icons::icon(icons::CHEV_UP).size(10))
-                    .padding([2, 2])
-                    .style(theme::button::danger)
-                    .on_press(SubtitleConfig::SubSizeIncr);
-                let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
-                    .padding([2, 2])
-                    .style(theme::button::danger)
-                    .on_press(SubtitleConfig::SubSizeDecr);
-
-                column!(incr, decr).spacing(2.0)
-            };
+            let actions = input_actions(SubtitleConfig::SubSizeIncr, SubtitleConfig::SubSizeDecr);
 
             let input = text_input("", &amt)
                 .width(input_width)
@@ -4021,7 +4006,6 @@ fn draw_audio<'a>(
     config: &'a Config,
     audio: &'a [Audio],
     size: f32,
-    padding: Padding,
     spacing: f32,
 ) -> Element<'a, AudioConfig> {
     let selection = {
@@ -4035,7 +4019,8 @@ fn draw_audio<'a>(
             pick_list(config.selected_audio.clone(), audio, audio_to_string)
                 .handle(handle)
                 .on_select(AudioConfig::CurrentAudio)
-                .padding(padding)
+                .font(regular_font())
+                .padding(LIST_PADDING)
                 .text_size(size)
                 .into()
         };
@@ -4214,9 +4199,9 @@ fn draw_config<'a>(
                 .width(Length::Fill)
                 .style(move |theme, status| {
                     if current {
-                        theme::button::danger(theme, status)
+                        theme::button::neutral(theme, status)
                     } else {
-                        theme::button::danger(theme, status)
+                        theme::button::text_hover(theme, status)
                     }
                 })
                 .on_press(ManagerMessage::Config(ConfigMessage::Tab(*tab))),
@@ -4231,13 +4216,11 @@ fn draw_config<'a>(
             draw_general(settings, size, padding, spacing).map(ConfigMessage::General)
         }
         ConfigTab::Video => {
-            draw_video(settings, config, videos, size, padding, spacing).map(ConfigMessage::Video)
+            draw_video(settings, config, videos, size, spacing).map(ConfigMessage::Video)
         }
         ConfigTab::Subtitles => draw_subs(settings, config, subtitles, size, padding, spacing)
             .map(ConfigMessage::Subtitle),
-        ConfigTab::Audio => {
-            draw_audio(config, audio, size, padding, spacing).map(ConfigMessage::Audio)
-        }
+        ConfigTab::Audio => draw_audio(config, audio, size, spacing).map(ConfigMessage::Audio),
         ConfigTab::Info => draw_info(config, item, file_size, size),
     };
 
@@ -4249,8 +4232,6 @@ fn draw_config<'a>(
         .height(Length::Fill)
         .padding(3);
 
-    let side = container(side).style(|theme| theme::container::db(theme));
-
     let content = row!(side, content).spacing(20);
 
     let content = column!(header, content)
@@ -4259,7 +4240,6 @@ fn draw_config<'a>(
         .spacing(20);
 
     modal_container(content)
-        .style(|theme| theme::container::bb(theme))
         .padding([16, 16])
         .width(600)
         .height(400)
@@ -4275,7 +4255,7 @@ fn panel_container<'a, Message: 'a>(
     width: impl Into<Length>,
 ) -> Element<'a, Message> {
     container(content)
-        .style(theme::container::db)
+        .style(theme::container::bb)
         .width(width)
         .into()
 }

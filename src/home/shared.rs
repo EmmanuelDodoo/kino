@@ -36,28 +36,6 @@ const SELECTED_WIDTH: f32 = 2.0;
 
 use crate::Element;
 
-variants! {
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-    pub enum Tab {
-        #[default]
-        Items,
-        Data,
-        // Comments,
-        Collections,
-    }
-}
-
-impl Tab {
-    pub fn to_str(self, item: &str) -> &str {
-        match self {
-            Self::Items => item,
-            Self::Data => "Data",
-            Self::Collections => "Collections",
-            // Self::Comments => "Comments",
-        }
-    }
-}
-
 pub fn title<'a, Message: 'a + Clone>(name: &'a str) -> Element<'a, Message> {
     sized_medium(name, H4).into()
 }
@@ -258,155 +236,6 @@ pub fn data<'a, Message: 'a>(
         .align_x(Horizontal::Center)
         .spacing(0.0)
         .into()
-}
-
-pub fn data_tab<'a, Message: 'a + Clone, T: Media>(
-    media: &T,
-    width: f32,
-    on_rename: Message,
-    on_refetch: Message,
-    on_remove: Message,
-    on_synopsis: Message,
-    on_tmdb: (Message, bool),
-) -> Element<'a, Message> {
-    let sts = {
-        let icon = icon(STATS).size(P);
-        let label = medium("Statistics");
-
-        row!(icon, label).spacing(4.0).align_y(Vertical::Center)
-    };
-
-    let duration = data("Duration", media.duration_short(), CLOCK);
-
-    let rating = {
-        let rating = media.rating().unwrap_or_default();
-
-        (rating * 100.0).round() / 100.0
-    };
-    let rating = data("Rating", format!("{}", rating), STAR);
-
-    let comments = data("Comments", media.comments(), NUMBER);
-
-    let release = data("Release Date", media.release_my(), CALENDAR);
-
-    let added = data("Date Added", media.added_humaized(), CALENDAR);
-
-    let count = data("Watch Count", media.watch_count(), EYE);
-
-    let progress = (media.progress() * 1000.0).round() / 10.0;
-    let progress = data("Watch Progress", format!("{:.1}%", progress), HOURGLASS);
-
-    let recent = data(
-        "Recent Watch",
-        media
-            .recent_humanized()
-            .unwrap_or(String::from(" --:--:--")),
-        CALENDAR,
-    );
-
-    let r1 = row!(
-        duration,
-        space::horizontal(),
-        release,
-        space::horizontal(),
-        count,
-        space::horizontal(),
-        progress
-    )
-    .align_y(Vertical::Center)
-    .width(Length::Fill);
-
-    let r2 = row!(
-        rating,
-        space::horizontal(),
-        added,
-        space::horizontal(),
-        comments,
-        space::horizontal(),
-        recent,
-    )
-    .align_y(Vertical::Center)
-    .width(Length::Fill);
-
-    let data = column!(r1, r2).spacing(20.0);
-
-    let data = column!(sts, data).spacing(12.0);
-
-    let ops = {
-        let label = {
-            let icon = icon(EDIT).size(P);
-            let label = medium("Edit");
-
-            row!(icon, label).spacing(4.0).align_y(Vertical::Center)
-        };
-
-        let ops = {
-            let size = H7;
-            let spacing = 4.0;
-            let tp = tp::Position::Top;
-
-            let rename = row!(icon(RENAME).size(size), sized_medium("Name", size))
-                .spacing(spacing)
-                .align_y(Vertical::Center);
-            let rename = button(rename)
-                .style(theme::button::danger)
-                .on_press(on_rename);
-
-            let synopsis = row!(icon(RENAME).size(size), sized_medium("Overview", size))
-                .spacing(spacing)
-                .align_y(Vertical::Center);
-            let synopsis = button(synopsis)
-                .style(theme::button::danger)
-                .on_press(on_synopsis);
-
-            let tmdb: Element<'_, Message> = if on_tmdb.1 {
-                let tmdb = sized_medium("TMDB ID", size);
-
-                tooltip(
-                        button(tmdb)
-                            .style(theme::button::danger)
-                            .on_press(on_tmdb.0),
-                        "TMDB id can easily be located as part of the movie/show url. Eg `1233413` from https://www.themoviedb.org/movie/1233413-sinners",
-                        tp,
-                    )
-                    .into()
-            } else {
-                let tmdb = sized_medium("Number", size);
-
-                tooltip(
-                    button(tmdb)
-                        .style(theme::button::danger)
-                        .on_press(on_tmdb.0),
-                    "Manually set the season/episode number",
-                    tp,
-                )
-                .into()
-            };
-
-            let refetch = row!(icon(REFRESH).size(size), sized_medium("Refetch", size))
-                .spacing(spacing)
-                .align_y(Vertical::Center);
-            let refetch = button(refetch)
-                .style(theme::button::danger)
-                .on_press(on_refetch);
-            let refetch = tooltip(refetch, "Refetch from TMDB", tp);
-
-            let remove = row!(icon(DELETE).size(size), sized_medium("Delete", size))
-                .spacing(spacing)
-                .align_y(Vertical::Center);
-            let remove = button(remove)
-                .style(theme::button::danger)
-                .on_press(on_remove);
-
-            row!(rename, synopsis, tmdb, refetch, remove).spacing(8.0)
-        };
-
-        column!(label, ops).spacing(10.0)
-    };
-
-    let content = column!(data, ops).spacing(40.0);
-
-    content.width(width).into()
 }
 
 pub fn draw_collection_tab<'a, Message: 'a + Clone>(
@@ -697,12 +526,7 @@ impl CollectionThumbnail {
 
         let content = button(content)
             .padding(10)
-            .style(|theme, status| {
-                let default = theme::button::danger(theme, status);
-                let border = default.border.rounded(IMAGE_RADIUS);
-
-                button::Style { border, ..default }
-            })
+            .style(theme::button::subtle_inv)
             .on_press((on_select)(self.collection.id));
 
         content.into()
@@ -754,13 +578,6 @@ impl SearchView {
             theme.schema().primary.strong.color
         }
 
-        let separator = || {
-            Element::from(text("•").line_height(0.9).size(H5).style(|theme: &Theme| {
-                let color = theme.schema().danger.strong.color;
-                text::Style { color: Some(color) }
-            }))
-        };
-
         let name = {
             let name = marquee(&self.item.name)
                 .size(H6)
@@ -792,32 +609,38 @@ impl SearchView {
 
                 sized_regular(media, size)
                     .font(bold_italic_font())
-                    .style(|theme| {
-                        let color = pair(theme);
+                    .style(|theme: &Theme| {
+                        let color = theme.schema().primary.strong.color;
                         text::Style { color: Some(color) }
                     })
             };
 
             let has_tags = !self.item.tags.is_empty();
             let tags = {
+                let separator = || {
+                    Element::from(text("•").line_height(0.75).size(H6).style(|theme: &Theme| {
+                        let color = theme.schema().accent.base.color;
+                        text::Style { color: Some(color) }
+                    }))
+                };
                 let max = 4;
-                let mut tags = vec![];
-                let tag_len = self.item.tags.len().min(max);
 
-                for (i, tag) in self.item.tags.iter().enumerate().take(max) {
-                    let text = sized_regular(tag, size)
-                        .font(bold_italic_font())
-                        .style(|theme| {
-                            let color = pair(theme);
-                            text::Style { color: Some(color) }
-                        });
+                let tags = self
+                    .item
+                    .tags
+                    .iter()
+                    .take(max)
+                    .flat_map(|tag| {
+                        let text = sized_regular(tag, size).font(bold_italic_font()).style(
+                            |theme: &Theme| {
+                                let color = theme.schema().secondary.strong.color;
+                                text::Style { color: Some(color) }
+                            },
+                        );
 
-                    tags.push(Element::from(text));
-
-                    if i < tag_len - 1 {
-                        tags.push(separator())
-                    }
-                }
+                        [separator(), Element::from(text)]
+                    })
+                    .skip(1);
 
                 row(tags).spacing(6).align_y(Vertical::Center)
             };
@@ -825,7 +648,10 @@ impl SearchView {
             let vert: Element<'_, Message> = if self.item.tags.is_empty() {
                 empty()
             } else {
-                container(rule::vertical(2.0)).height(H8).clip(true).into()
+                container(rule::vertical(2.0).style(theme::rule::weak))
+                    .height(H8)
+                    .clip(true)
+                    .into()
             };
 
             if has_tags {
@@ -858,12 +684,7 @@ impl SearchView {
         let content = container(content).width(Length::Fill);
 
         button(content)
-            .style(|theme, status| {
-                let default = theme::button::danger(theme, status);
-                let border = default.border.rounded(IMAGE_RADIUS);
-
-                button::Style { border, ..default }
-            })
+            .style(theme::button::subtle)
             .padding([4, 8])
             .on_press((on_details)(self.item.id))
             .into()
@@ -1321,8 +1142,8 @@ impl<'a, T: Copy, Message: 'a + Clone> List<'a, T, Message> {
         let content = button(content)
             .padding(10)
             .style(move |theme, status| {
-                let default = theme::button::danger(theme, status);
-                let border = default.border.rounded(IMAGE_RADIUS);
+                let default = theme::button::subtle_inv(theme, status);
+                let border = default.border;
                 let border = if selected {
                     border
                         .width(SELECTED_WIDTH)
@@ -1493,8 +1314,8 @@ impl<'a, T: Copy, Message: 'a + Clone> Compact<'a, T, Message> {
         .padding([6, 6])
         .on_press(on_select)
         .style(move |theme, status| {
-            let default = theme::button::danger(theme, status);
-            let border = default.border.rounded(IMAGE_RADIUS);
+            let default = theme::button::subtle_inv(theme, status);
+            let border = default.border;
             let border = if selected {
                 border
                     .width(SELECTED_WIDTH)
@@ -1714,7 +1535,7 @@ pub fn page_tags<'a, Message: 'a + Clone, T: text::IntoFragment<'a>>(
                 Some(message) => Element::from(
                     button(value)
                         .padding(0)
-                        .style(theme::button::text)
+                        .style(theme::button::text_primary)
                         .on_press(message),
                 ),
                 None => Element::from(value),
@@ -1939,11 +1760,11 @@ pub fn page_nav<'a, Message: 'a + Clone>(
     };
 
     let prev = button(icon(CHEV_RIGHT).size(size).style(color))
-        .style(theme::button::danger)
+        .style(theme::button::subtle_2)
         .on_press_maybe(on_prev);
 
     let next = button(icon(CHEV_LEFT).size(size).style(color))
-        .style(theme::button::danger)
+        .style(theme::button::subtle_2)
         .on_press(on_next);
 
     row!(space::horizontal(), prev, next, space::horizontal())
@@ -2023,7 +1844,7 @@ pub fn page_layout<'a, Message: 'a>(
         .height(Length::FillPortion(4))
         .width(Length::Fill)
         .style(|theme| {
-            let default = theme::container::bb(theme);
+            let default = theme::container::bw(theme);
             let background = default
                 .background
                 .map(|background| background.scale_alpha(0.85));

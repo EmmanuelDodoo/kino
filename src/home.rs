@@ -4697,7 +4697,7 @@ impl Home {
             .width(300.0)
             .height(Length::Fill);
 
-        let content = container(content).style(theme::container::db);
+        let content = container(content);
 
         content.into()
     }
@@ -4710,7 +4710,6 @@ impl Home {
     ) -> Element<'a, HomeMessage> {
         let movies = {
             let label = h6("Recent Movies");
-            let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
             let movies = movies.iter();
 
@@ -4768,7 +4767,6 @@ impl Home {
 
         let shows = {
             let label = h6("Recent Shows");
-            let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
             let shows = shows.iter();
 
@@ -4866,16 +4864,16 @@ impl Home {
 
     fn filters_view(&self) -> Element<'_, HomeMessage> {
         let size = H8;
-        let padding = Padding::new(2.0).horizontal(5.0);
-        let spacing = 2.0;
-        let picklist_font = regular_font();
+        let padding = Padding::new(3.0).horizontal(7.0);
+        let spacing = 3.0;
+        let picklist_font = medium_font();
         let input_font = mono_font();
 
         let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
         let comp = |icon: char, msg: FilterMessage| {
             icons::sized_button(icon, size * RATIO)
-                .padding([5, 5])
-                .style(theme::button::danger)
+                .padding([2, 5])
+                .style(theme::button::accent)
                 .on_press(HomeMessage::Filter(msg))
         };
 
@@ -4942,7 +4940,8 @@ impl Home {
                 .map(|comments| comments.number.to_string())
                 .unwrap_or_default();
             let input = text_input("", &content)
-                .width(32.0)
+                .width(44.0)
+                .align_x(Horizontal::Right)
                 .size(size)
                 .font(input_font)
                 .padding(padding)
@@ -4969,6 +4968,7 @@ impl Home {
                 .unwrap_or_default();
             let input = text_input("", &content)
                 .width(48.0)
+                .align_x(Horizontal::Right)
                 .font(input_font)
                 .size(size)
                 .padding(padding)
@@ -4996,8 +4996,9 @@ impl Home {
                 .map(|duration| format!("{}", duration.secs / 3600))
                 .unwrap_or_default();
             let hours = text_input("", &hours)
-                .width(28.0)
+                .width(32.0)
                 .size(size)
+                .align_x(Horizontal::Right)
                 .font(input_font)
                 .padding(padding)
                 .on_input(|input| HomeMessage::Filter(FilterMessage::DurationHours(input)));
@@ -5008,7 +5009,8 @@ impl Home {
                 .map(|duration| format!("{}", (duration.secs % 3600) / 60))
                 .unwrap_or_default();
             let minutes = text_input("", &minutes)
-                .width(28.0)
+                .width(32.0)
+                .align_x(Horizontal::Right)
                 .size(size)
                 .font(input_font)
                 .padding(padding)
@@ -5079,7 +5081,7 @@ impl Home {
                     let content = sized_medium(label, H8);
 
                     let unicode = if asc { UPS } else { DOWNS };
-                    let icon = icon(unicode).size(10.0);
+                    let icon = icon(unicode).size(12.0);
 
                     let icon = button(icon)
                         .padding(0)
@@ -5102,11 +5104,11 @@ impl Home {
                 let default = if enable {
                     theme::button::background(theme, status)
                 } else if SortKind::HIDDEN.is_empty() {
-                    theme::button::danger(theme, status)
+                    theme::button::neutral(theme, status)
                 } else {
                     theme::button::subtle_primary(theme, status)
                 };
-                let border = Border::default().width(2.0);
+                let border = default.border.width(2.0);
 
                 button::Style { border, ..default }
             });
@@ -5137,7 +5139,7 @@ impl Home {
                 }))
                 .spacing(8),
             )
-            .style(theme::container::db)
+            .style(theme::container::nb)
             .padding([3, 6]);
 
             menu(base, hidden)
@@ -5264,13 +5266,13 @@ impl Home {
         let tools = row!(left, space::horizontal(), right).width(Length::Fill);
 
         let sorts_rule = if self.show_sorts {
-            rule::horizontal(1.0).into()
+            rule::horizontal(0.75).into()
         } else {
             empty()
         };
 
         let filters_rule = if self.show_filters {
-            rule::horizontal(1.0).into()
+            rule::horizontal(0.75).into()
         } else {
             empty()
         };
@@ -5456,7 +5458,7 @@ impl Home {
                 .align_x(Horizontal::Right)
                 .padding(padding)
                 .style(|theme| {
-                    let default = theme::container::db(theme);
+                    let default = theme::container::bb(theme);
                     let background = default.background.map(|back| back.scale_alpha(0.5));
 
                     container::Style {
@@ -6757,9 +6759,9 @@ fn icon_button<'a>(
         button(content)
             .style(move |theme, status| {
                 if current {
-                    theme::button::danger(theme, status)
+                    theme::button::neutral(theme, status)
                 } else {
-                    theme::button::danger(theme, status)
+                    theme::button::text_hover(theme, status)
                 }
             })
             .on_press(message),

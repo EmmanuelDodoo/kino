@@ -158,13 +158,13 @@ pub struct Radii {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub enum Theme {
-    #[default]
     Autumn,
     Luxury,
     Ember,
     Bumblebee,
     Fantasy,
     Black,
+    #[default]
     Abyss,
     #[serde(serialize_with = "se_custom", deserialize_with = "de_custom")]
     Custom(Arc<Custom>),
