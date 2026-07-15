@@ -47,7 +47,6 @@ pub struct SeasonPageMessage {
 #[derive(Debug, Clone)]
 pub struct SeasonPage {
     id: SeasonId,
-    tab: Tab,
     scroll: Scroll,
 }
 
@@ -63,14 +62,7 @@ impl SeasonPage {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
-        (
-            Self {
-                id: season,
-                tab: Tab::Items,
-                scroll,
-            },
-            id,
-        )
+        (Self { id: season, scroll }, id)
     }
 
     pub fn update(&mut self, message: SeasonPageMessage) -> Option<HomeMessage> {

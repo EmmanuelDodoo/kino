@@ -274,9 +274,9 @@ pub fn draw_collection_add<'a>(
         )))
         .style(move |theme, status| {
             if selected {
-                theme::button::danger(theme, status)
+                theme::button::subtle_2(theme, status)
             } else {
-                theme::button::danger(theme, status)
+                theme::button::text(theme, status)
             }
         })
         .into()
@@ -579,7 +579,7 @@ pub fn draw_insert_trigger<'a>(
         let label = sized_medium("Generate Delete Rule", text_size / RATIO);
 
         button(label)
-            .style(theme::button::danger)
+            .style(theme::button::subtle_inv)
             .on_press(TriggerMessage::GenerateDelete(id))
     };
 
@@ -1332,28 +1332,29 @@ pub fn draw_selection<'a>(items: usize) -> Element<'a, HomeMessage> {
 
     let extra = column!(cancel, space::vertical(), count);
 
-    let content: Element<'_, SelectionMessage> = container(
-        row!(play, extra)
-            .width(dimensions)
-            .height(dimensions)
-            .spacing(4.0)
-            .align_y(Vertical::Center),
-    )
-    .align_y(Vertical::Center)
-    .align_x(Horizontal::Center)
-    .padding([40, 20])
-    .style(|theme| {
-        let default = theme::container::transparent(theme);
-        let background = default
-            .background
-            .map(|background| background.scale_alpha(0.25));
+    let content = row!(play, extra)
+        .width(dimensions)
+        .height(dimensions)
+        .spacing(4.0)
+        .align_y(Vertical::Center);
 
-        container::Style {
-            background,
-            ..default
-        }
-    })
-    .into();
+
+    let content: Element<'_, SelectionMessage> = container(content)
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Center)
+        .padding([40, 20])
+        .style(|theme| {
+            let default = theme::container::bs(theme);
+            let background = default
+                .background
+                .map(|background| background.scale_alpha(0.25));
+
+            container::Style {
+                background,
+                ..default
+            }
+        })
+        .into();
 
     content.map(HomeMessage::Selection)
 }

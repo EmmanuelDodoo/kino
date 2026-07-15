@@ -4,8 +4,9 @@ use crate::theme::{self, Theme};
 use crate::utils::{
     self, Config, FontState, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
     SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
-    convert_color_str, empty, icons, icons::sized_button, modal::modal, modal_container,
-    path_container, picklist_handle, save_btn, toggler, tooltip, trim_path, typo::*,
+    convert_color_str, empty, icons, icons::sized_button, input_actions, modal::modal,
+    modal_container, path_container, picklist_handle, save_btn, toggler, tooltip, trim_path,
+    typo::*,
 };
 use devutils::source::SourceSet;
 use iced::{
@@ -31,7 +32,7 @@ const SPACING: f32 = 6.0;
 const INPUT_PADDING: [f32; 2] = [3.5, 5.0];
 const LIST_PADDING: [f32; 2] = [5.0, 10.0];
 const ACTIONS_PADDING: [f32; 2] = [1.5, 1.5];
-const ACTIONS_SIZE: f32 = 10.0;
+const ACTIONS_SIZE: f32 = 12.0;
 const ACTIONS_SPACING: f32 = 4.0;
 const SECTION_SPACING: f32 = 16.0;
 const SLIDER_WIDTH: f32 = 200.0;
@@ -1201,7 +1202,7 @@ impl Settings {
             .width(275.0)
             .height(Length::Fill);
 
-        let content = container(content).style(theme::container::db);
+        let content = container(content);
 
         content.into()
     }
@@ -1673,9 +1674,9 @@ fn side_button<'a>(
             .width(Length::Fill)
             .style(move |theme, status| {
                 if current {
-                    theme::button::danger(theme, status)
+                    theme::button::neutral(theme, status)
                 } else {
-                    theme::button::danger(theme, status)
+                    theme::button::text_hover(theme, status)
                 }
             })
             .on_press(message),
@@ -2087,7 +2088,7 @@ fn section<'a, Message: 'a>(
 
     let content = container(content)
         .padding(PADDING)
-        .style(theme::container::db);
+        .style(theme::container::bw);
 
     column!(header, content).spacing(SPACING).into()
 }
@@ -3015,20 +3016,4 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
 
 fn horizontal_rule<'a, Message: 'a>() -> Element<'a, Message> {
     rule::horizontal(1.0).into()
-}
-
-fn input_actions<'a, Message: 'a + Clone>(
-    increase: Message,
-    decrease: Message,
-) -> Element<'a, Message> {
-    let incr = button(icons::icon(icons::CHEV_UP).size(ACTIONS_SIZE))
-        .padding(ACTIONS_PADDING)
-        .style(theme::button::danger)
-        .on_press(increase);
-    let decr = button(icons::icon(icons::CHEV_DOWN).size(ACTIONS_SIZE))
-        .padding(ACTIONS_PADDING)
-        .style(theme::button::danger)
-        .on_press(decrease);
-
-    column!(incr, decr).spacing(2.0).into()
 }

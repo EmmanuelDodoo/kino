@@ -194,8 +194,11 @@ impl Comment {
         if !matches!(&self.mode, Mode::View(_)) {
             return Task::none();
         }
+        let mut editor = text_editor::Content::with_text(&self.inner.content);
 
-        self.mode = Mode::Edit(text_editor::Content::with_text(&self.inner.content));
+        editor.perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+
+        self.mode = Mode::Edit(editor);
 
         operation::focus(self.text_editor.clone())
     }
@@ -245,7 +248,7 @@ impl Comment {
                     .spacing(10);
 
                 let content = container(content).padding(padding).style(move |theme| {
-                    let default = theme::container::db(theme);
+                    let default = theme::container::bw(theme);
 
                     container::Style { ..default }
                 });
@@ -300,7 +303,7 @@ impl Comment {
                     .padding(iced::Padding::ZERO.vertical(6).right(4))
                     .on_press(Message::edit(id, timestamp))
                     .style(move |theme: &Theme, status| {
-                        let base = theme::button::danger(theme, status);
+                        let base = theme::button::subtle_inv(theme, status);
                         let border = base.border.width(border_width);
                         let border = match status {
                             button::Status::Hovered => {
@@ -423,7 +426,9 @@ impl<'a, Message: 'a + CommentMessage> markdown::Viewer<'a, Message, Theme> for 
             Some(Image::Errored(error)) => {
                 let msg = format!("{title} image download errored. {error}");
 
-                typo::regular(msg).style(theme::text::danger).into()
+                typo::sized_regular(msg, typo::H7)
+                    .style(theme::text::danger)
+                    .into()
             }
             None | Some(Image::Loading) => sensor(
                 container(rich_text(alt.spans(settings.style)).on_link_click(Self::on_link_click))

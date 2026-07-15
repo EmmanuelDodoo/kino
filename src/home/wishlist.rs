@@ -424,11 +424,10 @@ impl WishThumbnail {
         };
 
         let actions = {
-            let style = theme::button::subtle;
-
-            let edit = icon_button(icons::RENAME, "Edit", None)
-                .style(style)
-                .on_press(WishlistMessage::Edit(self.item.id));
+            let edit = icon_button(icons::RENAME, "Edit", |theme| text::Style {
+                color: Some(theme.schema().secondary.base.color),
+            })
+            .on_press(WishlistMessage::Edit(self.item.id));
 
             let complete = {
                 let label = if self.item.completed {
@@ -437,9 +436,19 @@ impl WishThumbnail {
                     "Pending"
                 };
 
-                icon_button(icons::CHECK, label, Some(self.item.completed))
-                    .style(style)
-                    .on_press(WishlistMessage::Complete(self.item.id))
+                let completed = self.item.completed;
+
+                icon_button(icons::CHECK, label, move |theme| {
+                    let schema = theme.schema();
+                    let color = if completed {
+                        schema.primary.base.color
+                    } else {
+                        schema.success.base.color
+                    };
+
+                    text::Style { color: Some(color) }
+                })
+                .on_press(WishlistMessage::Complete(self.item.id))
             };
 
             let delete_name = match &self.item.kind {
@@ -450,9 +459,10 @@ impl WishThumbnail {
                 }
             };
 
-            let delete = delete_btn("Delete")
-                .style(style)
-                .on_press(WishlistMessage::Delete(self.item.id, delete_name));
+            let delete = icon_button(icons::DELETE, "Delete", |theme| text::Style {
+                color: Some(theme.schema().danger.base.color),
+            })
+            .on_press(WishlistMessage::Delete(self.item.id, delete_name));
 
             row!(complete, edit, delete)
                 .spacing(20)
@@ -490,17 +500,9 @@ fn tags_row<'a, Message: 'a>(tags: &'a [String]) -> Element<'a, Message> {
 fn icon_button<'a, Message: 'a + Clone>(
     icon: char,
     label: &'a str,
-    primary: Option<bool>,
+    style: impl Fn(&Theme) -> text::Style + 'a,
 ) -> button::Button<'a, Message, Theme> {
-    let icon = icons::icon(icon).size(P).style(move |theme: &Theme| {
-        let color = match primary {
-            Some(true) => Some(theme.schema().primary.base.color),
-            Some(false) => Some(theme.schema().success.base.color),
-            None => None,
-        };
-
-        text::Style { color }
-    });
+    let icon = icons::icon(icon).size(P).style(style);
 
     button(
         row!(icon, typo::sized_medium(label, typo::H7))
@@ -508,5 +510,5 @@ fn icon_button<'a, Message: 'a + Clone>(
             .align_y(iced::alignment::Vertical::Center),
     )
     .padding([6, 12])
-    .style(theme::button::danger)
+    .style(theme::button::subtle)
 }

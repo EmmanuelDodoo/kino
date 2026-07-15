@@ -83,21 +83,21 @@ fn main() -> iced::Result {
         _ => BootMode::Prod,
     };
 
-    // iced::application::timed(
-    //     mode,
-    //     App::update,
-    //     App::subscription,
-    //     App::view
-    // )
-    //     .theme(App::theme)
-
     iced::application::timed(
-        Playground::boot,
-        Playground::update,
-        Playground::subscription,
-        Playground::view,
+        mode,
+        App::update,
+        App::subscription,
+        App::view
     )
-        .theme(Playground::theme)
+        .theme(App::theme)
+
+    // iced::application::timed(
+    //     Playground::boot,
+    //     Playground::update,
+    //     Playground::subscription,
+    //     Playground::view,
+    // )
+    //     .theme(Playground::theme)
 
         .settings(iced::Settings {
             default_font: regular_font(),
@@ -109,7 +109,7 @@ fn main() -> iced::Result {
         .window(window::Settings {
             icon: Some(icon),
             size: Size::new(1280.0, 800.0),
-            // exit_on_close_request: false,
+            exit_on_close_request: false,
             ..Default::default()
         })
         .run()

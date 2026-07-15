@@ -268,7 +268,7 @@ pub mod text {
 
     fn style(pair: Pair) -> Style {
         Style {
-            color: Some(pair.text),
+            color: Some(pair.color),
         }
     }
 
@@ -392,6 +392,23 @@ pub mod button {
         text_base(theme, theme.schema().background.base.text, status)
     }
 
+    pub fn text_hover(theme: &Theme, status: Status) -> Style {
+        let schema = theme.schema();
+        let base = text_base(theme, schema.background.base.text, status);
+
+        match status {
+            Status::Hovered => {
+                let pair = schema.neutral.base;
+                Style {
+                    background: Some(pair.color.scale_alpha(0.5).into()),
+                    text_color: pair.text,
+                    ..base
+                }
+            }
+            _ => base,
+        }
+    }
+
     pub fn text_white(theme: &Theme, status: Status) -> Style {
         text_base(theme, Color::WHITE, status)
     }
@@ -410,6 +427,14 @@ pub mod button {
 
     pub fn text_secondary(theme: &Theme, status: Status) -> Style {
         text_base(theme, theme.schema().secondary.base.color, status)
+    }
+
+    pub fn text_accent(theme: &Theme, status: Status) -> Style {
+        text_base(theme, theme.schema().accent.base.color, status)
+    }
+
+    pub fn text_neutral(theme: &Theme, status: Status) -> Style {
+        text_base(theme, theme.schema().neutral.base.color, status)
     }
 
     pub fn text_slate(theme: &Theme, status: Status) -> Style {
@@ -434,6 +459,56 @@ pub mod button {
             },
             Status::Hovered => Style {
                 background: Some(Background::Color(schema.background.base.color)),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
+    pub fn subtle_2(theme: &Theme, status: Status) -> Style {
+        let schema = theme.schema();
+        let pair = schema.background.weak;
+
+        let light = iced::theme::palette::lighten(pair.color, 0.025);
+
+        let base = Style {
+            background: Some(Background::Color(pair.color)),
+            text_color: pair.text,
+            ..base(theme)
+        };
+
+        match status {
+            Status::Active => base,
+            Status::Pressed => Style {
+                background: Some(Background::Color(schema.background.weak.color)),
+                ..base
+            },
+            Status::Hovered => Style {
+                background: Some(Background::Color(light)),
+                ..base
+            },
+            Status::Disabled => disabled(base),
+        }
+    }
+
+    pub fn subtle_inv(theme: &Theme, status: Status) -> Style {
+        let schema = theme.schema();
+
+        let pair = schema.background.base;
+        let base = Style {
+            background: Some(Background::Color(pair.color)),
+            text_color: pair.text,
+            ..base(theme)
+        };
+
+        match status {
+            Status::Active => base,
+            Status::Pressed => Style {
+                background: Some(Background::Color(schema.background.weak.color)),
+                ..base
+            },
+            Status::Hovered => Style {
+                background: Some(Background::Color(schema.background.strong.color)),
                 ..base
             },
             Status::Disabled => disabled(base),
@@ -470,22 +545,23 @@ pub mod button {
     pub fn subtle_primary(theme: &Theme, status: Status) -> Style {
         let schema = theme.schema();
         let palette = schema.primary;
+        let pair = palette.weak;
 
         let base = Style {
-            background: Some(Background::Color(palette.strong.color)),
-            text_color: palette.strong.text,
+            background: Some(Background::Color(pair.color)),
+            text_color: pair.text,
             ..base(theme)
         };
 
         match status {
             Status::Active => base,
             Status::Pressed => Style {
-                background: Some(Background::Color(palette.strong.color)),
+                background: Some(Background::Color(pair.color.scale_alpha(0.75))),
 
                 ..base
             },
             Status::Hovered => Style {
-                background: Some(Background::Color(palette.strong.color.scale_alpha(0.75))),
+                background: Some(Background::Color(palette.strong.color)),
                 ..base
             },
             Status::Disabled => disabled(base),
@@ -927,7 +1003,7 @@ pub mod rule {
         let schema = theme.schema();
 
         Style {
-            color: schema.background.strong.color,
+            color: schema.neutral.strong.color,
             radius: 0.0.into(),
             fill_mode: FillMode::Full,
             snap: true,
@@ -939,7 +1015,7 @@ pub mod rule {
         let schema = theme.schema();
 
         Style {
-            color: schema.background.weak.color,
+            color: schema.neutral.weak.color,
             radius: 0.0.into(),
             fill_mode: FillMode::Full,
             snap: true,

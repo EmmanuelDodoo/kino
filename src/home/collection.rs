@@ -9,7 +9,7 @@ use crate::Element;
 use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{self, Layout, Scroll, empty};
+use crate::utils::{self, Layout, Scroll, empty, icons};
 use iced::{
     Border, Length, Padding, Task,
     alignment::Vertical,
@@ -245,17 +245,7 @@ impl CollectionPage {
                 let play = btn(id, PLAY, "Play", Message::Play(Items::All));
 
                 let base = container(icon(ELLIPSIS_VER).size(H7))
-                    .style(|theme: &Theme| {
-                        let pair = theme.schema().danger.strong;
-                        let text = pair.text;
-                        let color = pair.color;
-
-                        container::Style {
-                            background: Some(color.into()),
-                            text_color: Some(text),
-                            ..Default::default()
-                        }
-                    })
+                    .style(theme::container::bw)
                     .padding([8, 3]);
 
                 let actions = column!(
@@ -288,17 +278,7 @@ impl CollectionPage {
                 );
 
                 let base = container(icon(ELLIPSIS_VER).size(H7))
-                    .style(|theme: &Theme| {
-                        let pair = theme.schema().danger.strong;
-                        let text = pair.text;
-                        let color = pair.color;
-
-                        container::Style {
-                            background: Some(color.into()),
-                            text_color: Some(text),
-                            ..Default::default()
-                        }
-                    })
+                    .style(theme::container::bw)
                     .padding([8, 3]);
 
                 let actions = column!(
@@ -699,7 +679,7 @@ fn btn<'a>(
     )
     .padding([6, 12])
     .on_press(CollectionMessage { id, message })
-    .style(theme::button::danger)
+    .style(theme::button::subtle_2)
 }
 
 fn delete_btn<'a>(
@@ -707,7 +687,18 @@ fn delete_btn<'a>(
     label: &'a str,
     message: Message,
 ) -> Button<'a, CollectionMessage, Theme> {
-    utils::delete_btn(label).on_press(CollectionMessage { id, message })
+    let icon = icons::icon(DELETE).style(|theme: &Theme| text::Style {
+        color: Some(theme.schema().danger.base.color),
+    });
+
+    button(
+        row!(icon, medium(label))
+            .spacing(10.0)
+            .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding([6, 12])
+    .style(theme::button::subtle_2)
+    .on_press(CollectionMessage { id, message })
 }
 
 fn add(item: impl Into<ItemId>) -> Message {
