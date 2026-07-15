@@ -7,6 +7,7 @@ pub mod slider;
 pub mod throbber;
 pub mod toast;
 pub mod toggler;
+pub mod font_selection;
 
 pub use expandable::*;
 pub use marquee::marquee;
@@ -16,3 +17,4 @@ pub use pagination::{Page, Pagination, pagination};
 pub use throbber::*;
 pub use toast::manager;
 pub use toggler::*;
+pub use font_selection::*;
