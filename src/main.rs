@@ -41,16 +41,16 @@ use registry::models::{
 use registry::sort;
 use registry::sort::*;
 use std::sync::LazyLock;
-use theme::Theme;
+pub use theme::Theme;
 use utils::config::Config;
 use utils::icons;
 use utils::icons::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Layout, cancel_btn, empty, save_btn, styles, tooltip};
+use utils::{Layout, cancel_btn, empty, save_btn, tooltip};
 use widgets::{menu, modal, pagination};
 
-type Element<'a, Message> = iced::Element<'a, Message, Theme, iced::Renderer>;
+pub type Element<'a, Message> = iced::Element<'a, Message, Theme, iced::Renderer>;
 
 // fn test_main() -> iced::Result {
 #[rustfmt::skip]
@@ -242,7 +242,7 @@ impl Playground {
 
             let pages = column!(a, b).spacing(16);
 
-            container(pages).max_width(500)
+            container(pages).max_width(750)
         };
 
         let toggles = {

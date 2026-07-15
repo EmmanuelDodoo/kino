@@ -1,14 +1,15 @@
 use crate::app::Message;
 use crate::db::Operation;
+use crate::theme::{self, Theme};
 use crate::utils::{
-    self, AppTheme, Config, FontState, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction,
-    Scroll, SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
+    self, Config, FontState, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
+    SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
     convert_color_str, empty, icons, icons::sized_button, modal::modal, modal_container,
-    path_container, picklist_handle, save_btn, styles, toggler, tooltip, trim_path, typo::*,
+    path_container, picklist_handle, save_btn, toggler, tooltip, trim_path, typo::*,
 };
 use devutils::source::SourceSet;
 use iced::{
-    Border, Element, Length, Task, Theme,
+    Border, Length, Task,
     alignment::{Horizontal, Vertical},
     font::Family,
     widget::{
@@ -17,10 +18,11 @@ use iced::{
     },
 };
 use registry::models::{Directory, DirectoryId, MediaType, humanize_datetime};
-use widgets::{expandable, marquee};
-
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use widgets::{expandable, marquee};
+
+use crate::Element;
 
 const PADDING: [f32; 2] = [20.0, 24.0];
 const TEXT_SIZE: f32 = P;
@@ -150,7 +152,7 @@ pub enum GeneralMessage {
 #[derive(Debug, Clone)]
 pub enum AppearanceMessage {
     Layout(Layout),
-    Theme(AppTheme),
+    Theme(Theme),
 }
 
 #[derive(Debug, Clone)]
@@ -1199,12 +1201,7 @@ impl Settings {
             .width(275.0)
             .height(Length::Fill);
 
-        let content = container(content).style(|theme| {
-            let default = styles::container::bw3(theme);
-            let border = default.border.rounded(2.5);
-
-            container::Style { border, ..default }
-        });
+        let content = container(content).style(theme::container::db);
 
         content.into()
     }
@@ -1271,7 +1268,6 @@ impl Settings {
             recents_limit,
             search_limit,
             theme,
-            theme_iced: _unused,
             scan_discoverer,
             auth_token,
             movie_depth,
@@ -1313,7 +1309,7 @@ impl Settings {
                 button(label)
                     .padding(0)
                     .on_press(SettingsMessage::OpenConfig)
-                    .style(styles::button::text_primary)
+                    .style(theme::button::text_primary)
             };
 
             let log = {
@@ -1325,7 +1321,7 @@ impl Settings {
                 button(label)
                     .padding(0)
                     .on_press(SettingsMessage::OpenLog)
-                    .style(styles::button::text_primary)
+                    .style(theme::button::text_primary)
             };
 
             column!(config, log).spacing(12)
@@ -1440,7 +1436,7 @@ impl Settings {
 
             let new = button(new)
                 .on_press(SettingsMessage::NewKeyPress(KeyAction::General(None)))
-                .style(styles::button::text_primary);
+                .style(theme::button::text_primary);
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
@@ -1483,7 +1479,7 @@ impl Settings {
 
             let new = button(new)
                 .on_press(SettingsMessage::NewKeyPress(KeyAction::Video(None)))
-                .style(styles::button::text_primary);
+                .style(theme::button::text_primary);
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
@@ -1526,7 +1522,7 @@ impl Settings {
 
             let new = button(new)
                 .on_press(SettingsMessage::NewKeyPress(KeyAction::Settings(None)))
-                .style(styles::button::text_primary);
+                .style(theme::button::text_primary);
 
             let title = row!(title, space::horizontal(), new).align_y(Vertical::Center);
 
@@ -1677,9 +1673,9 @@ fn side_button<'a>(
             .width(Length::Fill)
             .style(move |theme, status| {
                 if current {
-                    styles::button::background_primary(theme, status)
+                    theme::button::danger(theme, status)
                 } else {
-                    styles::button::subtlest(theme, status)
+                    theme::button::danger(theme, status)
                 }
             })
             .on_press(message),
@@ -1689,7 +1685,7 @@ fn side_button<'a>(
     .into()
 }
 
-fn help<'a, Message: 'a>(label: &'a str) -> Tooltip<'a, Message> {
+fn help<'a, Message: 'a>(label: &'a str) -> Tooltip<'a, Message, Theme> {
     use iced::widget::tooltip::Position;
 
     tooltip(
@@ -1728,7 +1724,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
             .on_press(SettingsMessage::FolderSelection(
                 FolderSelectionMessage::Reselect,
             ))
-            .style(styles::button::subtle);
+            .style(theme::button::subtle);
 
         row!(folder, reselect).align_y(Vertical::Center).spacing(12)
     };
@@ -1738,7 +1734,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
         let label = sized_bold("Media type: ", size).width(100.0);
 
         let lst = pick_list(Some(*kind), MediaType::ALL, ToString::to_string)
-            .style(styles::pick_list::default)
+            .style(theme::pick_list::default)
             .font(regular_font())
             .on_select(|kind| SettingsMessage::FolderSelection(FolderSelectionMessage::Kind(kind)))
             .padding([2, 5])
@@ -1787,9 +1783,9 @@ fn draw_capture_key<'a>(
     .width(Length::Fill)
     .padding([2, 4])
     .style(|theme: &Theme| {
-        let color = theme.palette().secondary.strong.color;
-        let default = styles::container::transparent(theme);
-        let border = default.border.rounded(5).color(color).width(1.5);
+        let color = theme.schema().secondary.strong.color;
+        let default = theme::container::transparent(theme);
+        let border = default.border.color(color).width(1.5);
 
         container::Style { border, ..default }
     });
@@ -1799,27 +1795,15 @@ fn draw_capture_key<'a>(
     let conflict: Element<'_, SettingsMessage> = match conflict {
         KeyAction::General(Some(action)) => medium(format!("Conflicts with {action}"))
             .size(size / RATIO)
-            .style(|theme| {
-                let color = theme.palette().danger.base.color;
-
-                text::Style { color: Some(color) }
-            })
+            .style(theme::text::danger)
             .into(),
         KeyAction::Video(Some(action)) => medium(format!("Conflicts with {action}"))
             .size(size / RATIO)
-            .style(|theme| {
-                let color = theme.palette().danger.base.color;
-
-                text::Style { color: Some(color) }
-            })
+            .style(theme::text::danger)
             .into(),
         KeyAction::Settings(Some(action)) => medium(format!("Conflicts with {action}"))
             .size(size / RATIO)
-            .style(|theme| {
-                let color = theme.palette().danger.base.color;
-
-                text::Style { color: Some(color) }
-            })
+            .style(theme::text::danger)
             .into(),
         _ => empty(),
     };
@@ -1839,7 +1823,7 @@ fn draw_capture_key<'a>(
         let (lst, set): (Element<'_, SettingsMessage>, bool) = match action {
             KeyAction::General(selected) => (
                 pick_list(*selected, HomeAction::VARIANTS, ToString::to_string)
-                    .style(styles::pick_list::default)
+                    .style(theme::pick_list::default)
                     .font(regular_font())
                     .on_select(|action| {
                         SettingsMessage::KeyAction(KeyAction::General(Some(action)))
@@ -1852,7 +1836,7 @@ fn draw_capture_key<'a>(
             ),
             KeyAction::Video(selected) => (
                 pick_list(*selected, PlayerAction::VARIANTS, ToString::to_string)
-                    .style(styles::pick_list::default)
+                    .style(theme::pick_list::default)
                     .on_select(|action| SettingsMessage::KeyAction(KeyAction::Video(Some(action))))
                     .font(regular_font())
                     .handle(picklist_handle(size))
@@ -1863,7 +1847,7 @@ fn draw_capture_key<'a>(
             ),
             KeyAction::Settings(selected) => (
                 pick_list(*selected, SettingsAction::VARIANTS, ToString::to_string)
-                    .style(styles::pick_list::default)
+                    .style(theme::pick_list::default)
                     .font(regular_font())
                     .on_select(|action| {
                         SettingsMessage::KeyAction(KeyAction::Settings(Some(action)))
@@ -1897,15 +1881,15 @@ fn draw_capture_key<'a>(
     modal_container(content).width(300).into()
 }
 
-fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a, Theme> {
     sized_medium(label, TEXT_SIZE)
 }
 
-fn section_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+fn section_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a, Theme> {
     sized_bold(label, TEXT_SIZE * RATIO)
 }
 
-fn table_header<'a>(label: &'a str) -> text::Text<'a> {
+fn table_header<'a>(label: &'a str) -> text::Text<'a, Theme> {
     sized_medium(label, TEXT_SIZE / RATIO)
 }
 
@@ -1924,7 +1908,7 @@ fn table_name<'a>(
         .into()
 }
 
-fn table_description<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+fn table_description<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a, Theme> {
     sized_regular(label, TEXT_SIZE)
 }
 
@@ -1932,7 +1916,7 @@ fn table_keys<'a>(page: Page, keys: &[KeyPress]) -> Element<'a, SettingsMessage>
     let keys = keys.iter().map(|key| {
         let key = button(table_key(key))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(SettingsMessage::ClearBinding(page, key.clone()));
 
         binding_tooltip(key, "Remove binding")
@@ -1947,8 +1931,8 @@ fn table_key<'a>(key: &KeyPress) -> Element<'a, SettingsMessage> {
     let content = container(content)
         .padding(5)
         .style(|theme| {
-            let default = styles::container::bordered(theme);
-            let border = default.border.rounded(5).width(1.5);
+            let default = theme::container::bordered(theme);
+            let border = default.border.width(1.5);
 
             container::Style { border, ..default }
         })
@@ -1985,7 +1969,7 @@ fn draw_subtitles<'a>(
         let label = button(label)
             .padding(0)
             .on_press(SubtitleMessage::ToggleSubtitles)
-            .style(styles::button::text);
+            .style(theme::button::text);
 
         let toggle = toggler(show_subtitles).on_toggle(SubtitleMessage::Subtitles);
 
@@ -2103,7 +2087,7 @@ fn section<'a, Message: 'a>(
 
     let content = container(content)
         .padding(PADDING)
-        .style(styles::container::bw3);
+        .style(theme::container::db);
 
     column!(header, content).spacing(SPACING).into()
 }
@@ -2195,7 +2179,7 @@ fn draw_general<'a>(
         let label = button(label)
             .padding(0)
             .on_press(GeneralMessage::ToggleShowDirs)
-            .style(styles::button::text);
+            .style(theme::button::text);
 
         let toggle = toggler(show_dirs).on_toggle(GeneralMessage::ShowDirs);
 
@@ -2216,7 +2200,7 @@ fn draw_general<'a>(
     section("General", content)
 }
 
-fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, AppearanceMessage> {
+fn draw_appearance<'a>(layout: &'a Layout, theme: &'a Theme) -> Element<'a, AppearanceMessage> {
     let layouts = {
         let handle = picklist_handle(TEXT_SIZE);
         let label = label_maker("Content layout ");
@@ -2227,7 +2211,7 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
             .handle(handle.clone())
             .padding(LIST_PADDING)
             .text_size(TEXT_SIZE)
-            .style(styles::pick_list::default);
+            .style(theme::pick_list::default);
 
         row!(label, space::horizontal(), layouts).align_y(Vertical::Center)
     };
@@ -2237,13 +2221,13 @@ fn draw_appearance<'a>(layout: &'a Layout, theme: &'a AppTheme) -> Element<'a, A
 
         let label = label_maker("Theme ");
 
-        let theme = pick_list(Some(*theme), AppTheme::VARIANTS, ToString::to_string)
+        let theme = pick_list(Some(theme), Theme::ALL, ToString::to_string)
             .font(regular_font())
             .on_select(AppearanceMessage::Theme)
             .handle(handle.clone())
             .padding(LIST_PADDING)
             .text_size(TEXT_SIZE)
-            .style(styles::pick_list::default);
+            .style(theme::pick_list::default);
 
         row!(label, space::horizontal(), theme).align_y(Vertical::Center)
     };
@@ -2277,7 +2261,7 @@ fn draw_media<'a>(
                 .align_y(Vertical::Center),
             )
             .padding([3, 6])
-            .style(styles::button::text_primary)
+            .style(theme::button::text_primary)
             .on_press(MediaMessage::AddFolder);
 
             let scan = button(
@@ -2289,7 +2273,7 @@ fn draw_media<'a>(
                 .align_y(Vertical::Center),
             )
             .padding([3, 6])
-            .style(styles::button::text_primary)
+            .style(theme::button::text_primary)
             .on_press(MediaMessage::ScanAll);
 
             let icon = if directories_shown {
@@ -2314,12 +2298,8 @@ fn draw_media<'a>(
                 button(tag)
                     .padding([2, 5])
                     .style(|theme, status| {
-                        let default = styles::button::text_primary(theme, status);
-                        let border = default
-                            .border
-                            .rounded(3.0)
-                            .color(default.text_color)
-                            .width(0.75);
+                        let default = theme::button::text_primary(theme, status);
+                        let border = default.border.color(default.text_color).width(0.75);
 
                         button::Style { border, ..default }
                     })
@@ -2340,7 +2320,7 @@ fn draw_media<'a>(
                 .handle(handle)
                 .padding(LIST_PADDING)
                 .text_size(TEXT_SIZE)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
             })
             .align_y(Vertical::Center);
 
@@ -2389,9 +2369,9 @@ fn draw_media<'a>(
                     .on_press(MediaMessage::ToggleDirectoryAdd(dir.dir.id))
                     .style(move |theme, status| {
                         if deleted {
-                            styles::button::text_primary(theme, status)
+                            theme::button::text_primary(theme, status)
                         } else {
-                            styles::button::text_danger(theme, status)
+                            theme::button::text_danger(theme, status)
                         }
                     })
             })
@@ -2415,7 +2395,7 @@ fn draw_media<'a>(
         let label = button(label)
             .padding(0)
             .on_press(MediaMessage::ToggleScanDiscover)
-            .style(styles::button::text);
+            .style(theme::button::text);
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
@@ -2431,7 +2411,7 @@ fn draw_media<'a>(
         let label = button(label)
             .padding(0)
             .on_press(MediaMessage::ToggleRestore)
-            .style(styles::button::text);
+            .style(theme::button::text);
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
@@ -2560,7 +2540,7 @@ fn draw_metadata<'a>(
         let label = button(label)
             .padding(0)
             .on_press(MetadataMessage::ToggleTMDBRating)
-            .style(styles::button::text);
+            .style(theme::button::text);
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
@@ -2597,7 +2577,7 @@ fn draw_metadata<'a>(
         .handle(handle.clone())
         .padding(LIST_PADDING)
         .text_size(TEXT_SIZE)
-        .style(styles::pick_list::default);
+        .style(theme::pick_list::default);
 
         row!(label, space::horizontal(), sources).align_y(Vertical::Center)
     };
@@ -2713,7 +2693,7 @@ fn draw_playback<'a>(
         let label = button(label)
             .padding(0)
             .on_press(PlaybackMessage::ToggleAutoStart)
-            .style(styles::button::text);
+            .style(theme::button::text);
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
@@ -2728,7 +2708,7 @@ fn draw_playback<'a>(
         let label = button(label)
             .padding(0)
             .on_press(PlaybackMessage::ToggleAutoNext)
-            .style(styles::button::text);
+            .style(theme::button::text);
 
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
@@ -3043,11 +3023,11 @@ fn input_actions<'a, Message: 'a + Clone>(
 ) -> Element<'a, Message> {
     let incr = button(icons::icon(icons::CHEV_UP).size(ACTIONS_SIZE))
         .padding(ACTIONS_PADDING)
-        .style(styles::button::subtler)
+        .style(theme::button::danger)
         .on_press(increase);
     let decr = button(icons::icon(icons::CHEV_DOWN).size(ACTIONS_SIZE))
         .padding(ACTIONS_PADDING)
-        .style(styles::button::subtler)
+        .style(theme::button::danger)
         .on_press(decrease);
 
     column!(incr, decr).spacing(2.0).into()

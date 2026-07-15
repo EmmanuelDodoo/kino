@@ -1,6 +1,6 @@
 use chrono::Local;
 use iced::{
-    Element, Subscription, Task, Theme, event,
+    Subscription, Task, event,
     font::Family,
     keyboard::{self, Key, Modifiers},
     mouse,
@@ -9,9 +9,11 @@ use iced::{
 };
 use tokio::sync::mpsc;
 
+use crate::Element;
 use crate::home::{self, Home, HomeMessage, WishThumbnailTask, shared};
 use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
 use crate::settings::{Settings, SettingsMessage};
+use crate::theme::{self, Theme};
 use crate::utils::{Action, Config, KeyPress, Layout, Screen, icons, typo};
 use core::{Context, ContextLog, Error, Log, anyhow, error};
 use registry::db::{self, Query};

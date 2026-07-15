@@ -115,99 +115,111 @@ pub fn medium_font() -> Font {
     }
 }
 
-pub fn mono<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn mono<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     Text::new(text)
         .size(P)
         .font(mono_font())
         .ellipsis(Ellipsis::End)
 }
 
-pub fn display<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn display<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     Text::new(text)
         .size(H2)
         .font(display_font())
         .ellipsis(Ellipsis::End)
 }
 
-pub fn mono_bold<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn mono_bold<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     Text::new(text)
         .size(P)
         .font(mono_bold_font())
         .ellipsis(Ellipsis::End)
 }
 
-pub fn sized_bold<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
+pub fn sized_bold<'a, Theme: text::Catalog>(
+    text: impl text::IntoFragment<'a>,
+    size: f32,
+) -> Text<'a, Theme> {
     Text::new(text)
         .size(size)
         .font(bold_font())
         .ellipsis(Ellipsis::End)
 }
 
-pub fn sized_medium<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
+pub fn sized_medium<'a, Theme: text::Catalog>(
+    text: impl text::IntoFragment<'a>,
+    size: f32,
+) -> Text<'a, Theme> {
     Text::new(text)
         .size(size)
         .font(medium_font())
         .ellipsis(Ellipsis::End)
 }
 
-pub fn sized_italic<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
+pub fn sized_italic<'a, Theme: text::Catalog>(
+    text: impl text::IntoFragment<'a>,
+    size: f32,
+) -> Text<'a, Theme> {
     Text::new(text)
         .size(size)
         .font(italic_font())
         .ellipsis(Ellipsis::End)
 }
 
-pub fn sized_regular<'a>(text: impl text::IntoFragment<'a>, size: f32) -> Text<'a> {
+pub fn sized_regular<'a, Theme: text::Catalog>(
+    text: impl text::IntoFragment<'a>,
+    size: f32,
+) -> Text<'a, Theme> {
     Text::new(text)
         .size(size)
         .font(regular_font())
         .ellipsis(Ellipsis::End)
 }
 
-pub fn regular<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn regular<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_regular(text, P)
 }
 
-pub fn bold<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn bold<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, P)
 }
 
-pub fn medium<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn medium<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_medium(text, P)
 }
 
-pub fn italic<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn italic<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_italic(text, P)
 }
 
-pub fn h1<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn h1<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, H1)
 }
 
-pub fn h2<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn h2<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, H2)
 }
 
-pub fn h3<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn h3<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, H3)
 }
 
-pub fn h4<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn h4<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, H4)
 }
 
-pub fn h5<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn h5<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, H5)
 }
 
-pub fn h6<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn h6<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, H6)
 }
 
-pub fn h7<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn h7<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, H7)
 }
 
-pub fn h8<'a>(text: impl text::IntoFragment<'a>) -> Text<'a> {
+pub fn h8<'a, Theme: text::Catalog>(text: impl text::IntoFragment<'a>) -> Text<'a, Theme> {
     sized_bold(text, H8)
 }

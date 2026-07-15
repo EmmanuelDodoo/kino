@@ -1,11 +1,13 @@
 use super::{HomeMessage, PageKind, SeasonItem, ViewMessage, shared::*};
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, empty, styles};
+use crate::utils::{Layout, Scroll, empty};
 use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{
-    Animation, Color, ContentFit, Element, Length, Padding, Task,
+    Animation, Color, ContentFit, Length, Padding, Task,
     alignment::{Horizontal, Vertical},
     task,
     time::Instant,
@@ -399,7 +401,7 @@ impl ShowItem {
             None => container(empty())
                 .height(height)
                 .width(width)
-                .style(styles::container::dark)
+                .style(theme::container::dark)
                 .into(),
         }
     }
@@ -446,12 +448,12 @@ impl ShowItem {
             format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" }),
             H8,
         )
-        .style(move |theme: &iced::Theme| {
+        .style(move |theme: &Theme| {
             if sample.is_some() {
                 text::Style { color: sample }
             } else {
                 text::Style {
-                    color: Some(theme.palette().primary.strong.text),
+                    color: Some(theme.schema().primary.strong.text),
                 }
             }
         });

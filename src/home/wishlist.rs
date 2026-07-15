@@ -1,9 +1,11 @@
 use super::{HomeMessage, PageKind, shared::*};
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::typo;
-use crate::utils::{Scroll, delete_btn, empty, icons, styles, typo::*};
+use crate::utils::{Scroll, delete_btn, empty, icons, typo::*};
 use devutils::image_ops::sample_complement;
 use iced::{
-    Color, Element, Length, Padding, Task,
+    Color, Length, Padding, Task,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
     task,
@@ -84,7 +86,7 @@ impl Wishlist {
     ) -> Element<'a, WishlistMessage> {
         let add = {
             let btn = button(typo::medium("New"))
-                .style(styles::button::text_primary)
+                .style(theme::button::text_primary)
                 .on_press(WishlistMessage::New);
 
             row!(space::horizontal(), btn)
@@ -244,12 +246,12 @@ impl WishThumbnail {
         let padding = [3, 6];
         let sample = self.sample_text;
 
-        let color = move |theme: &iced::Theme| {
+        let color = move |theme: &Theme| {
             if sample.is_some() {
                 text::Style { color: sample }
             } else {
                 text::Style {
-                    color: Some(theme.palette().primary.strong.text),
+                    color: Some(theme.schema().primary.strong.text),
                 }
             }
         };
@@ -277,10 +279,10 @@ impl WishThumbnail {
 
         let tag = container(sized_bold(tag, H8))
             .padding([2, 4])
-            .style(move |theme| {
-                let color = sample.unwrap_or_else(|| theme.palette().primary.strong.color);
-                let default = container::rounded_box(theme);
-                let border = default.border.color(color).rounded(3.0).width(1.50);
+            .style(move |theme: &Theme| {
+                let color = sample.unwrap_or_else(|| theme.schema().primary.strong.color);
+                let default = theme::container::rounded_box(theme);
+                let border = default.border.color(color).width(1.50);
 
                 container::Style {
                     text_color: Some(color),
@@ -307,8 +309,8 @@ impl WishThumbnail {
             let curtain = container("")
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(|theme: &iced::Theme| {
-                    let color = theme.palette().primary.weak.color.scale_alpha(0.5);
+                .style(|theme: &Theme| {
+                    let color = theme.schema().primary.weak.color.scale_alpha(0.5);
 
                     container::background(color)
                 });
@@ -355,8 +357,8 @@ impl WishThumbnail {
     pub fn modal(&self, now: Instant) -> Element<'_, WishlistMessage> {
         use iced::ContentFit;
 
-        let primary_text = |theme: &iced::Theme| text::Style {
-            color: Some(theme.palette().primary.base.color),
+        let primary_text = |theme: &Theme| text::Style {
+            color: Some(theme.schema().primary.base.color),
         };
 
         let poster = {
@@ -422,13 +424,7 @@ impl WishThumbnail {
         };
 
         let actions = {
-            let style = |theme: &iced::Theme, status: button::Status| {
-                let default = styles::button::subtle(theme, status);
-
-                let border = default.border.rounded(5);
-
-                button::Style { border, ..default }
-            };
+            let style = theme::button::subtle;
 
             let edit = icon_button(icons::RENAME, "Edit", None)
                 .style(style)
@@ -477,8 +473,8 @@ fn tags_row<'a, Message: 'a>(tags: &'a [String]) -> Element<'a, Message> {
     let tag_len = tags.len().min(len);
 
     for (i, tag) in tags.iter().enumerate().take(len) {
-        let tag = h8(tag).style(|theme| text::Style {
-            color: Some(theme.palette().primary.base.color),
+        let tag = h8(tag).style(|theme: &Theme| text::Style {
+            color: Some(theme.schema().primary.base.color),
         });
 
         res.push(Element::from(tag));
@@ -495,11 +491,11 @@ fn icon_button<'a, Message: 'a + Clone>(
     icon: char,
     label: &'a str,
     primary: Option<bool>,
-) -> button::Button<'a, Message> {
-    let icon = icons::icon(icon).size(P).style(move |theme| {
+) -> button::Button<'a, Message, Theme> {
+    let icon = icons::icon(icon).size(P).style(move |theme: &Theme| {
         let color = match primary {
-            Some(true) => Some(theme.palette().primary.base.color),
-            Some(false) => Some(theme.palette().success.base.color),
+            Some(true) => Some(theme.schema().primary.base.color),
+            Some(false) => Some(theme.schema().success.base.color),
             None => None,
         };
 
@@ -512,10 +508,5 @@ fn icon_button<'a, Message: 'a + Clone>(
             .align_y(iced::alignment::Vertical::Center),
     )
     .padding([6, 12])
-    .style(|theme, status| {
-        let default = styles::button::subtlest(theme, status);
-        let border = default.border.rounded(5);
-
-        button::Style { border, ..default }
-    })
+    .style(theme::button::danger)
 }
