@@ -1,4 +1,4 @@
-use iced::{color, color::Color, theme};
+use iced::{animation::Interpolable, color, color::Color, theme};
 use serde::{Deserialize, Serialize, de, ser};
 
 use std::{
@@ -102,6 +102,15 @@ pub struct Pair {
     pub text: Color,
 }
 
+impl Interpolable for Pair {
+    fn interpolated(&self, other: Self, ratio: f32) -> Self {
+        Self {
+            color: self.color.interpolated(other.color, ratio),
+            text: self.text.interpolated(other.color, ratio),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Triplet {
     pub weak: Pair,
@@ -110,7 +119,7 @@ pub struct Triplet {
 }
 
 impl Triplet {
-    fn generate(base: Pair) -> Self {
+    pub fn generate(base: Pair) -> Self {
         use theme::palette::{darken, lighten};
 
         Self {
@@ -131,6 +140,16 @@ impl Triplet {
     }
 }
 
+impl Interpolable for Triplet {
+    fn interpolated(&self, other: Self, ratio: f32) -> Self {
+        Self {
+            weak: self.weak.interpolated(other.weak, ratio),
+            base: self.base.interpolated(other.base, ratio),
+            strong: self.strong.interpolated(other.strong, ratio),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Schema {
     pub background: Triplet,
@@ -146,6 +165,30 @@ pub struct Schema {
     pub radii: Radii,
 }
 
+impl Interpolable for Schema {
+    fn interpolated(&self, other: Self, ratio: f32) -> Self {
+        let is_dark = if ratio >= 0.5 {
+            other.is_dark
+        } else {
+            self.is_dark
+        };
+
+        Self {
+            background: self.background.interpolated(other.background, ratio),
+            primary: self.primary.interpolated(other.primary, ratio),
+            secondary: self.secondary.interpolated(other.secondary, ratio),
+            accent: self.accent.interpolated(other.accent, ratio),
+            neutral: self.neutral.interpolated(other.neutral, ratio),
+            info: self.info.interpolated(other.info, ratio),
+            success: self.success.interpolated(other.success, ratio),
+            warning: self.warning.interpolated(other.warning, ratio),
+            danger: self.danger.interpolated(other.danger, ratio),
+            is_dark,
+            radii: self.radii.interpolated(other.radii, ratio),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Radii {
     /// Cards, modals, alerts, Containers
@@ -154,6 +197,16 @@ pub struct Radii {
     pub fields: f32,
     /// Checkbox, toggle, badge
     pub selectors: f32,
+}
+
+impl Interpolable for Radii {
+    fn interpolated(&self, other: Self, ratio: f32) -> Self {
+        Self {
+            boxes: self.boxes.interpolated(other.boxes, ratio),
+            fields: self.fields.interpolated(other.fields, ratio),
+            selectors: self.selectors.interpolated(other.selectors, ratio),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -173,12 +226,12 @@ pub enum Theme {
 impl Theme {
     pub const ALL: &[Self] = &[
         Self::Abyss,
+        Self::Autumn,
         Self::Black,
-        Self::Fantasy,
         Self::Bumblebee,
         Self::Ember,
+        Self::Fantasy,
         Self::Luxury,
-        Self::Autumn,
     ];
 
     pub fn schema(&self) -> &Schema {
@@ -258,6 +311,17 @@ impl theme::Base for Theme {
 impl std::fmt::Display for Theme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
+    }
+}
+
+impl Interpolable for Theme {
+    fn interpolated(&self, other: Self, ratio: f32) -> Self {
+        let schema = self.schema().interpolated(*other.schema(), ratio);
+
+        Self::Custom(Arc::new(Custom {
+            name: Cow::Borrowed("Custom Animated Theme"),
+            schema,
+        }))
     }
 }
 
