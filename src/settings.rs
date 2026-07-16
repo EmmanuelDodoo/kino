@@ -5,8 +5,7 @@ use crate::utils::{
     self, Config, FontState, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
     SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
     convert_color_str, empty, icons, icons::sized_button, input_actions, modal::modal,
-    modal_container, path_container, picklist_handle, save_btn, toggler, tooltip, trim_path,
-    typo::*,
+    modal_container, path_container, picklist_handle, save_btn, tooltip, trim_path, typo::*,
 };
 use devutils::source::SourceSet;
 use iced::{
@@ -3021,4 +3020,8 @@ fn draw_filters<'a>(filters: &VideoFilters) -> Element<'a, VideoFilterMessage> {
 
 fn horizontal_rule<'a, Message: 'a>() -> Element<'a, Message> {
     rule::horizontal(1.0).into()
+}
+
+fn toggler<'a, Message: 'a + Clone>(is_checked: bool) -> widgets::Toggler<'a, Message, Theme> {
+    utils::toggler(is_checked).style(theme::toggler::primary_inv)
 }
