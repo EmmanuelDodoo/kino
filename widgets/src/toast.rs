@@ -76,6 +76,7 @@ impl Toast {
 /// The settings for a [`Manager`]
 pub struct Settings {
     pub text_size: f32,
+    pub text_font: iced::Font,
     pub close_icon: char,
     pub close_size: f32,
     pub close_font: iced::Font,
@@ -128,7 +129,9 @@ where
                     .width(5.0)
                     .height(Length::Fill);
 
-                let content = text(toast.message.as_str()).size(settings.text_size);
+                let content = text(toast.message.as_str())
+                    .size(settings.text_size)
+                    .font(settings.text_font);
 
                 let class = Theme::button_text();
                 let close = button(

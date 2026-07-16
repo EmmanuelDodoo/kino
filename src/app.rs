@@ -2427,6 +2427,7 @@ impl App {
             Message::CloseToast,
             toast::Settings {
                 text_size: typo::H7,
+                text_font: typo::medium_font(),
                 close_icon: icons::CANCEL,
                 close_size: typo::P,
                 close_font: icons::FONT,
