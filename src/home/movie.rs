@@ -240,7 +240,10 @@ impl MovieItem {
         self.hovered = new_state;
         self.icon.go_mut(new_state, at);
 
-        if !selection {
+        if selection {
+            self.card.go_mut(false, at);
+            self.float.go_mut(false, at);
+        } else {
             self.card.go_mut(new_state, at);
             self.float.go_mut(new_state, at);
         }

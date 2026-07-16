@@ -352,7 +352,10 @@ impl ShowItem {
         self.hovered = new_state;
         self.icon.go_mut(new_state, at);
 
-        if !selection {
+        if selection {
+            self.card.go_mut(false, at);
+            self.float.go_mut(false, at);
+        } else {
             self.card.go_mut(new_state, at);
             self.float.go_mut(new_state, at);
         }
@@ -440,6 +443,8 @@ impl ShowItem {
         on_play: impl Fn(ShowId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let background_inter = self.card.interpolate(0.0, 1.0, now);
+        let icon_inter = self.icon.interpolate(0.0, 1.0, now);
+
         let on_select = move |arg: ShowId| Some((on_select)(arg));
 
         let sample = self.sample_text;
@@ -465,7 +470,7 @@ impl ShowItem {
             on_hover.clone(),
             self.sample_color,
             self.sample_text,
-            background_inter,
+            icon_inter,
             seasons,
         );
 

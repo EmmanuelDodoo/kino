@@ -361,7 +361,10 @@ impl SeasonItem {
         self.hovered = new_state;
         self.icon.go_mut(new_state, at);
 
-        if !selection {
+        if selection {
+            self.card.go_mut(false, at);
+            self.float.go_mut(false, at);
+        } else {
             self.card.go_mut(new_state, at);
             self.float.go_mut(new_state, at);
         }
@@ -449,6 +452,8 @@ impl SeasonItem {
         on_play: impl Fn(SeasonId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let background_inter = self.card.interpolate(0.0, 1.0, now);
+        let icon_inter = self.icon.interpolate(0.0, 1.0, now);
+
         let on_select = move |arg: SeasonId| Some((on_select)(arg));
 
         let sample = self.sample_text;
@@ -478,7 +483,7 @@ impl SeasonItem {
             on_hover.clone(),
             self.sample_color,
             self.sample_text,
-            background_inter,
+            icon_inter,
             episodes,
         );
 
