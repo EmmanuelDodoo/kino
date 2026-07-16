@@ -1471,33 +1471,87 @@ pub mod toggler {
 
     /// The primary style of a [`Toggler`].
     pub fn primary(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
+        styled(theme, Palette::Primary, status)
+    }
 
-        styled(schema.primary, schema.background, schema.radii, status)
+    pub fn primary_inv(theme: &Theme, status: Status) -> Style {
+        styled_inv(theme, Palette::Primary, status)
     }
 
     /// The secondary style of a [`Toggler`].
     pub fn secondary(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-
-        styled(schema.secondary, schema.background, schema.radii, status)
+        styled(theme, Palette::Secondary, status)
     }
 
     /// The accent style of a [`Toggler`].
     pub fn accent(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-
-        styled(schema.accent, schema.background, schema.radii, status)
+        styled(theme, Palette::Accent, status)
     }
 
     /// The neutral style of a [`Toggler`].
     pub fn neutral(theme: &Theme, status: Status) -> Style {
-        let schema = theme.schema();
-
-        styled(schema.neutral, schema.background, schema.radii, status)
+        styled(theme, Palette::Neutral, status)
     }
 
-    fn styled(base: Triplet, background: Triplet, radii: Radii, status: Status) -> Style {
+    fn styled_inv(theme: &Theme, palette: Palette, status: Status) -> Style {
+        let schema = theme.schema();
+
+        let base = palette.triplet(schema);
+        let background = schema.background;
+
+        // fn styled(base: Triplet, background: Triplet, radii: Radii, status: Status) -> Style {
+        let bg = match status {
+            Status::Active { is_toggled } | Status::Hovered { is_toggled } => {
+                if is_toggled {
+                    base.base.color
+                } else {
+                    background.base.color
+                }
+            }
+            Status::Disabled { .. } => background.strong.color,
+        };
+
+        let foreground = match status {
+            Status::Active { is_toggled } => {
+                if is_toggled {
+                    base.base.text
+                } else {
+                    background.weak.color
+                }
+            }
+            Status::Hovered { is_toggled } => {
+                if is_toggled {
+                    Color {
+                        a: 0.5,
+                        ..base.base.text
+                    }
+                } else {
+                    background.weak.color
+                }
+            }
+            Status::Disabled { .. } => background.base.color.scale_alpha(0.5),
+        };
+
+        Style {
+            background: bg.into(),
+            foreground: foreground.into(),
+            foreground_border_width: 0.0,
+            foreground_border_color: Color::TRANSPARENT,
+            background_border_width: 0.0,
+            background_border_color: Color::TRANSPARENT,
+            text_color: None,
+            border_radius: Some(schema.radii.selectors.into()),
+            padding_ratio: 0.1,
+        }
+    }
+
+    fn styled(theme: &Theme, palette: Palette, status: Status) -> Style {
+        let schema = theme.schema();
+
+        let base = palette.triplet(schema);
+        let background = schema.background;
+
+        // fn styled(base: Triplet, background: Triplet, radii: Radii, status: Status) -> Style {
         let bg = match status {
             Status::Active { is_toggled } | Status::Hovered { is_toggled } => {
                 if is_toggled {
@@ -1538,7 +1592,7 @@ pub mod toggler {
             background_border_width: 0.0,
             background_border_color: Color::TRANSPARENT,
             text_color: None,
-            border_radius: Some(radii.selectors.into()),
+            border_radius: Some(schema.radii.selectors.into()),
             padding_ratio: 0.1,
         }
     }
