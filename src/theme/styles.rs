@@ -1614,9 +1614,9 @@ pub mod modal {
         }
     }
 
-    pub fn default(theme: &Theme) -> Style {
+    pub fn default(_theme: &Theme) -> Style {
         Style {
-            blur: theme.schema().background.weak.text.scale_alpha(0.15).into(),
+            blur: Background::Color(Color::BLACK.scale_alpha(0.5)),
         }
     }
 }

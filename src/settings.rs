@@ -7,8 +7,7 @@ use crate::db::Operation;
 use crate::theme::{self, Theme};
 use crate::utils::{
     self, FontState, Scroll, cancel_btn, empty, icons, icons::sized_button, input_actions,
-    modal::modal, modal_container, path_container, picklist_handle, save_btn, tooltip, trim_path,
-    typo::*,
+    modal_container, path_container, picklist_handle, save_btn, tooltip, trim_path, typo::*,
 };
 use devutils::source::SourceSet;
 use iced::{
@@ -1156,19 +1155,29 @@ impl Settings {
 
         match &self.view {
             None => content.into(),
-            Some(View::FolderSelection { path, kind }) => {
-                let overlay = draw_folder_selection(path, kind);
+            Some(view) => {
+                let modal = |overlay| {
+                    widgets::modal(content, overlay)
+                        .on_blur(SettingsMessage::Cancel)
+                        .center()
+                        .into()
+                };
 
-                modal(content, overlay, SettingsMessage::Cancel)
-            }
-            Some(View::CaptureKey {
-                action,
-                key,
-                conflict,
-            }) => {
-                let overlay = draw_capture_key(action, key, conflict);
+                match view {
+                    View::FolderSelection { path, kind } => {
+                        let overlay = draw_folder_selection(path, kind);
 
-                modal(content, overlay, SettingsMessage::Cancel)
+                        modal(overlay)
+                    }
+                    View::CaptureKey {
+                        action,
+                        key,
+                        conflict,
+                    } => {
+                        let overlay = draw_capture_key(action, key, conflict);
+                        modal(overlay)
+                    }
+                }
             }
         }
     }

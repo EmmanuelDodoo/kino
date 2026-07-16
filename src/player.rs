@@ -31,9 +31,8 @@ use crate::theme::{self, Theme};
 use crate::utils::{
     self, FontState, InterpolableLength, cancel_btn, draw_subtitles, duration_string, empty,
     icons::{self, CANCEL, sized_button},
-    input_actions,
-    modal::modal,
-    modal_container, path_container, picklist_handle, save_btn, toggler, tooltip, trim_path, typo,
+    input_actions, modal_container, path_container, picklist_handle, save_btn, toggler, tooltip,
+    trim_path, typo,
 };
 pub use comment::*;
 use devutils::thumbnails::{Image, ThumbnailGenerator};
@@ -2092,38 +2091,51 @@ impl Manager {
 
         match &self.modal {
             None => content,
-            Some(Modal::CollectionAdd {
-                collections,
-                selected,
-                ..
-            }) => modal(
-                content,
-                draw_collection_add(selected, collections.is_empty(), collections.iter()),
-                ManagerMessage::CloseView,
-            ),
-            Some(Modal::Config(config)) => {
-                let Some(player) = self.player() else {
-                    return empty();
+            Some(view) => {
+                let modal = |overlay| {
+                    widgets::modal(content, overlay)
+                        .on_blur(ManagerMessage::CloseView)
+                        .center()
+                        .into()
                 };
 
-                let item = &player.item;
-                let subs = item.subtitles.as_slice();
-                let audio = item.audios.as_slice();
-                let videos = item.videos.as_slice();
+                match view {
+                    Modal::CollectionAdd {
+                        collections,
+                        selected,
+                        ..
+                    } => {
+                        let overlay = draw_collection_add(
+                            selected,
+                            collections.is_empty(),
+                            collections.iter(),
+                        );
 
-                modal(
-                    content,
-                    draw_config(
-                        &self.settings,
-                        config,
-                        subs,
-                        audio,
-                        videos,
-                        item,
-                        player.file_size,
-                    ),
-                    ManagerMessage::CloseView,
-                )
+                        modal(overlay)
+                    }
+                    Modal::Config(config) => {
+                        let Some(player) = self.player() else {
+                            return empty();
+                        };
+
+                        let item = &player.item;
+                        let subs = item.subtitles.as_slice();
+                        let audio = item.audios.as_slice();
+                        let videos = item.videos.as_slice();
+
+                        let overlay = draw_config(
+                            &self.settings,
+                            config,
+                            subs,
+                            audio,
+                            videos,
+                            item,
+                            player.file_size,
+                        );
+
+                        modal(overlay)
+                    }
+                }
             }
         }
     }
