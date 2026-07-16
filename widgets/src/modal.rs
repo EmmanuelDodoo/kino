@@ -587,18 +587,17 @@ where
         operation: &mut dyn widget::Operation,
     ) {
         let state = tree.state.downcast_ref::<State>();
+        self.base.as_widget_mut().operate(
+            &mut tree.children[0],
+            layout.child(0),
+            renderer,
+            operation,
+        );
 
         if state.animation_value() {
             self.content.as_widget_mut().operate(
                 &mut tree.children[1],
                 layout.child(1),
-                renderer,
-                operation,
-            );
-        } else {
-            self.base.as_widget_mut().operate(
-                &mut tree.children[0],
-                layout.child(0),
                 renderer,
                 operation,
             );
