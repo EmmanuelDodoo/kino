@@ -219,7 +219,7 @@ pub enum Theme {
     Black,
     #[default]
     Abyss,
-    #[serde(serialize_with = "se_custom", deserialize_with = "de_custom")]
+    #[serde(serialize_with = "se_custom", deserialize_with = "de_custom", rename="custom")]
     Custom(Arc<Custom>),
 }
 
@@ -345,6 +345,7 @@ impl Interpolable for Theme {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Custom {
     pub name: Cow<'static, str>,
+    #[serde(flatten)]
     pub schema: Schema,
 }
 
