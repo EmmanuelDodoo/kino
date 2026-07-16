@@ -3,13 +3,13 @@ use crate::db::Operation;
 use crate::theme::{self, Theme};
 use crate::utils::{
     self, Config, FontState, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
-    SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn,
-    convert_color_str, empty, icons, icons::sized_button, input_actions, modal::modal,
-    modal_container, path_container, picklist_handle, save_btn, tooltip, trim_path, typo::*,
+    SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn, empty, icons,
+    icons::sized_button, input_actions, modal::modal, modal_container, path_container,
+    picklist_handle, save_btn, tooltip, trim_path, typo::*,
 };
 use devutils::source::SourceSet;
 use iced::{
-    Border, Length, Task,
+    Border, Color, Length, Task,
     alignment::{Horizontal, Vertical},
     font::Family,
     widget::{
@@ -381,8 +381,8 @@ impl Settings {
     }
 
     fn new(config: Config, fonts: Vec<Family>) -> Self {
-        let text_color = format!("#{:08x}", config.video.subtitles.color);
-        let background_color = format!("#{:08x}", config.video.subtitles.background_color);
+        let text_color = config.video.subtitles.color.to_string();
+        let background_color = config.video.subtitles.background_color.to_string();
 
         let subtitle_state = FontState::new(fonts, &config.video.subtitles.font);
 
@@ -961,18 +961,18 @@ impl Settings {
                     Task::none()
                 }
                 SubtitleMessage::SubColor(color) => {
-                    if let Some(color) = convert_color_str(&color) {
+                    if let Ok(color) = color.parse::<Color>() {
                         self.config.video.subtitles.color = color;
-                    };
+                    }
 
                     self.text_color = color;
 
                     Task::none()
                 }
                 SubtitleMessage::SubBackground(color) => {
-                    if let Some(color) = convert_color_str(&color) {
+                    if let Ok(color) = color.parse::<Color>() {
                         self.config.video.subtitles.background_color = color;
-                    };
+                    }
 
                     self.background_color = color;
 

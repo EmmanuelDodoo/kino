@@ -1,6 +1,6 @@
 use core::{Context, ContextLog, Error, Log, anyhow, error, variants};
 use iced::{
-    ContentFit, Length, Padding, Size, Subscription, Task,
+    Color, ContentFit, Length, Padding, Size, Subscription, Task,
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
@@ -28,8 +28,8 @@ use crate::app::Message;
 use crate::home::shared::Icon;
 use crate::theme::{self, Theme};
 use crate::utils::{
-    self, FontState, InterpolableLength, PlayerAction, VideoSettings, cancel_btn,
-    convert_color_str, draw_subtitles, duration_string, empty,
+    self, FontState, InterpolableLength, PlayerAction, VideoSettings, cancel_btn, draw_subtitles,
+    duration_string, empty,
     icons::{self, CANCEL, sized_button},
     input_actions,
     modal::modal,
@@ -1162,18 +1162,18 @@ impl Manager {
                             Task::none()
                         }
                         SubtitleConfig::SubColor(color) => {
-                            if let Some(color) = convert_color_str(&color) {
+                            if let Ok(color) = color.parse::<Color>() {
                                 self.settings.subtitles.color = color;
-                            };
+                            }
 
                             config.text_color = color;
 
                             Task::none()
                         }
                         SubtitleConfig::SubBackground(color) => {
-                            if let Some(color) = convert_color_str(&color) {
+                            if let Ok(color) = color.parse::<Color>() {
                                 self.settings.subtitles.background_color = color;
-                            };
+                            }
 
                             config.background_color = color;
 
@@ -2873,8 +2873,8 @@ impl Manager {
             selected_text,
             selected_audio,
             selected_video,
-            text_color: format!("#{:08x}", self.settings.subtitles.color),
-            background_color: format!("#{:08x}", self.settings.subtitles.background_color),
+            text_color: self.settings.subtitles.color.to_string(),
+            background_color: self.settings.subtitles.background_color.to_string(),
             subtitle_font: FontState::new(self.fonts.clone(), &self.settings.subtitles.font),
             subtitle_offset,
             fit: fit.unwrap_or(ContentFit::Contain),

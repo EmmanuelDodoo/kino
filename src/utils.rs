@@ -188,7 +188,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
 
     let content = typo::regular(subtitles)
         .size((*size).max(5))
-        .color(u32_to_rgba(*color))
+        .color(*color)
         .font(font)
         .align_y(Vertical::Center);
 
@@ -199,7 +199,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
             let base = theme::styles::container::transparent(theme);
 
             container::Style {
-                background: Some(u32_to_rgba(*background_color).into()),
+                background: Some((*background_color).into()),
                 text_color: None,
                 ..base
             }
@@ -208,7 +208,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
     subtitles.into()
 }
 
-pub fn convert_color_str(input: &str) -> Option<u32> {
+fn convert_color_str(input: &str) -> Option<u32> {
     if input.is_empty() {
         return None;
     }
@@ -257,7 +257,7 @@ pub fn convert_color_str(input: &str) -> Option<u32> {
     Some(color)
 }
 
-pub fn u32_to_rgba(color: u32) -> iced::Color {
+fn u32_to_rgba(color: u32) -> iced::Color {
     let r = (color & 0xff000000) >> 24;
     let g = (color & 0x00ff0000) >> 16;
     let b = (color & 0x0000ff00) >> 8;

@@ -16,8 +16,9 @@ completion_watch_time = 0.75
 
 [video.subtitles]
 size = 20
-color = 4286727167
-background_color = 175
+color = "#ff8243"
+font = "Roboto"
+background_color = "#000000af"
 
 [video.filters]
 brightness = 0.0

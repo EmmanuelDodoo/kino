@@ -2,10 +2,43 @@ use super::{Action, HomeAction, Layout, PlayerAction, Screen, SettingsAction};
 use crate::theme::Theme;
 use core::variants;
 use devutils::source::SourceSet;
+use iced::Color;
 pub use keys::{KeyModifier, KeyPress, KeyStore};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de, ser};
 use std::{path::PathBuf, time::Duration};
 pub use subtitles::SubtitleDescription;
+
+pub fn se_color<S: ser::Serializer>(color: &Color, s: S) -> Result<S::Ok, S::Error> {
+    use ser::Serializer;
+    let color = color.to_string();
+
+    s.serialize_str(&color)
+}
+
+pub fn de_color<'de, D: de::Deserializer<'de>>(d: D) -> Result<Color, D::Error> {
+    use de::{Deserializer, Visitor};
+
+    struct ColorVisitor;
+
+    impl<'de> Visitor<'de> for ColorVisitor {
+        type Value = Color;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "a valid Color string")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            use de::Error;
+
+            v.parse::<Color>().map_err(|error| de::Error::custom(error))
+        }
+    }
+
+    d.deserialize_str(ColorVisitor)
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct VideoFilters {
@@ -1653,25 +1686,29 @@ mod keys {
 }
 
 mod subtitles {
+    use super::{de_color, se_color};
     use crate::utils::typo::DEFAULT_SUBTITLE_FONT_NAME;
+    use iced::{Color, color};
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(default = "SubtitleDescription::defaults")]
     pub struct SubtitleDescription {
         pub size: u32,
-        pub color: u32,
+        #[serde(serialize_with = "se_color", deserialize_with = "de_color")]
+        pub color: Color,
         pub font: String,
-        pub background_color: u32,
+        #[serde(serialize_with = "se_color", deserialize_with = "de_color")]
+        pub background_color: Color,
     }
 
     impl SubtitleDescription {
         pub(super) fn defaults() -> Self {
             Self {
                 size: 20,
-                color: 0xff8243ff,
+                color: color!(0xff8243),
                 font: DEFAULT_SUBTITLE_FONT_NAME.to_owned(),
-                background_color: 0xaf,
+                background_color: Color::BLACK.scale_alpha(0.69),
             }
         }
     }
