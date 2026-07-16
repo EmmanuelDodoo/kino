@@ -30,7 +30,6 @@ gamma = 1.0
 layout = "Grid"
 recents_limit = 5
 search_limit = 5
-theme = "Moonfly"
 scan_discoverer = true
 auth_token = ""
 movie_depth = 2
@@ -58,3 +57,119 @@ defaults = false
 [[keybindings.general.actions.LayoutToggle]]
 key = "l"
 
+[general.theme.custom]
+name = "Custom theme Example"
+is_dark = true
+
+[general.theme.custom.background.weak]
+color = "#001e29"
+text = "#ffd6a7"
+
+[general.theme.custom.background.base]
+color = "#00111d"
+text = "#ffd6a7"
+
+[general.theme.custom.background.strong]
+color = "#000611"
+text = "#ffd6a7"
+
+[general.theme.custom.primary.weak]
+color = "#c3ff00"
+text = "#427600"
+
+[general.theme.custom.primary.base]
+color = "#bdff00"
+text = "#427600"
+
+[general.theme.custom.primary.strong]
+color = "#b5f600"
+text = "#427600"
+
+[general.theme.custom.secondary.weak]
+color = "#d6c5ff"
+text = "#564775"
+
+[general.theme.custom.secondary.base]
+color = "#cebef4"
+text = "#564775"
+
+[general.theme.custom.secondary.strong]
+color = "#c6b5ee"
+text = "#564775"
+
+[general.theme.custom.accent.weak]
+color = "#575757"
+text = "#f8f8f8"
+
+[general.theme.custom.accent.base]
+color = "#505050"
+text = "#f8f8f8"
+
+[general.theme.custom.accent.strong]
+color = "#494949"
+text = "#f8f8f8"
+
+[general.theme.custom.neutral.weak]
+color = "#003f4d"
+text = "#ffd6a7"
+
+[general.theme.custom.neutral.base]
+color = "#003843"
+text = "#ffd6a7"
+
+[general.theme.custom.neutral.strong]
+color = "#00323e"
+text = "#ffd6a7"
+
+[general.theme.custom.info.weak]
+color = "#00c3ff"
+text = "#042e49"
+
+[general.theme.custom.info.base]
+color = "#00bafe"
+text = "#042e49"
+
+[general.theme.custom.info.strong]
+color = "#00b2f5"
+text = "#042e49"
+
+[general.theme.custom.success.weak]
+color = "#00e974"
+text = "#022d14"
+
+[general.theme.custom.success.base]
+color = "#01df72"
+text = "#022d14"
+
+[general.theme.custom.success.strong]
+color = "#00d76a"
+text = "#022d14"
+
+[general.theme.custom.warning.weak]
+color = "#ffc600"
+text = "#854200"
+
+[general.theme.custom.warning.base]
+color = "#ffbf00"
+text = "#854200"
+
+[general.theme.custom.warning.strong]
+color = "#f7b700"
+text = "#854200"
+
+[general.theme.custom.danger.weak]
+color = "#ff4e50"
+text = "#690000"
+
+[general.theme.custom.danger.base]
+color = "#f04e4f"
+text = "#690000"
+
+[general.theme.custom.danger.strong]
+color = "#e74548"
+text = "#690000"
+
+[general.theme.custom.radii]
+boxes = 8.0
+fields = 8.0
+selectors = 4.0

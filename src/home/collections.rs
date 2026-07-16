@@ -1,7 +1,9 @@
 use super::{HomeMessage, PageKind, shared::*};
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::Scroll;
 use iced::{
-    Element, Padding, Task,
+    Padding, Task,
     time::Instant,
     widget::{self, container, grid, operation, scrollable},
 };

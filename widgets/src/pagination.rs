@@ -514,9 +514,9 @@ where
 }
 
 pub struct Style {
-    background: Option<Background>,
-    text: Option<Color>,
-    border: Border,
+    pub background: Option<Background>,
+    pub text: Option<Color>,
+    pub border: Border,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1188,5 +1188,5 @@ pub mod buttoned {
         }
     }
 
-    impl Catalog for iced::Theme {}
+    impl<T> Catalog for T where T: super::Catalog + button::Catalog + iced::widget::text::Catalog {}
 }

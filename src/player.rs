@@ -1,6 +1,6 @@
 use core::{Context, ContextLog, Error, Log, anyhow, error, variants};
 use iced::{
-    ContentFit, Element, Length, Padding, Size, Subscription, Task, Theme,
+    ContentFit, Length, Padding, Size, Subscription, Task,
     advanced::graphics::futures::MaybeSend,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
@@ -26,13 +26,14 @@ pub mod comment;
 pub mod playlist;
 use crate::app::Message;
 use crate::home::shared::Icon;
+use crate::theme::{self, Theme};
 use crate::utils::{
     self, FontState, InterpolableLength, PlayerAction, VideoSettings, cancel_btn,
     convert_color_str, draw_subtitles, duration_string, empty,
     icons::{self, CANCEL, sized_button},
+    input_actions,
     modal::modal,
-    modal_container, path_container, picklist_handle, save_btn, styles, toggler, tooltip,
-    trim_path, typo,
+    modal_container, path_container, picklist_handle, save_btn, toggler, tooltip, trim_path, typo,
 };
 pub use comment::*;
 use devutils::thumbnails::{Image, ThumbnailGenerator};
@@ -42,6 +43,9 @@ use registry::models::{
     VideoInfo,
 };
 use typo::*;
+
+use crate::Element;
+const LIST_PADDING: [f32; 2] = [5.0, 10.0];
 
 #[derive(Debug)]
 enum Modal {
@@ -1472,7 +1476,7 @@ impl Manager {
                 let title = marquee(&player.item.name).size(H4).font(medium_font());
 
                 container(title)
-                    .style(styles::container::text)
+                    .style(theme::container::text)
                     .center_x(Length::FillPortion(12))
                     .center_y(36)
                     .into()
@@ -1486,7 +1490,7 @@ impl Manager {
             row!(
                 sized_button(icons::ELLIPSIS_VER, icon_size)
                     .on_press(ManagerMessage::OpenConfig)
-                    .style(styles::button::text_slate)
+                    .style(theme::button::text_slate)
             )
             .spacing(6.0)
             .align_y(Vertical::Center)
@@ -1497,7 +1501,7 @@ impl Manager {
         let back = container(tooltip(
             sized_button(icons::BACK, icon_size)
                 .on_press(ManagerMessage::PreviousScreen)
-                .style(styles::button::text_slate),
+                .style(theme::button::text_slate),
             "Exit Player",
             tp::Position::Bottom,
         ))
@@ -1540,13 +1544,13 @@ impl Manager {
                 let duration = video.duration();
                 let spent = duration_string(*position as u64);
                 let spent = container(medium(spent))
-                    .style(styles::container::text)
+                    .style(theme::container::text)
                     .width(60.0);
 
                 let remaining = duration.as_secs().saturating_sub(*position as u64);
                 let remaining = duration_string(remaining);
                 let remaining = container(medium(remaining))
-                    .style(styles::container::text)
+                    .style(theme::container::text)
                     .width(60.0);
 
                 let slider = widgets::slider::VideoSlider::new(
@@ -1601,9 +1605,9 @@ impl Manager {
             let current = self.settings.speed;
             let overlay = move |speed: f64| {
                 let style = if current == speed {
-                    styles::button::text_primary
+                    theme::button::text_primary
                 } else {
-                    styles::button::text
+                    theme::button::text
                 };
 
                 button(mono_bold(format!("{speed:.2}✕")))
@@ -1620,13 +1624,11 @@ impl Manager {
             let opts = column(opts).spacing(4).align_x(Horizontal::Right);
 
             let opts = container(opts).padding([5, 8]).style(|theme| {
-                let default = styles::container::bw3(theme);
+                let default = theme::container::bb(theme);
                 let background = default.background.map(|bg| bg.scale_alpha(0.9));
-                let border = default.border.rounded(5.0);
 
                 container::Style {
                     background,
-                    border,
                     ..default
                 }
             });
@@ -1634,7 +1636,7 @@ impl Manager {
             let current = container(
                 mono_bold(format!("{:.2}✕", self.settings.speed)).size(icon_size / (typo::RATIO)),
             )
-            .style(styles::container::text);
+            .style(theme::container::text);
 
             let speed = menu(current, opts)
                 .toggle(self.speed_toggle)
@@ -1652,7 +1654,7 @@ impl Manager {
                 tooltip(
                     sized_button(icons::SUBTITLES_OFF, icon_size)
                         .on_press(ManagerMessage::ToggleSubtitles)
-                        .style(styles::button::text_slate),
+                        .style(theme::button::text_slate),
                     "Subtitles off",
                     tp,
                 )
@@ -1660,7 +1662,7 @@ impl Manager {
                 tooltip(
                     sized_button(icons::SUBTITLES_ON, icon_size)
                         .on_press(ManagerMessage::ToggleSubtitles)
-                        .style(styles::button::text_slate),
+                        .style(theme::button::text_slate),
                     "Subtitles on",
                     tp,
                 )
@@ -1672,7 +1674,7 @@ impl Manager {
                 tooltip(
                     sized_button(icons::MUTE, icon_size)
                         .on_press(ManagerMessage::ToggleMute)
-                        .style(styles::button::text_slate),
+                        .style(theme::button::text_slate),
                     "Unmute",
                     tp,
                 )
@@ -1680,7 +1682,7 @@ impl Manager {
                 tooltip(
                     sized_button(icons::VOLUME, icon_size)
                         .on_press(ManagerMessage::ToggleMute)
-                        .style(styles::button::text_slate),
+                        .style(theme::button::text_slate),
                     "Mute",
                     tp,
                 )
@@ -1701,10 +1703,10 @@ impl Manager {
 
             let play: Element<'_, ManagerMessage> = match &self.state {
                 State::Idle => sized_button(icons::PLAY, size)
-                    .style(styles::button::text_slate)
+                    .style(theme::button::text_slate)
                     .into(),
                 State::Loading => container(throbber::circular().bar_height(3.0))
-                    .style(styles::container::text)
+                    .style(theme::container::text)
                     .width(size)
                     .height(size)
                     .into(),
@@ -1719,7 +1721,7 @@ impl Manager {
 
                     sized_button(icon, size)
                         .on_press(message)
-                        .style(styles::button::text_slate)
+                        .style(theme::button::text_slate)
                         .into()
                 }
             };
@@ -1727,35 +1729,35 @@ impl Manager {
             let previous: Element<'_, ManagerMessage> = match self.playlist.previous_peek() {
                 Some(previous) => tooltip(
                     sized_button(icons::PREVIOUS_VIDEO, size)
-                        .style(styles::button::text_slate)
+                        .style(theme::button::text_slate)
                         .on_press(ManagerMessage::PlayPrevious),
                     &previous.name,
                     tp,
                 )
                 .into(),
                 None => sized_button(icons::PREVIOUS_VIDEO, size)
-                    .style(styles::button::text_slate)
+                    .style(theme::button::text_slate)
                     .into(),
             };
 
             let next: Element<'_, ManagerMessage> = match self.playlist.next_peek() {
                 Some(next) => tooltip(
                     sized_button(icons::NEXT_VIDEO, size)
-                        .style(styles::button::text_slate)
+                        .style(theme::button::text_slate)
                         .on_press(ManagerMessage::PlayNext),
                     &next.name,
                     tp,
                 )
                 .into(),
                 None => sized_button(icons::NEXT_VIDEO, size)
-                    .style(styles::button::text_slate)
+                    .style(theme::button::text_slate)
                     .into(),
             };
 
             let seek_amt = self.settings.seek_change_amt.trunc() as i16;
             let sb = tooltip(
                 sized_button(icons::SEEK_BACK, size)
-                    .style(styles::button::text_slate)
+                    .style(theme::button::text_slate)
                     .on_press_maybe(self.is_ready(ManagerMessage::SeekBack(false))),
                 format!(
                     "Backward {} sec{}",
@@ -1767,7 +1769,7 @@ impl Manager {
 
             let sf = tooltip(
                 sized_button(icons::SEEK_FRONT, size)
-                    .style(styles::button::text_slate)
+                    .style(theme::button::text_slate)
                     .on_press_maybe(self.is_ready(ManagerMessage::SeekFront(false))),
                 format!(
                     "Forward {} sec{}",
@@ -1785,7 +1787,7 @@ impl Manager {
         let full = if self.is_fullscreen {
             tooltip(
                 sized_button(icons::MINIMIZE, icon_size)
-                    .style(styles::button::text_slate)
+                    .style(theme::button::text_slate)
                     .on_press(ManagerMessage::ToggleFullscreen),
                 "Exit Fullscreen",
                 tp,
@@ -1793,7 +1795,7 @@ impl Manager {
         } else {
             tooltip(
                 sized_button(icons::MAXIMIZE, icon_size)
-                    .style(styles::button::text_slate)
+                    .style(theme::button::text_slate)
                     .on_press(ManagerMessage::ToggleFullscreen),
                 "Enter Fullscreen",
                 tp,
@@ -1804,21 +1806,21 @@ impl Manager {
             row!(
                 tooltip(
                     sized_button(icons::ADD_COLLECTION, icon_size * typo::RATIO)
-                        .style(styles::button::text_slate)
+                        .style(theme::button::text_slate)
                         .on_press_maybe(self.is_ready(ManagerMessage::AddCollection)),
                     "Add to collection",
                     tp
                 ),
                 tooltip(
                     sized_button(icons::COMMENT, icon_size)
-                        .style(styles::button::text_slate)
+                        .style(theme::button::text_slate)
                         .on_press_maybe(self.is_ready(ManagerMessage::Comment)),
                     "Comments",
                     tp
                 ),
                 tooltip(
                     sized_button(icons::PLAYLIST, icon_size)
-                        .style(styles::button::text_slate)
+                        .style(theme::button::text_slate)
                         .on_press_maybe(
                             self.is_ready(ManagerMessage::Playlist(PlaylistMessge::Toggle))
                         ),
@@ -1929,7 +1931,7 @@ impl Manager {
         let alpha = indicator.animation.interpolate(1.0, 0.0, now);
 
         let color = move |theme: &Theme| {
-            let default = text::primary(theme);
+            let default = theme::text::primary(theme);
 
             text::Style {
                 color: default
@@ -1967,7 +1969,8 @@ impl Manager {
             }
             _ => {
                 let content = container(icon).padding(padding).style(move |theme| {
-                    let default = styles::container::dark(theme);
+                    let default = theme::container::dark(theme);
+
                     let border = default.border.rounded(100.0);
 
                     container::Style {
@@ -2013,13 +2016,8 @@ impl Manager {
             fn trans<'a>(
                 init: bool,
                 view: impl Fn(Length) -> Element<'a, ManagerMessage> + 'a,
-            ) -> transition::Transition<
-                'a,
-                ManagerMessage,
-                iced::Theme,
-                iced::Renderer,
-                Animation<bool>,
-            > {
+            ) -> transition::Transition<'a, ManagerMessage, Theme, iced::Renderer, Animation<bool>>
+            {
                 let length = Length::Fixed(350.0);
 
                 transition(
@@ -3225,7 +3223,7 @@ fn draw_playlist<'a>(
             space::horizontal(),
             button(icons::icon(CANCEL).size(H6))
                 .on_press(ManagerMessage::ClosePanel)
-                .style(styles::button::text)
+                .style(theme::button::text)
                 .padding(0),
         )
         .padding(padding)
@@ -3246,7 +3244,7 @@ fn draw_playlist<'a>(
         let secs = duration % 60;
 
         let color = move |theme: &Theme| {
-            let color = theme.palette().primary.base.color;
+            let color = theme.schema().primary.base.color;
 
             text::Style {
                 color: current.then_some(color),
@@ -3281,7 +3279,7 @@ fn draw_playlist<'a>(
         )
         .on_press(ManagerMessage::Playlist(PlaylistMessge::PlayItem(idx)))
         .padding(0)
-        .style(styles::button::text)
+        .style(theme::button::text)
         .into()
     });
 
@@ -3291,7 +3289,7 @@ fn draw_playlist<'a>(
         let size = H6;
         let position = tp::Position::Top;
         let color = |theme: &Theme, active: bool| {
-            let color = theme.palette().primary.base.color;
+            let color = theme.schema().primary.base.color;
 
             text::Style {
                 color: active.then_some(color),
@@ -3305,7 +3303,7 @@ fn draw_playlist<'a>(
                     .style(move |theme| color(theme, playlist.repeat)),
             )
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(ManagerMessage::Playlist(PlaylistMessge::ToggleRepeat(
                 !playlist.repeat,
             ))),
@@ -3320,7 +3318,7 @@ fn draw_playlist<'a>(
                     .style(move |theme| color(theme, playlist.shuffle)),
             )
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(ManagerMessage::Playlist(PlaylistMessge::ToggleShuffle(
                 !playlist.shuffle,
             ))),
@@ -3339,7 +3337,7 @@ fn draw_playlist<'a>(
         let save = tooltip(
             button(icons::icon(icons::SAVE).size(size))
                 .padding(0)
-                .style(styles::button::text)
+                .style(theme::button::text)
                 .on_press(ManagerMessage::Playlist(PlaylistMessge::Save)),
             "Save playlist",
             position,
@@ -3395,7 +3393,7 @@ fn draw_comments<'a>(
             space::horizontal(),
             button(icons::icon(CANCEL).size(H6))
                 .on_press(ManagerMessage::ClosePanel)
-                .style(styles::button::text)
+                .style(theme::button::text)
                 .padding(0),
         )
         .padding(padding)
@@ -3431,12 +3429,9 @@ fn draw_comments<'a>(
                 .align_x(Horizontal::Center)
                 .spacing(10);
 
-            let content = container(content).padding(4).style(move |theme| {
-                let default = styles::container::bw(theme);
-                let border = default.border.rounded(8);
-
-                container::Style { border, ..default }
-            });
+            let content = container(content)
+                .padding(4)
+                .style(move |theme| theme::container::bw(theme));
 
             content.into()
         }
@@ -3532,15 +3527,11 @@ fn draw_collection_add<'a>(
             CollectionAddMessage::Toggle(selected, collection.id),
         ))
         .style(move |theme, status| {
-            let default = if selected {
-                styles::button::subtle(theme, status)
+            if selected {
+                theme::button::subtle(theme, status)
             } else {
-                styles::button::subtlest(theme, status)
-            };
-
-            let border = default.border.rounded(5.0);
-
-            button::Style { border, ..default }
+                theme::button::text(theme, status)
+            }
         })
         .into()
     }
@@ -3554,9 +3545,9 @@ fn draw_collection_add<'a>(
     let collections = container(collections)
         .padding(if is_empty { [0, 0] } else { [6, 8] })
         .style(|theme: &Theme| {
-            let color = theme.palette().secondary.strong.color;
-            let default = styles::container::transparent(theme);
-            let border = default.border.rounded(5).color(color).width(1.5);
+            let color = theme.schema().secondary.strong.color;
+            let default = theme::container::transparent(theme);
+            let border = default.border.color(color).width(1.5);
 
             container::Style { border, ..default }
         });
@@ -3682,7 +3673,6 @@ fn draw_video<'a>(
     config: &'a Config,
     videos: &'a [VideoInfo],
     size: f32,
-    padding: Padding,
     spacing: f32,
 ) -> Element<'a, VideoConfig> {
     let width = 200;
@@ -3783,7 +3773,8 @@ fn draw_video<'a>(
             pick_list(config.selected_video.clone(), videos, video_info_to_string)
                 .handle(handle)
                 .on_select(VideoConfig::CurrentVideo)
-                .padding(padding)
+                .font(regular_font())
+                .padding(LIST_PADDING)
                 .text_size(size)
                 .into()
         };
@@ -3812,7 +3803,8 @@ fn draw_video<'a>(
         .handle(handle)
         .ellipsis(text::Ellipsis::End)
         .on_select(VideoConfig::Fit)
-        .padding(padding)
+        .font(regular_font())
+        .padding(LIST_PADDING)
         .text_size(size);
 
         row!(label, space::horizontal(), pick)
@@ -3845,7 +3837,7 @@ fn draw_subs<'a>(
             .align_y(Vertical::Center),
         )
         .padding([3, 6])
-        .style(styles::button::subtle)
+        .style(theme::button::subtle)
         .on_press(SubtitleConfig::SelectFile);
 
         let path = config.subtitle_uri.as_ref().map(|path| trim_path(path, 3));
@@ -3859,7 +3851,7 @@ fn draw_subs<'a>(
                 .align_y(Vertical::Center),
             )
             .padding([2, 5])
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(SubtitleConfig::ClearSelected)
             .into(),
             None => empty(),
@@ -3882,7 +3874,8 @@ fn draw_subs<'a>(
                 .handle(handle)
                 .ellipsis(text::Ellipsis::End)
                 .on_select(SubtitleConfig::CurrentText)
-                .padding(padding)
+                .font(regular_font())
+                .padding(LIST_PADDING)
                 .text_size(size)
                 .into()
         };
@@ -3897,18 +3890,7 @@ fn draw_subs<'a>(
             let label = label_maker("Subtitle Offset(seconds): ");
             let offset = format!("{:.02}", config.subtitle_offset);
 
-            let actions = {
-                let incr = button(icons::icon(icons::CHEV_UP).size(10))
-                    .padding([2, 2])
-                    .style(styles::button::subtler)
-                    .on_press(SubtitleConfig::OffsetIncr);
-                let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
-                    .padding([2, 2])
-                    .style(styles::button::subtler)
-                    .on_press(SubtitleConfig::OffsetDecr);
-
-                column!(incr, decr).spacing(2.0)
-            };
+            let actions = input_actions(SubtitleConfig::OffsetIncr, SubtitleConfig::OffsetDecr);
 
             let input = text_input("", &offset)
                 .width(input_width)
@@ -3937,18 +3919,7 @@ fn draw_subs<'a>(
 
             let amt = format!("{}", settings.subtitles.size);
 
-            let actions = {
-                let incr = button(icons::icon(icons::CHEV_UP).size(10))
-                    .padding([2, 2])
-                    .style(styles::button::subtler)
-                    .on_press(SubtitleConfig::SubSizeIncr);
-                let decr = button(icons::icon(icons::CHEV_DOWN).size(10))
-                    .padding([2, 2])
-                    .style(styles::button::subtler)
-                    .on_press(SubtitleConfig::SubSizeDecr);
-
-                column!(incr, decr).spacing(2.0)
-            };
+            let actions = input_actions(SubtitleConfig::SubSizeIncr, SubtitleConfig::SubSizeDecr);
 
             let input = text_input("", &amt)
                 .width(input_width)
@@ -4035,7 +4006,6 @@ fn draw_audio<'a>(
     config: &'a Config,
     audio: &'a [Audio],
     size: f32,
-    padding: Padding,
     spacing: f32,
 ) -> Element<'a, AudioConfig> {
     let selection = {
@@ -4049,7 +4019,8 @@ fn draw_audio<'a>(
             pick_list(config.selected_audio.clone(), audio, audio_to_string)
                 .handle(handle)
                 .on_select(AudioConfig::CurrentAudio)
-                .padding(padding)
+                .font(regular_font())
+                .padding(LIST_PADDING)
                 .text_size(size)
                 .into()
         };
@@ -4228,9 +4199,9 @@ fn draw_config<'a>(
                 .width(Length::Fill)
                 .style(move |theme, status| {
                     if current {
-                        styles::button::background_primary(theme, status)
+                        theme::button::neutral(theme, status)
                     } else {
-                        styles::button::subtlest(theme, status)
+                        theme::button::text_hover(theme, status)
                     }
                 })
                 .on_press(ManagerMessage::Config(ConfigMessage::Tab(*tab))),
@@ -4245,13 +4216,11 @@ fn draw_config<'a>(
             draw_general(settings, size, padding, spacing).map(ConfigMessage::General)
         }
         ConfigTab::Video => {
-            draw_video(settings, config, videos, size, padding, spacing).map(ConfigMessage::Video)
+            draw_video(settings, config, videos, size, spacing).map(ConfigMessage::Video)
         }
         ConfigTab::Subtitles => draw_subs(settings, config, subtitles, size, padding, spacing)
             .map(ConfigMessage::Subtitle),
-        ConfigTab::Audio => {
-            draw_audio(config, audio, size, padding, spacing).map(ConfigMessage::Audio)
-        }
+        ConfigTab::Audio => draw_audio(config, audio, size, spacing).map(ConfigMessage::Audio),
         ConfigTab::Info => draw_info(config, item, file_size, size),
     };
 
@@ -4263,13 +4232,6 @@ fn draw_config<'a>(
         .height(Length::Fill)
         .padding(3);
 
-    let side = container(side).style(|theme| {
-        let default = styles::container::bw3(theme);
-        let border = default.border.rounded(styles::RADIUS);
-
-        container::Style { border, ..default }
-    });
-
     let content = row!(side, content).spacing(20);
 
     let content = column!(header, content)
@@ -4278,19 +4240,13 @@ fn draw_config<'a>(
         .spacing(20);
 
     modal_container(content)
-        .style(|theme| {
-            let default = styles::container::bb(theme);
-            let border = default.border.rounded(5.0);
-
-            container::Style { border, ..default }
-        })
         .padding([16, 16])
         .width(600)
         .height(400)
         .into()
 }
 
-fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a, Theme> {
     sized_medium(label, H7)
 }
 
@@ -4299,7 +4255,7 @@ fn panel_container<'a, Message: 'a>(
     width: impl Into<Length>,
 ) -> Element<'a, Message> {
     container(content)
-        .style(styles::container::bw3)
+        .style(theme::container::bb)
         .width(width)
         .into()
 }

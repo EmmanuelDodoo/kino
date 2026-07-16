@@ -1,70 +1,11 @@
 use super::{Action, HomeAction, Layout, PlayerAction, Screen, SettingsAction};
+use crate::theme::Theme;
 use core::variants;
 use devutils::source::SourceSet;
 pub use keys::{KeyModifier, KeyPress, KeyStore};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};
 pub use subtitles::SubtitleDescription;
-
-variants! {
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
-    pub enum AppTheme {
-        Light,
-        Dark,
-        SolarizedLight,
-        Nord,
-        GruvboxLight,
-        GruvboxDark,
-        CatppuccinLatte,
-        KanagawaWave,
-        TokyoNight,
-        TokyoNightLight,
-        #[default]
-        Moonfly,
-    }
-}
-
-impl From<AppTheme> for iced::Theme {
-    fn from(value: AppTheme) -> Self {
-        use iced::Theme;
-
-        match value {
-            AppTheme::Light => Theme::Light,
-            AppTheme::Dark => Theme::Dark,
-            AppTheme::SolarizedLight => Theme::SolarizedLight,
-            AppTheme::Nord => Theme::Nord,
-            AppTheme::GruvboxLight => Theme::GruvboxLight,
-            AppTheme::GruvboxDark => Theme::GruvboxDark,
-            AppTheme::CatppuccinLatte => Theme::CatppuccinLatte,
-            AppTheme::KanagawaWave => Theme::KanagawaWave,
-            AppTheme::TokyoNight => Theme::TokyoNight,
-            AppTheme::TokyoNightLight => Theme::TokyoNightLight,
-            AppTheme::Moonfly => Theme::Moonfly,
-        }
-    }
-}
-
-impl std::fmt::Display for AppTheme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Light => "Light",
-                Self::Dark => "Dark",
-                Self::SolarizedLight => "Solarized Light",
-                Self::Nord => "Nord",
-                Self::GruvboxLight => "Gruvbox Light",
-                Self::GruvboxDark => "Gruvbox Dark",
-                Self::CatppuccinLatte => "Catppuccin Latte",
-                Self::KanagawaWave => "Kanagawa Wave",
-                Self::TokyoNight => "Tokyo Night",
-                Self::TokyoNightLight => "Tokyo Night Light",
-                Self::Moonfly => "Moonfly",
-            }
-        )
-    }
-}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct VideoFilters {
@@ -139,9 +80,9 @@ pub struct GeneralSettings {
     pub refresh_interval: Duration,
     pub recents_limit: Option<i32>,
     pub search_limit: Option<i32>,
-    pub theme: AppTheme,
+    pub theme: Theme,
     #[serde(skip)]
-    pub theme_iced: iced::Theme,
+    pub themes: Vec<Theme>,
     pub scan_discoverer: bool,
     pub auth_token: String,
     pub movie_depth: u8,
@@ -156,13 +97,11 @@ pub struct GeneralSettings {
 
 impl GeneralSettings {
     fn defaults() -> Self {
-        let theme = AppTheme::default();
-
         Self {
             layout: Layout::default(),
             refresh_interval: Duration::from_secs(600),
-            theme_iced: theme.into(),
-            theme,
+            theme: Theme::default(),
+            themes: vec![],
             recents_limit: Some(5),
             search_limit: Some(5),
             scan_discoverer: true,
@@ -179,13 +118,11 @@ impl GeneralSettings {
     }
 
     fn debug_defaults() -> Self {
-        let theme = AppTheme::default();
-
         Self {
             layout: Layout::default(),
             refresh_interval: Duration::from_secs(120),
-            theme_iced: theme.into(),
-            theme,
+            theme: Theme::default(),
+            themes: vec![],
             recents_limit: Some(5),
             search_limit: Some(5),
             scan_discoverer: false,
@@ -201,9 +138,12 @@ impl GeneralSettings {
         }
     }
 
-    pub fn set_theme(&mut self, theme: AppTheme) {
+    fn load_themes(&mut self) {
+        self.themes = self.theme.all()
+    }
+
+    pub fn set_theme(&mut self, theme: Theme) {
         self.theme = theme;
-        self.theme_iced = theme.into();
     }
 }
 
@@ -292,6 +232,7 @@ impl Config {
         let dir = dir.as_ref();
         let log = dir.join(Self::LOG_FILE);
         self.config_dir = Some(dir.to_path_buf());
+        self.general.load_themes();
 
         match OpenOptions::new().append(true).create(true).open(log) {
             Ok(log) => {
@@ -350,12 +291,12 @@ impl Config {
         new.prep(Self::DEV_PATH)
     }
 
-    pub fn theme(&self) -> iced::Theme {
-        self.general.theme_iced.clone()
+    pub fn theme(&self) -> Theme {
+        self.general.theme.clone()
     }
 
-    pub fn theme_ref(&self) -> &iced::Theme {
-        &self.general.theme_iced
+    pub fn theme_ref(&self) -> &Theme {
+        &self.general.theme
     }
 
     pub fn layout(&self) -> Layout {

@@ -1,7 +1,8 @@
-use crate::utils::{cancel_btn, icons, save_btn, styles, typo};
+use crate::theme::{self, Theme};
+use crate::utils::{cancel_btn, icons, save_btn, typo};
 use fancy_regex::{Captures, Regex};
 use iced::{
-    Element, Length, Task, Theme,
+    Length, Task,
     alignment::{Horizontal, Vertical},
     animation::Animation,
     time::{Instant, milliseconds},
@@ -13,6 +14,8 @@ use iced::{
 use registry::models::{self, CommentId, VideoId};
 use std::collections::HashMap;
 use std::sync::LazyLock;
+
+use crate::Element;
 
 static REGEX: LazyLock<Option<Regex>> = LazyLock::new(|| {
     Regex::new(r"@((?<hrs>\d+):)?((?<mins>[0-9]|[0-5][0-9]):)((?<secs>[0-5][0-9]))").ok()
@@ -191,8 +194,11 @@ impl Comment {
         if !matches!(&self.mode, Mode::View(_)) {
             return Task::none();
         }
+        let mut editor = text_editor::Content::with_text(&self.inner.content);
 
-        self.mode = Mode::Edit(text_editor::Content::with_text(&self.inner.content));
+        editor.perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+
+        self.mode = Mode::Edit(editor);
 
         operation::focus(self.text_editor.clone())
     }
@@ -205,7 +211,6 @@ impl Comment {
         let id = self.inner.id;
         let timestamp = self.inner.timestamp;
         let padding = 6;
-        let rounding = 8;
         let border_width = 1.5;
         let size = typo::H7;
 
@@ -243,10 +248,9 @@ impl Comment {
                     .spacing(10);
 
                 let content = container(content).padding(padding).style(move |theme| {
-                    let default = styles::container::bw2(theme);
-                    let border = default.border.rounded(rounding);
+                    let default = theme::container::bw(theme);
 
-                    container::Style { border, ..default }
+                    container::Style { ..default }
                 });
 
                 content.into()
@@ -284,7 +288,7 @@ impl Comment {
                 let content = scrollable(content);
 
                 let edit = button(icons::icon(icons::DELETE).size(typo::P))
-                    .style(styles::button::text_danger)
+                    .style(theme::button::text_danger)
                     .on_press(Message::delete(id, timestamp))
                     .padding(0);
 
@@ -298,12 +302,12 @@ impl Comment {
                 let content = button(content)
                     .padding(iced::Padding::ZERO.vertical(6).right(4))
                     .on_press(Message::edit(id, timestamp))
-                    .style(move |theme, status| {
-                        let base = styles::button::bw2(theme, status);
-                        let border = base.border.rounded(rounding).width(border_width);
+                    .style(move |theme: &Theme, status| {
+                        let base = theme::button::subtle_inv(theme, status);
+                        let border = base.border.width(border_width);
                         let border = match status {
                             button::Status::Hovered => {
-                                border.color(theme.palette().primary.weak.color)
+                                border.color(theme.schema().neutral.weak.color)
                             }
                             _ => border,
                         };
@@ -395,7 +399,7 @@ pub struct CommentViewer<'a> {
     pub now: Instant,
 }
 
-impl<'a, Message: 'a + CommentMessage> markdown::Viewer<'a, Message> for CommentViewer<'a> {
+impl<'a, Message: 'a + CommentMessage> markdown::Viewer<'a, Message, Theme> for CommentViewer<'a> {
     fn on_link_click(url: String) -> Message {
         Message::link(url)
     }
@@ -422,10 +426,8 @@ impl<'a, Message: 'a + CommentMessage> markdown::Viewer<'a, Message> for Comment
             Some(Image::Errored(error)) => {
                 let msg = format!("{title} image download errored. {error}");
 
-                text(msg)
-                    .style(|theme: &Theme| text::Style {
-                        color: Some(theme.palette().danger.weak.color),
-                    })
+                typo::sized_regular(msg, typo::H7)
+                    .style(theme::text::danger)
                     .into()
             }
             None | Some(Image::Loading) => sensor(

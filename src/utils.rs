@@ -6,80 +6,72 @@ pub use length::InterpolableLength;
 pub mod config;
 pub use config::*;
 pub mod icons;
-pub mod styles;
 pub mod typo;
+use crate::Element;
+use crate::theme::{self, Theme};
 
-pub fn toggler<'a, Message>(is_checked: bool) -> widgets::toggler::Toggler<'a, Message> {
+pub fn toggler<'a, Message, Theme: iced::widget::toggler::Catalog>(
+    is_checked: bool,
+) -> widgets::toggler::Toggler<'a, Message, Theme> {
     widgets::toggler::Toggler::new(is_checked).size(typo::H6)
 }
 
 /// Returns an empty [`iced::Element`].
-pub fn empty<'a, Message: 'a>() -> iced::Element<'a, Message> {
+pub fn empty<'a, Message: 'a>() -> Element<'a, Message> {
     iced::widget::Space::new().width(0).height(0).into()
 }
 
-pub fn save_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message> {
-    iced::widget::button(typo::medium("Save")).style(styles::button::primary)
+pub fn save_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message, Theme> {
+    iced::widget::button(typo::medium("Save")).style(theme::styles::button::primary)
 }
 
-pub fn delete_btn<'a, Message: 'a + Clone>(label: &'a str) -> iced::widget::Button<'a, Message> {
+pub fn delete_btn<'a, Message: 'a + Clone>(
+    label: &'a str,
+) -> iced::widget::Button<'a, Message, Theme> {
     use iced::widget::{button, row, text};
 
     button(
         row!(
-            icons::icon(icons::DELETE).size(typo::P).style(|theme| {
-                text::Style {
-                    color: Some(theme.palette().danger.base.color),
-                }
-            }),
+            icons::icon(icons::DELETE).size(typo::P),
             typo::sized_medium(label, typo::H7)
         )
         .spacing(10.0)
         .align_y(iced::alignment::Vertical::Center),
     )
     .padding([6, 12])
-    .style(|theme, status| {
-        let default = styles::button::subtlest(theme, status);
-        let border = default.border.rounded(5);
-
-        button::Style { border, ..default }
-    })
+    .style(theme::styles::button::danger)
 }
 
-pub fn cancel_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message> {
-    iced::widget::button(typo::medium("Cancel")).style(styles::button::secondary)
+pub fn cancel_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message, Theme> {
+    iced::widget::button(typo::medium("Cancel")).style(theme::styles::button::secondary)
 }
 
 pub fn tooltip<'a, Message: 'a>(
-    content: impl Into<iced::Element<'a, Message>>,
+    content: impl Into<Element<'a, Message>>,
     label: impl iced::widget::text::IntoFragment<'a>,
     position: iced::widget::tooltip::Position,
-) -> iced::widget::Tooltip<'a, Message> {
+) -> iced::widget::Tooltip<'a, Message, Theme> {
+    use iced::Shadow;
     use iced::widget::{container, tooltip};
-    use iced::{Shadow, Theme};
 
     tooltip(
         content,
-        container(typo::sized_regular(label, typo::H8))
+        container(typo::sized_medium(label, typo::H8))
             .clip(true)
             .max_width(350)
             .max_height(100)
-            .padding([3, 6])
+            .padding([5, 10])
             .style(|theme: &Theme| {
-                let color = theme.palette().secondary.weak.color;
-                let default = styles::container::bw2(theme);
-                let border = default.border.rounded(5.0).width(1.0).color(color);
+                let schema = theme.schema();
+                let color = schema.neutral.strong.color;
+                let default = theme::styles::container::nw(theme);
                 let shadow = Shadow {
                     color,
-                    blur_radius: 8.0,
+                    blur_radius: schema.radii.boxes,
                     offset: [0.0, 0.0].into(),
                 };
 
-                container::Style {
-                    border,
-                    shadow,
-                    ..default
-                }
+                container::Style { shadow, ..default }
             }),
         position,
     )
@@ -91,7 +83,7 @@ pub fn path_container<'a, Message>(
     path: impl iced::widget::text::IntoFragment<'a>,
     text_size: f32,
     rtl: bool,
-) -> iced::widget::Container<'a, Message> {
+) -> iced::widget::Container<'a, Message, Theme> {
     let path = widgets::marquee(path)
         .size(text_size)
         .font(typo::mono_font())
@@ -99,10 +91,10 @@ pub fn path_container<'a, Message>(
 
     iced::widget::container(path)
         .max_width(250)
-        .style(|theme: &iced::Theme| {
-            let color = theme.palette().secondary.weak.color;
-            let default = styles::container::transparent(theme);
-            let border = default.border.rounded(2.5).color(color).width(1.0);
+        .style(|theme: &Theme| {
+            let color = theme.schema().secondary.weak.color;
+            let default = theme::styles::container::transparent(theme);
+            let border = default.border.color(color).width(1.0);
 
             iced::widget::container::Style { border, ..default }
         })
@@ -110,19 +102,14 @@ pub fn path_container<'a, Message>(
 }
 
 pub fn modal_container<'a, Message: 'a>(
-    content: impl Into<iced::Element<'a, Message>>,
-) -> iced::widget::Container<'a, Message> {
+    content: impl Into<Element<'a, Message>>,
+) -> iced::widget::Container<'a, Message, Theme> {
     use iced::alignment::{Horizontal, Vertical};
     use iced::widget::container;
 
     container(content)
         .padding([8, 12])
-        .style(|theme| {
-            let default = styles::container::bw2(theme);
-            let border = default.border.rounded(5.0);
-
-            container::Style { border, ..default }
-        })
+        .style(theme::styles::container::bb)
         .clip(true)
         .align_y(Vertical::Center)
         .align_x(Horizontal::Center)
@@ -153,6 +140,22 @@ pub fn picklist_handle(size: f32) -> iced::widget::pick_list::Handle<iced::Font>
     }
 }
 
+pub fn input_actions<'a, Message: 'a + Clone>(
+    increase: Message,
+    decrease: Message,
+) -> Element<'a, Message> {
+    let incr = iced::widget::button(icons::icon(icons::CHEV_UP).size(12))
+        .padding([2, 2])
+        .style(theme::button::subtle_inv)
+        .on_press(increase);
+    let decr = iced::widget::button(icons::icon(icons::CHEV_DOWN).size(12))
+        .padding([2, 2])
+        .style(theme::button::subtle_inv)
+        .on_press(decrease);
+
+    iced::widget::column!(incr, decr).spacing(2.0).into()
+}
+
 pub fn trim_path(path: &Path, components: usize) -> String {
     let path = path
         .components()
@@ -169,7 +172,7 @@ pub fn trim_path(path: &Path, components: usize) -> String {
 pub fn draw_subtitles<'a, Message: 'a>(
     subtitles: &'a str,
     description: &'a SubtitleDescription,
-) -> iced::Element<'a, Message> {
+) -> Element<'a, Message> {
     use iced::alignment::Vertical;
     use iced::font::{Family, Font, Weight};
     use iced::widget::container;
@@ -192,13 +195,13 @@ pub fn draw_subtitles<'a, Message: 'a>(
     let subtitles = container(content)
         .align_y(Vertical::Center)
         .padding([6, 6])
-        .style(move |_| {
-            let border = iced::border::rounded(5);
+        .style(move |theme| {
+            let base = theme::styles::container::transparent(theme);
+
             container::Style {
                 background: Some(u32_to_rgba(*background_color).into()),
                 text_color: None,
-                border,
-                ..Default::default()
+                ..base
             }
         });
 
@@ -588,8 +591,10 @@ impl From<SettingsAction> for Action {
 }
 
 pub mod modal {
+    use crate::Element;
+    use crate::theme::{self, Theme};
+    use iced::Color;
     use iced::widget::{center, container, mouse_area, opaque, stack};
-    use iced::{Color, Element};
 
     pub fn modal<'a, Message>(
         base: impl Into<Element<'a, Message>>,

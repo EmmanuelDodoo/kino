@@ -1,12 +1,14 @@
 use super::episode::EpisodeItem;
 use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, empty, styles};
+use crate::utils::{Layout, Scroll, empty};
 use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{
-    Animation, Color, ContentFit, Element, Length, Padding, Task,
+    Animation, Color, ContentFit, Length, Padding, Task,
     alignment::{Horizontal, Vertical},
     task,
     time::Instant,
@@ -45,7 +47,6 @@ pub struct SeasonPageMessage {
 #[derive(Debug, Clone)]
 pub struct SeasonPage {
     id: SeasonId,
-    tab: Tab,
     scroll: Scroll,
 }
 
@@ -61,14 +62,7 @@ impl SeasonPage {
         let scroll = Scroll::new();
         let id = scroll.id.clone();
 
-        (
-            Self {
-                id: season,
-                tab: Tab::Items,
-                scroll,
-            },
-            id,
-        )
+        (Self { id: season, scroll }, id)
     }
 
     pub fn update(&mut self, message: SeasonPageMessage) -> Option<HomeMessage> {
@@ -416,7 +410,7 @@ impl SeasonItem {
             None => container(empty())
                 .height(height)
                 .width(width)
-                .style(styles::container::dark)
+                .style(theme::container::dark)
                 .into(),
         }
     }
@@ -467,12 +461,12 @@ impl SeasonItem {
             ),
             H8,
         )
-        .style(move |theme: &iced::Theme| {
+        .style(move |theme: &Theme| {
             if sample.is_some() {
                 text::Style { color: sample }
             } else {
                 text::Style {
-                    color: Some(theme.palette().primary.strong.text),
+                    color: Some(theme.schema().primary.strong.text),
                 }
             }
         });

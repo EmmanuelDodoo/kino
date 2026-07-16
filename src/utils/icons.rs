@@ -5,7 +5,6 @@ use iced::{
 
 use std::sync::LazyLock;
 
-use super::styles;
 use super::typo::*;
 
 pub static ICONS: &[u8] = include_bytes!("../../resources/fonts/kino-icons.ttf");
@@ -139,7 +138,7 @@ pub const FOLDER: char = '\u{e86d}';
 pub const UPLOAD: char = '\u{e86b}';
 pub const ARCHIVED: char = '\u{e86e}';
 
-fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
+fn icon_maker<'a, Theme: 'a + text::Catalog>(unicode: char, name: &'static str) -> Text<'a, Theme> {
     let fnt: Font = Font::new(name);
     text(unicode.to_string())
         .font(fnt)
@@ -148,12 +147,13 @@ fn icon_maker<'a>(unicode: char, name: &'static str) -> Text<'a> {
         .size(P)
 }
 
-pub fn icon<'a>(unicode: char) -> Text<'a> {
+pub fn icon<'a, Theme: 'a + text::Catalog>(unicode: char) -> Text<'a, Theme> {
     icon_maker(unicode, NAME)
 }
 
 /// Returns a text button
-pub fn text_button<'a, Message>(unicode: char) -> Button<'a, Message> {
+pub fn text_button<'a, Message>(unicode: char) -> Button<'a, Message, crate::Theme> {
+    use crate::theme::styles;
     use iced::widget::button;
 
     button(icon(unicode)).style(styles::button::text)
@@ -162,13 +162,9 @@ pub fn text_button<'a, Message>(unicode: char) -> Button<'a, Message> {
 pub fn sized_button<'a, Message>(
     unicode: char,
     size: impl Into<iced::Pixels>,
-) -> Button<'a, Message> {
+) -> Button<'a, Message, crate::Theme> {
+    use crate::theme::styles;
     use iced::widget::button;
 
     button(icon(unicode).size(size)).style(styles::button::text)
-}
-
-pub fn alt<'a>(unicode: u32) -> Text<'a> {
-    let unicode = char::from_u32(unicode).unwrap();
-    icon_maker(unicode, NAME)
 }

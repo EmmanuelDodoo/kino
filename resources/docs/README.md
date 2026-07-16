@@ -118,16 +118,18 @@ All available actions can be found in the [actions file](actions.md).
 
 ### Application Themes
 
-Below are the available application Themes
+Below are the available application Themes. Most of these are derived from [Daisy Ui](https://daisyui.com/)
 
-- Moonfly (Default)
-- Light
-- Dark
-- SolarizedLight
-- Nord
-- GruvboxLight
-- GruvboxDark
-- CatppuccinLatte
-- KanagawaWave
-- TokyoNight
-- TokyoNightLight
+- Abyss,
+
+- Autumn,
+
+- Black,
+
+- Ember,
+
+- Fantasy,
+
+- Luxury,
+
+- Winter,

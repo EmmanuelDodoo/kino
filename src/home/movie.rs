@@ -1,11 +1,12 @@
 use super::{HomeMessage, PageKind, Scroll, ViewMessage, shared::*};
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::icons::*;
-use crate::utils::styles;
 use crate::utils::typo::*;
 use crate::utils::{empty, trim_path, typo};
 use devutils::source::SourceSet;
 use iced::{
-    Animation, Color, ContentFit, Element, Length, Padding, Shadow, Task,
+    Animation, Color, ContentFit, Length, Padding, Shadow, Task,
     alignment::{Horizontal, Vertical},
     task,
     time::Instant,
@@ -288,7 +289,7 @@ impl MovieItem {
             None => container(empty())
                 .height(height)
                 .width(width)
-                .style(styles::container::dark)
+                .style(theme::container::dark)
                 .into(),
         }
     }
@@ -331,16 +332,15 @@ impl MovieItem {
         let on_select = move |arg: MovieId| Some((on_select)(arg));
 
         let sample = self.sample_text;
-        let duration =
-            sized_medium(self.item.duration_full(), H8).style(move |theme: &iced::Theme| {
-                if sample.is_some() {
-                    text::Style { color: sample }
-                } else {
-                    text::Style {
-                        color: Some(theme.palette().primary.strong.text),
-                    }
+        let duration = sized_medium(self.item.duration_full(), H8).style(move |theme: &Theme| {
+            if sample.is_some() {
+                text::Style { color: sample }
+            } else {
+                text::Style {
+                    color: Some(theme.schema().primary.strong.text),
                 }
-            });
+            }
+        });
         let overlay = card_overlay(
             self.item.as_ref(),
             on_add,

@@ -1,8 +1,10 @@
 use super::{HomeMessage, PageKind, ShowItem, ViewMessage, shared::*};
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::typo::*;
 use crate::utils::{Layout, Scroll};
 use iced::{
-    Element, Length, Padding, Task,
+    Length, Padding, Task,
     time::Instant,
     widget::{self, column, container, grid, operation, scrollable, text},
 };

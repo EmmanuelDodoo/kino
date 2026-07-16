@@ -5,11 +5,13 @@ use super::series::ShowItem;
 use super::{
     CollectionThumbnail, HomeMessage, PageKind, ViewMessage, movies, shared::*, shows, view_unicode,
 };
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{self, Layout, Scroll, empty, styles};
+use crate::utils::{self, Layout, Scroll, empty, icons};
 use iced::{
-    Border, Element, Length, Padding, Task,
+    Border, Length, Padding, Task,
     alignment::Vertical,
     time::Instant,
     widget::{
@@ -243,19 +245,7 @@ impl CollectionPage {
                 let play = btn(id, PLAY, "Play", Message::Play(Items::All));
 
                 let base = container(icon(ELLIPSIS_VER).size(H7))
-                    .style(|theme| {
-                        let pair = theme.palette().background.weakest;
-                        let text = pair.text;
-                        let color = pair.color;
-                        let border = Border::default().rounded(2);
-
-                        container::Style {
-                            background: Some(color.into()),
-                            text_color: Some(text),
-                            border,
-                            ..Default::default()
-                        }
-                    })
+                    .style(theme::container::bw)
                     .padding([8, 3]);
 
                 let actions = column!(
@@ -266,12 +256,9 @@ impl CollectionPage {
                 )
                 .spacing(8);
 
-                let overlay = container(actions).padding([8, 12]).style(|theme| {
-                    let default = styles::container::bordered(theme);
-                    let border = default.border.rounded(8);
-
-                    container::Style { border, ..default }
-                });
+                let overlay = container(actions)
+                    .padding([8, 12])
+                    .style(theme::container::bordered);
 
                 let hidden = menu(base, overlay)
                     .on_toggle(move |_| CollectionMessage {
@@ -291,19 +278,7 @@ impl CollectionPage {
                 );
 
                 let base = container(icon(ELLIPSIS_VER).size(H7))
-                    .style(|theme| {
-                        let pair = theme.palette().background.weakest;
-                        let text = pair.text;
-                        let color = pair.color;
-                        let border = Border::default().rounded(2);
-
-                        container::Style {
-                            background: Some(color.into()),
-                            text_color: Some(text),
-                            border,
-                            ..Default::default()
-                        }
-                    })
+                    .style(theme::container::bw)
                     .padding([8, 3]);
 
                 let actions = column!(
@@ -314,12 +289,9 @@ impl CollectionPage {
                 )
                 .spacing(8);
 
-                let overlay = container(actions).padding([8, 12]).style(|theme| {
-                    let default = styles::container::bordered(theme);
-                    let border = default.border.rounded(8);
-
-                    container::Style { border, ..default }
-                });
+                let overlay = container(actions)
+                    .padding([8, 12])
+                    .style(theme::container::bordered);
 
                 let hidden = menu(base, overlay)
                     .on_toggle(move |_| CollectionMessage {
@@ -351,7 +323,7 @@ impl CollectionPage {
         let content = container(content)
             .padding(20)
             .width(Length::Fill)
-            .style(styles::container::bordered);
+            .style(theme::container::bordered);
 
         content.into()
     }
@@ -699,7 +671,7 @@ fn btn<'a>(
     unicode: char,
     label: &'static str,
     message: Message,
-) -> Button<'a, CollectionMessage> {
+) -> Button<'a, CollectionMessage, Theme> {
     button(
         row!(icon(unicode).size(P), sized_medium(label, H7))
             .spacing(10.0)
@@ -707,20 +679,26 @@ fn btn<'a>(
     )
     .padding([6, 12])
     .on_press(CollectionMessage { id, message })
-    .style(|theme, status| {
-        let default = styles::button::subtlest(theme, status);
-        let border = default.border.rounded(5);
-
-        button::Style { border, ..default }
-    })
+    .style(theme::button::subtle_2)
 }
 
 fn delete_btn<'a>(
     id: CollectionId,
     label: &'a str,
     message: Message,
-) -> Button<'a, CollectionMessage> {
-    utils::delete_btn(label).on_press(CollectionMessage { id, message })
+) -> Button<'a, CollectionMessage, Theme> {
+    let icon = icons::icon(DELETE).style(|theme: &Theme| text::Style {
+        color: Some(theme.schema().danger.base.color),
+    });
+
+    button(
+        row!(icon, medium(label))
+            .spacing(10.0)
+            .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding([6, 12])
+    .style(theme::button::subtle_2)
+    .on_press(CollectionMessage { id, message })
 }
 
 fn add(item: impl Into<ItemId>) -> Message {

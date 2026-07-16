@@ -1,6 +1,8 @@
+use crate::Element;
+use crate::theme::{self, Theme};
 use core::variants;
 use iced::{
-    Element, Length, Padding, Subscription, Task, Theme,
+    Length, Padding, Subscription, Task,
     alignment::{Horizontal, Vertical},
     animation::Animation,
     border::Border,
@@ -52,7 +54,7 @@ use registry::{
 
 use crate::app::{FetchId, Message, WishMessage};
 use crate::utils::{
-    HomeAction, Layout, Scroll, empty, icons, icons::*, picklist_handle, styles, tooltip, typo::*,
+    HomeAction, Layout, Scroll, empty, icons, icons::*, picklist_handle, tooltip, typo::*,
 };
 
 use collection::{CollectionMessage, CollectionPage};
@@ -4671,7 +4673,7 @@ impl Home {
     fn side(&self, show_dirs: bool) -> Element<'_, HomeMessage> {
         let header = {
             let color = |theme: &Theme| {
-                let color = theme.palette().primary.base.color.scale_alpha(0.85);
+                let color = theme.schema().primary.base.color.scale_alpha(0.85);
 
                 text::Style { color: Some(color) }
             };
@@ -4695,7 +4697,7 @@ impl Home {
             .width(300.0)
             .height(Length::Fill);
 
-        let content = container(content).style(styles::container::bw3);
+        let content = container(content);
 
         content.into()
     }
@@ -4708,7 +4710,6 @@ impl Home {
     ) -> Element<'a, HomeMessage> {
         let movies = {
             let label = h6("Recent Movies");
-            let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
             let movies = movies.iter();
 
@@ -4766,7 +4767,6 @@ impl Home {
 
         let shows = {
             let label = h6("Recent Shows");
-            let label = column!(label, rule::horizontal(1.0)).spacing(4.0);
 
             let shows = shows.iter();
 
@@ -4864,16 +4864,16 @@ impl Home {
 
     fn filters_view(&self) -> Element<'_, HomeMessage> {
         let size = H8;
-        let padding = Padding::new(2.0).horizontal(5.0);
-        let spacing = 2.0;
-        let picklist_font = regular_font();
+        let padding = Padding::new(3.0).horizontal(7.0);
+        let spacing = 3.0;
+        let picklist_font = medium_font();
         let input_font = mono_font();
 
         let vertical_rule = || container(rule::vertical(2.0)).height(20.0);
         let comp = |icon: char, msg: FilterMessage| {
             icons::sized_button(icon, size * RATIO)
-                .padding([5, 5])
-                .style(styles::button::subtlest)
+                .padding([2, 5])
+                .style(theme::button::accent)
                 .on_press(HomeMessage::Filter(msg))
         };
 
@@ -4940,7 +4940,8 @@ impl Home {
                 .map(|comments| comments.number.to_string())
                 .unwrap_or_default();
             let input = text_input("", &content)
-                .width(32.0)
+                .width(44.0)
+                .align_x(Horizontal::Right)
                 .size(size)
                 .font(input_font)
                 .padding(padding)
@@ -4967,6 +4968,7 @@ impl Home {
                 .unwrap_or_default();
             let input = text_input("", &content)
                 .width(48.0)
+                .align_x(Horizontal::Right)
                 .font(input_font)
                 .size(size)
                 .padding(padding)
@@ -4994,8 +4996,9 @@ impl Home {
                 .map(|duration| format!("{}", duration.secs / 3600))
                 .unwrap_or_default();
             let hours = text_input("", &hours)
-                .width(28.0)
+                .width(32.0)
                 .size(size)
+                .align_x(Horizontal::Right)
                 .font(input_font)
                 .padding(padding)
                 .on_input(|input| HomeMessage::Filter(FilterMessage::DurationHours(input)));
@@ -5006,7 +5009,8 @@ impl Home {
                 .map(|duration| format!("{}", (duration.secs % 3600) / 60))
                 .unwrap_or_default();
             let minutes = text_input("", &minutes)
-                .width(28.0)
+                .width(32.0)
+                .align_x(Horizontal::Right)
                 .size(size)
                 .font(input_font)
                 .padding(padding)
@@ -5025,7 +5029,7 @@ impl Home {
             let mode = sized_medium(self.filters.mode.to_string(), H8);
 
             let button = button(mode)
-                .style(styles::button::background)
+                .style(theme::button::background)
                 .padding(padding)
                 .on_press(HomeMessage::Filter(FilterMessage::Mode));
 
@@ -5034,7 +5038,7 @@ impl Home {
 
         let clear = button(sized_medium("Clear", H8))
             .padding(padding)
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(HomeMessage::Filter(FilterMessage::Clear));
 
         let content = row!(
@@ -5077,12 +5081,12 @@ impl Home {
                     let content = sized_medium(label, H8);
 
                     let unicode = if asc { UPS } else { DOWNS };
-                    let icon = icon(unicode).size(10.0);
+                    let icon = icon(unicode).size(12.0);
 
                     let icon = button(icon)
                         .padding(0)
                         .on_press(HomeMessage::Sort(SortMessage::ReverseSort(sort)))
-                        .style(styles::button::text_primary);
+                        .style(theme::button::text_primary);
 
                     let content = row!(content, icon).spacing(2.0).align_y(Vertical::Center);
 
@@ -5098,13 +5102,13 @@ impl Home {
             .on_press(msg)
             .style(move |theme, status| {
                 let default = if enable {
-                    styles::button::background(theme, status)
+                    theme::button::background(theme, status)
                 } else if SortKind::HIDDEN.is_empty() {
-                    styles::button::subtler(theme, status)
+                    theme::button::neutral(theme, status)
                 } else {
-                    styles::button::subtle_primary(theme, status)
+                    theme::button::subtle_primary(theme, status)
                 };
-                let border = Border::default().width(2.0).rounded(5.0);
+                let border = default.border.width(2.0);
 
                 button::Style { border, ..default }
             });
@@ -5114,12 +5118,12 @@ impl Home {
 
         let clear = button(h8("Clear"))
             .padding([2, 5])
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(HomeMessage::Sort(SortMessage::Clear));
 
         let reverse = button(h8("Reverse"))
             .padding([2, 5])
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(HomeMessage::Sort(SortMessage::ToggleReverse));
 
         let base = icon(ELLIPSIS_HOR).size(size);
@@ -5135,7 +5139,7 @@ impl Home {
                 }))
                 .spacing(8),
             )
-            .style(styles::container::bw2)
+            .style(theme::container::nb)
             .padding([3, 6]);
 
             menu(base, hidden)
@@ -5189,9 +5193,9 @@ impl Home {
             tooltip(
                 button(content)
                     .style(if self.filters.is_any() {
-                        styles::button::background
+                        theme::button::background
                     } else {
-                        styles::button::text_primary
+                        theme::button::text_primary
                     })
                     .on_press(HomeMessage::ToggleFilter)
                     .padding([5, 5]),
@@ -5214,9 +5218,9 @@ impl Home {
             tooltip(
                 button(content)
                     .style(if self.sort.is_empty() {
-                        styles::button::background
+                        theme::button::background
                     } else {
-                        styles::button::text_primary
+                        theme::button::text_primary
                     })
                     .on_press(HomeMessage::ToggleSort)
                     .padding([5, 5]),
@@ -5262,13 +5266,13 @@ impl Home {
         let tools = row!(left, space::horizontal(), right).width(Length::Fill);
 
         let sorts_rule = if self.show_sorts {
-            rule::horizontal(1.0).into()
+            rule::horizontal(0.75).into()
         } else {
             empty()
         };
 
         let filters_rule = if self.show_filters {
-            rule::horizontal(1.0).into()
+            rule::horizontal(0.75).into()
         } else {
             empty()
         };
@@ -5454,7 +5458,7 @@ impl Home {
                 .align_x(Horizontal::Right)
                 .padding(padding)
                 .style(|theme| {
-                    let default = styles::container::bw3(theme);
+                    let default = theme::container::bb(theme);
                     let background = default.background.map(|back| back.scale_alpha(0.5));
 
                     container::Style {
@@ -5637,13 +5641,13 @@ impl Home {
                 .height(Length::Fill)
                 .padding(0),
         )
-        .style(styles::container::bb);
+        .style(theme::container::bb);
 
         fn modalize<'a>(
             content: impl Into<Element<'a, HomeMessage>>,
             overlay: impl Into<Element<'a, HomeMessage>>,
             toggle: bool,
-        ) -> modal::Modal<'a, HomeMessage> {
+        ) -> modal::Modal<'a, HomeMessage, Theme> {
             modal(content, overlay)
                 .toggle(toggle)
                 .on_toggle_complete(HomeMessage::ViewAnimated)
@@ -5702,14 +5706,14 @@ impl Home {
                         draw_collection_triggers(*view_inserts, itriggers, dtriggers),
                     ),
                     View::Selection(selected) => {
-                        let selection = container(draw_selection(selected.len()))
-                            .style(styles::container::dark);
+                        let selection =
+                            container(draw_selection(selected.len())).style(theme::container::dark);
 
                         modalize(content, selection.into())
                             .passthrough(true)
                             .on_blur_maybe(None)
                             .style(|theme| {
-                                let default = modal::default(theme);
+                                let default = theme::modal::default(theme);
                                 let blur = default.blur.scale_alpha(0.2);
 
                                 modal::Style { blur, ..default }
@@ -6755,9 +6759,9 @@ fn icon_button<'a>(
         button(content)
             .style(move |theme, status| {
                 if current {
-                    styles::button::background_primary(theme, status)
+                    theme::button::neutral(theme, status)
                 } else {
-                    styles::button::subtlest(theme, status)
+                    theme::button::text_hover(theme, status)
                 }
             })
             .on_press(message),

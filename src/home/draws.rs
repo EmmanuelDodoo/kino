@@ -1,7 +1,9 @@
 use super::*;
+use crate::Element;
+use crate::theme::{self, Theme};
 use crate::utils::{
     cancel_btn, empty, icons, icons::*, modal_container, path_container, picklist_handle, save_btn,
-    styles, toggler, tooltip, trim_path, typo::*,
+    toggler, tooltip, trim_path, typo::*,
 };
 use registry::models::collection::{
     CollectionView, ItemId,
@@ -12,7 +14,7 @@ use registry::models::WishKind;
 
 use devutils::source::SourceSet;
 use iced::{
-    Color, Element, Length, Padding, Theme,
+    Color, Length, Padding,
     alignment::{Horizontal, Vertical},
     color, mouse,
     time::Instant,
@@ -29,7 +31,6 @@ const PADDING_5: Padding = Padding::new(5.0);
 pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let width = 550;
     let height = 550;
-    let radius = 5.0;
     let padding = Padding::from([6, 6]);
 
     let icon_height = 40.0;
@@ -41,20 +42,16 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         message: ConfigMessage,
         label: &'a str,
     ) -> Element<'a, HomeMessage> {
-        let radius = 5.0;
         tooltip(
             button(content)
                 .padding([0, 0])
                 .on_press(HomeMessage::CollectionConfig(message))
                 .style(move |theme, status| {
-                    let default = if selected {
-                        styles::button::weak_primary(theme, status)
+                    if selected {
+                        theme::button::weak_primary(theme, status)
                     } else {
-                        styles::button::subtle(theme, status)
-                    };
-                    let border = default.border.rounded(radius);
-
-                    button::Style { border, ..default }
+                        theme::button::subtle(theme, status)
+                    }
                 }),
             label,
             tp::Position::Top,
@@ -66,7 +63,7 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let label = bold("Name");
 
         let value = config.name.as_str();
-        let input_style = styles::text_input::required(config.empty_name);
+        let input_style = theme::text_input::required(config.empty_name);
 
         let input = text_input("", value)
             .id(config.name_input.clone())
@@ -90,12 +87,7 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
             })
             .font(regular_font())
             .padding(padding)
-            .style(move |theme, status| {
-                let default = text_editor::default(theme, status);
-                let border = default.border.rounded(radius);
-
-                text_editor::Style { border, ..default }
-            })
+            .style(theme::text_editor::default)
             .height(height as f32 * 0.2);
 
         column!(label, editor).spacing(2)
@@ -133,9 +125,9 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let views = container(views)
             .padding(padding)
             .style(move |theme: &Theme| {
-                let color = theme.palette().secondary.weak.color;
-                let default = styles::container::transparent(theme);
-                let border = default.border.rounded(radius).color(color).width(1.5);
+                let color = theme.schema().secondary.weak.color;
+                let default = theme::container::transparent(theme);
+                let border = default.border.color(color).width(1.5);
 
                 container::Style { border, ..default }
             });
@@ -167,9 +159,9 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
         let icons = container(icons)
             .padding(padding)
             .style(move |theme: &Theme| {
-                let color = theme.palette().secondary.weak.color;
-                let default = styles::container::transparent(theme);
-                let border = default.border.rounded(radius).color(color).width(1.5);
+                let color = theme.schema().secondary.weak.color;
+                let default = theme::container::transparent(theme);
+                let border = default.border.color(color).width(1.5);
 
                 container::Style { border, ..default }
             });
@@ -217,12 +209,7 @@ pub fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
 
                 button(content)
                     .on_press(HomeMessage::SearchMessage(SearchMessage::ClearFilter))
-                    .style(|theme, status| {
-                        let default = styles::button::text_primary(theme, status);
-                        let border = default.border.rounded(5);
-
-                        button::Style { border, ..default }
-                    })
+                    .style(theme::button::text_primary)
                     .into()
             }
             None => empty(),
@@ -286,15 +273,11 @@ pub fn draw_collection_add<'a>(
             collection.id,
         )))
         .style(move |theme, status| {
-            let default = if selected {
-                styles::button::subtle(theme, status)
+            if selected {
+                theme::button::subtle_2(theme, status)
             } else {
-                styles::button::subtlest(theme, status)
-            };
-
-            let border = default.border.rounded(5.0);
-
-            button::Style { border, ..default }
+                theme::button::text(theme, status)
+            }
         })
         .into()
     }
@@ -309,9 +292,9 @@ pub fn draw_collection_add<'a>(
     let collections = container(collections)
         .padding(if is_empty { [0, 0] } else { [6, 8] })
         .style(|theme: &Theme| {
-            let color = theme.palette().secondary.strong.color;
-            let default = styles::container::transparent(theme);
-            let border = default.border.rounded(5).color(color).width(1.5);
+            let color = theme.schema().secondary.strong.color;
+            let default = theme::container::transparent(theme);
+            let border = default.border.color(color).width(1.5);
 
             container::Style { border, ..default }
         });
@@ -323,7 +306,7 @@ pub fn draw_collection_add<'a>(
     )
     .padding([2, 4])
     .on_press(HomeMessage::NewCollection)
-    .style(styles::button::text_primary);
+    .style(theme::button::text_primary);
 
     let collections = column!(new, collections)
         .spacing(5.0)
@@ -351,11 +334,11 @@ pub fn draw_delete_confirm<'a>(name: &'a str, message: HomeMessage) -> Element<'
 
     let delete = button(medium("Delete"))
         .on_press(message)
-        .style(styles::button::danger);
+        .style(theme::button::danger);
 
     let cancel = button(medium("Cancel"))
         .on_press(HomeMessage::CloseView)
-        .style(styles::button::primary);
+        .style(theme::button::primary);
 
     let actions = row!(cancel, delete).spacing(80.0).align_y(Vertical::Center);
 
@@ -375,7 +358,7 @@ pub fn draw_collection_triggers<'a>(
     let text_size = P;
     let input_padding = [3.5, 5.0];
 
-    fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+    fn label_maker<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a, Theme> {
         sized_medium(label, P)
     }
 
@@ -392,12 +375,12 @@ pub fn draw_collection_triggers<'a>(
                 column!(
                     button(text)
                         .on_press(TriggerMessage::Tab)
-                        .style(styles::button::text),
+                        .style(theme::button::text),
                     container(iced::widget::Space::new().width(88).height(2)).style(
                         if view_inserts {
-                            styles::container::pb
+                            theme::container::pb
                         } else {
-                            styles::container::transparent
+                            theme::container::transparent
                         }
                     ),
                 )
@@ -417,12 +400,12 @@ pub fn draw_collection_triggers<'a>(
                 column!(
                     button(text)
                         .on_press(TriggerMessage::Tab)
-                        .style(styles::button::text),
+                        .style(theme::button::text),
                     container(iced::widget::Space::new().width(88).height(2)).style(
                         if !view_inserts {
-                            styles::container::pb
+                            theme::container::pb
                         } else {
-                            styles::container::transparent
+                            theme::container::transparent
                         }
                     ),
                 )
@@ -450,7 +433,7 @@ pub fn draw_collection_triggers<'a>(
                     } else {
                         TriggerMessage::AddDelete
                     })
-                    .style(styles::button::text_primary)
+                    .style(theme::button::text_primary)
             )
         };
 
@@ -513,10 +496,9 @@ pub fn draw_insert_trigger<'a>(
         let kind = regular(trigger.media.to_string()).size(size / RATIO);
 
         let kind = container(kind).padding([1, 5]).style(|theme| {
-            let default = styles::container::text_ps(theme);
+            let default = theme::container::text_ps(theme);
             let border = default
                 .border
-                .rounded(3.0)
                 .color(default.text_color.unwrap_or_default())
                 .width(0.75);
 
@@ -535,12 +517,12 @@ pub fn draw_insert_trigger<'a>(
 
         let duplicate = button(icons::icon(COPY).size(size))
             .padding(0)
-            .style(styles::button::text_primary)
+            .style(theme::button::text_primary)
             .on_press(TriggerMessage::DuplicateInsert(id));
 
         let remove = button(icons::icon(DELETE).size(size))
             .padding(0)
-            .style(styles::button::text_danger)
+            .style(theme::button::text_danger)
             .on_press(TriggerMessage::RemoveInsert(id));
 
         row!(name, duplicate, remove,)
@@ -573,7 +555,7 @@ pub fn draw_insert_trigger<'a>(
             .width(88.0)
             .on_select(move |media| TriggerMessage::MediaInsert(id, media))
             .padding([2, 5])
-            .style(styles::pick_list::default)
+            .style(theme::pick_list::default)
             .handle(picklist_handle(text_size))
             .padding([5, 10])
             .font(regular_font())
@@ -586,7 +568,7 @@ pub fn draw_insert_trigger<'a>(
         let label = sized_medium("Run on existing media", text_size);
         let label = button(label)
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(TriggerMessage::ToggleROEInsert(id));
         let toggle = toggler(*roe).on_toggle(move |checked| TriggerMessage::ROEInsert(id, checked));
 
@@ -597,7 +579,7 @@ pub fn draw_insert_trigger<'a>(
         let label = sized_medium("Generate Delete Rule", text_size / RATIO);
 
         button(label)
-            .style(styles::button::subtlest)
+            .style(theme::button::subtle_inv)
             .on_press(TriggerMessage::GenerateDelete(id))
     };
 
@@ -606,7 +588,7 @@ pub fn draw_insert_trigger<'a>(
         let size = text_size / RATIO;
         let pick_padding = [2, 5];
 
-        let input = |value: &str| -> text_input::TextInput<'_, LogicMessage> {
+        let input = |value: &str| -> text_input::TextInput<'_, LogicMessage, Theme> {
             text_input("", value)
                 .align_x(Horizontal::Right)
                 .size(size)
@@ -715,7 +697,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::LastComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -740,7 +722,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::DurationComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -766,7 +748,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::ProgressComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -792,7 +774,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::WatchComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -818,7 +800,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::ReleaseComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -843,7 +825,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::RatingComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -869,7 +851,7 @@ pub fn draw_insert_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::CommentComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -909,7 +891,7 @@ pub fn draw_insert_trigger<'a>(
         .on_expand(move |expand| TriggerMessage::ToggleExpandInsert(id, expand));
 
     let content = container(content)
-        .style(styles::container::bw)
+        .style(theme::container::bw)
         .padding(padding);
     content.into()
 }
@@ -932,10 +914,9 @@ pub fn draw_delete_trigger<'a>(
 
         let kind = regular(trigger.media.to_string()).size(size / RATIO);
         let kind = container(kind).padding([1, 5]).style(|theme| {
-            let default = styles::container::text_ps(theme);
+            let default = theme::container::text_ps(theme);
             let border = default
                 .border
-                .rounded(3.0)
                 .color(default.text_color.unwrap_or_default())
                 .width(0.75);
 
@@ -954,12 +935,12 @@ pub fn draw_delete_trigger<'a>(
 
         let duplicate = button(icons::icon(COPY).size(size))
             .padding(0)
-            .style(styles::button::text_primary)
+            .style(theme::button::text_primary)
             .on_press(TriggerMessage::DuplicateDelete(id));
 
         let remove = button(icons::icon(DELETE).size(size))
             .padding(0)
-            .style(styles::button::text_danger)
+            .style(theme::button::text_danger)
             .on_press(TriggerMessage::RemoveDelete(id));
 
         row!(name, duplicate, remove,)
@@ -990,7 +971,7 @@ pub fn draw_delete_trigger<'a>(
 
         let pick = pick_list(Some(trigger.media), options, ToString::to_string)
             .width(88.0)
-            .style(styles::pick_list::default)
+            .style(theme::pick_list::default)
             .on_select(move |media| TriggerMessage::MediaDelete(id, media))
             .padding([2, 5])
             .handle(picklist_handle(text_size))
@@ -1005,7 +986,7 @@ pub fn draw_delete_trigger<'a>(
         let label = sized_medium("Run on existing media", text_size);
         let label = button(label)
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
             .on_press(TriggerMessage::ToggleROEDelete(id));
         let toggle = toggler(*roe).on_toggle(move |checked| TriggerMessage::ROEDelete(id, checked));
 
@@ -1017,7 +998,7 @@ pub fn draw_delete_trigger<'a>(
         let size = text_size / RATIO;
         let pick_padding = [2, 5];
 
-        let input = |value: &str| -> text_input::TextInput<'_, LogicMessage> {
+        let input = |value: &str| -> text_input::TextInput<'_, LogicMessage, Theme> {
             text_input("", value)
                 .size(size)
                 .font(regular_font())
@@ -1126,7 +1107,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::LastComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1151,7 +1132,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .on_select(LogicMessage::DurationComp)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .padding(pick_padding)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1177,7 +1158,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::ProgressComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1203,7 +1184,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::WatchComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1229,7 +1210,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::ReleaseComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1254,7 +1235,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::RatingComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1280,7 +1261,7 @@ pub fn draw_delete_trigger<'a>(
 
             let comp = pick_list(Some(comp), Comparison::VARIANTS, ToString::to_string)
                 .padding(pick_padding)
-                .style(styles::pick_list::default)
+                .style(theme::pick_list::default)
                 .on_select(LogicMessage::CommentComp)
                 .handle(picklist_handle(text_size))
                 .font(regular_font())
@@ -1319,7 +1300,7 @@ pub fn draw_delete_trigger<'a>(
         .on_expand(move |expand| TriggerMessage::ToggleExpandDelete(id, expand));
 
     let content = container(content)
-        .style(styles::container::bw)
+        .style(theme::container::bw)
         .padding(padding);
     content.into()
 }
@@ -1332,8 +1313,8 @@ pub fn draw_selection<'a>(items: usize) -> Element<'a, HomeMessage> {
         .width(56)
         .height(56)
         .style(|theme, status| {
-            let default = styles::button::weak_primary(theme, status);
-            let text = styles::button::text_primary(theme, status);
+            let default = theme::button::weak_primary(theme, status);
+            let text = theme::button::text_primary(theme, status);
             let border = default.border.rounded(100.0);
 
             button::Style {
@@ -1346,35 +1327,34 @@ pub fn draw_selection<'a>(items: usize) -> Element<'a, HomeMessage> {
 
     let cancel = button(icons::icon(CANCEL).size(H6))
         .padding(0)
-        .style(styles::button::text_danger)
+        .style(theme::button::text_danger)
         .on_press(SelectionMessage::Cancel);
 
     let extra = column!(cancel, space::vertical(), count);
 
-    let content: Element<'_, SelectionMessage> = container(
-        row!(play, extra)
-            .width(dimensions)
-            .height(dimensions)
-            .spacing(4.0)
-            .align_y(Vertical::Center),
-    )
-    .align_y(Vertical::Center)
-    .align_x(Horizontal::Center)
-    .padding([40, 20])
-    .style(|theme| {
-        let default = styles::container::transparent(theme);
-        let border = default.border.rounded(5.0);
-        let background = default
-            .background
-            .map(|background| background.scale_alpha(0.25));
+    let content = row!(play, extra)
+        .width(dimensions)
+        .height(dimensions)
+        .spacing(4.0)
+        .align_y(Vertical::Center);
 
-        container::Style {
-            border,
-            background,
-            ..default
-        }
-    })
-    .into();
+
+    let content: Element<'_, SelectionMessage> = container(content)
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Center)
+        .padding([40, 20])
+        .style(|theme| {
+            let default = theme::container::bs(theme);
+            let background = default
+                .background
+                .map(|background| background.scale_alpha(0.25));
+
+            container::Style {
+                background,
+                ..default
+            }
+        })
+        .into();
 
     content.map(HomeMessage::Selection)
 }
@@ -1397,7 +1377,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
 
         let label = medium(name);
 
-        let input_style = styles::text_input::required(state.invalid_name());
+        let input_style = theme::text_input::required(state.invalid_name());
 
         let input = text_input("", state.name())
             .id(state.name_input.clone())
@@ -1416,7 +1396,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
         WishKindSelection::Show | WishKindSelection::Movie => empty(),
         WishKindSelection::Season => {
             let label = medium("Season number:");
-            let input_style = styles::text_input::required(state.invalid_season());
+            let input_style = theme::text_input::required(state.invalid_season());
 
             let input = text_input("", state.season())
                 .id(state.season_input.clone())
@@ -1438,7 +1418,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
 
             let season = {
                 let label = medium("Season number:");
-                let input_style = styles::text_input::required(state.invalid_season());
+                let input_style = theme::text_input::required(state.invalid_season());
 
                 let input = text_input("", state.season())
                     .id(state.season_input.clone())
@@ -1455,7 +1435,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
 
             let episode = {
                 let label = medium("Episode number:");
-                let input_style = styles::text_input::required(state.invalid_episode());
+                let input_style = theme::text_input::required(state.invalid_episode());
 
                 let input = text_input("", state.episode())
                     .id(state.episode_input.clone())
@@ -1484,7 +1464,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
         let source = pick_list(Some(state.source), SourceSet::VARIANTS, |source| {
             source.to_str().to_owned()
         })
-        .style(styles::pick_list::default)
+        .style(theme::pick_list::default)
         .font(regular_font())
         .on_select(|kind| HomeMessage::WishViewMessage(WishViewMessage::Source(kind)))
         .handle(handle)
@@ -1509,7 +1489,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
             }
             .to_owned()
         })
-        .style(styles::pick_list::default)
+        .style(theme::pick_list::default)
         .font(regular_font())
         .on_select(|kind| HomeMessage::WishViewMessage(WishViewMessage::Kind(kind)))
         .handle(handle)
@@ -1527,7 +1507,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
         let input = text_input("", &state.source_id)
             .on_input(|input| HomeMessage::WishViewMessage(WishViewMessage::SourceId(input)))
             .align_x(Horizontal::Right)
-            .style(styles::text_input::default)
+            .style(theme::text_input::default)
             .font(regular_font())
             .size(P)
             .padding([4, 6])
@@ -1617,7 +1597,7 @@ pub fn draw_movie_edit<'a>(
 
     let remove = media_icon_btn(DELETE, "Delete")
         .on_press(MovieEditMessage::Remove)
-        .style(styles::button::danger);
+        .style(theme::button::danger);
 
     let poster = media_image(
         "Poster: ",
@@ -1679,7 +1659,7 @@ pub fn draw_show_edit<'a>(
 
     let remove = media_icon_btn(DELETE, "Delete")
         .on_press(ShowEditMessage::Remove)
-        .style(styles::button::danger);
+        .style(theme::button::danger);
 
     let poster = media_image(
         "Poster: ",
@@ -1735,7 +1715,7 @@ pub fn draw_season_edit<'a>(state: &'a SeasonEditState) -> Element<'a, HomeMessa
 
     let remove = media_icon_btn(DELETE, "Delete")
         .on_press(SeasonEditMessage::Remove)
-        .style(styles::button::danger);
+        .style(theme::button::danger);
 
     let poster = media_image(
         "Poster: ",
@@ -1813,7 +1793,7 @@ pub fn draw_episode_edit<'a>(
 
     let remove = media_icon_btn(DELETE, "Delete")
         .on_press(EpisodeEditMessage::Remove)
-        .style(styles::button::danger);
+        .style(theme::button::danger);
 
     let poster = media_image(
         "Poster: ",
@@ -1875,7 +1855,7 @@ where
         button(sized_regular(codec, size))
             .on_press(on_select(video.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -1883,7 +1863,7 @@ where
         button(sized_regular(video.resolution(), size))
             .on_press(on_select(video.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -1895,7 +1875,7 @@ where
                 button(sized_regular(framerate, size))
                     .on_press(on_select(video.id))
                     .padding(0)
-                    .style(styles::button::text),
+                    .style(theme::button::text),
             )
         } else {
             None
@@ -1911,7 +1891,7 @@ where
                 button(sized_regular(bitrate, size))
                     .on_press(on_select(video.id))
                     .padding(0)
-                    .style(styles::button::text),
+                    .style(theme::button::text),
             )
         } else {
             None
@@ -1969,7 +1949,7 @@ where
         button(sized_regular(lang, size))
             .on_press(on_select(audio.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -1978,7 +1958,7 @@ where
         button(sized_regular(codec, size))
             .on_press(on_select(audio.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -1990,7 +1970,7 @@ where
                 button(sized_regular(bitrate, size))
                     .on_press(on_select(audio.id))
                     .padding(0)
-                    .style(styles::button::text),
+                    .style(theme::button::text),
             )
         } else {
             None
@@ -2006,7 +1986,7 @@ where
                 button(sized_regular(sample, size))
                     .on_press(on_select(audio.id))
                     .padding(0)
-                    .style(styles::button::text),
+                    .style(theme::button::text),
             )
         } else {
             None
@@ -2022,7 +2002,7 @@ where
                 button(sized_regular(channels, size))
                     .on_press(on_select(audio.id))
                     .padding(0)
-                    .style(styles::button::text),
+                    .style(theme::button::text),
             )
         } else {
             None
@@ -2081,7 +2061,7 @@ where
         button(sized_regular(&sub.title, size))
             .on_press(on_select(sub.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -2089,7 +2069,7 @@ where
         button(sized_regular(&sub.lang, size))
             .on_press(on_select(sub.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -2102,7 +2082,7 @@ where
         button(marquee(kind).size(size).width(225).font(mono_font()))
             .on_press(on_select(sub.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -2125,7 +2105,7 @@ where
         .into()
 }
 
-fn media_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a> {
+fn media_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a, Theme> {
     sized_medium(label, P)
 }
 
@@ -2139,9 +2119,9 @@ fn media_name<'a, Message: 'a + Clone>(
     let input = text_input(placeholder, value)
         .on_input(on_input)
         .font(regular_font())
-        .style(styles::text_input::default)
+        .style(theme::text_input::default)
         .padding(PADDING_5)
-        .style(styles::text_input::default)
+        .style(theme::text_input::default)
         .width(Length::Fill);
 
     column!(label, input).spacing(3).into()
@@ -2176,7 +2156,7 @@ fn media_rating<'a, Message: 'a + Clone>(
             .padding(PADDING_5)
             .align_x(Horizontal::Right)
             .width(80.0)
-            .style(styles::text_input::default)
+            .style(theme::text_input::default)
             .on_input(on_input);
 
         row!(value, extra).spacing(2.0).align_y(Vertical::Center)
@@ -2230,7 +2210,7 @@ fn media_source<'a, Message: 'a + Clone>(
         Some(on_select) => pick_list(Some(source), SourceSet::VARIANTS, |source| {
             source.to_str().to_owned()
         })
-        .style(styles::pick_list::default)
+        .style(theme::pick_list::default)
         .font(regular_font())
         .on_select(on_select)
         .handle(handle)
@@ -2258,7 +2238,7 @@ fn media_source_id<'a, Message: 'a + Clone>(
             let input = text_input("", id)
                 .on_input(on_input)
                 .align_x(Horizontal::Right)
-                .style(styles::text_input::default)
+                .style(theme::text_input::default)
                 .font(regular_font())
                 .size(P)
                 .padding(PADDING_5)
@@ -2275,14 +2255,14 @@ fn media_source_id<'a, Message: 'a + Clone>(
 fn media_icon_btn<'a, Message: 'a + Clone>(
     codepoint: char,
     label: &'a str,
-) -> button::Button<'a, Message> {
+) -> button::Button<'a, Message, Theme> {
     let size = H7;
 
     let refetch = row!(icon(codepoint).size(size), sized_medium(label, size))
         .spacing(4.0)
         .align_y(Vertical::Center);
 
-    button(refetch).style(styles::button::subtle)
+    button(refetch).style(theme::button::subtle)
 }
 
 fn media_image<'a, Message: 'a + Clone>(
@@ -2311,7 +2291,7 @@ fn media_image<'a, Message: 'a + Clone>(
                 .align_y(Vertical::Center);
 
             button(upload)
-                .style(styles::button::subtle)
+                .style(theme::button::subtle)
                 .on_press(on_press)
                 .into()
         }
@@ -2370,7 +2350,7 @@ where
         button(sized_regular(&dir.name, size))
             .on_press(on_select(dir.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -2380,7 +2360,7 @@ where
         button(marquee(path).size(size).direction(true).font(mono_font()))
             .on_press(on_select(dir.id))
             .padding(0)
-            .style(styles::button::text)
+            .style(theme::button::text)
     })
     .align_y(Vertical::Center);
 
@@ -2440,7 +2420,7 @@ fn media_layout<'a>(
         .into()
 }
 
-fn help<'a, Message: 'a>(label: &'a str, size: f32) -> tp::Tooltip<'a, Message> {
+fn help<'a, Message: 'a>(label: &'a str, size: f32) -> tp::Tooltip<'a, Message, Theme> {
     tooltip(
         icons::icon(icons::HELP).size(size),
         label,
