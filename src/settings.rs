@@ -1758,7 +1758,7 @@ fn side_button<'a>(
             .on_press(message),
     )
     .clip(true)
-    .max_height(48.0)
+    .height(Length::Fit.max(48.0))
     .into()
 }
 
@@ -1836,7 +1836,7 @@ fn draw_folder_selection<'a>(path: &'a Path, kind: &'a MediaType) -> Element<'a,
     let content = column!(folder, kind, actions).spacing(20);
 
     modal_container(content)
-        .max_width(450)
+        .width(Length::Fit.max(450.0))
         .padding([12, 16])
         .into()
 }

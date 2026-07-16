@@ -238,7 +238,7 @@ impl Playground {
 
             let pages = column!(a, b).spacing(16);
 
-            container(pages).max_width(750)
+            container(pages).width(Length::Fit.max(750))
         };
 
         let toggles = {

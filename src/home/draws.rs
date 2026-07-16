@@ -238,7 +238,7 @@ pub fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
 
     modal_container(content)
         .padding([8, 8])
-        .max_width(550)
+        .width(Length::Fit.max(550))
         .height(Length::Shrink)
         .into()
 }
@@ -255,8 +255,8 @@ pub fn draw_collection_add<'a>(
         let unicode = Icon::new(collection.icon).unicode();
         let icon = icons::icon(unicode).size(size);
         let text = container(regular(&collection.name))
-            .max_height(48.0)
-            .max_width(275);
+            .height(Length::Fit.max(48.0))
+            .width(Length::Fit.max(275));
         let check = checkbox(selected).on_toggle(|value| {
             HomeMessage::CollectionAdd(CollectionAddMessage::Toggle(!value, collection.id))
         });
@@ -324,7 +324,7 @@ pub fn draw_collection_add<'a>(
         .spacing(24)
         .align_x(Horizontal::Center);
 
-    modal_container(content).max_width(400).into()
+    modal_container(content).width(Length::Fit.max(400)).into()
 }
 
 pub fn draw_delete_confirm<'a>(name: &'a str, message: HomeMessage) -> Element<'a, HomeMessage> {
@@ -346,7 +346,7 @@ pub fn draw_delete_confirm<'a>(name: &'a str, message: HomeMessage) -> Element<'
         .spacing(40)
         .align_x(Horizontal::Center);
 
-    modal_container(content).max_width(500).into()
+    modal_container(content).width(Length::Fit.max(500)).into()
 }
 
 pub fn draw_collection_triggers<'a>(
@@ -1338,7 +1338,6 @@ pub fn draw_selection<'a>(items: usize) -> Element<'a, HomeMessage> {
         .spacing(4.0)
         .align_y(Vertical::Center);
 
-
     let content: Element<'_, SelectionMessage> = container(content)
         .align_y(Vertical::Center)
         .align_x(Horizontal::Center)
@@ -1532,7 +1531,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
 
     modal_container(content)
         .width(width)
-        .max_height(height)
+        .height(Length::Fit.max(height))
         .into()
 }
 

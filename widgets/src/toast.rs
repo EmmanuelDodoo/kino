@@ -147,7 +147,7 @@ where
                 )
                 .class(Theme::container_rounded())
                 .clip(true)
-                .max_width(500)
+                .width(Length::Fit.max(500))
                 .height(Length::Shrink)
                 .padding([5.0, 5.0])
                 .into()

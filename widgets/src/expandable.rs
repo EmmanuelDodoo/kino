@@ -153,12 +153,19 @@ where
 
             let max_height = full.height * factor;
 
+            let max = limits.max();
+            let limits = layout::Limits::with_compression(
+                limits.min(),
+                Size::new(max.width, max.height.min(max_height)),
+                limits.compression(),
+            );
+
             self.content
                 .as_widget_mut()
                 .layout(
                     &mut tree.children[1],
                     renderer,
-                    &limits.max_height(max_height).width(full.width),
+                    &limits.width(full.width),
                 )
                 .move_to(Point::new(0.0, root_size.height + spacing))
         };

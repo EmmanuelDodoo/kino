@@ -235,7 +235,7 @@ impl Comment {
                         }
                     })
                     .size(size)
-                    .max_height(250)
+                    .height(Length::Fit.max(250.0))
                     .padding(6)
                     .highlight("markdown", iced::highlighter::Theme::Base16Ocean);
                 let cancel = cancel_btn().on_press(Message::cancel(id, timestamp));
@@ -421,7 +421,7 @@ impl<'a, Message: 'a + CommentMessage> markdown::Viewer<'a, Message, Theme> for 
                     .opacity(fade_in.interpolate(0.0, 1.0, self.now))
                     .scale(fade_in.interpolate(1.2, 1.0, self.now)),
             )
-            .max_height(200)
+            .height(Length::Fit.max(200))
             .into(),
             Some(Image::Errored(error)) => {
                 let msg = format!("{title} image download errored. {error}");

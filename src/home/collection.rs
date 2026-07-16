@@ -217,7 +217,7 @@ impl CollectionPage {
         let header = {
             let title = container(h4(&collection.collection.name))
                 .clip(true)
-                .max_height(56);
+                .height(Length::Fit.max(56));
 
             let title = row!(title)
                 .align_y(Vertical::Center)
@@ -239,7 +239,7 @@ impl CollectionPage {
                 .unwrap_or_default();
             let description = container(regular(description))
                 .clip(true)
-                .max_width(750)
+                .width(Length::Fit.max(750))
                 .height(Length::Fill);
 
             let play = {

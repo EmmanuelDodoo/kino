@@ -6747,7 +6747,7 @@ fn icon_button<'a>(
             .on_press(message),
     )
     .clip(true)
-    .max_height(56.0)
+    .height(Length::Fit.max(56.0))
     .into()
 }
 

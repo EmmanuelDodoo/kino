@@ -3528,7 +3528,7 @@ fn draw_comments<'a>(
 
     let draw_comment = |comment: &'a Comment| {
         container(comment.view(now, theme))
-            .max_height(325)
+            .height(Length::Fit.max(325.0))
             .width(Length::Fill)
             .into()
     };
@@ -3542,7 +3542,7 @@ fn draw_comments<'a>(
             }
         });
 
-        let nulls = container(column(nulls)).max_height(500);
+        let nulls = container(column(nulls)).height(Length::Fit.max(500.0));
 
         scrollable(nulls).spacing(10)
     };
@@ -3586,8 +3586,8 @@ fn draw_collection_add<'a>(
         let unicode = Icon::new(collection.icon).unicode();
         let icon = icons::icon(unicode).size(size);
         let text = container(regular(&collection.name))
-            .max_height(48.0)
-            .max_width(275);
+            .width(Length::Fit.max(275.0))
+            .height(Length::Fit.max(48.0));
         let check = checkbox(selected).on_toggle(|value| {
             ManagerMessage::CollectionAddMessage(CollectionAddMessage::Toggle(
                 !value,
@@ -3645,7 +3645,7 @@ fn draw_collection_add<'a>(
         .spacing(24)
         .align_x(Horizontal::Center);
 
-    modal_container(content).max_width(400).into()
+    modal_container(content).width(Length::Fit.max(400)).into()
 }
 
 fn draw_general<'a>(
@@ -4285,7 +4285,7 @@ fn draw_config<'a>(
                 .on_press(ManagerMessage::Config(ConfigMessage::Tab(*tab))),
         )
         .clip(true)
-        .max_height(48.0)
+        .height(Length::Fit.max(48.0))
         .into()
     });
 

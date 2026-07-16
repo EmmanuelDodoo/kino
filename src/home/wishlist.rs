@@ -370,7 +370,7 @@ impl WishThumbnail {
                 ContentFit::Contain,
                 now,
             ))
-            .max_height(250)
+            .height(Length::Fit.max(250))
             .style(move |_| {
                 let mut style = container::background(sample);
                 style.border = style.border.rounded(IMAGE_RADIUS);
@@ -418,7 +418,7 @@ impl WishThumbnail {
         let title = column!(name, details).spacing(8);
 
         let overview = {
-            let overview = container(regular(&self.item.synopsis)).max_height(300);
+            let overview = container(regular(&self.item.synopsis)).height(Length::Fit.max(300));
 
             scrollable(overview)
         };

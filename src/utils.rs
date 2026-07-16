@@ -50,6 +50,7 @@ pub fn tooltip<'a, Message: 'a>(
     label: impl iced::widget::text::IntoFragment<'a>,
     position: iced::widget::tooltip::Position,
 ) -> iced::widget::Tooltip<'a, Message, Theme> {
+    use iced::Length;
     use iced::Shadow;
     use iced::widget::{container, tooltip};
 
@@ -57,8 +58,8 @@ pub fn tooltip<'a, Message: 'a>(
         content,
         container(typo::sized_medium(label, typo::H8))
             .clip(true)
-            .max_width(350)
-            .max_height(100)
+            .width(Length::Fit.max(350))
+            .height(Length::Fit.max(100))
             .padding([5, 10])
             .style(|theme: &Theme| {
                 let schema = theme.schema();
@@ -89,7 +90,7 @@ pub fn path_container<'a, Message>(
         .direction(rtl);
 
     iced::widget::container(path)
-        .max_width(250)
+        .width(iced::Length::Fit.max(250))
         .style(|theme: &Theme| {
             let color = theme.schema().secondary.weak.color;
             let default = theme::styles::container::transparent(theme);

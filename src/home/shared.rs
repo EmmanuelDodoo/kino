@@ -212,7 +212,7 @@ pub fn add_labelled<'a, T, Message: 'a + Clone>(
 pub fn synopsis<'a, Message: 'a>(synopsis: &'a str) -> Element<'a, Message> {
     container(regular(synopsis).ellipsis(text::Ellipsis::End))
         .clip(true)
-        .max_height(44.0)
+        .height(Length::Fit.max(44.0))
         .into()
 }
 
@@ -246,8 +246,8 @@ pub fn draw_collection_tab<'a, Message: 'a + Clone>(
     let unicode = Icon::new(collection.icon).unicode();
     let icon = icon(unicode).size(size);
     let text = container(medium(&collection.name).size(size))
-        .max_height(48.0)
-        .max_width(275);
+        .height(Length::Fit.max(48.0))
+        .width(Length::Fit.max(275));
 
     button(
         row!(icon, text)
@@ -474,7 +474,7 @@ impl CollectionThumbnail {
 
             container(title)
                 .padding(padding)
-                .max_height(35.0)
+                .height(Length::Fit.max(35.0))
                 .clip(true)
         };
 
@@ -587,7 +587,7 @@ impl SearchView {
                     text::Style { color: Some(color) }
                 })
                 .width(Length::Fill);
-            container(name).clip(true).max_height(24.0)
+            container(name).clip(true).height(Length::Fit.max(24.0))
         };
 
         let snippet = {
@@ -1024,7 +1024,10 @@ pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
 
 pub fn card_title<'a, Message: 'a>(title: &'a str, hovered: bool) -> Element<'a, Message> {
     let title = marquee(title).size(P).font(medium_font()).toggle(hovered);
-    container(title).max_height(20.0).clip(true).into()
+    container(title)
+        .height(Length::Fit.max(20.0))
+        .clip(true)
+        .into()
 }
 
 pub fn card_details<'a, Message: 'a>(rating: Option<f32>, release: String) -> Element<'a, Message> {
@@ -1633,8 +1636,8 @@ pub fn page_overview<'a, Message: 'a>(
     let synopsis = regular(overview);
 
     container(scrollable(synopsis).spacing(4.0))
-        .max_width(750)
-        .max_height(500)
+        .width(Length::Fit.max(750))
+        .height(Length::Fit.max(500))
         .into()
 }
 
@@ -1742,7 +1745,7 @@ pub fn page_collections<'a, Message: 'a + Clone>(
             memberships.map(|collection| draw_collection_tab(collection, goto.clone()));
 
         let content = column(collections).spacing(4.0).width(Length::Fill);
-        let collections = container(scrollable(content).spacing(4.0)).max_height(300);
+        let collections = container(scrollable(content).spacing(4.0)).height(Length::Fit.max(300));
 
         column!(title, collections).spacing(8).into()
     } else {
