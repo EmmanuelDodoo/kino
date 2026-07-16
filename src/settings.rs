@@ -13,14 +13,14 @@ use iced::{
     alignment::{Horizontal, Vertical},
     font::Family,
     widget::{
-        button, center_x, checkbox, column, combo_box, container, operation, pick_list, rich_text,
-        row, rule, scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
+        button, center_x, checkbox, column, container, operation, pick_list, rich_text, row, rule,
+        scrollable, slider, space, span, table, text, text_input, tooltip::Tooltip,
     },
 };
 use registry::models::{Directory, DirectoryId, MediaType, humanize_datetime};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use widgets::{expandable, marquee};
+use widgets::{expandable, font_selection, marquee};
 
 use crate::Element;
 
@@ -2044,15 +2044,9 @@ fn draw_subtitles<'a>(
     let font = {
         let label = label_maker("Font ");
 
-        let selection = combo_box(
-            &state.state,
-            "",
-            state.selected.as_ref(),
-            SubtitleMessage::Font,
-        )
-        .width(256)
-        .size(TEXT_SIZE)
-        .font(regular_font());
+        let selection = font_selection(&state.state, "", state.selected, SubtitleMessage::Font)
+            .width(256)
+            .size(TEXT_SIZE);
 
         row!(label, space::horizontal(), selection).align_y(Vertical::Center)
     };

@@ -310,7 +310,7 @@ impl Default for Scroll {
 
 #[derive(Debug)]
 pub struct FontState {
-    pub state: iced::widget::combo_box::State<iced::font::Family>,
+    pub state: widgets::font_selection::State,
     pub selected: Option<iced::font::Family>,
 }
 
@@ -320,7 +320,7 @@ impl FontState {
             .iter()
             .find(|family| family.to_string() == *default)
             .copied();
-        let state = iced::widget::combo_box::State::with_selection(fonts, selected.as_ref());
+        let state = widgets::font_selection::State::with_selection(fonts, selected);
 
         Self { state, selected }
     }

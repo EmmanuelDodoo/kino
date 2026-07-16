@@ -53,3 +53,9 @@
 <div align="center">
     <img src="showcase/pagination.gif", width="300px" alt="Pagination"/> 
 </div>
+
+##  Font Selection 
+
+<div align="center">
+    <img src="showcase/font_selection.gif", width="300px" alt="Font Selection"/> 
+</div>

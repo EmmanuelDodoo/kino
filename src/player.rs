@@ -7,9 +7,9 @@ use iced::{
     task,
     time::Instant,
     widget::{
-        self, button, center, checkbox, column, combo_box, container, image, mouse_area, operation,
-        pick_list, row, rule, scrollable, slider, space, stack, text, text_editor, text_input,
-        tooltip as tp, transition,
+        self, button, center, checkbox, column, container, image, mouse_area, operation, pick_list,
+        row, rule, scrollable, slider, space, stack, text, text_editor, text_input, tooltip as tp,
+        transition,
     },
     window,
 };
@@ -20,7 +20,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     path::PathBuf,
 };
-use widgets::{marquee, menu, throbber};
+use widgets::{font_selection, marquee, menu, throbber};
 
 pub mod comment;
 pub mod playlist;
@@ -3971,15 +3971,14 @@ fn draw_subs<'a>(
         let font = {
             let label = label_maker("Font: ");
 
-            let selection = combo_box(
+            let selection = font_selection(
                 &config.subtitle_font.state,
                 "",
-                config.subtitle_font.selected.as_ref(),
+                config.subtitle_font.selected,
                 SubtitleConfig::SubFont,
             )
             .width(200)
             .size(size)
-            .font(regular_font())
             .padding(padding);
 
             row!(label, space::horizontal(), selection)

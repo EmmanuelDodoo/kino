@@ -48,7 +48,7 @@ use utils::icons::*;
 use utils::typo;
 use utils::typo::*;
 use utils::{Layout, cancel_btn, empty, save_btn, tooltip};
-use widgets::{menu, modal, pagination};
+use widgets::{font_selection, modal, pagination};
 
 pub type Element<'a, Message> = iced::Element<'a, Message, Theme, iced::Renderer>;
 
@@ -157,7 +157,7 @@ enum Message {
 struct Playground {
     now: Instant,
     selected: Option<font::Family>,
-    state: combo_box::State<font::Family>,
+    state: font_selection::State,
     current: usize,
     temp: bool,
     theme: Option<Theme>,
@@ -171,7 +171,7 @@ impl Playground {
         let new = Self {
             now,
             selected: Some(font::Family::Name("Copperplate Gothic Bold")),
-            state: combo_box::State::new(vec![]),
+            state: font_selection::State::new(vec![]),
             current: 15,
             temp: false,
             theme: None,
@@ -188,7 +188,7 @@ impl Playground {
                 println!("Received None");
             }
             Message::Fonts(Ok(fams)) => {
-                self.state = combo_box::State::new(fams);
+                self.state = font_selection::State::new(fams);
             }
             Message::Fonts(Err(error)) => {
                 println!("{error:?}");
@@ -223,13 +223,8 @@ impl Playground {
             .padding([5, 10])
             .font(self.selected.unwrap_or_default());
 
-        let families = combo_box(
-            &self.state,
-            "Select font",
-            self.selected.as_ref(),
-            Message::Family,
-        )
-        .width(500);
+        let families =
+            font_selection(&self.state, "Select font", self.selected, Message::Family).width(500);
 
         let pages = {
             let a = pagination(1, self.current, 1250)
