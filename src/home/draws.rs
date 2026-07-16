@@ -172,7 +172,7 @@ pub fn draw_config(config: &CollectionConfig) -> Element<'_, HomeMessage> {
     let actions = {
         let save = save_btn().on_press(HomeMessage::CollectionConfig(ConfigMessage::Save));
 
-        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+        let cancel = cancel_btn().on_press(HomeMessage::CloseModal);
 
         column!(row!(save, cancel).spacing(80))
             .align_x(Horizontal::Center)
@@ -315,7 +315,7 @@ pub fn draw_collection_add<'a>(
     let actions = {
         let save = save_btn().on_press(HomeMessage::CollectionAdd(CollectionAddMessage::Save));
 
-        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+        let cancel = cancel_btn().on_press(HomeMessage::CloseModal);
 
         row!(save, cancel).spacing(100)
     };
@@ -337,7 +337,7 @@ pub fn draw_delete_confirm<'a>(name: &'a str, message: HomeMessage) -> Element<'
         .style(theme::button::danger);
 
     let cancel = button(medium("Cancel"))
-        .on_press(HomeMessage::CloseView)
+        .on_press(HomeMessage::CloseModal)
         .style(theme::button::primary);
 
     let actions = row!(cancel, delete).spacing(80.0).align_y(Vertical::Center);
@@ -461,7 +461,7 @@ pub fn draw_collection_triggers<'a>(
     let actions = {
         let save = save_btn().on_press(HomeMessage::Trigger(TriggerMessage::Save));
 
-        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+        let cancel = cancel_btn().on_press(HomeMessage::CloseModal);
 
         row!(save, cancel).spacing(100)
     };
@@ -1519,7 +1519,7 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
     let actions = {
         let save = save_btn().on_press(HomeMessage::WishViewMessage(WishViewMessage::Save));
 
-        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+        let cancel = cancel_btn().on_press(HomeMessage::CloseModal);
 
         column!(row!(save, cancel).spacing(80))
             .align_x(Horizontal::Center)
@@ -2402,7 +2402,7 @@ fn media_layout<'a>(
     let actions = {
         let save = save_btn().on_press(on_save);
 
-        let cancel = cancel_btn().on_press(HomeMessage::CloseView);
+        let cancel = cancel_btn().on_press(HomeMessage::CloseModal);
 
         column!(row!(save, cancel).spacing(80))
             .align_x(Horizontal::Center)

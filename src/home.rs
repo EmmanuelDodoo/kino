@@ -805,7 +805,7 @@ pub enum ViewMessage {
 }
 
 #[derive(Debug)]
-pub enum View {
+pub enum Modal {
     CollectionConfig(CollectionConfig),
     Search(SearchState, Option<CollectionId>),
     CollectionAdd(CollectionAddState),
@@ -838,47 +838,57 @@ pub enum View {
     WishDrawer(WishId),
 }
 
-impl View {
+impl Modal {
     fn is_selection(&self) -> bool {
         matches!(self, Self::Selection(_))
     }
 }
 
 #[derive(Debug)]
-pub enum ViewState {
-    None,
-    Animating { view: View, opening: bool },
-    Done(View),
+pub struct ModalState {
+    modal: Option<Modal>,
+    open: bool,
 }
 
-impl ViewState {
-    fn as_ref(&self) -> Option<&View> {
-        match self {
-            Self::Done(view) | Self::Animating { view, .. } => Some(view),
-            Self::None => None,
+impl ModalState {
+    fn none() -> Self {
+        Self {
+            modal: None,
+            open: false,
         }
     }
 
-    fn as_mut(&mut self) -> Option<&mut View> {
-        match self {
-            Self::Done(view) | Self::Animating { view, .. } => Some(view),
-            Self::None => None,
-        }
+    fn open(&mut self, modal: Modal) {
+        self.modal = Some(modal);
+        self.open = true;
+    }
+
+    fn close(&mut self) {
+        self.open = false;
+    }
+
+    fn as_ref(&self) -> Option<&Modal> {
+        self.modal.as_ref()
+    }
+
+    fn as_mut(&mut self) -> Option<&mut Modal> {
+        self.modal.as_mut()
     }
 
     fn is_selection(&self) -> bool {
-        match self {
-            Self::Done(view) | Self::Animating { view, .. } => view.is_selection(),
-            _ => false,
-        }
+        self.modal
+            .as_ref()
+            .map(|modal| modal.is_selection())
+            .unwrap_or_default()
     }
 
-    fn view(&self) -> Option<(&View, bool)> {
-        match self {
-            Self::Done(done) => Some((done, true)),
-            Self::Animating { view, opening } => Some((view, *opening)),
-            Self::None => None,
-        }
+    fn take(&mut self) -> Option<Modal> {
+        self.open = false;
+        self.modal.take()
+    }
+
+    fn view(&self) -> Option<(&Modal, bool)> {
+        self.as_ref().map(|modal| (modal, self.open))
     }
 }
 
@@ -970,8 +980,8 @@ pub enum HomeMessage {
     Refetch { id: ItemId, source: SourceSet },
     OpenView(ViewMessage),
     AddCollection(ItemId, CollectionId),
-    CloseView,
-    ViewAnimated,
+    CloseModal,
+    ModalToggled(bool),
     Play(ItemId),
     PlayCollection { id: CollectionId, items: Items },
     ToggleLayout,
@@ -1014,7 +1024,7 @@ pub struct Home {
     show_sorts: bool,
     show_filters: bool,
 
-    view: ViewState,
+    modal: ModalState,
 
     scroll: Scroll,
 
@@ -1080,7 +1090,7 @@ impl Home {
             scroll: Scroll::new(),
             collections: Vec::default(),
             directories: Vec::default(),
-            view: ViewState::None,
+            modal: ModalState::none(),
             recent_limit,
             scanning: false,
             focused: None,
@@ -1089,7 +1099,7 @@ impl Home {
     }
 
     fn unfocus(&mut self, now: Instant) {
-        let selection = self.view.is_selection();
+        let selection = self.modal.is_selection();
         match &mut self.state {
             State::Collection {
                 shows,
@@ -1270,7 +1280,7 @@ impl Home {
             }
             HomeMessage::OpenView(view) => {
                 self.unfocus(now);
-                let (view, msg) = match view {
+                let (modal, msg) = match view {
                     ViewMessage::CollectionConfig => {
                         let State::Collection { collection, .. } = &self.state else {
                             return Task::none();
@@ -1279,7 +1289,7 @@ impl Home {
                         let (config, name_input) =
                             CollectionConfig::from_collection(&collection.collection);
 
-                        let view = View::CollectionConfig(config);
+                        let view = Modal::CollectionConfig(config);
                         let focus = operation::focus(name_input);
 
                         (view, Task::batch([focus, self.update_page_scroll()]))
@@ -1295,7 +1305,7 @@ impl Home {
                             return Task::none();
                         };
 
-                        let view = View::CollectionTriggers {
+                        let view = Modal::CollectionTriggers {
                             id: collection.collection.id,
                             view_inserts: true,
                             itriggers: itriggers
@@ -1352,19 +1362,19 @@ impl Home {
                             selected: HashSet::new(),
                             initial: HashSet::new(),
                         };
-                        let view = View::CollectionAdd(state);
+                        let view = Modal::CollectionAdd(state);
 
                         (view, Task::done(Message::FetchMembershipIds(item)))
                     }
                     ViewMessage::AddToCollection(id) => return self.toggle_search(Some(id), now),
                     ViewMessage::Search => return self.toggle_search(None, now),
                     ViewMessage::RemoveMedia { id, name } => {
-                        let view = View::RemoveMedia { id, name };
+                        let view = Modal::RemoveMedia { id, name };
 
                         (view, self.update_page_scroll())
                     }
                     ViewMessage::RemoveCollection { id, name } => {
-                        let view = View::RemoveCollection { id, name };
+                        let view = Modal::RemoveCollection { id, name };
 
                         (view, self.update_page_scroll())
                     }
@@ -1389,7 +1399,7 @@ impl Home {
                             None => WishNewState::new(default_source),
                         };
 
-                        let view = View::WishNew(view);
+                        let view = Modal::WishNew(view);
 
                         (
                             view,
@@ -1397,12 +1407,12 @@ impl Home {
                         )
                     }
                     ViewMessage::WishModal(id) => {
-                        let view = View::WishDrawer(id);
+                        let view = Modal::WishDrawer(id);
 
                         (view, self.update_page_scroll())
                     }
                     ViewMessage::RemoveWish { id, name } => {
-                        let view = View::RemoveWish { id, name };
+                        let view = Modal::RemoveWish { id, name };
 
                         (view, self.update_page_scroll())
                     }
@@ -1417,7 +1427,7 @@ impl Home {
 
                         let state = MovieEditState::new(&movie.item);
 
-                        (View::MovieEdit(Box::new(state)), self.update_page_scroll())
+                        (Modal::MovieEdit(Box::new(state)), self.update_page_scroll())
                     }
                     ViewMessage::ShowEdit(id) => {
                         let State::Show { show, .. } = &self.state else {
@@ -1430,7 +1440,7 @@ impl Home {
 
                         let state = ShowEditState::new(&show.item);
 
-                        (View::ShowEdit(Box::new(state)), self.update_page_scroll())
+                        (Modal::ShowEdit(Box::new(state)), self.update_page_scroll())
                     }
                     ViewMessage::SeasonEdit(id) => {
                         let State::Season {
@@ -1446,7 +1456,10 @@ impl Home {
 
                         let state = SeasonEditState::new(&season.item, show.clone());
 
-                        (View::SeasonEdit(Box::new(state)), self.update_page_scroll())
+                        (
+                            Modal::SeasonEdit(Box::new(state)),
+                            self.update_page_scroll(),
+                        )
                     }
                     ViewMessage::EpisodeEdit(id) => {
                         let State::Episode { episode, dir, .. } = &self.state else {
@@ -1460,21 +1473,18 @@ impl Home {
                         let state = EpisodeEditState::new(&episode.item, dir.clone());
 
                         (
-                            View::EpisodeEdit(Box::new(state)),
+                            Modal::EpisodeEdit(Box::new(state)),
                             self.update_page_scroll(),
                         )
                     }
                 };
 
-                self.view = ViewState::Animating {
-                    view,
-                    opening: true,
-                };
+                self.modal.open(modal);
 
                 msg
             }
             HomeMessage::CollectionConfig(csg) => {
-                let Some(View::CollectionConfig(config)) = self.view.as_mut() else {
+                let Some(Modal::CollectionConfig(config)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -1517,9 +1527,9 @@ impl Home {
                         sort_collections(&mut self.collections);
 
                         let query = collection.collection.save();
-                        let close_view = self.close_view(true, now);
+                        let close_modal = self.close_modal();
 
-                        return Task::batch([Task::done(Message::Query(query)), close_view]);
+                        return Task::batch([Task::done(Message::Query(query)), close_modal]);
                     }
                     ConfigMessage::Save => {
                         if config.empty_name {
@@ -1596,7 +1606,7 @@ impl Home {
                 Task::none()
             }
             HomeMessage::WishViewMessage(wsg) => {
-                let Some(View::WishNew(state)) = self.view.as_mut() else {
+                let Some(Modal::WishNew(state)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -1732,7 +1742,7 @@ impl Home {
                                 })
                                 .tasked();
 
-                                Task::batch([msg, self.close_view(true, now)])
+                                Task::batch([msg, self.close_modal()])
                             }
                             None => {
                                 if state.invalid_name() {
@@ -1758,7 +1768,7 @@ impl Home {
                                     source_id,
                                 })
                                 .tasked();
-                                let close = self.close_view(true, now);
+                                let close = self.close_modal();
 
                                 Task::batch([close, wish])
                             }
@@ -1767,7 +1777,7 @@ impl Home {
                 }
             }
             HomeMessage::MovieEdit(msg) => {
-                let Some(View::MovieEdit(state)) = self.view.as_mut() else {
+                let Some(Modal::MovieEdit(state)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -1987,7 +1997,7 @@ impl Home {
                         };
 
                         let msg = Message::MovieUpdate(update).tasked();
-                        let close = self.close_view(true, now);
+                        let close = self.close_modal();
 
                         return Task::batch([msg, close, poster, backdrop]);
                     }
@@ -1996,7 +2006,7 @@ impl Home {
                 Task::none()
             }
             HomeMessage::ShowEdit(ssg) => {
-                let Some(View::ShowEdit(state)) = self.view.as_mut() else {
+                let Some(Modal::ShowEdit(state)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -2172,7 +2182,7 @@ impl Home {
                         };
 
                         let msg = Message::ShowUpdate(update).tasked();
-                        let close = self.close_view(true, now);
+                        let close = self.close_modal();
 
                         return Task::batch([msg, close, poster, backdrop]);
                     }
@@ -2181,7 +2191,7 @@ impl Home {
                 Task::none()
             }
             HomeMessage::SeasonEdit(ssg) => {
-                let Some(View::SeasonEdit(state)) = self.view.as_mut() else {
+                let Some(Modal::SeasonEdit(state)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -2315,7 +2325,7 @@ impl Home {
                         };
 
                         let msg = Message::SeasonUpdate(update).tasked();
-                        let close = self.close_view(true, now);
+                        let close = self.close_modal();
 
                         return Task::batch([msg, close, poster]);
                     }
@@ -2324,7 +2334,7 @@ impl Home {
                 Task::none()
             }
             HomeMessage::EpisodeEdit(msg) => {
-                let Some(View::EpisodeEdit(state)) = self.view.as_mut() else {
+                let Some(Modal::EpisodeEdit(state)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -2501,7 +2511,7 @@ impl Home {
                         };
 
                         let msg = Message::EpisodeUpdate(update).tasked();
-                        let close = self.close_view(true, now);
+                        let close = self.close_modal();
 
                         return Task::batch([msg, close, poster]);
                     }
@@ -2511,7 +2521,7 @@ impl Home {
             }
             HomeMessage::RemoveCollection => {
                 self.unfocus(now);
-                let Some(View::RemoveCollection { id, .. }) = self.view.as_ref() else {
+                let Some(Modal::RemoveCollection { id, .. }) = self.modal.as_ref() else {
                     return Task::none();
                 };
 
@@ -2528,7 +2538,6 @@ impl Home {
                 let remove = Message::RemoveCollection(old.id).tasked();
 
                 self.command = false;
-                self.view = ViewState::None;
 
                 Task::batch([remove, self.back(now, true), self.close_view(true, now)])
             }
@@ -2540,7 +2549,7 @@ impl Home {
                 Task::batch([remove, self.content_refresh()])
             }
             HomeMessage::SearchMessage(ssg) => {
-                let Some(View::Search(state, _)) = self.view.as_mut() else {
+                let Some(Modal::Search(state, _)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -2602,7 +2611,7 @@ impl Home {
                 }
             }
             HomeMessage::CollectionAdd(csg) => {
-                let Some(View::CollectionAdd(state)) = self.view.as_mut() else {
+                let Some(Modal::CollectionAdd(state)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -2641,13 +2650,13 @@ impl Home {
                                 item: state.item,
                                 collections: new,
                             }),
-                            self.close_view(true, now),
+                            self.close_modal(),
                         ])
                     }
                 }
             }
             HomeMessage::Selection(ssg) => {
-                let Some(View::Selection(selected)) = self.view.as_mut() else {
+                let Some(Modal::Selection(selected)) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -2817,14 +2826,14 @@ impl Home {
                             }
                         }
 
-                        self.close_view(true, now)
+                        self.close_modal()
                     }
                     SelectionMessage::Play => {
                         let play = selected.to_vec();
                         let play = Message::PlayItems(play).tasked();
-                        // The modal widget tree state gets replaced faster than it's able
-                        // to complete the animation and publish the message. Hence:
-                        self.view = ViewState::None;
+                        self.modal.close();
+
+                        self.command = false;
 
                         Task::batch([play, self.close_view(true, now)])
                     }
@@ -2836,7 +2845,7 @@ impl Home {
                 Task::done(msg)
             }
             HomeMessage::RemoveMedia => {
-                let Some(View::RemoveMedia { id, .. }) = self.view.as_mut() else {
+                let Some(Modal::RemoveMedia { id, .. }) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -2845,12 +2854,11 @@ impl Home {
                 let remove = Task::done(msg);
 
                 self.command = false;
-                self.view = ViewState::None;
 
                 Task::batch([self.back(now, true), remove, self.close_view(true, now)])
             }
             HomeMessage::RemoveWish => {
-                let Some(View::RemoveWish { id, .. }) = self.view.as_mut() else {
+                let Some(Modal::RemoveWish { id, .. }) = self.modal.as_mut() else {
                     return Task::none();
                 };
 
@@ -2859,14 +2867,14 @@ impl Home {
                 Task::batch([msg, self.close_view(true, now)])
             }
             HomeMessage::Trigger(tsg) => {
-                let Some(View::CollectionTriggers {
+                let Some(Modal::CollectionTriggers {
                     id,
                     view_inserts,
                     itriggers,
                     dtriggers,
                     removed_inserts,
                     removed_deletes,
-                }) = self.view.as_mut()
+                }) = self.modal.as_mut()
                 else {
                     return Task::none();
                 };
@@ -3870,27 +3878,19 @@ impl Home {
                         }
                         .tasked();
 
-                        let close_view = self.close_view(true, now);
+                        let close_modal = self.close_modal();
 
-                        Task::batch([close_view, msg])
+                        Task::batch([close_modal, msg])
                     }
                 }
             }
-            HomeMessage::CloseView => self.close_view(true, now),
-            HomeMessage::ViewAnimated => {
-                match std::mem::replace(&mut self.view, ViewState::None) {
-                    ViewState::None => {}
-                    ViewState::Done(done) => {
-                        self.view = ViewState::Done(done);
-                    }
-                    ViewState::Animating { view, opening } => {
-                        if opening {
-                            self.view = ViewState::Done(view);
-                        }
-                    }
+            HomeMessage::CloseModal => self.close_modal(),
+            HomeMessage::ModalToggled(open) => {
+                if open {
+                    self.update_page_scroll()
+                } else {
+                    self.close_view(true, now)
                 }
-
-                self.update_page_scroll()
             }
             HomeMessage::Back => self.back(now, false),
             HomeMessage::Forward => self.forward(now),
@@ -4070,11 +4070,8 @@ impl Home {
             HomeMessage::NewCollection => {
                 let (config, name_input) = CollectionConfig::new();
 
-                let view = View::CollectionConfig(config);
-                self.view = ViewState::Animating {
-                    view,
-                    opening: true,
-                };
+                let modal = Modal::CollectionConfig(config);
+                self.modal.open(modal);
                 let focus = operation::focus(name_input);
 
                 Task::batch([focus, self.update_page_scroll()])
@@ -4082,7 +4079,7 @@ impl Home {
             HomeMessage::Random => Task::done(Message::Random),
             HomeMessage::RefreshContent => self.content_refresh(),
             HomeMessage::Play(item) => {
-                if self.view.is_selection() {
+                if self.modal.is_selection() {
                     Message::Home(HomeMessage::Selection(SelectionMessage::Select(item))).tasked()
                 } else if self.command {
                     let selection =
@@ -4102,7 +4099,7 @@ impl Home {
                 Task::done(Message::PlayCollectionItems { id, items })
             }
             HomeMessage::WishHovered(id, is_hovered) => {
-                let is_hovered = is_hovered && !self.view.is_selection();
+                let is_hovered = is_hovered && !self.modal.is_selection();
 
                 let State::Wishlist(wishlist) = &mut self.state else {
                     return Task::none();
@@ -4119,7 +4116,7 @@ impl Home {
                 Task::none()
             }
             HomeMessage::Hovered(id, is_hovered) => {
-                let selection = self.view.is_selection();
+                let selection = self.modal.is_selection();
 
                 match (&mut self.state, id) {
                     (State::Loading, _)
@@ -4345,14 +4342,13 @@ impl Home {
                 Task::none()
             }
             HomeMessage::AddCollection(item, collection) => {
-                let close_view = self.close_view(true, now);
-                // self.view = None;
+                let close_modal = self.close_modal();
                 let toggle = Task::done(Message::ToggleMembership {
                     item,
                     collections: vec![(collection, true)],
                 });
 
-                Task::batch([close_view, toggle])
+                Task::batch([close_modal, toggle])
             }
             HomeMessage::WishCompletion(id) => {
                 let State::Wishlist(wishlist) = &mut self.state else {
@@ -4383,8 +4379,8 @@ impl Home {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let searching = match self.view.as_ref() {
-            Some(View::Search(state, _)) => state.last_edit.is_some(),
+        let searching = match self.modal.as_ref() {
+            Some(Modal::Search(state, _)) => state.last_edit.is_some(),
             _ => false,
         };
         if searching {
@@ -5198,7 +5194,7 @@ impl Home {
                     })
                     .on_press(HomeMessage::ToggleFilter)
                     .padding([5, 5]),
-                "Filters",
+                "Filter",
                 tp,
             )
         };
@@ -5649,27 +5645,27 @@ impl Home {
         ) -> modal::Modal<'a, HomeMessage, Theme> {
             modal(content, overlay)
                 .toggle(toggle)
-                .on_toggle_complete(HomeMessage::ViewAnimated)
+                .on_complete(HomeMessage::ModalToggled)
                 .position(modal::Position::Center)
-                .on_blur(HomeMessage::CloseView)
+                .on_blur(HomeMessage::CloseModal)
         }
 
         fn default<'a>(content: impl Into<Element<'a, HomeMessage>>) -> Element<'a, HomeMessage> {
             modalize(content, empty(), false).passthrough(true).into()
         }
 
-        match self.view.view() {
+        match self.modal.view() {
             None => default(content),
             Some((view, toggle)) => {
                 let modalize = |content, overlay| modalize(content, overlay, toggle);
 
                 match view {
-                    View::CollectionConfig(config) => modalize(content, draw_config(config)),
-                    View::Search(state, None) => modalize(
+                    Modal::CollectionConfig(config) => modalize(content, draw_config(config)),
+                    Modal::Search(state, None) => modalize(
                         content,
                         draw_search(state, |id| HomeMessage::Goto(id.into()), theme, true),
                     ),
-                    View::Search(state, Some(collection)) => modalize(
+                    Modal::Search(state, Some(collection)) => modalize(
                         content,
                         draw_search(
                             state,
@@ -5678,7 +5674,7 @@ impl Home {
                             false,
                         ),
                     ),
-                    View::CollectionAdd(state) => modalize(
+                    Modal::CollectionAdd(state) => modalize(
                         content,
                         draw_collection_add(
                             state,
@@ -5686,14 +5682,14 @@ impl Home {
                             self.collections.is_empty(),
                         ),
                     ),
-                    View::RemoveMedia { name, .. } => {
+                    Modal::RemoveMedia { name, .. } => {
                         modalize(content, draw_delete_confirm(name, HomeMessage::RemoveMedia))
                     }
-                    View::RemoveCollection { name, .. } => modalize(
+                    Modal::RemoveCollection { name, .. } => modalize(
                         content,
                         draw_delete_confirm(name, HomeMessage::RemoveCollection),
                     ),
-                    View::CollectionTriggers {
+                    Modal::CollectionTriggers {
                         itriggers,
                         dtriggers,
                         view_inserts,
@@ -5704,7 +5700,7 @@ impl Home {
                         content,
                         draw_collection_triggers(*view_inserts, itriggers, dtriggers),
                     ),
-                    View::Selection(selected) => {
+                    Modal::Selection(selected) => {
                         let selection =
                             container(draw_selection(selected.len())).style(theme::container::dark);
 
@@ -5719,8 +5715,8 @@ impl Home {
                             })
                             .right()
                     }
-                    View::WishNew(state) => modalize(content, draw_wishlist(state)),
-                    View::WishDrawer(id) => {
+                    Modal::WishNew(state) => modalize(content, draw_wishlist(state)),
+                    Modal::WishDrawer(id) => {
                         let State::Wishlist(wishlist) = &self.state else {
                             return default(content);
                         };
@@ -5733,10 +5729,10 @@ impl Home {
 
                         modalize(content, overlay)
                     }
-                    View::RemoveWish { name, .. } => {
+                    Modal::RemoveWish { name, .. } => {
                         modalize(content, draw_delete_confirm(name, HomeMessage::RemoveWish))
                     }
-                    View::MovieEdit(state) => {
+                    Modal::MovieEdit(state) => {
                         let State::Movie {
                             movie,
                             subtitles,
@@ -5763,7 +5759,7 @@ impl Home {
                         )
                         .right()
                     }
-                    View::ShowEdit(state) => {
+                    Modal::ShowEdit(state) => {
                         let State::Show { show, .. } = &self.state else {
                             return default(content);
                         };
@@ -5779,7 +5775,7 @@ impl Home {
 
                         modalize(content, draw_show_edit(state, dirs)).right()
                     }
-                    View::SeasonEdit(state) => {
+                    Modal::SeasonEdit(state) => {
                         let State::Season { season, .. } = &self.state else {
                             return default(content);
                         };
@@ -5790,7 +5786,7 @@ impl Home {
 
                         modalize(content, draw_season_edit(state)).right()
                     }
-                    View::EpisodeEdit(state) => {
+                    Modal::EpisodeEdit(state) => {
                         let State::Episode {
                             episode,
                             subtitles,
@@ -5860,14 +5856,14 @@ impl Home {
     pub fn back(&mut self, now: Instant, clear: bool) -> Task<Message> {
         self.unfocus(now);
 
-        if let Some((view, _)) = self.view.view()
-            && !view.is_selection()
-        {
-            return self.close_view(true, now);
-        }
+        let close_modal = if self.modal.is_selection() {
+            Task::none()
+        } else {
+            self.close_view(true, now)
+        };
 
         let Some(new) = self.backward.pop() else {
-            return Task::none();
+            return close_modal;
         };
 
         let (task, msg) = match self.current_page.take() {
@@ -5898,20 +5894,20 @@ impl Home {
             }
         };
 
-        Task::batch([msg.tasked(), task])
+        Task::batch([msg.tasked(), task, close_modal])
     }
 
     pub fn forward(&mut self, now: Instant) -> Task<Message> {
         self.unfocus(now);
 
-        if let Some((view, _)) = self.view.view()
-            && !view.is_selection()
-        {
-            return self.close_view(true, now);
-        }
+        let close_modal = if self.modal.is_selection() {
+            Task::none()
+        } else {
+            self.close_view(true, now)
+        };
 
         let Some(new) = self.forward.pop() else {
-            return Task::none();
+            return close_modal;
         };
 
         let (task, msg) = match self.current_page.take() {
@@ -5939,7 +5935,7 @@ impl Home {
             }
         };
 
-        Task::batch([msg.tasked(), task])
+        Task::batch([msg.tasked(), task, close_modal])
     }
 
     pub fn content_refresh(&mut self) -> Task<Message> {
@@ -5999,32 +5995,23 @@ impl Home {
         Task::done(Message::Layout(self.layout))
     }
 
+    fn close_modal(&mut self) -> Task<Message> {
+        self.modal.close();
+
+        Task::none()
+    }
+
     fn close_view(&mut self, clear_selection: bool, now: Instant) -> Task<Message> {
         let scroll = self.update_page_scroll();
         self.unfocus(now);
 
-        if !clear_selection && self.view.is_selection() {
+        if !clear_selection && self.modal.is_selection() {
             self.command = true;
             return scroll;
         }
 
         self.command = false;
-
-        match std::mem::replace(&mut self.view, ViewState::None) {
-            ViewState::None => {}
-            ViewState::Animating { view, .. } => {
-                self.view = ViewState::Animating {
-                    view,
-                    opening: false,
-                };
-            }
-            ViewState::Done(view) => {
-                self.view = ViewState::Animating {
-                    view,
-                    opening: false,
-                };
-            }
-        }
+        self.modal.take();
 
         return scroll;
     }
@@ -6138,10 +6125,7 @@ impl Home {
     }
 
     fn selection(&mut self, now: Instant) -> Task<Message> {
-        self.view = ViewState::Animating {
-            view: View::Selection(vec![]),
-            opening: true,
-        };
+        self.modal.open(Modal::Selection(vec![]));
         self.unfocus(now);
 
         self.update_page_scroll()
@@ -6154,7 +6138,7 @@ impl Home {
             HomeAction::RefreshContent => self.content_refresh(),
             HomeAction::Refresh => self.refresh(),
             HomeAction::SearchToggle => self.toggle_search(None, now),
-            HomeAction::CloseModal => self.close_view(true, now),
+            HomeAction::CloseModal => self.close_modal(),
             HomeAction::Back => self.back(now, false),
             HomeAction::Forward => self.forward(now),
             HomeAction::SelectionStart => self.selection(now),
@@ -6171,7 +6155,7 @@ impl Home {
         mut movies: Vec<MovieItem>,
         mut shows: Vec<ShowItem>,
     ) -> Task<Message> {
-        if let Some(View::Selection(selected)) = self.view.as_ref() {
+        if let Some(Modal::Selection(selected)) = self.modal.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.item.id.into());
             }
@@ -6204,7 +6188,7 @@ impl Home {
     ) -> Task<Message> {
         let scroll = self.update_page_scroll();
 
-        if let Some(View::Selection(selected)) = self.view.as_ref() {
+        if let Some(Modal::Selection(selected)) = self.modal.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.item.id.into());
             }
@@ -6229,7 +6213,7 @@ impl Home {
     }
 
     pub fn fetched_shows(&mut self, mut shows: Vec<ShowItem>) -> Task<Message> {
-        if let Some(View::Selection(selected)) = self.view.as_ref() {
+        if let Some(Modal::Selection(selected)) = self.modal.as_ref() {
             for media in &mut shows {
                 media.selected = selected.contains(&media.item.id.into());
             }
@@ -6240,7 +6224,7 @@ impl Home {
     }
 
     pub fn fetched_movies(&mut self, mut movies: Vec<MovieItem>) -> Task<Message> {
-        if let Some(View::Selection(selected)) = self.view.as_ref() {
+        if let Some(Modal::Selection(selected)) = self.modal.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.item.id.into());
             }
@@ -6250,7 +6234,7 @@ impl Home {
     }
 
     pub fn fetched_show(&mut self, show: ShowItem, mut seasons: Vec<SeasonItem>) -> Task<Message> {
-        if let Some(View::Selection(selected)) = self.view.as_ref() {
+        if let Some(Modal::Selection(selected)) = self.modal.as_ref() {
             for media in &mut seasons {
                 media.selected = selected.contains(&media.item.id.into());
             }
@@ -6308,7 +6292,7 @@ impl Home {
         season: SeasonItem,
         mut episodes: Vec<EpisodeItem>,
     ) -> Task<Message> {
-        if let Some(View::Selection(selected)) = self.view.as_ref() {
+        if let Some(Modal::Selection(selected)) = self.modal.as_ref() {
             for media in &mut episodes {
                 media.selected = selected.contains(&media.item.id.into());
             }
@@ -6404,7 +6388,7 @@ impl Home {
         let task = task.map(|task| Message::Home(HomeMessage::CollectionTask(task)));
         let scroll = self.update_page_scroll();
 
-        if let Some(View::Selection(selected)) = self.view.as_ref() {
+        if let Some(Modal::Selection(selected)) = self.modal.as_ref() {
             for media in &mut movies {
                 media.selected = selected.contains(&media.item.id.into());
             }
@@ -6433,9 +6417,9 @@ impl Home {
     }
 
     pub fn fetched_memberships_ids(&mut self, memberships: Vec<CollectionId>) -> Task<Message> {
-        if let Some(View::CollectionAdd(CollectionAddState {
+        if let Some(Modal::CollectionAdd(CollectionAddState {
             selected, initial, ..
-        })) = self.view.as_mut()
+        })) = self.modal.as_mut()
         {
             for collection in memberships {
                 initial.insert(collection);
@@ -6664,7 +6648,7 @@ impl Home {
     }
 
     pub fn load(&mut self) -> Task<Message> {
-        let Some(View::Search(state, _)) = self.view.as_mut() else {
+        let Some(Modal::Search(state, _)) = self.modal.as_mut() else {
             return Task::none();
         };
 
@@ -6679,7 +6663,7 @@ impl Home {
     }
 
     pub fn loaded_search(&mut self, items: Vec<SearchView>) -> Task<Message> {
-        let Some(View::Search(state, _)) = self.view.as_mut() else {
+        let Some(Modal::Search(state, _)) = self.modal.as_mut() else {
             return self.update_page_scroll();
         };
 
@@ -6703,10 +6687,7 @@ impl Home {
             text_input: text_input.clone(),
         };
 
-        self.view = ViewState::Animating {
-            view: View::Search(state, collection),
-            opening: true,
-        };
+        self.modal.open(Modal::Search(state, collection));
 
         let focus = operation::focus(text_input);
 

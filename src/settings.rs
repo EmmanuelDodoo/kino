@@ -99,7 +99,7 @@ impl ScrollState {
 }
 
 #[derive(Debug, Clone)]
-enum View {
+enum Modal {
     FolderSelection {
         path: PathBuf,
         kind: MediaType,
@@ -109,6 +109,52 @@ enum View {
         key: Option<KeyPress>,
         conflict: KeyAction,
     },
+}
+
+#[derive(Debug, Clone)]
+struct ModalState {
+    modal: Option<Modal>,
+    open: bool,
+}
+
+impl ModalState {
+    fn none() -> Self {
+        Self {
+            modal: None,
+            open: false,
+        }
+    }
+
+    fn open(&mut self, modal: Modal) {
+        self.modal = Some(modal);
+        self.open = true;
+    }
+
+    fn close(&mut self) -> Task<Message> {
+        if self.modal.is_none() {
+            return Task::done(Message::Back);
+        } else {
+            self.open = false;
+            Task::none()
+        }
+    }
+
+    fn take(&mut self) -> Option<Modal> {
+        self.open = false;
+        self.modal.take()
+    }
+
+    fn as_ref(&self) -> Option<&Modal> {
+        self.modal.as_ref()
+    }
+
+    fn as_mut(&mut self) -> Option<&mut Modal> {
+        self.modal.as_mut()
+    }
+
+    fn view(&self) -> Option<(&Modal, bool)> {
+        self.as_ref().map(|modal| (modal, self.open))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -263,6 +309,7 @@ pub enum SettingsMessage {
     NewKeyPress(KeyAction),
     KeyAction(KeyAction),
     SaveKeyBinding,
+    ModalToggled(bool),
     None,
 }
 
@@ -358,7 +405,7 @@ pub struct Settings {
     subtitle_state: FontState,
 
     page: Page,
-    view: Option<View>,
+    modal: ModalState,
 
     scroll_state: ScrollState,
 
@@ -392,7 +439,7 @@ impl Settings {
             config,
             subtitle_state,
             page: Page::default(),
-            view: None,
+            modal: ModalState::none(),
             scroll_state: ScrollState::new(),
             directories: Vec::default(),
             text_color,
@@ -415,6 +462,13 @@ impl Settings {
                 }
 
                 Task::none()
+            }
+            SettingsMessage::ModalToggled(opened) => {
+                if opened {
+                    self.update_scroll()
+                } else {
+                    self.close_modal()
+                }
             }
             SettingsMessage::Cancel => self.cancel(),
             SettingsMessage::Save => Task::done(Message::SaveSettings),
@@ -996,10 +1050,12 @@ impl Settings {
                     return Task::none();
                 };
 
-                self.view = Some(View::FolderSelection {
+                let modal = Modal::FolderSelection {
                     path: folder,
                     kind: MediaType::Movies,
-                });
+                };
+
+                self.modal.open(modal);
 
                 self.update_scroll()
             }
@@ -1007,14 +1063,14 @@ impl Settings {
                 FolderSelectionMessage::Cancel => self.cancel(),
                 FolderSelectionMessage::Reselect => pick_task(),
                 FolderSelectionMessage::Kind(new) => {
-                    if let Some(View::FolderSelection { kind, .. }) = self.view.as_mut() {
+                    if let Some(Modal::FolderSelection { kind, .. }) = self.modal.as_mut() {
                         *kind = new;
                     }
 
                     Task::none()
                 }
                 FolderSelectionMessage::Submit => {
-                    let Some(View::FolderSelection { path, kind }) = self.view.take() else {
+                    let Some(Modal::FolderSelection { path, kind }) = self.modal.take() else {
                         return self.update_scroll();
                     };
 
@@ -1075,26 +1131,28 @@ impl Settings {
                 Task::none()
             }
             SettingsMessage::NewKeyPress(action) => {
-                self.view = Some(View::CaptureKey {
+                let modal = Modal::CaptureKey {
                     conflict: action.none(),
                     action,
                     key: None,
-                });
+                };
+
+                self.modal.open(modal);
                 Task::batch([Task::done(Message::CaptureKeys(true)), self.update_scroll()])
             }
             SettingsMessage::KeyAction(action) => {
-                if let Some(View::CaptureKey { action: old, .. }) = self.view.as_mut() {
+                if let Some(Modal::CaptureKey { action: old, .. }) = self.modal.as_mut() {
                     *old = action
                 }
 
                 Task::none()
             }
             SettingsMessage::SaveKeyBinding => {
-                let Some(View::CaptureKey {
+                let Some(Modal::CaptureKey {
                     action,
                     key,
                     conflict: _unused,
-                }) = self.view.take()
+                }) = self.modal.take()
                 else {
                     return Task::done(Message::CaptureKeys(false));
                 };
@@ -1153,23 +1211,25 @@ impl Settings {
                 .padding(4),
         );
 
-        match &self.view {
+        match self.modal.view() {
             None => content.into(),
-            Some(view) => {
+            Some((view, opened)) => {
                 let modal = |overlay| {
                     widgets::modal(content, overlay)
                         .on_blur(SettingsMessage::Cancel)
+                        .toggle(opened)
+                        .on_complete(SettingsMessage::ModalToggled)
                         .center()
                         .into()
                 };
 
                 match view {
-                    View::FolderSelection { path, kind } => {
+                    Modal::FolderSelection { path, kind } => {
                         let overlay = draw_folder_selection(path, kind);
 
                         modal(overlay)
                     }
-                    View::CaptureKey {
+                    Modal::CaptureKey {
                         action,
                         key,
                         conflict,
@@ -1566,15 +1626,19 @@ impl Settings {
         }
     }
 
-    fn cancel(&mut self) -> Task<Message> {
-        match self.view.take() {
+    fn close_modal(&mut self) -> Task<Message> {
+        match self.modal.take() {
             None => Task::done(Message::Back),
-            Some(View::FolderSelection { .. }) => self.update_scroll(),
-            Some(View::CaptureKey { .. }) => Task::batch([
+            Some(Modal::FolderSelection { .. }) => self.update_scroll(),
+            Some(Modal::CaptureKey { .. }) => Task::batch([
                 Task::done(Message::CaptureKeys(false)),
                 self.update_scroll(),
             ]),
         }
+    }
+
+    fn cancel(&mut self) -> Task<Message> {
+        self.modal.close()
     }
 
     fn goto(&mut self, page: Page) -> Task<Message> {
@@ -1604,11 +1668,11 @@ impl Settings {
     }
 
     pub fn captured_key(&mut self, key: KeyPress) -> Task<Message> {
-        if let Some(View::CaptureKey {
+        if let Some(Modal::CaptureKey {
             key: old,
             action,
             conflict,
-        }) = self.view.as_mut()
+        }) = self.modal.as_mut()
         {
             match action {
                 KeyAction::Video(new) => {

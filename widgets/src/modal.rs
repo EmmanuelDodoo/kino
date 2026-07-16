@@ -92,7 +92,7 @@ where
     easing: Easing,
     toggle: bool,
     on_blur: Option<Message>,
-    on_toggle_complete: Option<Message>,
+    on_complete: Option<Box<dyn Fn(bool) -> Message + 'a>>,
     passthrough: bool,
     class: Theme::Class<'a>,
 }
@@ -116,7 +116,7 @@ where
             easing: Easing::EaseInOut,
             toggle: true,
             on_blur: None,
-            on_toggle_complete: None,
+            on_complete: None,
             passthrough: false,
             class: Theme::default(),
         }
@@ -204,8 +204,8 @@ where
     }
 
     /// Sets the message produced once the animation is finished.
-    pub fn on_toggle_complete(mut self, message: Message) -> Self {
-        self.on_toggle_complete = Some(message);
+    pub fn on_complete(mut self, on_complete: impl Fn(bool) -> Message + 'a) -> Self {
+        self.on_complete = Some(Box::new(on_complete));
         self
     }
 
@@ -492,10 +492,11 @@ where
                 viewport,
             );
 
-            let interactive_event = !matches!(event, iced::Event::Window(_));
+            let captured = shell.is_event_captured();
+            let interactive_event = !matches!(event, iced::Event::Window(_) | iced::Event::Waken);
             let passthrough = !(interactive_event && cursor.is_over(content_layout.bounds()));
 
-            if self.passthrough && !shell.is_event_captured() && passthrough {
+            if !captured && self.passthrough && passthrough {
                 self.base.as_widget_mut().update(
                     &mut tree.children[0],
                     event,
@@ -538,8 +539,9 @@ where
                     shell.request_redraw();
                 } else if !state.done {
                     state.done = true;
-                    if let Some(message) = self.on_toggle_complete.clone() {
-                        shell.publish(message);
+
+                    if let Some(on_complete) = self.on_complete.as_ref() {
+                        shell.publish(on_complete(state.animation_value()));
                     }
                 }
             }

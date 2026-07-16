@@ -58,6 +58,47 @@ enum Modal {
 }
 
 #[derive(Debug)]
+pub struct ModalState {
+    modal: Option<Modal>,
+    open: bool,
+}
+
+impl ModalState {
+    fn none() -> Self {
+        Self {
+            modal: None,
+            open: false,
+        }
+    }
+
+    fn open(&mut self, modal: Modal) {
+        self.modal = Some(modal);
+        self.open = true;
+    }
+
+    fn close(&mut self) {
+        self.open = false
+    }
+
+    fn as_ref(&self) -> Option<&Modal> {
+        self.modal.as_ref()
+    }
+
+    fn as_mut(&mut self) -> Option<&mut Modal> {
+        self.modal.as_mut()
+    }
+
+    fn take(&mut self) -> Option<Modal> {
+        self.open = false;
+        self.modal.take()
+    }
+
+    fn view(&self) -> Option<(&Modal, bool)> {
+        self.as_ref().map(|modal| (modal, self.open))
+    }
+}
+
+#[derive(Debug)]
 struct Config {
     tab: ConfigTab,
     subtitle_uri: Option<PathBuf>,
@@ -458,6 +499,7 @@ pub enum ManagerMessage {
     CommentMessage(CommentMessage),
     ClearIndicator,
     SpeedToggle(bool),
+    ModalToggled(bool),
     None,
 }
 
@@ -476,7 +518,7 @@ pub struct Manager {
     state: State,
     next: AutoState,
 
-    modal: Option<Modal>,
+    modal: ModalState,
     panel: Option<Panel>,
 
     speed_toggle: bool,
@@ -531,7 +573,7 @@ impl Manager {
             is_fullscreen: false,
             state,
             next: AutoState::Idle,
-            modal: None,
+            modal: ModalState::none(),
             panel: None,
             speed_toggle: false,
         }
@@ -828,6 +870,13 @@ impl Manager {
                 self.show_controls = true;
                 Task::none()
             }
+            ManagerMessage::ModalToggled(opened) => {
+                if opened {
+                    Task::none()
+                } else {
+                    self.close_modal_forced()
+                }
+            }
             ManagerMessage::ToggleFullscreen => self.fullscreen_toggle(),
             ManagerMessage::PreviousScreen => self.previous_screen(),
             ManagerMessage::ToggleSubtitles => self.subtitles_toggle(),
@@ -837,7 +886,7 @@ impl Manager {
             ManagerMessage::OpenConfig => self.video_config(),
             ManagerMessage::Comment => self.video_comment(),
             ManagerMessage::SetSpeed(speed) => self.set_speed(speed),
-            ManagerMessage::CloseView => self.close_view(),
+            ManagerMessage::CloseView => self.close_modal(),
             ManagerMessage::CollectionAddMessage(csg) => {
                 let Some(Modal::CollectionAdd {
                     item,
@@ -857,12 +906,14 @@ impl Manager {
                             selected.insert(id);
                         }
 
-                        self.modal = Some(Modal::CollectionAdd {
+                        let modal = Modal::CollectionAdd {
                             item,
                             collections,
                             selected,
                             initial,
-                        });
+                        };
+
+                        self.modal.open(modal);
                         Task::none()
                     }
                     CollectionAddMessage::Save => {
@@ -1868,7 +1919,7 @@ impl Manager {
     fn video_elem(&self) -> Element<'_, ManagerMessage> {
         match &self.state {
             State::Ready { player, .. } => {
-                let fit = match &self.modal {
+                let fit = match self.modal.as_ref() {
                     Some(Modal::Config(config)) => Some(config.fit),
                     _ => None,
                 }
@@ -2089,12 +2140,14 @@ impl Manager {
             }
         };
 
-        match &self.modal {
+        match self.modal.view() {
             None => content,
-            Some(view) => {
+            Some((view, open)) => {
                 let modal = |overlay| {
                     widgets::modal(content, overlay)
                         .on_blur(ManagerMessage::CloseView)
+                        .on_complete(ManagerMessage::ModalToggled)
+                        .toggle(open)
                         .center()
                         .into()
                 };
@@ -2276,7 +2329,7 @@ impl Manager {
     }
 
     fn fullscreen_toggle(&mut self) -> Task<Message> {
-        if self.modal.is_some() {
+        if self.modal.as_ref().is_some() {
             return Task::none();
         }
 
@@ -2770,7 +2823,21 @@ impl Manager {
         Task::none()
     }
 
-    pub fn close_view(&mut self) -> Task<Message> {
+    fn open_modal(&mut self, modal: Modal) -> Task<Message> {
+        self.modal.open(modal);
+        self.close_panel()
+    }
+
+    fn close_modal(&mut self) -> Task<Message> {
+        if self.modal.as_ref().is_some() {
+            self.modal.close();
+            Task::none()
+        } else {
+            self.close_modal_forced()
+        }
+    }
+
+    fn close_modal_forced(&mut self) -> Task<Message> {
         let previous = match self.modal.take() {
             Some(view) => self.save_config(view),
             None => {
@@ -2816,19 +2883,19 @@ impl Manager {
         awake.take();
 
         let id = player.item.id;
-        let view = Modal::CollectionAdd {
+        let modal = Modal::CollectionAdd {
             item: id,
             collections: vec![],
             selected: HashSet::default(),
             initial: HashSet::default(),
         };
 
-        self.modal = Some(view);
+        let close_panel = self.open_modal(modal);
 
         let ids = Task::done(Message::FetchMembershipIds(id.into()));
         let cols = Task::done(Message::fetch_simple_collections());
 
-        Task::batch([ids, cols])
+        Task::batch([ids, cols, close_panel])
     }
 
     fn video_config(&mut self) -> Task<Message> {
@@ -2879,7 +2946,7 @@ impl Manager {
             .map(|sub| sub.offset)
             .unwrap_or_default();
 
-        self.modal = Some(Modal::Config(Box::new(Config {
+        let modal = Modal::Config(Box::new(Config {
             tab: ConfigTab::General,
             subtitle_uri,
             selected_text,
@@ -2890,9 +2957,9 @@ impl Manager {
             subtitle_font: FontState::new(self.fonts.clone(), &self.settings.subtitles.font),
             subtitle_offset,
             fit: fit.unwrap_or(ContentFit::Contain),
-        })));
+        }));
 
-        Task::none()
+        self.open_modal(modal)
     }
 
     fn video_comment(&mut self) -> Task<Message> {
@@ -2911,8 +2978,8 @@ impl Manager {
             PlayerAction::PlayPrevious => self.play_previous(),
             PlayerAction::FullscreenToggle => self.fullscreen_toggle(),
             PlayerAction::Exit => {
-                if self.modal.is_some() || self.panel.is_some() {
-                    self.close_view()
+                if self.modal.as_ref().is_some() || self.panel.is_some() {
+                    self.close_modal_forced()
                 } else {
                     self.fullscreen_exit()
                 }
@@ -2931,7 +2998,7 @@ impl Manager {
             PlayerAction::Add => self.collection_add(),
             PlayerAction::VideoConfig => self.video_config(),
             PlayerAction::VideoComment => self.video_comment(),
-            PlayerAction::CloseView => self.close_view(),
+            PlayerAction::CloseView => self.close_modal(),
             PlayerAction::Back => self.previous_screen(),
             PlayerAction::PlaylistToggle => self.toggle_playlist(),
             PlayerAction::VideoCommentNew => self.new_comment(),
