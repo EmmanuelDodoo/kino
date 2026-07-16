@@ -25,11 +25,11 @@ use widgets::{font_selection, marquee, menu, throbber};
 pub mod comment;
 pub mod playlist;
 use crate::app::Message;
+use crate::config::{PlayerAction, VideoFilters, VideoSettings};
 use crate::home::shared::Icon;
 use crate::theme::{self, Theme};
 use crate::utils::{
-    self, FontState, InterpolableLength, PlayerAction, VideoSettings, cancel_btn, draw_subtitles,
-    duration_string, empty,
+    self, FontState, InterpolableLength, cancel_btn, draw_subtitles, duration_string, empty,
     icons::{self, CANCEL, sized_button},
     input_actions,
     modal::modal,
@@ -3168,7 +3168,7 @@ fn apply_settings(settings: &VideoSettings, player: &mut Player) {
         subtitles: _subtitles,
         comment_span: _comment_span,
         filters:
-            utils::VideoFilters {
+            VideoFilters {
                 contrast,
                 brightness,
                 hue,

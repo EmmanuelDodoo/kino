@@ -1,10 +1,10 @@
 use super::episode::EpisodeItem;
-use super::{HomeMessage, PageKind, ViewMessage, shared::*};
+use super::{HomeMessage, Layout, PageKind, ViewMessage, shared::*};
 use crate::Element;
 use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, empty};
+use crate::utils::{Scroll, empty};
 use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{

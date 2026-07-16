@@ -1,4 +1,4 @@
-use crate::utils::config::{de_color, se_color};
+use crate::config::{de_color, se_color};
 use iced::{animation::Interpolable, color, color::Color, theme};
 use serde::{Deserialize, Serialize, de, ser};
 use std::{

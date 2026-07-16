@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 
 mod app;
+mod config;
 mod home;
 mod player;
 mod settings;
@@ -32,6 +33,7 @@ pub mod theme;
 pub mod utils;
 
 use app::App;
+use config::Config;
 use registry::db;
 use registry::filter;
 use registry::filter::*;
@@ -42,12 +44,11 @@ use registry::sort;
 use registry::sort::*;
 use std::sync::LazyLock;
 pub use theme::Theme;
-use utils::config::Config;
 use utils::icons;
 use utils::icons::*;
 use utils::typo;
 use utils::typo::*;
-use utils::{Layout, cancel_btn, empty, save_btn, tooltip};
+use utils::{cancel_btn, empty, save_btn, tooltip};
 use widgets::{font_selection, modal, pagination};
 
 pub type Element<'a, Message> = iced::Element<'a, Message, Theme, iced::Renderer>;

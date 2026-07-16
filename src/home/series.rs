@@ -1,9 +1,9 @@
-use super::{HomeMessage, PageKind, SeasonItem, ViewMessage, shared::*};
+use super::{HomeMessage, Layout, PageKind, SeasonItem, ViewMessage, shared::*};
 use crate::Element;
 use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll, empty};
+use crate::utils::{Scroll, empty};
 use devutils::source::SourceSet;
 use iced::widget::Space;
 use iced::{

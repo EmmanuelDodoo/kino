@@ -1,11 +1,14 @@
 use crate::app::Message;
+use crate::config::{
+    Config, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, SettingsAction,
+    SubtitleDescription, VideoFilters, VideoSettings,
+};
 use crate::db::Operation;
 use crate::theme::{self, Theme};
 use crate::utils::{
-    self, Config, FontState, GeneralSettings, HomeAction, KeyPress, Layout, PlayerAction, Scroll,
-    SettingsAction, SubtitleDescription, VideoFilters, VideoSettings, cancel_btn, empty, icons,
-    icons::sized_button, input_actions, modal::modal, modal_container, path_container,
-    picklist_handle, save_btn, tooltip, trim_path, typo::*,
+    self, FontState, Scroll, cancel_btn, empty, icons, icons::sized_button, input_actions,
+    modal::modal, modal_container, path_container, picklist_handle, save_btn, tooltip, trim_path,
+    typo::*,
 };
 use devutils::source::SourceSet;
 use iced::{

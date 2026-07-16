@@ -3,13 +3,14 @@ use super::movie::MovieItem;
 use super::season::SeasonItem;
 use super::series::ShowItem;
 use super::{
-    CollectionThumbnail, HomeMessage, PageKind, ViewMessage, movies, shared::*, shows, view_unicode,
+    CollectionThumbnail, HomeMessage, Layout, PageKind, ViewMessage, movies, shared::*, shows,
+    view_unicode,
 };
 use crate::Element;
 use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{self, Layout, Scroll, empty, icons};
+use crate::utils::{self, Scroll, empty, icons};
 use iced::{
     Border, Length, Padding, Task,
     alignment::Vertical,

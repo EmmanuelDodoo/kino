@@ -53,9 +53,8 @@ use registry::{
 };
 
 use crate::app::{FetchId, Message, WishMessage};
-use crate::utils::{
-    HomeAction, Layout, Scroll, empty, icons, icons::*, picklist_handle, tooltip, typo::*,
-};
+use crate::config::{HomeAction, Layout};
+use crate::utils::{Scroll, empty, icons, icons::*, picklist_handle, tooltip, typo::*};
 
 use collection::{CollectionMessage, CollectionPage};
 use collections::{Collections, CollectionsMessage};

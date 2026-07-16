@@ -1,8 +1,8 @@
-use super::{HomeMessage, PageKind, ShowItem, ViewMessage, shared::*};
+use super::{HomeMessage, Layout, PageKind, ShowItem, ViewMessage, shared::*};
 use crate::Element;
 use crate::theme::{self, Theme};
+use crate::utils::Scroll;
 use crate::utils::typo::*;
-use crate::utils::{Layout, Scroll};
 use iced::{
     Length, Padding, Task,
     time::Instant,
