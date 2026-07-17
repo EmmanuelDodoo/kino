@@ -107,6 +107,7 @@ fn main() -> iced::Result {
 
         })
         .title("kino")
+        .power_preference(iced::backend::PowerPreference::HighPerformance)
         .window(window::Settings {
             icon: Some(icon),
             size: Size::new(1280.0, 800.0),
