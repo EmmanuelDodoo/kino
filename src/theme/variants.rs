@@ -1,18 +1,18 @@
 use super::*;
 
-pub static ABYSS: LazyLock<Schema> = LazyLock::new(|| abyss());
+pub static ABYSS: LazyLock<Schema> = LazyLock::new(abyss);
 
-pub static BLACK: LazyLock<Schema> = LazyLock::new(|| black());
+pub static BLACK: LazyLock<Schema> = LazyLock::new(black);
 
-pub static EMBER: LazyLock<Schema> = LazyLock::new(|| ember());
+pub static EMBER: LazyLock<Schema> = LazyLock::new(ember);
 
-pub static LUXURY: LazyLock<Schema> = LazyLock::new(|| luxury());
+pub static LUXURY: LazyLock<Schema> = LazyLock::new(luxury);
 
-pub static FANTASY: LazyLock<Schema> = LazyLock::new(|| fantasy());
+pub static FANTASY: LazyLock<Schema> = LazyLock::new(fantasy);
 
-pub static WINTER: LazyLock<Schema> = LazyLock::new(|| winter());
+pub static WINTER: LazyLock<Schema> = LazyLock::new(winter);
 
-pub static AUTUMN: LazyLock<Schema> = LazyLock::new(|| autumn());
+pub static AUTUMN: LazyLock<Schema> = LazyLock::new(autumn);
 
 fn abyss() -> Schema {
     Schema {

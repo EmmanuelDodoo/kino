@@ -2,17 +2,14 @@ use super::episode::EpisodeItem;
 use super::movie::MovieItem;
 use super::season::SeasonItem;
 use super::series::ShowItem;
-use super::{
-    CollectionThumbnail, HomeMessage, Layout, PageKind, ViewMessage, movies, shared::*, shows,
-    view_unicode,
-};
+use super::{CollectionThumbnail, HomeMessage, Layout, PageKind, ViewMessage, view_unicode};
 use crate::Element;
 use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{self, Scroll, empty, icons};
+use crate::utils::{Scroll, icons};
 use iced::{
-    Border, Length, Padding, Task,
+    Length, Padding, Task,
     alignment::Vertical,
     time::Instant,
     widget::{
@@ -21,10 +18,7 @@ use iced::{
         row, rule, scrollable, space, text,
     },
 };
-use registry::models::{
-    CollectionId, CollectionView, Episode, Movie, Season, Show, collection::ItemId,
-    collection::Items,
-};
+use registry::models::{CollectionId, CollectionView, collection::ItemId, collection::Items};
 use std::iter::Peekable;
 use widgets::{expandable, menu};
 
@@ -196,7 +190,7 @@ impl CollectionPage {
             Layout::Grid => self.grid(now, movies, shows, seasons, episodes),
             Layout::Compact => self.compact(now, movies, shows, seasons, episodes),
         }
-        .map(move |message| CollectionMessage { id: id, message });
+        .map(move |message| CollectionMessage { id, message });
 
         let content = column!(self.top(collection, now), content).spacing(10);
 

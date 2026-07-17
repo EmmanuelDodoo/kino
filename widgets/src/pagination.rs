@@ -26,7 +26,7 @@ fn fit(n: usize, l: usize, r: usize) -> (usize, usize) {
         return (n - r, r);
     }
 
-    let left = (n + 1) / 2;
+    let left = n.div_ceil(2);
     let right = n / 2;
 
     (left, right)
@@ -589,7 +589,7 @@ impl<P: text::Paragraph> PageState<P> {
     where
         Renderer: text::Renderer<Font = P::Font>,
     {
-        fn text<'a, Renderer: text::Renderer>(
+        fn text<Renderer: text::Renderer>(
             renderer: &Renderer,
             value: String,
             font: Option<Renderer::Font>,

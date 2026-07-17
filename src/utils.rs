@@ -1,8 +1,6 @@
-use iced::animation::{Animation, Easing};
 use std::path::{Path, PathBuf};
 
 use crate::config::SubtitleDescription;
-use core::variants;
 pub use length::InterpolableLength;
 pub mod icons;
 pub mod typo;
@@ -27,7 +25,7 @@ pub fn save_btn<'a, Message: 'a + Clone>() -> iced::widget::Button<'a, Message, 
 pub fn delete_btn<'a, Message: 'a + Clone>(
     label: &'a str,
 ) -> iced::widget::Button<'a, Message, Theme> {
-    use iced::widget::{button, row, text};
+    use iced::widget::{button, row};
 
     button(
         row!(
@@ -174,7 +172,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
     description: &'a SubtitleDescription,
 ) -> Element<'a, Message> {
     use iced::alignment::Vertical;
-    use iced::font::{Family, Font, Weight};
+    use iced::font::Font;
     use iced::widget::container;
 
     let SubtitleDescription {
@@ -208,7 +206,7 @@ pub fn draw_subtitles<'a, Message: 'a>(
     subtitles.into()
 }
 
-fn convert_color_str(input: &str) -> Option<u32> {
+fn _convert_color_str(input: &str) -> Option<u32> {
     if input.is_empty() {
         return None;
     }
@@ -257,7 +255,7 @@ fn convert_color_str(input: &str) -> Option<u32> {
     Some(color)
 }
 
-fn u32_to_rgba(color: u32) -> iced::Color {
+fn _u32_to_rgba(color: u32) -> iced::Color {
     let r = (color & 0xff000000) >> 24;
     let g = (color & 0x00ff0000) >> 16;
     let b = (color & 0x0000ff00) >> 8;

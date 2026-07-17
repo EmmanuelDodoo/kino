@@ -234,7 +234,7 @@ impl State {
         let now = Instant::now();
         Self {
             animation: None,
-            now: now,
+            now,
             done: true,
         }
     }
@@ -398,9 +398,9 @@ where
 
         let content_layout = content_layout.move_to(position);
 
-        let node = Node::with_children(size, vec![base_layout, content_layout]);
+        
 
-        node
+        Node::with_children(size, vec![base_layout, content_layout])
     }
 
     fn draw(

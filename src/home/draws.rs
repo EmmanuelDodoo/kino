@@ -10,18 +10,14 @@ use registry::models::collection::{
     triggers::{self, Comparison, DeleteTrigger, InsertTrigger},
 };
 
-use registry::models::WishKind;
-
 use devutils::source::SourceSet;
 use iced::{
-    Color, Length, Padding,
+    Length, Padding,
     alignment::{Horizontal, Vertical},
-    color, mouse,
     time::Instant,
     widget::{
-        self, bottom_right, button, center, checkbox, column, container, grid, mouse_area,
-        pick_list, radio, row, rule, scrollable, space, table, text, text_editor, text_input,
-        tooltip as tp,
+        button, center, checkbox, column, container, grid, pick_list, radio, row, rule, scrollable,
+        space, table, text, text_editor, text_input, tooltip as tp,
     },
 };
 use widgets::expandable;
@@ -1591,7 +1587,7 @@ pub fn draw_movie_edit<'a>(
 
     let source = media_source(
         &state.source,
-        Some(|source| MovieEditMessage::Source(source)),
+        Some(MovieEditMessage::Source),
     );
 
     let source_id = media_source_id(state.source, &state.source_id, MovieEditMessage::SourceId);
@@ -1653,7 +1649,7 @@ pub fn draw_show_edit<'a>(
 
     let source = media_source(
         &state.source,
-        Some(|source| ShowEditMessage::Source(source)),
+        Some(ShowEditMessage::Source),
     );
 
     let source_id = media_source_id(state.source, &state.source_id, ShowEditMessage::SourceId);
@@ -1888,7 +1884,7 @@ where
 
     let bitrate = table::column(empty(), |video: &VideoInfo| {
         if video.bitrate > 0 {
-            let bitrate = format!("{:.2} Mbps", video.bitrate as f32 / 1000_000.0);
+            let bitrate = format!("{:.2} Mbps", video.bitrate as f32 / 1_000_000.0);
 
             Some(
                 button(sized_regular(bitrate, size))

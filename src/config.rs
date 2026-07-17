@@ -3,7 +3,7 @@ use crate::utils::icons;
 use core::variants;
 use devutils::source::SourceSet;
 use iced::Color;
-pub use keys::{KeyModifier, KeyPress, KeyStore};
+pub use keys::{KeyPress, KeyStore};
 use serde::{Deserialize, Serialize, de, ser};
 use std::{path::PathBuf, time::Duration};
 pub use subtitles::SubtitleDescription;
@@ -11,14 +11,13 @@ pub use subtitles::SubtitleDescription;
 mod keys;
 
 pub fn se_color<S: ser::Serializer>(color: &Color, s: S) -> Result<S::Ok, S::Error> {
-    use ser::Serializer;
     let color = color.to_string();
 
     s.serialize_str(&color)
 }
 
 pub fn de_color<'de, D: de::Deserializer<'de>>(d: D) -> Result<Color, D::Error> {
-    use de::{Deserializer, Visitor};
+    use de::Visitor;
 
     struct ColorVisitor;
 
@@ -33,8 +32,6 @@ pub fn de_color<'de, D: de::Deserializer<'de>>(d: D) -> Result<Color, D::Error> 
         where
             E: de::Error,
         {
-            use de::Error;
-
             v.parse::<Color>().map_err(|error| de::Error::custom(error))
         }
     }

@@ -10,7 +10,6 @@ pub mod styles;
 mod variants;
 
 pub use styles::*;
-use variants::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Variant {

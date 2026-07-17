@@ -1,17 +1,13 @@
 use super::movie::MovieItem;
-use super::{HomeMessage, Layout, PageKind, ViewMessage, shared::*};
+use super::{HomeMessage, Layout, PageKind, ViewMessage};
 use crate::Element;
-use crate::theme::{self, Theme};
 use crate::utils::Scroll;
-use crate::utils::icons::*;
-use crate::utils::typo::*;
 use iced::{
     Length, Padding, Task,
-    alignment::Vertical,
     time::Instant,
-    widget::{self, column, container, grid, operation, row, scrollable, text},
+    widget::{self, column, container, grid, operation, scrollable},
 };
-use registry::models::{ItemId, Media, Movie, MovieId};
+use registry::models::{ItemId, MovieId};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MoviesMessage {

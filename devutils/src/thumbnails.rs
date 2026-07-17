@@ -90,10 +90,10 @@ impl ThumbnailGenerator {
             .seek_simple(gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT, position)
             .context("ThumbnailGenerator sample generation seeking")?;
 
-        Ok(self
+        self
             .sink
             .pull_preroll()
-            .context("ThumbnailGenerator sample generation preroll pulling")?)
+            .context("ThumbnailGenerator sample generation preroll pulling")
     }
 
     fn frame<'a>(

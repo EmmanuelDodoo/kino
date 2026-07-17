@@ -1,14 +1,12 @@
-use super::{HomeMessage, Layout, PageKind, ShowItem, ViewMessage, shared::*};
+use super::{HomeMessage, Layout, PageKind, ShowItem, ViewMessage};
 use crate::Element;
-use crate::theme::{self, Theme};
 use crate::utils::Scroll;
-use crate::utils::typo::*;
 use iced::{
     Length, Padding, Task,
     time::Instant,
-    widget::{self, column, container, grid, operation, scrollable, text},
+    widget::{self, column, container, grid, operation, scrollable},
 };
-use registry::models::{ItemId, Show, ShowId};
+use registry::models::{ItemId, ShowId};
 
 #[derive(Debug, Clone, Copy)]
 pub enum TvShowsMessage {

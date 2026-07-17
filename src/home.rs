@@ -4,8 +4,6 @@ use core::variants;
 use iced::{
     Length, Padding, Subscription, Task,
     alignment::{Horizontal, Vertical},
-    animation::Animation,
-    border::Border,
     time::{Duration, Instant},
     widget::{
         self, bottom, button, center, column, container, grid,
@@ -35,7 +33,7 @@ mod wishlist;
 use crate::app::{
     EpisodeUpdate, FetchPath, MediaUpdateKind, MovieUpdate, SeasonUpdate, ShowUpdate,
 };
-use devutils::source::{SourceId, SourceSet};
+use devutils::source::SourceSet;
 use draws::*;
 use registry::models::{
     Audio, AudioId, Collection, CollectionId, CollectionView, Directory, DirectoryId, Episode,
@@ -146,8 +144,8 @@ impl CollectionConfig {
             collection.description = Some(description);
         }
         collection.icon = Some(icon.to_u32());
-        collection.theme = theme.clone();
-        collection.view = view.clone();
+        collection.theme = *theme;
+        collection.view = *view;
     }
 
     pub fn from_collection(collection: &Collection) -> (Self, widget::Id) {
@@ -530,7 +528,7 @@ impl MovieEditState {
             selected_video: movie.video_id,
             selected_audio: movie.audio_id,
             selected_sub: movie.subtitle_id,
-            source: SourceSet::from_str(&movie.source()),
+            source: SourceSet::from_str(movie.source()),
             source_id: String::default(),
             watched: false,
             poster: None,
@@ -624,7 +622,7 @@ impl ShowEditState {
                 .rating()
                 .map(|rating| format!("{rating:.2}"))
                 .unwrap_or("0.0".to_owned()),
-            source: SourceSet::from_str(&show.source()),
+            source: SourceSet::from_str(show.source()),
             source_id: String::default(),
             watched: false,
             poster: None,
@@ -674,7 +672,7 @@ impl SeasonEditState {
                 .rating()
                 .map(|rating| format!("{rating:.2}"))
                 .unwrap_or("0.0".to_owned()),
-            source: SourceSet::from_str(&season.source()),
+            source: SourceSet::from_str(season.source()),
             source_id: String::default(),
             watched: false,
             poster: None,
@@ -731,7 +729,7 @@ impl EpisodeEditState {
             selected_video: episode.video_id,
             selected_audio: episode.audio_id,
             selected_sub: episode.subtitle_id,
-            source: SourceSet::from_str(&episode.source()),
+            source: SourceSet::from_str(episode.source()),
             source_id: String::default(),
             watched: false,
             poster: None,
@@ -1910,7 +1908,7 @@ impl Home {
                             let path = match validate_path(&dir.path, &state.path, siblings, false)
                             {
                                 Ok(path) => path,
-                                Err(msg) => return Task::done(msg),
+                                Err(msg) => return msg,
                             };
 
                             updates.push(MediaUpdateKind::Path(path.display().to_string()));
@@ -2114,7 +2112,7 @@ impl Home {
                         if state.path != show.item.path {
                             let path = match validate_path(&dir.path, &state.path, siblings, true) {
                                 Ok(path) => path,
-                                Err(msg) => return Task::done(msg),
+                                Err(msg) => return msg,
                             };
                             updates.push(MediaUpdateKind::Path(path.display().to_string()))
                         }
@@ -2250,7 +2248,7 @@ impl Home {
 
                         let path = match validate_path(&state.dir, &path, siblings, true) {
                             Ok(path) => path,
-                            Err(msg) => return Task::done(msg),
+                            Err(msg) => return msg,
                         };
                         state.path = path;
                     }
@@ -2414,7 +2412,7 @@ impl Home {
 
                         let path = match validate_path(&state.dir, &path, siblings, true) {
                             Ok(path) => path,
-                            Err(msg) => return Task::done(msg),
+                            Err(msg) => return msg,
                         };
 
                         state.path = path;
@@ -5711,7 +5709,7 @@ impl Home {
                                 let default = theme::modal::default(theme);
                                 let blur = default.blur.scale_alpha(0.2);
 
-                                modal::Style { blur, ..default }
+                                modal::Style { blur }
                             })
                             .right()
                     }
@@ -6013,7 +6011,7 @@ impl Home {
         self.command = false;
         self.modal.take();
 
-        return scroll;
+        scroll
     }
 
     pub fn goto(&mut self, kind: PageKind, now: Instant) -> Task<Message> {
@@ -6627,13 +6625,10 @@ impl Home {
     }
 
     pub fn wish_task(&mut self, task: WishThumbnailTask, now: Instant) -> Task<Message> {
-        match &mut self.state {
-            State::Wishlist(wishlist) => {
-                if let Some(wish) = wishlist.iter_mut().find(|wish| wish.item.id == task.id) {
-                    wish.task(task.kind, now)
-                }
-            }
-            _ => {}
+        if let State::Wishlist(wishlist) = &mut self.state
+            && let Some(wish) = wishlist.iter_mut().find(|wish| wish.item.id == task.id)
+        {
+            wish.task(task.kind, now)
         }
 
         Task::none()
@@ -6853,7 +6848,7 @@ fn validate_path(
     path: &Path,
     siblings: &HashSet<String>,
     show: bool,
-) -> Result<PathBuf, Message> {
+) -> Result<PathBuf, Task<Message>> {
     let mut dir = dir.components().peekable();
     let mut path = path.components().peekable();
     let msg = "Media must remain in the same parent directory";
@@ -6867,14 +6862,14 @@ fn validate_path(
             }
             (Some(_), Some(_)) => {
                 let msg = Message::error(msg, false);
-                return Err(msg);
+                return Err(msg.tasked());
             }
             (None, Some(_)) => {
                 break;
             }
             (_, None) => {
                 let msg = Message::error(msg, false);
-                return Err(msg);
+                return Err(msg.tasked());
             }
         }
     }
@@ -6884,7 +6879,7 @@ fn validate_path(
 
         if path.peek().is_some() {
             let msg = Message::error("Selected folder too deeply nested", false);
-            return Err(msg);
+            return Err(msg.tasked());
         }
 
         let path: &Path = folder.as_ref();
@@ -6896,7 +6891,7 @@ fn validate_path(
     let check = path.display().to_string();
 
     if siblings.contains(&check) {
-        return Err(Message::error("Media path already exists", false));
+        return Err(Message::error("Media path already exists", false).tasked());
     }
 
     Ok(path)

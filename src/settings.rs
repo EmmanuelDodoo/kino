@@ -11,7 +11,7 @@ use crate::utils::{
 };
 use devutils::source::SourceSet;
 use iced::{
-    Border, Color, Length, Task,
+    Color, Length, Task,
     alignment::{Horizontal, Vertical},
     font::Family,
     widget::{
@@ -22,7 +22,7 @@ use iced::{
 use registry::models::{Directory, DirectoryId, MediaType, humanize_datetime};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use widgets::{expandable, font_selection, marquee};
+use widgets::{expandable, font_selection};
 
 use crate::Element;
 
@@ -32,8 +32,6 @@ const INPUT_WIDTH: f32 = 56.0;
 const SPACING: f32 = 6.0;
 const INPUT_PADDING: [f32; 2] = [3.5, 5.0];
 const LIST_PADDING: [f32; 2] = [5.0, 10.0];
-const ACTIONS_PADDING: [f32; 2] = [1.5, 1.5];
-const ACTIONS_SIZE: f32 = 12.0;
 const ACTIONS_SPACING: f32 = 4.0;
 const SECTION_SPACING: f32 = 16.0;
 const SLIDER_WIDTH: f32 = 200.0;
@@ -132,7 +130,7 @@ impl ModalState {
 
     fn close(&mut self) -> Task<Message> {
         if self.modal.is_none() {
-            return Task::done(Message::Back);
+            Task::done(Message::Back)
         } else {
             self.open = false;
             Task::none()

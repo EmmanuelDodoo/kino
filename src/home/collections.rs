@@ -1,6 +1,5 @@
 use super::{HomeMessage, PageKind, shared::*};
 use crate::Element;
-use crate::theme::{self, Theme};
 use crate::utils::Scroll;
 use iced::{
     Padding, Task,

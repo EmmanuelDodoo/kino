@@ -43,6 +43,7 @@ impl SourceSet {
     pub const NONE: &str = "none";
     pub const TMDB: &str = "tmdb";
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             Self::TMDB => Self::Tmdb,

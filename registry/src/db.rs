@@ -1253,7 +1253,7 @@ impl Database {
                 )?;
             }
 
-            if params.len() > 0 {
+            if !params.is_empty() {
                 let vars = repeat(params.len());
                 let delete_movies = format!("DELETE FROM movie where directory in ({vars})");
                 let delete_shows = format!("DELETE FROM tv_show where directory in ({vars})");

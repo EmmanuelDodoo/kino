@@ -4,21 +4,15 @@ use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
 use crate::utils::{Scroll, empty};
-use devutils::source::SourceSet;
-use iced::widget::Space;
 use iced::{
-    Animation, Color, ContentFit, Length, Padding, Task,
-    alignment::{Horizontal, Vertical},
-    task,
+    Animation, Color, ContentFit, Length, Task, task,
     time::Instant,
     widget::{
-        self, button, column, container, grid, image, image::Handle, operation, row, rule,
-        scrollable, space, stack, text,
+        self, column, container, grid, image, image::Handle, operation, scrollable, space, stack,
+        text,
     },
 };
-use registry::models::{
-    CollectionId, ItemId, Media, Season, SeasonId, Show, ShowId, SimpleCollection,
-};
+use registry::models::{CollectionId, ItemId, Media, SeasonId, Show, ShowId, SimpleCollection};
 use std::iter::Peekable;
 
 #[derive(Debug, Clone)]
@@ -361,10 +355,6 @@ impl ShowItem {
         }
     }
 
-    fn poster_ready(&self) -> bool {
-        matches!(&self.poster, Image::Ready { .. })
-    }
-
     pub fn poster<'a, Message: 'a>(
         &'a self,
         width: impl Into<Length>,
@@ -382,10 +372,10 @@ impl ShowItem {
         match &self.poster {
             Image::Shown { allocation, .. } => view(allocation.handle()),
             Image::Ready { allocation, .. } => view(allocation.handle()),
-            Image::Loading(_) => empty().into(),
+            Image::Loading(_) => empty(),
             Image::Default => match DEFAULT_POSTER.as_ref() {
-                Some(handle) => view(handle).into(),
-                _ => empty().into(),
+                Some(handle) => view(handle),
+                _ => empty(),
             },
         }
     }

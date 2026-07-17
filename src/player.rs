@@ -29,7 +29,7 @@ use crate::config::{PlayerAction, VideoFilters, VideoSettings};
 use crate::home::shared::Icon;
 use crate::theme::{self, Theme};
 use crate::utils::{
-    self, FontState, InterpolableLength, cancel_btn, draw_subtitles, duration_string, empty,
+    FontState, InterpolableLength, cancel_btn, draw_subtitles, duration_string, empty,
     icons::{self, CANCEL, sized_button},
     input_actions, modal_container, path_container, picklist_handle, save_btn, toggler, tooltip,
     trim_path, typo,
@@ -377,7 +377,7 @@ impl Comments {
         }
     }
 
-    fn get_ref(&self, id: CommentId, timestamp: Option<u64>) -> Option<&Comment> {
+    fn _get_ref(&self, id: CommentId, timestamp: Option<u64>) -> Option<&Comment> {
         match timestamp {
             Some(timestamp) => self
                 .timestamped
@@ -1694,9 +1694,7 @@ impl Manager {
                 .auto_close(true)
                 .on_toggle(ManagerMessage::SpeedToggle);
 
-            let speed = tooltip(speed, "Playback speed", tp::Position::Bottom);
-
-            speed
+            tooltip(speed, "Playback speed", tp::Position::Bottom)
         };
 
         let subtitles = {
@@ -3037,7 +3035,7 @@ impl Manager {
         self.playlist.update_current(&player.item);
 
         Task::batch([
-            Task::done(Message::VideoStats(player.item.clone())),
+            Task::done(Message::VideoStats(Box::new(player.item.clone()))),
             comments,
         ])
     }
@@ -3451,7 +3449,7 @@ fn draw_playlist<'a>(
         .padding([3, 0])
         .spacing(0);
 
-    panel_container(content, width).into()
+    panel_container(content, width)
 }
 
 fn draw_comments<'a>(
@@ -3508,9 +3506,7 @@ fn draw_comments<'a>(
                 .align_x(Horizontal::Center)
                 .spacing(10);
 
-            let content = container(content)
-                .padding(4)
-                .style(move |theme| theme::container::bw(theme));
+            let content = container(content).padding(4).style(theme::container::bw);
 
             content.into()
         }
@@ -3555,7 +3551,7 @@ fn draw_comments<'a>(
             .range(timestamp)
             .flat_map(|(_, comments)| comments.iter().filter(|comment| !comment.inner.removed));
 
-        column(comments.map(|comment| draw_comment(comment))).spacing(16)
+        column(comments.map(draw_comment)).spacing(16)
     };
 
     let content = scrollable(comments).height(Length::Fill).spacing(10);
@@ -4160,7 +4156,7 @@ fn draw_info<'a>(
         let bitrate = if video.bitrate > 0 {
             Some(info(format!(
                 "Bitrate: {:.2} Mbps",
-                video.bitrate as f32 / 1000_000.0
+                video.bitrate as f32 / 1_000_000.0
             )))
         } else {
             None
@@ -4232,7 +4228,7 @@ fn draw_info<'a>(
 
         let path = path.map(|path| {
             let name = info("Path: ".to_string());
-            let path = trim_path(&path, 3);
+            let path = trim_path(path, 3);
             let path = marquee(path).size(size / typo::RATIO);
 
             row!(name, path).spacing(2).align_y(Vertical::Center)
@@ -4373,7 +4369,7 @@ fn audio_to_string(audio: &Audio) -> String {
 
 fn video_info_to_string(video: &VideoInfo) -> String {
     if video.bitrate > 0 {
-        let bitrate = video.bitrate as f32 / 1000_000.0;
+        let bitrate = video.bitrate as f32 / 1_000_000.0;
         format!(
             "{}, {bitrate:.1} Mbps, {:.1}fps",
             video.resolution(),

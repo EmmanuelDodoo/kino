@@ -1,25 +1,23 @@
 use super::{HomeMessage, PageKind, Scroll, ViewMessage, shared::*};
 use crate::Element;
 use crate::theme::{self, Theme};
+use crate::utils::empty;
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{empty, trim_path, typo};
-use devutils::source::SourceSet;
 use iced::{
-    Animation, Color, ContentFit, Length, Padding, Shadow, Task,
-    alignment::{Horizontal, Vertical},
+    Animation, Color, ContentFit, Length, Task,
+    alignment::Vertical,
     task,
     time::Instant,
     widget::{
-        self, bottom_center, button, center_x, column, container, image, image::Handle, operation,
-        responsive, row, rule, scrollable, space, stack, text,
+        self, column, container, image, image::Handle, operation, row, scrollable, space, stack,
+        text,
     },
 };
 use registry::models::{
     Audio, CollectionId, ItemId, Media, Movie, MovieId, SimpleCollection, Subtitle, VideoInfo,
 };
 use std::iter::Peekable;
-use widgets::marquee;
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -249,10 +247,6 @@ impl MovieItem {
         }
     }
 
-    fn poster_ready(&self) -> bool {
-        matches!(&self.poster, Image::Ready { .. })
-    }
-
     pub fn poster<'a, Message: 'a>(
         &'a self,
         width: impl Into<Length>,
@@ -270,10 +264,10 @@ impl MovieItem {
         match &self.poster {
             Image::Ready { allocation } => view(allocation.handle()),
             Image::Shown { allocation, .. } => view(allocation.handle()),
-            Image::Loading(_) => empty().into(),
+            Image::Loading(_) => empty(),
             Image::Default => match DEFAULT_POSTER.as_ref() {
-                Some(handle) => view(handle).into(),
-                _ => empty().into(),
+                Some(handle) => view(handle),
+                _ => empty(),
             },
         }
     }

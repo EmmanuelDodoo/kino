@@ -457,7 +457,7 @@ pub async fn run(
 ) {
     tracing::debug!("Starting up TMDB fetcher instance");
     let Some(mut db) =
-        registry::db::Database::open(db).ctx_log(format!("TMDB fetcher DB opening error"))
+        registry::db::Database::open(db).ctx_log("TMDB fetcher DB opening error".to_string())
     else {
         return;
     };
@@ -466,7 +466,7 @@ pub async fn run(
         if auth.trim().is_empty() {
             None
         } else {
-            get_config(&auth).await.ctx_log(format!(
+            get_config(auth).await.ctx_log(format!(
                 "Getting TMDB image config with auth: {auth} failed"
             ))
         }
@@ -506,13 +506,13 @@ pub async fn run(
         };
 
         let requests = get_requests(&db, retry_limit, limit)
-            .ctx_log(format!("Failed to get TMDB requests"))
+            .ctx_log("Failed to get TMDB requests".to_string())
             .unwrap_or_default();
 
         for mut request in requests {
             if let Err(error) = execute(
                 &mut db,
-                &image_config,
+                image_config,
                 &images_path,
                 &auth,
                 retry_limit,
@@ -534,6 +534,7 @@ pub async fn run(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute(
     db: &mut impl Deref<Target = Connection>,
     image_config: &ImageConfig,
@@ -1108,6 +1109,7 @@ fn insert_movie(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn insert_wish(
     db: &impl Deref<Target = Connection>,
     request: RequestId,

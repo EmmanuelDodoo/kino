@@ -39,6 +39,7 @@ impl RequestId {
             .map(|id| Self(Uuid::try_parse(&id).unwrap()))
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         Self(Uuid::try_parse(s).expect("Infallible Uuid conversion"))
     }
@@ -265,14 +266,12 @@ impl Request {
         let null = ToSqlOutput::Owned(Value::Null);
 
         let id = ToSqlOutput::from(*id);
-        let tmdb_id = tmdb_id
-            .map(|tmdb_id| ToSqlOutput::from(tmdb_id))
-            .unwrap_or(null.clone());
+        let tmdb_id = tmdb_id.map(ToSqlOutput::from).unwrap_or(null.clone());
         let status = ToSqlOutput::from(*status);
         let retry = ToSqlOutput::from(*retry);
         let poster = poster
             .clone()
-            .map(|poster| ToSqlOutput::from(poster))
+            .map(ToSqlOutput::from)
             .unwrap_or(null.clone());
 
         let (media_type, media_id, name, backdrop, parent, number, wish) = match media {
@@ -282,7 +281,7 @@ impl Request {
                 let name = ToSqlOutput::from(name.clone());
                 let backdrop = backdrop
                     .clone()
-                    .map(|backdrop| ToSqlOutput::from(backdrop))
+                    .map(ToSqlOutput::from)
                     .unwrap_or(null.clone());
 
                 (
@@ -301,7 +300,7 @@ impl Request {
                 let name = ToSqlOutput::from(name.clone());
                 let backdrop = backdrop
                     .clone()
-                    .map(|backdrop| ToSqlOutput::from(backdrop))
+                    .map(ToSqlOutput::from)
                     .unwrap_or(null.clone());
 
                 (
@@ -423,33 +422,23 @@ impl Request {
         let null = ToSqlOutput::Owned(Value::Null);
 
         let id = ToSqlOutput::from(*id);
-        let tmdb_id = tmdb_id
-            .map(|tmdb_id| ToSqlOutput::from(tmdb_id))
-            .unwrap_or(null.clone());
+        let tmdb_id = tmdb_id.map(ToSqlOutput::from).unwrap_or(null.clone());
         let status = ToSqlOutput::from(*status);
         let retry = ToSqlOutput::from(*retry);
         let poster = poster
             .clone()
-            .map(|poster| ToSqlOutput::from(poster))
+            .map(ToSqlOutput::from)
             .unwrap_or(null.clone());
 
         let backdrop = match media {
-            Media::Movie { backdrop, .. } => {
-                let backdrop = backdrop
-                    .clone()
-                    .map(|backdrop| ToSqlOutput::from(backdrop))
-                    .unwrap_or(null.clone());
-
-                backdrop
-            }
-            Media::Show { backdrop, .. } => {
-                let backdrop = backdrop
-                    .clone()
-                    .map(|backdrop| ToSqlOutput::from(backdrop))
-                    .unwrap_or(null.clone());
-
-                backdrop
-            }
+            Media::Movie { backdrop, .. } => backdrop
+                .clone()
+                .map(ToSqlOutput::from)
+                .unwrap_or(null.clone()),
+            Media::Show { backdrop, .. } => backdrop
+                .clone()
+                .map(ToSqlOutput::from)
+                .unwrap_or(null.clone()),
             Media::Wish {
                 kind: WishType::Episode { number, .. },
                 ..

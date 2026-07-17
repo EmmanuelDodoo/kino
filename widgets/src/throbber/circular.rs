@@ -182,7 +182,6 @@ impl State {
                     .easing(self.cycle_easing)
                     .delay(Self::CYCLE_DELAY)
                     .go(Self::CYCLE_END, now);
-                return;
             }
         }
     }

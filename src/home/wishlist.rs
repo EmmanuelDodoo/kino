@@ -1,21 +1,18 @@
-use super::{HomeMessage, PageKind, shared::*};
+use super::{HomeMessage, shared::*};
 use crate::Element;
 use crate::theme::{self, Theme};
 use crate::utils::typo;
-use crate::utils::{Scroll, delete_btn, empty, icons, typo::*};
-use devutils::image_ops::sample_complement;
+use crate::utils::{Scroll, icons, typo::*};
 use iced::{
-    Color, Length, Padding, Task,
-    alignment::{Horizontal, Vertical},
-    animation::{Animation, Easing},
+    Color, Length, Task,
+    alignment::Vertical,
+    animation::Animation,
     task,
     time::Instant,
     widget::{
-        self, button, center_x, column, container, grid, image, operation, row, scrollable, space,
-        stack, text,
+        self, button, column, container, grid, operation, row, scrollable, space, stack, text,
     },
 };
-use widgets::modal;
 
 use registry::models::{self, Wish, WishId, WishKind};
 
@@ -305,7 +302,6 @@ impl WishThumbnail {
         let content = column!(top, space::vertical(), bottom);
 
         if self.item.completed {
-            use iced::color;
             let curtain = container("")
                 .width(Length::Fill)
                 .height(Length::Fill)

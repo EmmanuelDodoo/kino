@@ -89,6 +89,14 @@ struct SubtitleInfo {
     lang: String,
 }
 
+#[derive(Debug, Default)]
+struct ScannedVideo {
+    duration: u64,
+    subtitles: Vec<SubtitleInfo>,
+    audios: Vec<AudioInfo>,
+    videos: Vec<VideoInfo>,
+}
+
 #[derive(Debug)]
 struct AudioInfo {
     stream: u32,
@@ -671,19 +679,17 @@ pub fn scan_dir_helper(
                         None => {
                             let (source, request) = season_source(show_source);
 
-                            if !new_show {
-                                if let Some((id, parent)) =
+                            if !new_show
+                                && let Some((id, parent)) =
                                     request.as_deref().zip(show_request.as_deref())
-                                {
-                                    if let Some(query) = source.season_sync(id, parent) {
-                                        let _ = query.execute(db).with_ctx_log(|| {
-                                        format!(
-                                            "Scan: Failed season sync {id} request on source {source:?}"
-                                        )
-                                    });
-                                    };
-                                }
-                            }
+                                && let Some(query) = source.season_sync(id, parent)
+                            {
+                                let _ = query.execute(db).with_ctx_log(|| {
+                                    format!(
+                                        "Scan: Failed season sync {id} request on source {source:?}"
+                                    )
+                                });
+                            };
                             (source, request)
                         }
                     };
@@ -824,19 +830,17 @@ pub fn scan_dir_helper(
                             None => {
                                 let (source, request) = episode_source(season_source);
 
-                                if !new_season {
-                                    if let Some((id, parent)) =
+                                if !new_season
+                                    && let Some((id, parent)) =
                                         request.as_deref().zip(show_request.as_deref())
-                                    {
-                                        if let Some(query) = source.episode_sync(id, parent) {
-                                            let _ = query.execute(db).with_ctx_log(|| {
+                                    && let Some(query) = source.episode_sync(id, parent)
+                                {
+                                    let _ = query.execute(db).with_ctx_log(|| {
                                         format!(
                                             "Scan: Failed episode sync {id} request on source {source:?}"
                                         )
                                     });
-                                        };
-                                    }
-                                }
+                                };
                             }
                         }
 
@@ -1084,13 +1088,17 @@ fn scan_file(path: PathBuf, discoverer: Option<&Discoverer>) -> Option<Video> {
         .inspect_err(|_| tracing::error!("Scan file url error on {}", path.display()))
         .ok();
 
-    let (duration, embedded_subs, audio, video) = match discoverer
+    let scanned = discoverer
         .zip(url)
         .and_then(|(discoverer, url)| discover(discoverer, url, &path).log_err())
-    {
-        Some(data) => data,
-        None => (0, vec![], vec![], vec![]),
-    };
+        .unwrap_or_default();
+
+    let ScannedVideo {
+        duration,
+        subtitles: embedded_subs,
+        audios: audio,
+        videos: video,
+    } = scanned;
 
     let name = path.file_stem().and_then(|name| name.to_str())?.to_owned();
     let loaded_sub = subtitles(&path);
@@ -1178,18 +1186,14 @@ fn process_episode(name: &str) -> Result<u16> {
         .with_context(|| format!("Episode number parsing on {name}"))
 }
 
-fn discover(
-    discoverer: &Discoverer,
-    url: url::Url,
-    path: &Path,
-) -> Result<(u64, Vec<SubtitleInfo>, Vec<AudioInfo>, Vec<VideoInfo>)> {
+fn discover(discoverer: &Discoverer, url: url::Url, path: &Path) -> Result<ScannedVideo> {
     let info = discoverer
         .discover_uri(url.as_str())
         .with_context(|| format!("Discovering url {url} for video {}", path.display()))?;
 
     use gstreamer_pbutils::prelude::DiscovererStreamInfoExt;
 
-    let subs = info
+    let subtitles = info
         .subtitle_streams()
         .into_iter()
         .filter_map(|sub| {
@@ -1206,16 +1210,14 @@ fn discover(
         .collect::<Vec<_>>();
 
     let mut audios = vec![];
-    let mut audio_stream = 0;
 
-    for audio in info.audio_streams().into_iter() {
+    for (audio_stream, audio) in info.audio_streams().into_iter().enumerate() {
         let caps = audio.caps();
         let codec = caps
             .as_ref()
             .map(|caps| gstreamer_pbutils::pb_utils_get_codec_description(caps).to_string());
 
-        let stream = audio_stream;
-        audio_stream += 1;
+        let stream = audio_stream as u32;
 
         let depth = audio.depth();
         let lang = audio.language().map(|lang| lang.to_string());
@@ -1237,9 +1239,8 @@ fn discover(
     }
 
     let mut videos = vec![];
-    let mut video_stream = 0;
 
-    for video in info.video_streams().into_iter() {
+    for (video_stream, video) in info.video_streams().into_iter().enumerate() {
         let caps = video.caps();
         let codec = caps
             .as_ref()
@@ -1263,8 +1264,7 @@ fn discover(
         let dar_denom = height * par.denom() as u32;
         let interlaced = video.is_interlaced();
 
-        let stream = video_stream;
-        video_stream += 1;
+        let stream = video_stream as u32;
 
         let video = VideoInfo {
             stream,
@@ -1288,7 +1288,12 @@ fn discover(
         .map(|clock| clock.seconds())
         .unwrap_or_default();
 
-    Ok((duration, subs, audios, videos))
+    Ok(ScannedVideo {
+        duration,
+        subtitles,
+        audios,
+        videos,
+    })
 }
 
 fn pick_subtitle(db: &Database, id: impl Into<VideoId>, preferred: Option<&str>) -> Result<()> {

@@ -498,7 +498,7 @@ where
                     let hovered_option = menu.hovered_option.unwrap_or(0);
 
                     if let Some(option) = state.filtered_options.options.get(hovered_option) {
-                        shell.publish(on_option_hovered(option.clone()));
+                        shell.publish(on_option_hovered(*option));
                         published_message_to_shell = true;
                     }
                 }
@@ -515,7 +515,7 @@ where
                             if let Some(index) = &menu.hovered_option
                                 && let Some(option) = state.filtered_options.options.get(*index)
                             {
-                                menu.new_selection = Some(option.clone());
+                                menu.new_selection = Some(*option);
                             }
 
                             shell.capture_event();
@@ -538,7 +538,7 @@ where
                                     .and_then(|index| state.filtered_options.options.get(index))
                             {
                                 // Notify the selection
-                                shell.publish((on_option_hovered)(option.clone()));
+                                shell.publish((on_option_hovered)(*option));
                                 published_message_to_shell = true;
                             }
 
@@ -567,7 +567,7 @@ where
                                     .and_then(|index| state.filtered_options.options.get(index))
                             {
                                 // Notify the selection
-                                shell.publish((on_option_hovered)(option.clone()));
+                                shell.publish((on_option_hovered)(*option));
                                 published_message_to_shell = true;
                             }
 
@@ -1186,7 +1186,7 @@ mod menu {
                         && let Some(index) = *self.hovered_option
                         && let Some(option) = self.options.get(index)
                     {
-                        shell.publish((self.on_selected)(option.clone()));
+                        shell.publish((self.on_selected)(*option));
                         shell.capture_event();
                     }
                 }
@@ -1204,7 +1204,7 @@ mod menu {
                             && let Some(option) = self.options.get(new_hovered_option)
                         {
                             if let Some(on_option_hovered) = self.on_option_hovered {
-                                shell.publish(on_option_hovered(option.clone()));
+                                shell.publish(on_option_hovered(*option));
                             }
 
                             shell.request_redraw();
@@ -1226,7 +1226,7 @@ mod menu {
                         if let Some(index) = *self.hovered_option
                             && let Some(option) = self.options.get(index)
                         {
-                            shell.publish((self.on_selected)(option.clone()));
+                            shell.publish((self.on_selected)(*option));
                             shell.capture_event();
                         }
                     }

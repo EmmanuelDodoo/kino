@@ -14,7 +14,7 @@ use crate::config::{Action, Config, KeyPress, Layout, Screen};
 use crate::home::{self, Home, HomeMessage, WishThumbnailTask, shared};
 use crate::player::{Comment, Manager as Player, ManagerMessage as PlayerMessage, Playlist};
 use crate::settings::{Settings, SettingsMessage};
-use crate::theme::{self, Theme};
+use crate::theme::Theme;
 use crate::utils::{icons, typo};
 use core::{Context, ContextLog, Error, Log, anyhow, error};
 use registry::db::{self, Query};
@@ -197,7 +197,7 @@ pub enum Message {
     SaveComments(Vec<models::Comment>),
     Refresh(Instant, bool),
     LastWatched(VideoId),
-    VideoStats(Video),
+    VideoStats(Box<Video>),
     KeyPress {
         key: Key,
         modifiers: Modifiers,
@@ -502,18 +502,16 @@ impl App {
                         Ok(succ) => {
                             succ.log();
                             let msg = Message::success("Refetch queued").tasked();
-                            return Task::batch([self.home.content_refresh(), msg]);
+                            Task::batch([self.home.content_refresh(), msg])
                         }
                         Err(error) => {
                             let msg = Message::anyhow(error);
 
-                            return Task::done(msg);
+                            Task::done(msg)
                         }
                     }
                 }
-                None => {
-                    return Task::none();
-                }
+                None => Task::none(),
             },
             Message::RemoveMedia(id) => {
                 let query = match id {
@@ -569,7 +567,6 @@ impl App {
                     return Message::anyhow(error).tasked();
                 }
 
-                use std::ops::DerefMut;
                 if let Err(error) = source::insert_media_image(
                     &self.db,
                     id,
@@ -582,12 +579,10 @@ impl App {
                     return Message::anyhow(error).tasked();
                 };
 
-                let tasks = Task::batch([
+                Task::batch([
                     self.home.content_refresh(),
                     Message::success("Poster updated!").tasked(),
-                ]);
-
-                return tasks;
+                ])
             }
             Message::BackdropUpdate { id, path } => {
                 let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
@@ -605,8 +600,6 @@ impl App {
                     return Message::anyhow(error).tasked();
                 }
 
-                use std::ops::DerefMut;
-
                 if let Err(error) = source::insert_media_image(
                     &self.db,
                     id,
@@ -619,12 +612,10 @@ impl App {
                     return Message::anyhow(error).tasked();
                 };
 
-                let tasks = Task::batch([
+                Task::batch([
                     self.home.content_refresh(),
                     Message::success("backdrop updated!").tasked(),
-                ]);
-
-                return tasks;
+                ])
             }
             Message::MovieUpdate(MovieUpdate {
                 id,
@@ -1754,7 +1745,7 @@ impl App {
                     Ok((paths, dir)) => self.home.fetched_paths(dir, paths),
                     Err(error) => {
                         let msg = Message::error(error, true);
-                        return Task::done(msg);
+                        Task::done(msg)
                     }
                 }
             }
@@ -2336,7 +2327,7 @@ impl App {
                             Err(error) => {
                                 let msg = Message::anyhow(error);
 
-                                return Task::done(msg);
+                                Task::done(msg)
                             }
                         }
                     }
@@ -2356,7 +2347,7 @@ impl App {
                             Err(error) => {
                                 let msg = Message::anyhow(error);
 
-                                return Task::done(msg);
+                                Task::done(msg)
                             }
                         }
                     }
@@ -2408,12 +2399,12 @@ impl App {
         let content: Element<'_, Message> = match self.screen {
             Screen::Home => self
                 .home
-                .view(&theme, self.now, self.config.general.show_dirs)
+                .view(theme, self.now, self.config.general.show_dirs)
                 .map(Message::Home),
             Screen::Player => {
                 let player = self.player.as_ref().unwrap();
 
-                player.view(&theme, self.now).map(Message::Player)
+                player.view(theme, self.now).map(Message::Player)
             }
             Screen::Settings => {
                 let settings = self.settings.as_ref().unwrap();

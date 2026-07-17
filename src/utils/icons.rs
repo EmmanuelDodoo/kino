@@ -3,8 +3,6 @@ use iced::{
     widget::{Button, Text, text},
 };
 
-use std::sync::LazyLock;
-
 use super::typo::*;
 
 pub static ICONS: &[u8] = include_bytes!("../../resources/fonts/kino-icons.ttf");

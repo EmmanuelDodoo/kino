@@ -1,20 +1,18 @@
 use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Scroll, empty, tooltip, trim_path, typo};
-use core::variants;
+use crate::utils::{Scroll, empty, trim_path, typo};
 use devutils::image_ops::{collage, sample_complement};
 use iced::{
     Color, ContentFit, Length, Padding, Task,
     alignment::{Horizontal, Vertical},
     animation::{Animation, Easing},
-    mouse, task,
+    mouse,
     time::{Duration, Instant},
     widget::{
         self, button, center, column, container, image,
         image::{Allocation, Handle},
         markdown, mouse_area, responsive, row, rule, scrollable, sensor, space, stack, text,
-        tooltip as tp,
     },
 };
 use registry::models::{
@@ -35,18 +33,6 @@ pub const IMAGE_RADIUS: f32 = 7.0;
 const SELECTED_WIDTH: f32 = 2.0;
 
 use crate::Element;
-
-pub fn title<'a, Message: 'a + Clone>(name: &'a str) -> Element<'a, Message> {
-    sized_medium(name, H4).into()
-}
-
-pub fn tab_synopsis<'a, Message: 'a + Clone>(synopsis: &'a str) -> Element<'a, Message> {
-    let synopsis = regular(synopsis);
-
-    scrollable(column!(synopsis).spacing(8.0))
-        .spacing(4.0)
-        .into()
-}
 
 pub fn duration<'a, Message: 'a>(duration: String) -> Element<'a, Message> {
     let duration = sized_medium(duration, H8);
@@ -574,10 +560,6 @@ impl SearchView {
         on_url: impl Fn(String) -> Message + 'a,
         set_play: bool,
     ) -> Element<'a, Message> {
-        fn pair(theme: &Theme) -> Color {
-            theme.schema().primary.strong.color
-        }
-
         let name = {
             let name = marquee(&self.item.name)
                 .size(H6)
@@ -927,6 +909,7 @@ impl<'a, T: Copy, Message: 'a + Clone> Card<'a, T, Message> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn card_overlay<'a, Message: 'a + Clone, T: Media>(
     media: &'a T,
     on_add: impl Fn(T::Id) -> Message + 'a,
@@ -1717,7 +1700,7 @@ pub fn page_video<'a, Message: 'a>(
 
         let path = path.map(|path| {
             let name = info("Path: ".to_string());
-            let path = trim_path(&path, 3);
+            let path = trim_path(path, 3);
             let path = marquee(path).size(size / typo::RATIO);
 
             row!(name, path).spacing(2).align_y(Vertical::Center)
@@ -1759,7 +1742,7 @@ pub fn page_nav<'a, Message: 'a + Clone>(
 ) -> Element<'a, Message> {
     let size = H3;
     let color = |theme: &Theme| text::Style {
-        color: Some(theme.schema().primary.base.color.into()),
+        color: Some(theme.schema().primary.base.color),
     };
 
     let prev = button(icon(CHEV_RIGHT).size(size).style(color))
@@ -1865,8 +1848,6 @@ pub fn item_sensor<'a, Message: 'a + Clone>(
     show: Message,
     hide: Message,
 ) -> sensor::Sensor<'a, (), Message, Theme> {
-    use iced::Size;
-
     sensor(content)
         // .delay(iced::time::milliseconds(100))
         .on_show(move |_| show.clone())

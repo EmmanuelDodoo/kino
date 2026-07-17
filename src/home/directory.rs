@@ -1,23 +1,18 @@
-use super::{HomeMessage, Layout, MovieItem, PageKind, ShowItem, ViewMessage, movies};
+use super::{HomeMessage, Layout, MovieItem, PageKind, ShowItem, ViewMessage};
 use crate::Element;
-use crate::theme::{self, Theme};
-use crate::utils::icons::*;
-use crate::utils::typo::*;
-use crate::utils::{self, Scroll, empty};
+use crate::utils::Scroll;
 use iced::{
     Length, Padding, Task,
-    alignment::Vertical,
     time::Instant,
     widget::{
-        Button, Column, button, column, container, grid,
+        Column, column, grid,
         operation::{self},
-        row, rule, scrollable, space, text,
+        scrollable,
     },
 };
 
 use registry::models::{Directory, DirectoryId, ItemId};
 use std::iter::Peekable;
-use widgets::expandable;
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -148,14 +143,14 @@ impl DirectoryPage {
             content
         } else {
             let movies = {
-                let movies = {
+                
+
+                {
                     let content =
                         movies.map(|movie| movie.list(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
-                };
-
-                movies
+                }
             };
 
             content.push(movies)
@@ -165,14 +160,14 @@ impl DirectoryPage {
             content
         } else {
             let shows = {
-                let shows = {
+                
+
+                {
                     let content =
                         shows.map(|thumbnail| thumbnail.list(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
-                };
-
-                shows
+                }
             };
 
             content.push(shows)
@@ -204,14 +199,14 @@ impl DirectoryPage {
             content
         } else {
             let movies = {
-                let movies = {
+                
+
+                {
                     let content = movies
                         .map(|thumbnail| thumbnail.compact(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
-                };
-
-                movies
+                }
             };
 
             content.push(movies)
@@ -221,13 +216,13 @@ impl DirectoryPage {
             content
         } else {
             let shows = {
-                let shows = {
+                
+                {
                     let content = shows
                         .map(|thumbnail| thumbnail.compact(now, add, select, hover, shown, play));
 
                     column(content).spacing(16.0)
-                };
-                shows
+                }
             };
 
             content.push(shows)
@@ -259,17 +254,16 @@ impl DirectoryPage {
             let movies = {
                 let movies = movies.map(|movie| movie.card(now, add, select, hover, shown, play));
 
-                let movies =
-                    grid(movies)
+                
+
+                grid(movies)
                         .spacing(16)
                         .fluid(MovieItem::WIDTH)
                         .height(if self.movies_shown {
                             grid::aspect_ratio(MovieItem::WIDTH, MovieItem::HEIGHT)
                         } else {
                             grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
-                        });
-
-                movies
+                        })
             };
             content.push(movies)
         };
@@ -281,15 +275,15 @@ impl DirectoryPage {
                 {
                     let shows = shows.map(|show| show.card(now, add, select, hover, shown, play));
 
-                    let shows = grid(shows).spacing(16).fluid(ShowItem::WIDTH).height(
+                    
+
+                    grid(shows).spacing(16).fluid(ShowItem::WIDTH).height(
                         if self.shows_shown {
                             grid::aspect_ratio(ShowItem::WIDTH, ShowItem::HEIGHT)
                         } else {
                             grid::Sizing::EvenlyDistribute(Length::Fixed(0.0))
                         },
-                    );
-
-                    shows
+                    )
                 };
 
             content.push(shows)

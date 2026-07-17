@@ -355,10 +355,8 @@ impl Episode {
     #[must_use]
     pub fn set_video<'a>(id: EpisodeId, video: VideoInfoId) -> Query<'a> {
         let sql = "UPDATE episode SET video_id=:video WHERE id=:id";
-        let params = vec![
-            (":id", ToSqlOutput::from(id)),
-            (":video", ToSqlOutput::from(video)),
-        ];
+        let params = [(":id", ToSqlOutput::from(id)),
+            (":video", ToSqlOutput::from(video))];
 
         Query {
             id: id.0,
@@ -372,10 +370,8 @@ impl Episode {
     #[must_use]
     pub fn set_audio<'a>(id: EpisodeId, audio: AudioId) -> Query<'a> {
         let sql = "UPDATE episode SET audio_id=:audio WHERE id=:id";
-        let params = vec![
-            (":id", ToSqlOutput::from(id)),
-            (":audio", ToSqlOutput::from(audio)),
-        ];
+        let params = [(":id", ToSqlOutput::from(id)),
+            (":audio", ToSqlOutput::from(audio))];
 
         Query {
             id: id.0,
@@ -389,10 +385,8 @@ impl Episode {
     #[must_use]
     pub fn set_subtitle<'a>(id: EpisodeId, subtitle: SubtitleId) -> Query<'a> {
         let sql = "UPDATE episode SET subtitle_id=:subtitle WHERE id=:id";
-        let params = vec![
-            (":id", ToSqlOutput::from(id)),
-            (":subtitle", ToSqlOutput::from(subtitle)),
-        ];
+        let params = [(":id", ToSqlOutput::from(id)),
+            (":subtitle", ToSqlOutput::from(subtitle))];
 
         Query {
             id: id.0,

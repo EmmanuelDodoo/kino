@@ -143,11 +143,10 @@ where
     ) {
         let state = tree.state.downcast_mut::<State>();
 
-        if let Event::Window(window::Event::RedrawRequested(now)) = event {
-            if state.animation.is_animating(*now) {
+        if let Event::Window(window::Event::RedrawRequested(now)) = event
+            && state.animation.is_animating(*now) {
                 shell.request_redraw();
             }
-        }
     }
 
     fn draw(
