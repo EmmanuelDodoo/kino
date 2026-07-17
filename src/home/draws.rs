@@ -570,7 +570,9 @@ pub fn draw_insert_trigger<'a>(
             .padding(0)
             .style(theme::button::text)
             .on_press(TriggerMessage::ToggleROEInsert(id));
-        let toggle = toggler(*roe).on_toggle(move |checked| TriggerMessage::ROEInsert(id, checked));
+        let toggle = toggler(*roe)
+            .on_toggle(move |checked| TriggerMessage::ROEInsert(id, checked))
+            .style(theme::toggler::primary_inv);
 
         row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
     };
@@ -988,7 +990,9 @@ pub fn draw_delete_trigger<'a>(
             .padding(0)
             .style(theme::button::text)
             .on_press(TriggerMessage::ToggleROEDelete(id));
-        let toggle = toggler(*roe).on_toggle(move |checked| TriggerMessage::ROEDelete(id, checked));
+        let toggle = toggler(*roe)
+            .on_toggle(move |checked| TriggerMessage::ROEDelete(id, checked))
+            .style(theme::toggler::primary_inv);
 
         row!(label, space::horizontal(), toggle).align_y(Vertical::Center)
     };
@@ -2190,7 +2194,7 @@ fn media_archive<'a, Message: 'a + Clone>(
     );
     let label = row!(label, help).spacing(4).align_y(Vertical::Center);
 
-    let content = checkbox(archive).size(P).on_toggle(on_toggle);
+    let content = toggler(archive).size(P).on_toggle(on_toggle);
 
     row!(label, space::horizontal(), content)
         .align_y(Vertical::Center)
