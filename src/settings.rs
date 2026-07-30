@@ -1189,7 +1189,7 @@ impl Settings {
                 }
             }
             SettingsMessage::OpenConfig => {
-                let Some(path) = self.config.config_path() else {
+                let Some(path) = self.config.config_dir() else {
                     return Task::none();
                 };
 
@@ -1372,7 +1372,7 @@ impl Settings {
 
         let open = {
             let config = {
-                let label = label_maker("Config File");
+                let label = label_maker("Config Directory");
                 let icon = icons::icon(icons::EXTERNAL).size(size / RATIO);
 
                 let label = row!(label, icon).spacing(4).align_y(Vertical::Center);

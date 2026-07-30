@@ -343,6 +343,17 @@ impl Config {
         self.general.search_limit
     }
 
+    pub fn config_dir(&self) -> Option<PathBuf> {
+        self.config_dir
+            .as_ref()?
+            .canonicalize()
+            .inspect_err(|error| {
+                let error = error.to_string();
+                tracing::error!(error);
+            })
+            .ok()
+    }
+
     pub fn config_path(&self) -> Option<PathBuf> {
         let path = self
             .config_dir
