@@ -1,4 +1,3 @@
-
 use super::*;
 use iced::keyboard;
 use serde::{de::VariantAccess, ser::SerializeStruct};
@@ -812,8 +811,9 @@ where
             && let Some(keys) = self.actions.get_mut(&action)
         {
             keys.retain(|curr| key != *curr);
-            self.defaults = false;
         }
+
+        self.defaults = false;
     }
 
     fn clear(&mut self, action: A) {
@@ -1070,6 +1070,16 @@ impl KeyStore {
 
     pub fn clear_settings(&mut self, action: SettingsAction) {
         self.settings.clear(action);
+    }
+
+    pub fn is_defaults(&self) -> bool {
+        let Self {
+            home,
+            player,
+            settings,
+        } = self;
+
+        home.defaults && player.defaults && settings.defaults
     }
 }
 

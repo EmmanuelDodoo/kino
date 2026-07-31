@@ -5,7 +5,10 @@ use devutils::source::SourceSet;
 use iced::Color;
 pub use keys::{KeyPress, KeyStore};
 use serde::{Deserialize, Serialize, de, ser};
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 pub use subtitles::SubtitleDescription;
 
 mod keys;
@@ -112,6 +115,7 @@ pub struct GeneralSettings {
     pub refresh_interval: Duration,
     pub recents_limit: Option<i32>,
     pub search_limit: Option<i32>,
+    #[serde(default, skip_serializing_if = "Theme::is_custom")]
     pub theme: Theme,
     #[serde(skip)]
     pub themes: Vec<Theme>,
@@ -170,8 +174,11 @@ impl GeneralSettings {
         }
     }
 
-    fn load_themes(&mut self) {
-        self.themes = self.theme.all()
+    fn load_themes(&mut self, theme: Option<Theme>) {
+        if let Some(theme) = theme {
+            self.themes = theme.all();
+            self.theme = theme;
+        }
     }
 
     pub fn set_theme(&mut self, theme: Theme) {
@@ -184,7 +191,7 @@ impl GeneralSettings {
 pub struct Config {
     pub video: VideoSettings,
     pub general: GeneralSettings,
-    #[serde(rename = "keybindings")]
+    #[serde(rename = "keybindings", skip_serializing)]
     pub keystore: KeyStore,
     #[serde(skip)]
     config_dir: Option<PathBuf>,
@@ -214,57 +221,91 @@ impl Clone for Config {
 
 impl Config {
     const CONFIG_PATH: &str = "config.toml";
-    const DEV_PATH: &str = ".dev";
+    const THEME_PATH: &str = "theme.toml";
+    const BINDINGS_PATH: &str = "keybindings.toml";
     const LOG_FILE: &str = "kino.log";
+    const DEV_PATH: &str = ".dev";
+
+    pub fn load_bindings(path: impl AsRef<Path>) -> Option<KeyStore> {
+        let bindings = std::fs::read_to_string(path).ok()?;
+
+        toml::from_str::<KeyStore>(&bindings).ok()
+    }
+
+    pub fn load_theme(path: impl AsRef<Path>) -> Option<Theme> {
+        let theme = std::fs::read_to_string(path).ok()?;
+
+        toml::from_str::<crate::theme::Custom>(&theme)
+            .ok()
+            .map(|custom| custom.into())
+    }
 
     pub fn load() -> (Self, Vec<String>) {
         use directories::ProjectDirs;
-        use std::fs::{create_dir_all, read_to_string};
-
-        tracing::debug!("Loading Config");
-
-        let mut errors = Vec::with_capacity(3);
 
         let project = ProjectDirs::from("", "", "kino").expect("Cannot create project directory");
         let config_dir = project.config_local_dir();
         let images = config_dir.join("images");
 
-        create_dir_all(images).expect("Cannot create project directory structure");
+        std::fs::create_dir_all(images).expect("Cannot create project directory structure");
+
+        Self::load_path(config_dir)
+    }
+
+    fn load_path(config_dir: impl AsRef<Path>) -> (Self, Vec<String>) {
+        tracing::debug!("Loading Config");
+        let config_dir = config_dir.as_ref();
+        let mut errors = Vec::with_capacity(3);
 
         let config_path = config_dir.join(Self::CONFIG_PATH);
 
+        let theme = config_dir.join(Self::THEME_PATH);
+        let theme = Self::load_theme(theme);
+
+        let bindings = config_dir.join(Self::BINDINGS_PATH);
+        let bindings = Self::load_bindings(bindings);
+
         tracing::debug!("Reading config contents");
-        let config = match read_to_string(config_path).map_err(|error| error.kind()) {
+        let config = match std::fs::read_to_string(config_path).map_err(|error| error.kind()) {
             Ok(config) => config,
             Err(std::io::ErrorKind::NotFound) => {
-                return (Config::defaults().prep(config_dir), errors);
+                return (Config::defaults().prep(config_dir, theme, bindings), errors);
             }
             Err(error) => {
                 errors.push(format!("Config file reading error.\n{error}"));
 
-                return (Config::defaults().prep(config_dir), errors);
+                return (Config::defaults().prep(config_dir, theme, bindings), errors);
             }
         };
 
         match toml::from_str::<Config>(&config) {
-            Ok(config) => (config.prep(config_dir), errors),
+            Ok(config) => (config.prep(config_dir, theme, bindings), errors),
             Err(error) => {
                 errors.push(format!("Config file loading error.\n{error}"));
 
-                (Config::defaults().prep(config_dir), errors)
+                (Config::defaults().prep(config_dir, theme, bindings), errors)
             }
         }
     }
 
-    fn prep(mut self, dir: impl AsRef<std::path::Path>) -> Self {
+    fn prep(
+        mut self,
+        dir: impl AsRef<Path>,
+        theme: Option<Theme>,
+        bindings: Option<KeyStore>,
+    ) -> Self {
         use std::fs::OpenOptions;
         use tracing_subscriber::EnvFilter;
 
         tracing::debug!("preping config");
         let dir = dir.as_ref();
         let log = dir.join(Self::LOG_FILE);
+
         self.config_dir = Some(dir.to_path_buf());
-        self.general.load_themes();
+        self.general.load_themes(theme);
+        if let Some(bindings) = bindings {
+            self.keystore = bindings;
+        }
 
         match OpenOptions::new().append(true).create(true).open(log) {
             Ok(log) => {
@@ -287,17 +328,47 @@ impl Config {
         self
     }
 
-    pub fn save(&self) -> Result<(), String> {
-        use std::fs::write;
+    fn save_bindings(&self, config_dir: &Path) -> Result<(), String> {
+        if self.keystore.is_defaults() {
+            return Ok(());
+        }
 
-        let path = match &self.config_dir {
-            Some(dir) => dir.join(Self::CONFIG_PATH),
-            None => [Self::DEV_PATH, Self::CONFIG_PATH].iter().collect(),
+        let bindings = toml_string(&self.keystore).map_err(|error| error.to_string())?;
+        let path = config_dir.join(Self::BINDINGS_PATH);
+
+        std::fs::write(path, bindings).map_err(|error| error.to_string())
+    }
+
+    fn save_theme(&self, config_dir: &Path) -> Result<(), String> {
+        let Some(custom) = self.general.theme.custom() else {
+            return Ok(());
         };
 
-        let config = toml::to_string_pretty(self).map_err(|error| error.to_string())?;
+        let theme = toml_string(&custom).map_err(|error| error.to_string())?;
 
-        write(path, config).map_err(|error| error.to_string())
+        let path = config_dir.join(Self::THEME_PATH);
+
+        std::fs::write(path, theme).map_err(|error| error.to_string())
+    }
+
+    fn save_path(&self, config_dir: impl AsRef<Path>) -> Result<(), String> {
+        let config_dir = config_dir.as_ref();
+
+        self.save_theme(config_dir)?;
+        self.save_bindings(config_dir)?;
+
+        let path = config_dir.join(Self::CONFIG_PATH);
+
+        let config = toml_string(self).map_err(|error| error.to_string())?;
+
+        std::fs::write(path, config).map_err(|error| error.to_string())
+    }
+
+    pub fn save(&self) -> Result<(), String> {
+        match &self.config_dir {
+            Some(dir) => self.save_path(dir),
+            None => self.save_path(Self::DEV_PATH),
+        }
     }
 
     pub fn defaults() -> Self {
@@ -320,7 +391,7 @@ impl Config {
             span_writer: None,
         };
 
-        new.prep(Self::DEV_PATH)
+        new.prep(Self::DEV_PATH, None, None)
     }
 
     pub fn theme(&self) -> Theme {
@@ -701,21 +772,27 @@ impl From<SettingsAction> for Action {
     }
 }
 
+fn toml_string<T: serde::ser::Serialize>(value: &T) -> Result<String, toml::ser::Error> {
+    toml::to_string_pretty(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn config_de() -> Result<(), toml::de::Error> {
-        let config = include_str!("../resources/docs/config.toml");
+    fn config_load_save() -> Result<(), String> {
+        let path = format!(
+            "{}{}resources{}docs",
+            env!("CARGO_MANIFEST_DIR"),
+            std::path::MAIN_SEPARATOR,
+            std::path::MAIN_SEPARATOR
+        );
+        println!("{path}");
+        let (config, errors) = Config::load_path(&path);
+        assert!(errors.is_empty());
+        // println!("{errors:#?}");
 
-        toml::from_str::<Config>(config).map(|_| {})
-    }
-
-    #[test]
-    fn config_se() -> Result<(), toml::ser::Error> {
-        let config = Config::dev();
-
-        toml::to_string_pretty(&config).map(|_| {})
+        config.save_path(path)
     }
 }

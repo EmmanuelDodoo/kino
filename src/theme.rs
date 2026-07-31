@@ -235,6 +235,13 @@ impl Theme {
         matches!(self, Self::Custom(_))
     }
 
+    pub fn custom(&self) -> Option<&Custom> {
+        match self {
+            Self::Custom(custom) => Some(custom.as_ref()),
+            _ => None,
+        }
+    }
+
     pub fn all(&self) -> Vec<Self> {
         if self.is_custom() {
             let mut values = vec![self.clone()];

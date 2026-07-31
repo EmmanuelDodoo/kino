@@ -1,0 +1,26 @@
+[general]
+defaults = false
+
+[[general.actions.SearchToggle]]
+key = "Space"
+
+[[general.actions.LayoutToggle]]
+key = "l"
+
+[[general.actions.Back]]
+key = "Enter"
+modifiers = "Ctrl"
+
+[player]
+defaults = false
+
+[player.actions]
+
+[[settings.actions.Up]]
+key = "ArrowUp"
+
+[[settings.actions.Cancel]]
+key = "Escape"
+
+[[settings.actions.Down]]
+key = "ArrowDown"

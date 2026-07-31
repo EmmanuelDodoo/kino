@@ -1,0 +1,115 @@
+name = "Custom theme Example"
+is_dark = true
+
+[background.weak]
+color = "#001e29"
+text = "#ffd6a7"
+
+[background.base]
+color = "#00111d"
+text = "#ffd6a7"
+
+[background.strong]
+color = "#000611"
+text = "#ffd6a7"
+
+[primary.weak]
+color = "#c3ff00"
+text = "#427600"
+
+[primary.base]
+color = "#bdff00"
+text = "#427600"
+
+[primary.strong]
+color = "#b5f600"
+text = "#427600"
+
+[secondary.weak]
+color = "#d6c5ff"
+text = "#564775"
+
+[secondary.base]
+color = "#cebef4"
+text = "#564775"
+
+[secondary.strong]
+color = "#c6b5ee"
+text = "#564775"
+
+[accent.weak]
+color = "#575757"
+text = "#f8f8f8"
+
+[accent.base]
+color = "#505050"
+text = "#f8f8f8"
+
+[accent.strong]
+color = "#494949"
+text = "#f8f8f8"
+
+[neutral.weak]
+color = "#003f4d"
+text = "#ffd6a7"
+
+[neutral.base]
+color = "#003843"
+text = "#ffd6a7"
+
+[neutral.strong]
+color = "#00323e"
+text = "#ffd6a7"
+
+[info.weak]
+color = "#00c3ff"
+text = "#042e49"
+
+[info.base]
+color = "#00bafe"
+text = "#042e49"
+
+[info.strong]
+color = "#00b2f5"
+text = "#042e49"
+
+[success.weak]
+color = "#00e974"
+text = "#022d14"
+
+[success.base]
+color = "#01df72"
+text = "#022d14"
+
+[success.strong]
+color = "#00d76a"
+text = "#022d14"
+
+[warning.weak]
+color = "#ffc600"
+text = "#854200"
+
+[warning.base]
+color = "#ffbf00"
+text = "#854200"
+
+[warning.strong]
+color = "#f7b700"
+text = "#854200"
+
+[danger.weak]
+color = "#ff4e50"
+text = "#690000"
+
+[danger.base]
+color = "#f04e4f"
+text = "#690000"
+
+[danger.strong]
+color = "#e74548"
+text = "#690000"
+
+[radii]
+boxes = 8.0
+fields = 8.0
+selectors = 4.0
