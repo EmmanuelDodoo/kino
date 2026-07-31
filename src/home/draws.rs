@@ -1585,10 +1585,7 @@ pub fn draw_movie_edit<'a>(
         MovieEditMessage::SubsExpanded,
     );
 
-    let source = media_source(
-        &state.source,
-        Some(MovieEditMessage::Source),
-    );
+    let source = media_source(&state.source, Some(MovieEditMessage::Source));
 
     let source_id = media_source_id(state.source, &state.source_id, MovieEditMessage::SourceId);
 
@@ -1647,10 +1644,7 @@ pub fn draw_show_edit<'a>(
 
     let archive = media_archive(state.archive, ShowEditMessage::Archive);
 
-    let source = media_source(
-        &state.source,
-        Some(ShowEditMessage::Source),
-    );
+    let source = media_source(&state.source, Some(ShowEditMessage::Source));
 
     let source_id = media_source_id(state.source, &state.source_id, ShowEditMessage::SourceId);
 
@@ -1819,12 +1813,12 @@ fn draw_videos<'a, Message: 'a + Clone, F>(
     selected: Option<VideoInfoId>,
     on_select: F,
     on_expand: impl Fn(bool) -> Message + 'a,
-) -> Element<'a, Message>
+) -> Option<Element<'a, Message>>
 where
     F: Fn(VideoInfoId) -> Message + 'a + Clone,
 {
     if videos.is_empty() {
-        return empty();
+        return None;
     }
 
     let label = {
@@ -1900,12 +1894,14 @@ where
 
     let content = table([rad, codec, resolution, bitrate, framerate], videos).separator(0);
 
-    expandable(label, content)
-        .width(Length::Fill)
-        .expanded(expanded)
-        .on_expand(on_expand)
-        .spacing(0)
-        .into()
+    Some(
+        expandable(label, content)
+            .width(Length::Fill)
+            .expanded(expanded)
+            .on_expand(on_expand)
+            .spacing(0)
+            .into(),
+    )
 }
 
 fn draw_audio<'a, Message: 'a + Clone, F>(
@@ -1914,12 +1910,12 @@ fn draw_audio<'a, Message: 'a + Clone, F>(
     selected: Option<AudioId>,
     on_select: F,
     on_expand: impl Fn(bool) -> Message + 'a,
-) -> Element<'a, Message>
+) -> Option<Element<'a, Message>>
 where
     F: Fn(AudioId) -> Message + 'a + Clone,
 {
     if audio.is_empty() {
-        return empty();
+        return None;
     }
 
     let label = {
@@ -2011,12 +2007,14 @@ where
 
     let content = table([radio, lang, codec, bitrate, sample, channels], audio).separator(0);
 
-    expandable(label, content)
-        .width(Length::Fill)
-        .expanded(expanded)
-        .on_expand(on_expand)
-        .spacing(0)
-        .into()
+    Some(
+        expandable(label, content)
+            .width(Length::Fill)
+            .expanded(expanded)
+            .on_expand(on_expand)
+            .spacing(0)
+            .into(),
+    )
 }
 
 fn draw_subs<'a, Message: 'a + Clone, F>(
@@ -2026,12 +2024,12 @@ fn draw_subs<'a, Message: 'a + Clone, F>(
     on_select: F,
     on_delete: impl Fn(SubtitleId) -> Message + 'a,
     on_expand: impl Fn(bool) -> Message + 'a,
-) -> Element<'a, Message>
+) -> Option<Element<'a, Message>>
 where
     F: Fn(SubtitleId) -> Message + 'a + Clone,
 {
     if subs.is_empty() {
-        return empty();
+        return None;
     }
 
     let label = {
@@ -2096,12 +2094,14 @@ where
 
     let content = table([radio, title, lang, kind, delete], subs).separator(0);
 
-    expandable(label, content)
-        .width(Length::Fill)
-        .expanded(expanded)
-        .on_expand(on_expand)
-        .spacing(0)
-        .into()
+    Some(
+        expandable(label, content)
+            .width(Length::Fill)
+            .expanded(expanded)
+            .on_expand(on_expand)
+            .spacing(0)
+            .into(),
+    )
 }
 
 fn media_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a, Theme> {
