@@ -23,68 +23,35 @@ struct Migration {
     sql: &'static str,
 }
 
-#[rustfmt::skip]
+macro_rules! migration {
+    ($version:literal) => {
+        Migration {
+            version: $version,
+            sql: include_str!(concat!(
+                "../../resources/db/migrations/",
+                stringify!($version),
+                ".sql"
+            )),
+        }
+    };
+}
+
 const MIGRATIONS: &[Migration] = &[
-    Migration {
-        version: 0,
-        sql: ""
-    },
-    Migration {
-        version: 1,
-        sql: include_str!("../../resources/db/migrations/1.sql"),
-    },
-    Migration {
-        version: 2,
-        sql: include_str!("../../resources/db/migrations/2.sql"),
-    },
-    Migration {
-        version: 3,
-        sql: include_str!("../../resources/db/migrations/3.sql"),
-    },
-    Migration {
-        version: 4,
-        sql: include_str!("../../resources/db/migrations/4.sql"),
-    },
-    Migration {
-        version: 5,
-        sql: include_str!("../../resources/db/migrations/5.sql"),
-    },
-    Migration {
-        version: 6,
-        sql: include_str!("../../resources/db/migrations/6.sql"),
-    },
-    Migration {
-        version: 7,
-        sql: include_str!("../../resources/db/migrations/7.sql"),
-    },
-    Migration {
-        version: 8,
-        sql: include_str!("../../resources/db/migrations/8.sql"),
-    },
-    Migration {
-        version: 9,
-        sql: include_str!("../../resources/db/migrations/9.sql"),
-    },
-    Migration {
-        version: 10,
-        sql: include_str!("../../resources/db/migrations/10.sql"),
-    },
-    Migration {
-        version: 11,
-        sql: include_str!("../../resources/db/migrations/11.sql"),
-    },
-    Migration {
-        version: 12,
-        sql: include_str!("../../resources/db/migrations/12.sql"),
-    },
-    Migration {
-        version: 13,
-        sql: include_str!("../../resources/db/migrations/13.sql"),
-    },
-    Migration {
-        version: 14,
-        sql: include_str!("../../resources/db/migrations/14.sql"),
-    },
+    migration!(0),
+    migration!(1),
+    migration!(2),
+    migration!(3),
+    migration!(4),
+    migration!(5),
+    migration!(6),
+    migration!(7),
+    migration!(8),
+    migration!(9),
+    migration!(10),
+    migration!(11),
+    migration!(12),
+    migration!(13),
+    migration!(14),
 ];
 
 pub enum Source<'a> {
