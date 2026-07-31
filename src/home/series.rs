@@ -27,6 +27,7 @@ pub enum Message {
     Play(SeasonId),
     Scroll(scrollable::Viewport),
     Goto(CollectionId),
+    Scan,
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +107,7 @@ impl ShowPage {
                 let msg = HomeMessage::Goto(PageKind::Collection(id));
                 Some(msg)
             }
+            Message::Scan => Some(HomeMessage::ScanShow(self.id)),
         }
     }
 
@@ -221,6 +223,7 @@ impl ShowPage {
             Message::Resume,
             Message::AddCollection,
             Message::Edit,
+            Some(Message::Scan),
         );
 
         let overview = page_overview(show.item.synopsis());

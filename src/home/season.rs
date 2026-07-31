@@ -32,6 +32,7 @@ pub enum Message {
     Sibbling(ShowId, u16),
     Play(EpisodeId),
     Scroll(scrollable::Viewport),
+    Scan,
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +107,7 @@ impl SeasonPage {
             Message::GotoCollection(id) => Some(HomeMessage::Goto(PageKind::Collection(id))),
             Message::Edit => Some(HomeMessage::OpenView(ViewMessage::SeasonEdit(self.id))),
             Message::Sibbling(show, number) => Some(HomeMessage::GotoSeason(show, number)),
+            Message::Scan => Some(HomeMessage::ScanSeason(self.id)),
         }
     }
 
@@ -222,7 +224,13 @@ impl SeasonPage {
             page_title(tags, season.item.name(), details, season.item.status)
         };
 
-        let header = page_header(header, Message::Resume, Message::AddSelf, Message::Edit);
+        let header = page_header(
+            header,
+            Message::Resume,
+            Message::AddSelf,
+            Message::Edit,
+            Some(Message::Scan),
+        );
 
         let overview = page_overview(season.item.synopsis());
 

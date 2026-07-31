@@ -122,7 +122,13 @@ impl EpisodePage {
             page_title(top, episode.item.name(), details, episode.item.status)
         };
 
-        let header = page_header(header, Message::Play, Message::AddCollection, Message::Edit);
+        let header = page_header(
+            header,
+            Message::Play,
+            Message::AddCollection,
+            Message::Edit,
+            None,
+        );
 
         let overview = page_overview(episode.item.synopsis());
 

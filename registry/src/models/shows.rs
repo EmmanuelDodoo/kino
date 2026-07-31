@@ -65,6 +65,7 @@ pub struct Show {
     duration: u64,
     comments: u32,
     source: String,
+    pub request: Option<String>,
     pub status: Status,
 }
 
@@ -121,6 +122,7 @@ impl Show {
         let comments = row.get::<_, u32>("comment_count")?;
         let source = row.get::<_, String>("source")?;
         let status = Status::from_row(row)?;
+        let request = row.get::<_, Option<String>>("request")?;
 
         Ok(Self {
             id,
@@ -144,6 +146,7 @@ impl Show {
             comments,
             source,
             status,
+            request,
         })
     }
 
@@ -170,6 +173,7 @@ impl Show {
             comments: _comments,
             source: _source,
             status,
+            request: _request,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -368,7 +372,6 @@ impl Show {
         path: String,
         name: String,
         original_name: String,
-        seasons: u16,
     ) -> (Self, Query<'a>) {
         let added = Local::now();
         let backdrop = None;
@@ -390,7 +393,7 @@ impl Show {
             release,
             added,
             watch_count: 0,
-            seasons,
+            seasons: 0,
             rating: None,
             progress: 0.0,
             last_watched: None,
@@ -399,6 +402,8 @@ impl Show {
             comments: 0,
             source: String::default(),
             status: Status::Normal,
+
+            request: None,
         };
 
         let query = new.insert();

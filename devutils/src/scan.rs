@@ -2,7 +2,7 @@ use crate::source::SourceSet;
 use core::error::{Context, ContextLog, Log, Result, bail};
 use fancy_regex::Regex;
 use gstreamer_pbutils::Discoverer;
-use registry::db::Database;
+use registry::db::{self, Database};
 use registry::models::{
     Audio, AudioId, Directory, DirectoryId, Episode, EpisodeId, MediaType, Movie, MovieId, Season,
     SeasonId, Show, ShowId, Subtitle, SubtitleId, VideoId, VideoInfoId, media::Status, video,
@@ -71,16 +71,16 @@ struct Video {
 }
 
 #[derive(Debug)]
-struct SeasonPrim {
+struct ScannedSeason {
     // Get number at end of this?
-    path: String,
-    episodes: Vec<Video>,
+    short_path: String,
+    full_path: PathBuf,
 }
 
 #[derive(Debug)]
-struct ShowPrim {
-    path: String,
-    seasons: Vec<SeasonPrim>,
+struct ScannedShow {
+    short_path: String,
+    full_path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -124,6 +124,17 @@ struct VideoInfo {
     dar_denom: u32,
 }
 
+pub fn discoverer_init(discoverer: bool) -> Option<Discoverer> {
+    if !discoverer {
+        return None;
+    }
+
+    gstreamer::init().with_ctx_log(|| format!("Scan Discoverer init gstreamer init error"));
+
+    Discoverer::new(gstreamer::ClockTime::from_seconds(5))
+        .with_ctx_log(|| format!("Scan Discoverer error"))
+}
+
 pub fn scan_dir(
     db: &str,
     dir: Directory,
@@ -135,15 +146,7 @@ pub fn scan_dir(
 ) -> Option<()> {
     let path = dir.path.display();
     tracing::debug!("Scanning directory {}", path);
-    let discoverer = if discoverer {
-        gstreamer::init()
-            .with_ctx_log(|| format!("Scan directory gstreamer init error on {}", path));
-
-        Discoverer::new(gstreamer::ClockTime::from_seconds(5))
-            .with_ctx_log(|| format!("Scan directory discoverer error on {}", path))
-    } else {
-        None
-    };
+    let discoverer = discoverer_init(discoverer);
 
     let mut db = Database::open(db)
         .with_ctx_log(|| format!("Scan directory DB opening error on {}.", path))?;
@@ -169,14 +172,7 @@ pub fn scan_dirs(
     preferred_audio_code: Option<String>,
 ) -> Vec<DirectoryId> {
     tracing::debug!("Scanning {} directories", dirs.len());
-    let discoverer = if discoverer {
-        gstreamer::init().ctx_log("Scan directories gstreamer init error on");
-
-        Discoverer::new(gstreamer::ClockTime::from_seconds(5))
-            .ctx_log("Scan directories discoverer error on")
-    } else {
-        None
-    };
+    let discoverer = discoverer_init(discoverer);
 
     let mut db = match Database::open(db).ctx_log("Scan directories error") {
         Some(db) => db,
@@ -405,25 +401,6 @@ pub fn scan_dir_helper(
             });
         }
         MediaType::Shows => {
-            struct DirEpisode {
-                id: EpisodeId,
-                status: Status,
-                scanned: bool,
-                source: SourceSet,
-                request: Option<String>,
-                subtitle: bool,
-                audio: bool,
-                video: bool,
-            }
-
-            struct DirSeason {
-                id: SeasonId,
-                scanned: bool,
-                status: Status,
-                request: Option<String>,
-                source: SourceSet,
-            }
-
             struct DirShow {
                 id: ShowId,
                 scanned: bool,
@@ -433,8 +410,8 @@ pub fn scan_dir_helper(
             }
 
             tracing::debug!("Scanning shows directory {}", path);
-            let shows = scan_shows(&dir.path, discoverer)
-                .with_ctx_log(|| format!("Scanning shows in dir {}", path))?;
+            let shows =
+                scan_shows(&dir.path).with_ctx_log(|| format!("Scanning shows in dir {}", path))?;
 
             tracing::debug!("Fetching Directory shows");
             let dir_shows = db
@@ -467,7 +444,7 @@ pub fn scan_dir_helper(
             };
 
             for show in shows {
-                let mut dir_show = dir_shows.get_mut(&show.path);
+                let mut dir_show = dir_shows.get_mut(&show.short_path);
                 let new_show = dir_show.is_none();
 
                 if let Some(show) = &dir_show {
@@ -478,17 +455,15 @@ pub fn scan_dir_helper(
                     }
                 }
 
-                let ShowPrim { path, seasons } = show;
-                let name = process_name(&path)
+                let ScannedShow {
+                    full_path,
+                    short_path,
+                } = show;
+                let name = process_name(&short_path)
                     .with_ctx_log(|| format!("Show name processing on {}", path))
-                    .unwrap_or(path.clone());
-                let (new, query) = Show::new(
-                    dir.id,
-                    path.clone(),
-                    name.clone(),
-                    path.clone(),
-                    seasons.len() as _,
-                );
+                    .unwrap_or(short_path.clone());
+                let (new, query) =
+                    Show::new(dir.id, short_path.clone(), name.clone(), short_path.clone());
 
                 let show = dir_show.as_ref().map(|show| show.id).unwrap_or(new.id);
 
@@ -536,7 +511,7 @@ pub fn scan_dir_helper(
                     (source, Some(request))
                 };
 
-                let (show_source, show_request) = match dir_show {
+                let (source, show_request) = match dir_show {
                     Some(dir_show) => match &dir_show.request {
                         Some(request) => (dir_show.source, Some(request.to_owned())),
                         None => {
@@ -548,359 +523,21 @@ pub fn scan_dir_helper(
                     None => show_source(default_source, name.clone()),
                 };
 
-                let show_name = name;
-                tracing::debug!("Scanning {show_name} seasons");
-                tracing::debug!("Fetching show seasons");
+                tracing::debug!("Scanning {name} seasons");
 
-                let Some(dir_seasons) = db
-                    .get_show_seasons_removed(show, |row| {
-                        let id = SeasonId::from_row(row)?;
-                        let path = row.get::<_, String>("path")?;
-                        let status = Status::from_row(row)?;
-                        let scanned = matches!(status, Status::Archived);
-
-                        let request = row.get::<_, Option<String>>("request")?;
-                        let source = SourceSet::from_row(row, "source")?;
-
-                        Ok((
-                            path,
-                            DirSeason {
-                                id,
-                                scanned,
-                                status,
-                                request,
-                                source,
-                            },
-                        ))
-                    })
-                    .with_ctx_log(|| {
-                        format!("Scanning show {show_name} seasons in directory {}", path)
-                    })
-                else {
-                    continue;
-                };
-
-                let mut dir_seasons = {
-                    let mut map = HashMap::new();
-                    map.extend(dir_seasons);
-                    map
-                };
-
-                for season in seasons {
-                    let mut dir_season = dir_seasons.get_mut(&season.path);
-                    let new_season = dir_season.is_none();
-
-                    if let Some(season) = &dir_season {
-                        match season.status {
-                            Status::Archived => continue,
-                            Status::Tombstone if !restore => continue,
-                            _ => {}
-                        }
-                    }
-
-                    let SeasonPrim { path, episodes } = season;
-                    let number = process_season(&path).log_err();
-                    let name = match number {
-                        Some(number) => format!("Season {number:02}"),
-                        None => path.clone(),
-                    };
-
-                    let season_number = number.unwrap_or_default();
-
-                    let (season, query) =
-                        Season::new(show, name.clone(), path.clone(), season_number);
-
-                    let season = dir_season.as_ref().map(|sea| sea.id).unwrap_or(season.id);
-
-                    match query.execute(db) {
-                        Ok(succ) => {
-                            let modified = succ.rows > 0;
-
-                            if let Some(entry) = dir_season.as_mut() {
-                                entry.scanned = true;
-                            }
-
-                            succ.log();
-                            modified
-                        }
-                        Err(err) => {
-                            err.with_ctx_log(|| {
-                                format!(
-                                    "Show {show_name} season {season_number} in Dir {} insertion",
-                                    path
-                                )
-                            });
-                            continue;
-                        }
-                    };
-
-                    let season_source = |source: SourceSet| {
-                        let Some(parent) = show_request.as_deref() else {
-                            return (source, None);
-                        };
-
-                        let Some((query, request)) =
-                            source.season_request(season, parent, season_number)
-                        else {
-                            return (source, None);
-                        };
-
-                        let Some(succ) = query.execute(db).with_ctx_log(|| {
-                            format!(
-                                "Scan show {show_name} season {season_number} source {source:?}"
-                            )
-                        }) else {
-                            return (source, None);
-                        };
-
-                        succ.log();
-
-                        let _ = db.execute(
-                            "UPDATE season SET source=:source, request=:request WHERE id=:id",
-                            &[
-                                (":id", &ToSqlOutput::from(season)),
-                                (":source", &ToSqlOutput::from(source)),
-                                (":request", &ToSqlOutput::from(request.as_str())),
-                            ],
-                        ).with_ctx_log(|| format!("Scan show {show_name} season {season_number} failed to update source & request"));
-
-                        (source, Some(request))
-                    };
-
-                    let (season_source, season_request) = match dir_season {
-                        Some(dir_season) => match &dir_season.request {
-                            Some(request) => (dir_season.source, Some(request.to_owned())),
-                            None => {
-                                let source = dir_season.source.merge(show_source);
-
-                                season_source(source)
-                            }
-                        },
-                        None => {
-                            let (source, request) = season_source(show_source);
-
-                            if !new_show
-                                && let Some((id, parent)) =
-                                    request.as_deref().zip(show_request.as_deref())
-                                && let Some(query) = source.season_sync(id, parent)
-                            {
-                                let _ = query.execute(db).with_ctx_log(|| {
-                                    format!(
-                                        "Scan: Failed season sync {id} request on source {source:?}"
-                                    )
-                                });
-                            };
-                            (source, request)
-                        }
-                    };
-
-                    tracing::debug!("Scanning {name} episodes");
-                    tracing::debug!("Fetching season episodes");
-
-                    let Some(dir_episodes) = db.get_season_episodes_removed(season, |row| {
-                        let id = EpisodeId::from_row(row)?;
-                        let path = row.get::<_, String>("path")?;
-                        let status = Status::from_row(row)?;
-                    let scanned = matches!(status, Status::Archived);
-
-                        let request = row.get::<_, Option<String>>("request")?;
-                        let source = SourceSet::from_row(row, "source")?;
-                        let subtitle = Movie::subtitle_maybe(row)?.is_some();
-                        let video = Movie::video_maybe(row)?.is_some();
-                        let audio = Movie::audio_maybe(row)?.is_some();
-
-                        Ok((
-                            path,
-                            DirEpisode {
-                                id,
-                                status,
-                                scanned,
-                                request,
-                                source,
-                                subtitle,
-                                audio,
-                                video,
-                            },
-                        ))
-                    }).with_ctx_log(|| format!("Scanning show {show_name} season {season_number} episodes in directory")) else {
-                        continue;
-                    };
-
-                    let mut dir_episodes = {
-                        let mut map = HashMap::new();
-                        map.extend(dir_episodes);
-
-                        map
-                    };
-
-                    for episode in episodes {
-                        let mut dir_ep = dir_episodes.get_mut(&episode.path);
-                        let pick_sub = !dir_ep
-                            .as_ref()
-                            .map(|movie| movie.subtitle)
-                            .unwrap_or_default();
-                        let pick_vid =
-                            !dir_ep.as_ref().map(|movie| movie.video).unwrap_or_default();
-                        let pick_aud =
-                            !dir_ep.as_ref().map(|movie| movie.audio).unwrap_or_default();
-
-                        if let Some(episode) = &dir_ep {
-                            match episode.status {
-                                Status::Archived => continue,
-                                Status::Tombstone if !restore => continue,
-                                _ => {}
-                            }
-                        }
-
-                        let number = process_episode(&episode.path).log_err();
-                        let name = match number {
-                            Some(number) => format!("Episode {number:02}"),
-                            None => episode.name.clone(),
-                        };
-
-                        let episode_number = number.unwrap_or_default();
-
-                        let (new, query) = Episode::new(
-                            show,
-                            season,
-                            name,
-                            episode.name,
-                            episode.path.clone(),
-                            episode.duration,
-                            episode_number,
-                        );
-
-                        let episode_id = dir_ep.as_ref().map(|ep| ep.id).unwrap_or(new.id);
-
-                        match query.execute(db) {
-                            Ok(succ) => {
-                                if let Some(entry) = dir_ep.as_mut() {
-                                    entry.scanned = true;
-                                }
-
-                                succ.log();
-                            }
-                            Err(err) => {
-                                err.with_ctx_log(|| format!("Show {show_name} season {season_number} episode {episode_number} in Dir {} insertion", path));
-                            }
-                        }
-
-                        let episode_source = |source: SourceSet| {
-                            let Some(parent) = season_request.as_deref() else {
-                                return (source, None);
-                            };
-
-                            let Some((query, request)) = source.episode_request(
-                                episode_id,
-                                parent,
-                                season_number,
-                                episode_number,
-                            ) else {
-                                return (source, None);
-                            };
-
-                            let Some(succ) = query.execute(db).with_ctx_log(|| format!("Scan show {show_name} season {season_number} episode {episode_number} source {source:?}")) else {
-                            return (source, None);
-                            };
-
-                            succ.log();
-
-                            let _ = db.execute(
-                                "UPDATE episode SET source=:source, request=:request WHERE id=:id",
-                                &[
-                                    (":id", &ToSqlOutput::from(episode_id)),
-                                    (":source", &ToSqlOutput::from(source)),
-                                    (":request", &ToSqlOutput::from(request.as_str())),
-                                ],
-                            )
-.with_ctx_log(|| format!("Scan show {show_name} season {season_number} episode {episode_number} failed to update source & request"));
-
-                            (source, Some(request))
-                        };
-
-                        match dir_ep {
-                            Some(dir_episode) => match &dir_episode.request {
-                                Some(_) => {}
-                                None => {
-                                    let source = dir_episode.source.merge(season_source);
-
-                                    episode_source(source);
-                                }
-                            },
-                            None => {
-                                let (source, request) = episode_source(season_source);
-
-                                if !new_season
-                                    && let Some((id, parent)) =
-                                        request.as_deref().zip(show_request.as_deref())
-                                    && let Some(query) = source.episode_sync(id, parent)
-                                {
-                                    let _ = query.execute(db).with_ctx_log(|| {
-                                        format!(
-                                            "Scan: Failed episode sync {id} request on source {source:?}"
-                                        )
-                                    });
-                                };
-                            }
-                        }
-
-                        save_video_metadata(
-                            db,
-                            episode_id,
-                            episode.embedded_subs,
-                            episode.loaded_sub,
-                            episode.audio,
-                            episode.video,
-                        );
-
-                        if pick_sub {
-                            pick_subtitle(db, episode_id, preferred_subtitle_code).log_err();
-                        }
-
-                        if pick_aud {
-                            pick_audio(db, episode_id, preferred_audio_code).log_err();
-                        }
-
-                        if pick_vid {
-                            pick_video(db, episode_id).log_err();
-                        }
-                    }
-
-                    tracing::debug!("Performing episodes insert/remove");
-
-                    let deletes = dir_episodes
-                        .into_values()
-                        .filter_map(|value| {
-                            if value.scanned {
-                                None
-                            } else {
-                                Some((value.id, false))
-                            }
-                        })
-                        .collect();
-
-                    db.insert_remove_episodes(deletes).with_ctx_log(|| format!("Scan show {show_name} season {season_number} episodes failed to insert remove on {}", path));
-                }
-
-                tracing::debug!("Performing season insert/remove");
-
-                let deletes = dir_seasons
-                    .into_values()
-                    .filter_map(|value| {
-                        if value.scanned {
-                            None
-                        } else {
-                            Some((value.id, false))
-                        }
-                    })
-                    .collect();
-
-                db.insert_remove_seasons(deletes).with_ctx_log(|| {
-                    format!(
-                        "Scan show {show_name} failed to insert/remove seasons on {}",
-                        path
-                    )
-                });
+                scan_show(
+                    db.into(),
+                    discoverer,
+                    full_path,
+                    source,
+                    show,
+                    show_request.as_deref(),
+                    restore,
+                    new_show,
+                    preferred_subtitle_code,
+                    preferred_audio_code,
+                )
+                .with_ctx_log(|| format!("Scanning: Show {name} episodes"));
             }
 
             tracing::debug!("Performing shows insert/remove");
@@ -928,7 +565,7 @@ pub fn scan_dir_helper(
     Some(())
 }
 
-fn scan_shows(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Result<Vec<ShowPrim>> {
+fn scan_shows(path: impl AsRef<Path>) -> Result<Vec<ScannedShow>> {
     let path = path.as_ref();
 
     let mut shows = vec![];
@@ -956,15 +593,457 @@ fn scan_shows(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Result
         }
         let path = item.path();
 
-        shows.push(scan_show_dir(path, discoverer)?);
+        shows.push(scan_show_dir(path)?);
     }
 
     Ok(shows)
 }
 
-fn scan_show_dir(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Result<ShowPrim> {
+#[allow(clippy::too_many_arguments)]
+pub fn scan_season<'a>(
+    db: db::Source<'a>,
+    discoverer: Option<&Discoverer>,
+    path: impl AsRef<Path>,
+    source: SourceSet,
+    show: ShowId,
+    season: SeasonId,
+    season_number: u16,
+    season_request: Option<&str>,
+    restore: bool,
+    new_season: bool,
+    preferred_subtitle_code: Option<&str>,
+    preferred_audio_code: Option<&str>,
+) -> Result<()> {
+    struct DirEpisode {
+        id: EpisodeId,
+        status: Status,
+        scanned: bool,
+        source: SourceSet,
+        request: Option<String>,
+        subtitle: bool,
+        audio: bool,
+        video: bool,
+    }
+
+    let db = db.as_ref();
     let path = path.as_ref();
-    let dir = path_name(path);
+
+    tracing::debug!("Fetching season directory items");
+    let episodes = scan_video_dir(path, discoverer, 0, None)?;
+
+    tracing::debug!("Fetching season episodes");
+    let dir_episodes = db
+        .get_season_episodes_removed(season, |row| {
+            let id = EpisodeId::from_row(row)?;
+            let path = row.get::<_, String>("path")?;
+            let status = Status::from_row(row)?;
+            let scanned = matches!(status, Status::Archived);
+
+            let request = row.get::<_, Option<String>>("request")?;
+            let source = SourceSet::from_row(row, "source")?;
+            let subtitle = Movie::subtitle_maybe(row)?.is_some();
+            let video = Movie::video_maybe(row)?.is_some();
+            let audio = Movie::audio_maybe(row)?.is_some();
+
+            Ok((
+                path,
+                DirEpisode {
+                    id,
+                    status,
+                    scanned,
+                    request,
+                    source,
+                    subtitle,
+                    audio,
+                    video,
+                },
+            ))
+        })
+        .with_context(|| format!("Scanning: season {season} removed epiosdes"))?;
+
+    let mut dir_episodes = {
+        let mut map = HashMap::new();
+        map.extend(dir_episodes);
+
+        map
+    };
+
+    for episode in episodes {
+        let mut dir_ep = dir_episodes.get_mut(&episode.path);
+        let pick_sub = !dir_ep
+            .as_ref()
+            .map(|movie| movie.subtitle)
+            .unwrap_or_default();
+        let pick_vid = !dir_ep.as_ref().map(|movie| movie.video).unwrap_or_default();
+        let pick_aud = !dir_ep.as_ref().map(|movie| movie.audio).unwrap_or_default();
+
+        if let Some(episode) = &dir_ep {
+            match episode.status {
+                Status::Archived => continue,
+                Status::Tombstone if !restore => continue,
+                _ => {}
+            }
+        }
+
+        let number = process_episode(&episode.path).log_err();
+        let name = match number {
+            Some(number) => format!("Episode {number:02}"),
+            None => episode.name.clone(),
+        };
+
+        let episode_number = number.unwrap_or_default();
+
+        let (new, query) = Episode::new(
+            show,
+            season,
+            name,
+            episode.name,
+            episode.path.clone(),
+            episode.duration,
+            episode_number,
+        );
+
+        let episode_id = dir_ep.as_ref().map(|ep| ep.id).unwrap_or(new.id);
+
+        match query.execute(db) {
+            Ok(succ) => {
+                if let Some(entry) = dir_ep.as_mut() {
+                    entry.scanned = true;
+                }
+
+                succ.log();
+            }
+            Err(err) => {
+                err.with_ctx_log(|| format!("Scanning: Episode {episode_number} query execution"));
+            }
+        }
+
+        let episode_source = |source: SourceSet| {
+            let Some(parent) = season_request else {
+                return (source, None);
+            };
+
+            let Some((query, request)) =
+                source.episode_request(episode_id, parent, season_number, episode_number)
+            else {
+                return (source, None);
+            };
+
+            let Some(succ) = query
+                .execute(db)
+                .with_ctx_log(|| format!("Scanning: Episode {episode_number} source {source:?}"))
+            else {
+                return (source, None);
+            };
+
+            succ.log();
+
+            let _ = db
+                .execute(
+                    "UPDATE episode SET source=:source, request=:request WHERE id=:id",
+                    &[
+                        (":id", &ToSqlOutput::from(episode_id)),
+                        (":source", &ToSqlOutput::from(source)),
+                        (":request", &ToSqlOutput::from(request.as_str())),
+                    ],
+                )
+                .with_ctx_log(|| {
+                    format!("Scanning: Episode {episode_number} failed to update source & request")
+                });
+
+            (source, Some(request))
+        };
+
+        match dir_ep {
+            Some(dir_episode) => match &dir_episode.request {
+                Some(_) => {}
+                None => {
+                    let source = dir_episode.source.merge(source);
+
+                    episode_source(source);
+                }
+            },
+            None => {
+                let (source, request) = episode_source(source);
+
+                if !new_season
+                    && let Some((id, parent)) = request.as_deref().zip(season_request.as_deref())
+                    && let Some(query) = source.episode_sync(id, parent)
+                {
+                    let _ = query.execute(db).with_ctx_log(|| {
+                        format!("Scanning: Failed episode sync {id} request on source {source:?}")
+                    });
+                };
+            }
+        }
+
+        save_video_metadata(
+            db,
+            episode_id,
+            episode.embedded_subs,
+            episode.loaded_sub,
+            episode.audio,
+            episode.video,
+        );
+
+        if pick_sub {
+            pick_subtitle(db, episode_id, preferred_subtitle_code).log_err();
+        }
+
+        if pick_aud {
+            pick_audio(db, episode_id, preferred_audio_code).log_err();
+        }
+
+        if pick_vid {
+            pick_video(db, episode_id).log_err();
+        }
+    }
+
+    tracing::debug!("Performing episodes insert/remove");
+
+    let deletes = dir_episodes
+        .into_values()
+        .filter_map(|value| {
+            if value.scanned {
+                None
+            } else {
+                Some((value.id, false))
+            }
+        })
+        .collect();
+
+    db.insert_remove_episodes(deletes).with_context(|| {
+        format!(
+            "Scanning: Episodes failed to insert remove on {}",
+            path.display()
+        )
+    })?;
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn scan_show<'a>(
+    db: db::Source<'a>,
+    discoverer: Option<&Discoverer>,
+    path: impl AsRef<Path>,
+    source: SourceSet,
+    show: ShowId,
+    show_request: Option<&str>,
+    restore: bool,
+    new_show: bool,
+    preferred_subtitle_code: Option<&str>,
+    preferred_audio_code: Option<&str>,
+) -> Result<()> {
+    struct DirSeason {
+        id: SeasonId,
+        scanned: bool,
+        status: Status,
+        request: Option<String>,
+        source: SourceSet,
+    }
+
+    let db = db.as_ref();
+    let path = path.as_ref();
+
+    tracing::debug!("Fetching show directory items");
+    let seasons = scan_seasons(path)?;
+
+    tracing::debug!("Fetching show seasons");
+    let dir_seasons = db
+        .get_show_seasons_removed(show, |row| {
+            let id = SeasonId::from_row(row)?;
+            let path = row.get::<_, String>("path")?;
+            let status = Status::from_row(row)?;
+            let scanned = matches!(status, Status::Archived);
+
+            let request = row.get::<_, Option<String>>("request")?;
+            let source = SourceSet::from_row(row, "source")?;
+
+            Ok((
+                path,
+                DirSeason {
+                    id,
+                    scanned,
+                    status,
+                    request,
+                    source,
+                },
+            ))
+        })
+        .with_context(|| format!("Scanning: show {show} removed seasons"))?;
+
+    let mut dir_seasons = {
+        let mut map = HashMap::new();
+        map.extend(dir_seasons);
+        map
+    };
+
+    for season in seasons {
+        let mut dir_season = dir_seasons.get_mut(&season.short_path);
+        let new_season = dir_season.is_none();
+
+        if let Some(season) = &dir_season {
+            match season.status {
+                Status::Archived => continue,
+                Status::Tombstone if !restore => continue,
+                _ => {}
+            }
+        }
+
+        let ScannedSeason {
+            short_path: path,
+            full_path,
+        } = season;
+        let number = process_season(&path).log_err();
+        let name = match number {
+            Some(number) => format!("Season {number:02}"),
+            None => path.clone(),
+        };
+
+        let season_number = number.unwrap_or_default();
+
+        let (season, query) = Season::new(show, name.clone(), path.clone(), season_number);
+
+        let season = dir_season.as_ref().map(|sea| sea.id).unwrap_or(season.id);
+
+        match query.execute(db) {
+            Ok(succ) => {
+                let modified = succ.rows > 0;
+
+                if let Some(entry) = dir_season.as_mut() {
+                    entry.scanned = true;
+                }
+
+                succ.log();
+                modified
+            }
+            Err(err) => {
+                err.with_ctx_log(|| format!("Scanning: Season {season_number} query execution",));
+                continue;
+            }
+        };
+
+        let season_source = |source: SourceSet| {
+            let Some(parent) = show_request.as_deref() else {
+                return (source, None);
+            };
+
+            let Some((query, request)) = source.season_request(season, parent, season_number)
+            else {
+                return (source, None);
+            };
+
+            let Some(succ) = query
+                .execute(db)
+                .with_ctx_log(|| format!("Scanning: season {season_number} source {source:?}"))
+            else {
+                return (source, None);
+            };
+
+            succ.log();
+
+            let _ = db
+                .execute(
+                    "UPDATE season SET source=:source, request=:request WHERE id=:id",
+                    &[
+                        (":id", &ToSqlOutput::from(season)),
+                        (":source", &ToSqlOutput::from(source)),
+                        (":request", &ToSqlOutput::from(request.as_str())),
+                    ],
+                )
+                .with_ctx_log(|| {
+                    format!("Scanning: Season {season_number} failed to update source & request")
+                });
+
+            (source, Some(request))
+        };
+
+        let (season_source, season_request) = match dir_season {
+            Some(dir_season) => match &dir_season.request {
+                Some(request) => (dir_season.source, Some(request.to_owned())),
+                None => {
+                    let source = dir_season.source.merge(source);
+
+                    season_source(source)
+                }
+            },
+            None => {
+                let (source, request) = season_source(source);
+
+                if !new_show
+                    && let Some((id, parent)) = request.as_deref().zip(show_request.as_deref())
+                    && let Some(query) = source.season_sync(id, parent)
+                {
+                    let _ = query.execute(db).with_ctx_log(|| {
+                        format!("Scan: Failed season sync {id} request on source {source:?}")
+                    });
+                };
+                (source, request)
+            }
+        };
+
+        tracing::debug!("Scanning {name} episodes");
+        scan_season(
+            db.into(),
+            discoverer,
+            &full_path,
+            season_source,
+            show,
+            season,
+            season_number,
+            season_request.as_deref(),
+            restore,
+            new_season,
+            preferred_subtitle_code,
+            preferred_audio_code,
+        )
+        .with_ctx_log(|| format!("Scanning: Season {name} episodes"));
+    }
+
+    tracing::debug!("Performing season insert/remove");
+
+    let deletes = dir_seasons
+        .into_values()
+        .filter_map(|value| {
+            if value.scanned {
+                None
+            } else {
+                Some((value.id, false))
+            }
+        })
+        .collect();
+
+    db.insert_remove_seasons(deletes).with_ctx_log(|| {
+        format!(
+            "Scanning: Seasons failed to insert/remove on {}",
+            path.display()
+        )
+    });
+
+    Ok(())
+}
+
+fn scan_season_dir(path: impl AsRef<Path>) -> Result<ScannedSeason> {
+    let path = path.as_ref();
+
+    if !path.is_dir() {
+        bail!(
+            "Scan Season path {} not an accessible directory",
+            path.display()
+        )
+    }
+
+    let name = path_name(&path).to_owned();
+
+    Ok(ScannedSeason {
+        short_path: name,
+        full_path: path.to_path_buf(),
+    })
+}
+
+fn scan_seasons(path: impl AsRef<Path>) -> Result<Vec<ScannedSeason>> {
+    let path = path.as_ref();
 
     let read = path
         .read_dir()
@@ -979,35 +1058,31 @@ fn scan_show_dir(path: impl AsRef<Path>, discoverer: Option<&Discoverer>) -> Res
             continue;
         };
 
-        let Some(is_dir) = item
-            .file_type()
-            .with_ctx_log(|| format!("Scanning show dir entry at {}", item.path().display()))
-            .map(|ft| ft.is_dir())
-        else {
-            continue;
-        };
+        let season = scan_season_dir(item.path())
+            .with_ctx_log(|| format!("Scanning show directory items at {}", path.display()));
 
-        if !is_dir {
-            continue;
-        }
-
-        let path = item.path();
-        let name = path_name(&path).to_owned();
-        if let Some(videos) = scan_video_dir(&path, discoverer, 0, None)
-            .with_ctx_log(|| format!("Scanning episodes in dir {}", path.display()))
-        {
-            let season = SeasonPrim {
-                path: name,
-                episodes: videos,
-            };
-
+        if let Some(season) = season {
             seasons.push(season)
-        };
+        }
     }
 
-    let show = ShowPrim {
-        path: dir.to_owned(),
-        seasons,
+    Ok(seasons)
+}
+
+fn scan_show_dir(path: impl AsRef<Path>) -> Result<ScannedShow> {
+    let path = path.as_ref();
+    let dir = path_name(path);
+
+    if !path.is_dir() {
+        bail!(
+            "Scan Season path {} not an accessible directory",
+            path.display()
+        )
+    }
+
+    let show = ScannedShow {
+        short_path: dir.to_owned(),
+        full_path: path.to_path_buf(),
     };
 
     Ok(show)

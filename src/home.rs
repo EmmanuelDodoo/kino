@@ -1001,6 +1001,8 @@ pub enum HomeMessage {
     Trigger(TriggerMessage),
     GotoEpisode(SeasonId, u16),
     GotoSeason(ShowId, u16),
+    ScanShow(ShowId),
+    ScanSeason(SeasonId),
 }
 
 pub struct Home {
@@ -4373,6 +4375,8 @@ impl Home {
                 Message::FetchEpisode(season, number).tasked()
             }
             HomeMessage::GotoSeason(show, number) => Message::FetchSeason(show, number).tasked(),
+            HomeMessage::ScanShow(id) => Message::ScanShowDir(id).tasked(),
+            HomeMessage::ScanSeason(id) => Message::ScanSeasonDir(id).tasked(),
         }
     }
 

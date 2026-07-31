@@ -71,6 +71,7 @@ pub struct Season {
     comments: u32,
     pub number: u16,
     source: String,
+    pub request: Option<String>,
     pub status: Status,
 }
 
@@ -124,6 +125,8 @@ impl Season {
         let show_name = row.get::<_, String>("show_name")?;
         let status = Status::from_row(row)?;
 
+        let request = row.get::<_, Option<String>>("request")?;
+
         Ok(Self {
             id,
             name,
@@ -147,6 +150,7 @@ impl Season {
             number,
             source,
             status,
+            request,
         })
     }
 
@@ -174,6 +178,7 @@ impl Season {
             number,
             source: _source,
             status,
+            request: _request,
         } = self;
 
         let id = ToSqlOutput::from(*id);
@@ -403,6 +408,7 @@ impl Season {
 
             // Not saved within season table so this is okay
             show_name: String::default(),
+            request: None,
         };
 
         let query = new.insert();

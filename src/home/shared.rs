@@ -1,7 +1,7 @@
 use crate::theme::{self, Theme};
 use crate::utils::icons::*;
 use crate::utils::typo::*;
-use crate::utils::{Scroll, empty, trim_path, typo};
+use crate::utils::{Scroll, empty, tooltip, trim_path, typo};
 use devutils::image_ops::{collage, sample_complement};
 use iced::{
     Color, ContentFit, Length, Padding, Task,
@@ -1539,27 +1539,41 @@ pub fn page_header<'a, Message: 'a + Clone>(
     on_play: Message,
     on_collection: Message,
     on_edit: Message,
+    rescan: Option<Message>,
 ) -> Element<'a, Message> {
     let header = header.into();
 
     let actions = {
         let size = H2;
+        let position = iced::widget::tooltip::Position::Top;
+
         let play = button(icon(PLAY).size(size))
             .style(theme::button::text_primary)
             .padding(0)
             .on_press(on_play);
+        let play = tooltip(play, "Play", position);
+
+        let scan = rescan.map(|msg| {
+            let scan = button(icon(REFRESH).size(size / RATIO))
+                .style(theme::button::text)
+                .padding(0)
+                .on_press(msg);
+            Element::from(tooltip(scan, "Rescan files", position))
+        });
 
         let collection = button(icon(ADD_COLLECTION).size(size))
             .style(theme::button::text)
             .padding(0)
             .on_press(on_collection);
+        let collection = tooltip(collection, "Add to collection", position);
 
         let config = button(icon(VIDEO_CONFIG).size(size / RATIO))
             .style(theme::button::text)
             .padding(0)
             .on_press(on_edit);
+        let config = tooltip(config, "Edit", position);
 
-        row!(play, collection, config)
+        row!(play, scan, collection, config)
             .align_y(Vertical::Center)
             .spacing(16)
     };

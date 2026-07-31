@@ -83,6 +83,38 @@ const MIGRATIONS: &[Migration] = &[
     },
 ];
 
+pub enum Source<'a> {
+    Ref(&'a Database),
+    Owned(Database),
+}
+
+impl<'a> AsRef<Database> for Source<'a> {
+    fn as_ref(&self) -> &Database {
+        match self {
+            Self::Ref(db) => db,
+            Self::Owned(db) => db,
+        }
+    }
+}
+
+impl<'a> From<&'a Database> for Source<'a> {
+    fn from(value: &'a Database) -> Self {
+        Self::Ref(value)
+    }
+}
+
+impl<'a> From<&'a mut Database> for Source<'a> {
+    fn from(value: &'a mut Database) -> Self {
+        Self::Ref(value)
+    }
+}
+
+impl From<Database> for Source<'_> {
+    fn from(value: Database) -> Self {
+        Self::Owned(value)
+    }
+}
+
 pub struct Database {
     conn: Connection,
 }

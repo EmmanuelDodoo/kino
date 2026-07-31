@@ -215,6 +215,7 @@ pub enum Message {
     CaptureKeys(bool),
     Scan,
     ScanComplete(Vec<DirectoryId>),
+    ScanCompleteMini,
     MovieTask(home::MovieItemTask),
     EpisodeTask(home::EpisodeItemTask),
     ShowTask(home::ShowItemTask),
@@ -238,6 +239,8 @@ pub enum Message {
     },
     AvailableFonts(Result<Vec<Family>, iced::font::Error>),
     Wish(WishMessage),
+    ScanShowDir(ShowId),
+    ScanSeasonDir(SeasonId),
     None,
 }
 
@@ -1599,6 +1602,194 @@ impl App {
                     _ => todo!(),
                 }
             }
+            Message::ScanShowDir(id) => {
+                let discoverer = self.config.general.scan_discoverer;
+                let db_path = self.config.db_path();
+                let restore = self.config.general.restore_deleted;
+                let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
+                let preferred_audio = self.config.general.preferred_audio_codec.clone();
+
+                async fn scan_task(
+                    db_path: PathBuf,
+                    discoverer: bool,
+                    id: ShowId,
+                    restore: bool,
+                    preferred_sub: Option<String>,
+                    preferred_audio: Option<String>,
+                ) -> Message {
+                    let discoverer = scan::discoverer_init(discoverer);
+                    let db = match db::Database::open(db_path)
+                        .with_context(|| format!("Failed to open database connection"))
+                        .context("Show scan failed")
+                    {
+                        Ok(db) => db,
+                        Err(error) => {
+                            return Message::anyhow(error);
+                        }
+                    };
+
+                    let items = || {
+                        let sql = "SELECT directory.path AS dir_path, tv_show.path, tv_show.request, tv_show.source FROM tv_show JOIN directory ON tv_show.directory=directory.id WHERE tv_show.id=:id";
+                        let mut statement = db.prepare_cached(sql)?;
+
+                        statement.query_row(
+                            &[(":id", &rusqlite::types::ToSqlOutput::from(id))],
+                            |row| {
+                                let path = {
+                                    let dir = row.get::<_, String>("dir_path")?;
+                                    let path = row.get::<_, String>("path")?;
+                                    [dir, path].into_iter().collect::<PathBuf>()
+                                };
+
+                                let request = row.get::<_, Option<String>>("request")?;
+                                let source = SourceSet::from_row(row, "source")?;
+
+                                Ok((path, request, source))
+                            },
+                        )
+                    };
+
+                    let (path, request, source) = match items()
+                        .with_context(|| format!("Failed to retrieve show {id} items"))
+                        .context("Show scan failed")
+                    {
+                        Ok(items) => items,
+                        Err(error) => {
+                            return Message::anyhow(error);
+                        }
+                    };
+
+                    let res = scan::scan_show(
+                        db.into(),
+                        discoverer.as_ref(),
+                        path,
+                        source,
+                        id,
+                        request.as_deref(),
+                        restore,
+                        false,
+                        preferred_sub.as_deref(),
+                        preferred_audio.as_deref(),
+                    )
+                    .context("Show scan Failed");
+
+                    if let Err(error) = res {
+                        return Message::anyhow(error);
+                    }
+
+                    Message::None
+                }
+
+                let scanning = self.home.scanning(true);
+                let scan = Task::future(scan_task(
+                    db_path,
+                    discoverer,
+                    id,
+                    restore,
+                    preferred_sub,
+                    preferred_audio,
+                ))
+                .chain(Message::ScanCompleteMini.tasked());
+
+                Task::batch([scanning, scan])
+            }
+            Message::ScanSeasonDir(id) => {
+                let discoverer = self.config.general.scan_discoverer;
+                let db_path = self.config.db_path();
+                let restore = self.config.general.restore_deleted;
+                let preferred_sub = self.config.general.preferred_subtitle_codec.clone();
+                let preferred_audio = self.config.general.preferred_audio_codec.clone();
+
+                async fn scan_task(
+                    db_path: PathBuf,
+                    discoverer: bool,
+                    id: SeasonId,
+                    restore: bool,
+                    preferred_sub: Option<String>,
+                    preferred_audio: Option<String>,
+                ) -> Message {
+                    let discoverer = scan::discoverer_init(discoverer);
+                    let db = match db::Database::open(db_path)
+                        .with_context(|| format!("Failed to open database connection"))
+                        .context("Season scan failed")
+                    {
+                        Ok(db) => db,
+                        Err(error) => {
+                            return Message::anyhow(error);
+                        }
+                    };
+
+                    let items = || {
+                        let sql = "SELECT directory.path AS dir_path, tv_show.path AS show_path, season.path, season.show_id, season.season_number, season.request, season.source FROM season JOIN tv_show ON tv_show.id=season.show_id JOIN directory ON tv_show.directory=directory.id WHERE season.id=:id";
+
+                        let mut statement = db.prepare_cached(sql)?;
+
+                        statement.query_row(
+                            &[(":id", &rusqlite::types::ToSqlOutput::from(id))],
+                            |row| {
+                                let path = {
+                                    let dir = row.get::<_, String>("dir_path")?;
+                                    let show = row.get::<_, String>("show_path")?;
+                                    let path = row.get::<_, String>("path")?;
+                                    [dir, show, path].into_iter().collect::<PathBuf>()
+                                };
+
+                                let request = row.get::<_, Option<String>>("request")?;
+                                let source = SourceSet::from_row(row, "source")?;
+                                let number = row.get::<_, u16>("season_number")?;
+                                let show = ShowId::from_child(row)?;
+
+                                Ok((path, request, source, show, number))
+                            },
+                        )
+                    };
+
+                    let (path, request, source, show, number) = match items()
+                        .with_context(|| format!("Failed to retrieve season {id} items"))
+                        .context("Season scan failed")
+                    {
+                        Ok(items) => items,
+                        Err(error) => {
+                            return Message::anyhow(error);
+                        }
+                    };
+
+                    let res = scan::scan_season(
+                        db.into(),
+                        discoverer.as_ref(),
+                        path,
+                        source,
+                        show,
+                        id,
+                        number,
+                        request.as_deref(),
+                        restore,
+                        false,
+                        preferred_sub.as_deref(),
+                        preferred_audio.as_deref(),
+                    )
+                    .context("Season scan Failed");
+
+                    if let Err(error) = res {
+                        return Message::anyhow(error);
+                    }
+
+                    Message::None
+                }
+
+                let scanning = self.home.scanning(true);
+                let scan = Task::future(scan_task(
+                    db_path,
+                    discoverer,
+                    id,
+                    restore,
+                    preferred_sub,
+                    preferred_audio,
+                ))
+                .chain(Message::ScanCompleteMini.tasked());
+
+                Task::batch([scanning, scan])
+            }
             Message::SaveComments(comments) => {
                 for comment in comments {
                     let query = comment.insert();
@@ -1964,6 +2155,7 @@ impl App {
 
                 self.home.scanning(false)
             }
+            Message::ScanCompleteMini => self.home.scanning(false),
             Message::MovieTask(home::MovieItemTask { id, kind }) => {
                 self.home.movie_task(id, kind, now)
             }

@@ -109,7 +109,13 @@ impl MoviePage {
             page_title(tags, movie.item.name(), details, movie.item.status)
         };
 
-        let header = page_header(header, Message::Play, Message::AddCollection, Message::Edit);
+        let header = page_header(
+            header,
+            Message::Play,
+            Message::AddCollection,
+            Message::Edit,
+            None,
+        );
 
         let overview = page_overview(movie.item.synopsis());
 
