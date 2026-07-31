@@ -130,6 +130,9 @@ where
                     .height(Length::Fill);
 
                 let content = text(toast.message.as_str())
+                    .ellipsis(text::Ellipsis::End)
+                    .width(Length::Fit.max(400))
+                    .height(Length::Shrink.max(1.75 * settings.text_size))
                     .size(settings.text_size)
                     .font(settings.text_font);
 
@@ -143,14 +146,13 @@ where
                 .class(class);
 
                 container(
-                    row!(side, content, space::horizontal(), close)
+                    row!(side, content, close)
                         .width(Length::Shrink)
                         .align_y(Vertical::Center)
                         .spacing(5),
                 )
                 .class(Theme::container_rounded())
                 .clip(true)
-                .width(Length::Fit.max(500))
                 .height(Length::Shrink)
                 .padding([5.0, 5.0])
                 .into()
