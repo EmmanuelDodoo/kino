@@ -1845,12 +1845,14 @@ pub fn page_layout<'a, Message: 'a>(
         .width(Length::Fill)
         .style(|theme| {
             let default = theme::container::bw(theme);
+            let border = default.border.rounded(0);
             let background = default
                 .background
                 .map(|background| background.scale_alpha(0.85));
 
             container::Style {
                 background,
+                border,
                 ..default
             }
         })

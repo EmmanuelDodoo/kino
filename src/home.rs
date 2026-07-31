@@ -5428,44 +5428,50 @@ impl Home {
             .map(|page| page.show_tools())
             .unwrap_or(true);
 
-        let status: Element<'_, HomeMessage> = if items > 0 || self.scanning {
+        let status: Option<Element<'_, HomeMessage>> = if items > 0 || self.scanning {
             let size = H8;
             let padding = Padding::new(3.0).right(10);
 
             let items = sized_medium(format!("{items} {item_name}"), size);
 
-            let scanning: Element<'_, HomeMessage> = if self.scanning {
+            let scanning: Option<Element<'_, HomeMessage>> = if self.scanning {
                 let label = sized_medium("Scanning Directories", size);
 
                 let throbber = throbber::circular().radius(20.0).bar_height(2.0);
 
-                row!(throbber, label)
-                    .spacing(4.0)
-                    .align_y(Vertical::Center)
-                    .into()
+                Some(
+                    row!(throbber, label)
+                        .spacing(4.0)
+                        .align_y(Vertical::Center)
+                        .into(),
+                )
             } else {
-                empty()
+                None
             };
 
             let content = row!(scanning, space::horizontal(), items).align_y(Vertical::Center);
 
-            container(content)
-                .width(Length::Fill)
-                .align_y(Vertical::Center)
-                .align_x(Horizontal::Right)
-                .padding(padding)
-                .style(|theme| {
-                    let default = theme::container::bb(theme);
-                    let background = default.background.map(|back| back.scale_alpha(0.5));
+            Some(
+                container(content)
+                    .width(Length::Fill)
+                    .align_y(Vertical::Center)
+                    .align_x(Horizontal::Right)
+                    .padding(padding)
+                    .style(|theme| {
+                        let default = theme::container::bb(theme);
+                        let border = default.border.rounded(0);
+                        let background = default.background.map(|back| back.scale_alpha(0.5));
 
-                    container::Style {
-                        background,
-                        ..default
-                    }
-                })
-                .into()
+                        container::Style {
+                            background,
+                            border,
+                            ..default
+                        }
+                    })
+                    .into(),
+            )
         } else {
-            empty()
+            None
         };
 
         let content_area = stack![content_area, bottom(status)];
