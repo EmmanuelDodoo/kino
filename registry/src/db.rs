@@ -81,6 +81,10 @@ const MIGRATIONS: &[Migration] = &[
         version: 13,
         sql: include_str!("../../resources/db/migrations/13.sql"),
     },
+    Migration {
+        version: 14,
+        sql: include_str!("../../resources/db/migrations/14.sql"),
+    },
 ];
 
 pub enum Source<'a> {

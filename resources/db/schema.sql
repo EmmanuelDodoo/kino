@@ -1,5 +1,5 @@
 PRAGMA recursive_triggers = ON;
-PRAGMA user_version = 13;
+PRAGMA user_version = 14;
 
 CREATE TABLE directory ( 
 	id		TEXT NOT NULL PRIMARY KEY,
@@ -867,10 +867,10 @@ END;
 
 CREATE TRIGGER season_status_update_tr AFTER UPDATE OF status ON season
 BEGIN
-    UPDATE episode SET status=NEW.status WHERE season_id=NEW.id;
+    UPDATE episode SET status=NEW.status WHERE season_id=NEW.id AND NEW.status > 0;
 END;
 
 CREATE TRIGGER show_status_update_tr AFTER UPDATE OF status ON tv_show
 BEGIN
-	UPDATE season SET status=NEW.status WHERE show_id=NEW.id;
+	UPDATE season SET status=NEW.status WHERE show_id=NEW.id AND NEW.status > 0;
 END;
