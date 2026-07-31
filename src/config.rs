@@ -176,9 +176,10 @@ impl GeneralSettings {
 
     fn load_themes(&mut self, theme: Option<Theme>) {
         if let Some(theme) = theme {
-            self.themes = theme.all();
             self.theme = theme;
         }
+
+        self.themes = self.theme.all();
     }
 
     pub fn set_theme(&mut self, theme: Theme) {
