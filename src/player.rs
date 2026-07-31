@@ -121,7 +121,7 @@ enum Panel {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum PlaylistMessge {
+pub enum PlaylistMessage {
     Toggle,
     ToggleShuffle(bool),
     ToggleRepeat(bool),
@@ -490,7 +490,7 @@ pub enum ManagerMessage {
     NewFrame,
     CloseView,
     CollectionAddMessage(CollectionAddMessage),
-    Playlist(PlaylistMessge),
+    Playlist(PlaylistMessage),
     ClosePanel,
     PanelClosed,
     Subs(Option<String>),
@@ -958,36 +958,41 @@ impl Manager {
                 }
             }
             ManagerMessage::Playlist(psg) => match psg {
-                PlaylistMessge::Toggle => self.toggle_playlist(),
-                PlaylistMessge::ToggleAutoNext(play) => {
+                PlaylistMessage::Toggle => self.toggle_playlist(),
+                PlaylistMessage::ToggleAutoNext(play) => {
                     self.settings.auto_next = play;
                     Task::none()
                 }
-                PlaylistMessge::ToggleShuffle(shuffle) => {
+                PlaylistMessage::ToggleShuffle(shuffle) => {
                     self.playlist.shuffle(shuffle);
                     self.next = AutoState::Idle;
                     Task::none()
                 }
-                PlaylistMessge::ToggleRepeat(repeat) => {
+                PlaylistMessage::ToggleRepeat(repeat) => {
                     self.playlist.repeat(repeat);
                     Task::none()
                 }
-                PlaylistMessge::PlayItem(item) => {
+                PlaylistMessage::PlayItem(item) => {
                     if !self.playlist.set_current(item) {
                         return Task::none();
                     };
 
-                    let load_video = match self.playlist.current().cloned() {
-                        Some(item) => load_video(item, |video| ManagerMessage::Video {
-                            is_next: false,
-                            video,
-                        }),
-                        None => Task::none(),
-                    };
+                    match self.playlist.current().cloned() {
+                        Some(item) => {
+                            let stats = self.stats();
 
-                    load_video.map(Message::Player)
+                            let load = load_video(item, |video| ManagerMessage::Video {
+                                is_next: false,
+                                video,
+                            })
+                            .map(Message::Player);
+
+                            Task::batch([stats, load])
+                        }
+                        None => Task::none(),
+                    }
                 }
-                PlaylistMessge::Save => {
+                PlaylistMessage::Save => {
                     if self.playlist.is_empty() {
                         Task::none()
                     } else {
@@ -1870,7 +1875,7 @@ impl Manager {
                     sized_button(icons::PLAYLIST, icon_size)
                         .style(theme::button::text_slate)
                         .on_press_maybe(
-                            self.is_ready(ManagerMessage::Playlist(PlaylistMessge::Toggle))
+                            self.is_ready(ManagerMessage::Playlist(PlaylistMessage::Toggle))
                         ),
                     "Playlist",
                     tp
@@ -3354,7 +3359,7 @@ fn draw_playlist<'a>(
                 .clip(true)
                 .align_y(Vertical::Center),
         )
-        .on_press(ManagerMessage::Playlist(PlaylistMessge::PlayItem(idx)))
+        .on_press(ManagerMessage::Playlist(PlaylistMessage::PlayItem(idx)))
         .padding(0)
         .style(theme::button::text)
         .into()
@@ -3381,7 +3386,7 @@ fn draw_playlist<'a>(
             )
             .padding(0)
             .style(theme::button::text)
-            .on_press(ManagerMessage::Playlist(PlaylistMessge::ToggleRepeat(
+            .on_press(ManagerMessage::Playlist(PlaylistMessage::ToggleRepeat(
                 !playlist.repeat,
             ))),
             "Loop",
@@ -3396,7 +3401,7 @@ fn draw_playlist<'a>(
             )
             .padding(0)
             .style(theme::button::text)
-            .on_press(ManagerMessage::Playlist(PlaylistMessge::ToggleShuffle(
+            .on_press(ManagerMessage::Playlist(PlaylistMessage::ToggleShuffle(
                 !playlist.shuffle,
             ))),
             "Shuffle",
@@ -3405,7 +3410,7 @@ fn draw_playlist<'a>(
 
         let auto_next = tooltip(
             toggler(auto_next).on_toggle(|toggle| {
-                ManagerMessage::Playlist(PlaylistMessge::ToggleAutoNext(toggle))
+                ManagerMessage::Playlist(PlaylistMessage::ToggleAutoNext(toggle))
             }),
             "Play next media",
             position,
@@ -3415,7 +3420,7 @@ fn draw_playlist<'a>(
             button(icons::icon(icons::SAVE).size(size))
                 .padding(0)
                 .style(theme::button::text)
-                .on_press(ManagerMessage::Playlist(PlaylistMessge::Save)),
+                .on_press(ManagerMessage::Playlist(PlaylistMessage::Save)),
             "Save playlist",
             position,
         );
