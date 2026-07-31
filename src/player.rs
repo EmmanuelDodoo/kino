@@ -1140,7 +1140,7 @@ impl Manager {
                     ConfigMessage::Subtitle(ssg) => match ssg {
                         SubtitleConfig::SelectFile => Task::perform(
                             rfd::AsyncFileDialog::new()
-                                .add_filter("", devutils::scan::SUB_EXT)
+                                .add_filter("subtitle", devutils::scan::SUB_EXT)
                                 .pick_file(),
                             |handle| {
                                 ManagerMessage::Config(ConfigMessage::Subtitle(
@@ -4338,6 +4338,7 @@ fn keep_awake() -> Result<keepawake::KeepAwake, keepawake::Error> {
     keepawake::Builder::default()
         .display(true)
         .app_name("kino")
+        .app_reverse_domain("io.github.EmmanuelDodoo.kino")
         .reason("kino video playback")
         .create()
 }

@@ -6824,7 +6824,7 @@ fn comp_icon(comp: filter::Comp) -> char {
 
 async fn pick_image() -> Option<PathBuf> {
     rfd::AsyncFileDialog::new()
-        .add_filter("", &["png", "jpeg", "jpg"])
+        .add_filter("image", &["png", "jpeg", "jpg"])
         .pick_file()
         .await
         .map(|handle| handle.path().to_path_buf())

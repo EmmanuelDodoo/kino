@@ -52,11 +52,8 @@ pub const VIDEO_EXT: &[&str] = &[
     "mov",
     "webm",
     "m4v",
-    "avi",
-    "wmv",
     "mpeg",
     "mpg",
-    "flv",
 ];
 
 #[derive(Debug)]
