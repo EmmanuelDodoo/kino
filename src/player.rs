@@ -1032,7 +1032,7 @@ impl Manager {
                                 return Task::none();
                             }
 
-                            let Ok(amt) = amt.parse::<f64>() else {
+                            let Ok(amt) = amt.parse::<f64>().map(|value| value.max(0.0)) else {
                                 let msg = Message::error(format!("Invalid input: {amt}"), true);
                                 return Task::done(msg);
                             };
@@ -1048,7 +1048,7 @@ impl Manager {
                                 return Task::none();
                             }
 
-                            let Ok(amt) = amt.parse::<f64>() else {
+                            let Ok(amt) = amt.parse::<f64>().map(|value| value.max(0.0)) else {
                                 let msg = Message::error(format!("Invalid input: {amt}"), true);
                                 return Task::done(msg);
                             };
@@ -1064,7 +1064,7 @@ impl Manager {
                                 return Task::none();
                             }
 
-                            let Ok(amt) = amt.parse::<f64>() else {
+                            let Ok(amt) = amt.parse::<f64>().map(|value| value.max(0.0)) else {
                                 let msg = Message::error(format!("Invalid input: {amt}"), true);
                                 return Task::done(msg);
                             };
@@ -1080,7 +1080,7 @@ impl Manager {
                                 return Task::none();
                             }
 
-                            let Ok(amt) = amt.parse::<f64>() else {
+                            let Ok(amt) = amt.parse::<f64>().map(|value| value.max(0.0)) else {
                                 let msg = Message::error(format!("Invalid input: {amt}"), true);
                                 return Task::done(msg);
                             };

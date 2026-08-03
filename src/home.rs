@@ -1925,7 +1925,12 @@ impl Home {
                             updates.push(MediaUpdateKind::Overview(overview))
                         }
 
-                        if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
+                        if let Some(ratings) = state
+                            .ratings
+                            .trim()
+                            .parse::<f32>()
+                            .ok()
+                            .map(|rating| rating.clamp(0.0, 5.0))
                             && ratings != movie.item.rating().unwrap_or_default()
                         {
                             updates.push(MediaUpdateKind::Rating(ratings));
@@ -2128,7 +2133,12 @@ impl Home {
                             updates.push(MediaUpdateKind::Overview(overview))
                         }
 
-                        if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
+                        if let Some(ratings) = state
+                            .ratings
+                            .trim()
+                            .parse::<f32>()
+                            .ok()
+                            .map(|rating| rating.clamp(0.0, 5.0))
                             && ratings != show.item.rating().unwrap_or_default()
                         {
                             updates.push(MediaUpdateKind::Rating(ratings));
@@ -2281,7 +2291,12 @@ impl Home {
                             updates.push(MediaUpdateKind::Overview(overview))
                         }
 
-                        if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
+                        if let Some(ratings) = state
+                            .ratings
+                            .trim()
+                            .parse::<f32>()
+                            .ok()
+                            .map(|rating| rating.clamp(0.0, 5.0))
                             && ratings != season.item.rating().unwrap_or_default()
                         {
                             updates.push(MediaUpdateKind::Rating(ratings));
@@ -2449,7 +2464,12 @@ impl Home {
                             updates.push(MediaUpdateKind::Overview(overview))
                         }
 
-                        if let Some(ratings) = state.ratings.trim().parse::<f32>().ok()
+                        if let Some(ratings) = state
+                            .ratings
+                            .trim()
+                            .parse::<f32>()
+                            .ok()
+                            .map(|rating| rating.clamp(0.0, 5.0))
                             && ratings != episode.item.rating().unwrap_or_default()
                         {
                             updates.push(MediaUpdateKind::Rating(ratings));
@@ -3286,12 +3306,11 @@ impl Home {
 
                                 let new = new.trim();
 
-                                let Ok(new) = new.parse::<f32>() else {
+                                let Ok(new) = new.parse::<f32>().map(|new| new.clamp(0.0, 1.0))
+                                else {
                                     let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
-
-                                let new = new.min(1.0);
 
                                 match trigger.logic.progress.take() {
                                     Some((comp, _)) => {
@@ -3398,12 +3417,11 @@ impl Home {
 
                                 let new = new.trim();
 
-                                let Ok(new) = new.parse::<f32>() else {
+                                let Ok(new) = new.parse::<f32>().map(|value| value.clamp(0.0, 5.0))
+                                else {
                                     let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
-
-                                let new = new.clamp(0.0, 5.0);
 
                                 match trigger.logic.rating.take() {
                                     Some((comp, _)) => {
@@ -3667,12 +3685,11 @@ impl Home {
 
                                 let new = new.trim();
 
-                                let Ok(new) = new.parse::<f32>() else {
+                                let Ok(new) = new.parse::<f32>().map(|value| value.clamp(0.0, 1.0))
+                                else {
                                     let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
-
-                                let new = new.min(1.0);
 
                                 match trigger.logic.progress.take() {
                                     Some((comp, _)) => {
@@ -3779,12 +3796,11 @@ impl Home {
 
                                 let new = new.trim();
 
-                                let Ok(new) = new.parse::<f32>() else {
+                                let Ok(new) = new.parse::<f32>().map(|value| value.clamp(0.0, 5.0))
+                                else {
                                     let msg = Message::error(format!("Invalid input: {new}"), true);
                                     return Task::done(msg);
                                 };
-
-                                let new = new.clamp(0.0, 5.0);
 
                                 match trigger.logic.rating.take() {
                                     Some((comp, _)) => {
@@ -4040,7 +4056,7 @@ impl Home {
                             return self.content_refresh();
                         }
 
-                        let Ok(year) = year.parse::<i32>() else {
+                        let Ok(year) = year.parse::<i32>().map(|value| value.max(0)) else {
                             let msg = Message::error(format!("Invalid input: {year}"), true);
                             return Task::done(msg);
                         };

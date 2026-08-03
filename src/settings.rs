@@ -510,7 +510,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    let Ok(searches) = searches.parse::<i32>() else {
+                    let Ok(searches) = searches.parse::<i32>().map(|value| value.max(0)) else {
                         let msg = Message::error(format!("Invalid input: {searches}"), true);
                         return Task::done(msg);
                     };
@@ -536,7 +536,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    let Ok(recents) = recents.parse::<i32>() else {
+                    let Ok(recents) = recents.parse::<i32>().map(|value| value.max(0)) else {
                         let msg = Message::error(format!("Invalid input: {recents}"), true);
                         return Task::done(msg);
                     };
@@ -732,7 +732,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    let Ok(amt) = amt.parse::<f64>() else {
+                    let Ok(amt) = amt.parse::<f64>().map(|value| value.max(0.0)) else {
                         let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
@@ -758,7 +758,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    let Ok(amt) = amt.parse::<f64>() else {
+                    let Ok(amt) = amt.parse::<f64>().map(|value| value.max(0.0)) else {
                         let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
@@ -784,7 +784,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    let Ok(amt) = amt.parse::<f64>() else {
+                    let Ok(amt) = amt.parse::<f64>().map(|value| value.clamp(0.0, 1.0)) else {
                         let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
@@ -810,7 +810,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    let Ok(amt) = amt.parse::<f64>() else {
+                    let Ok(amt) = amt.parse::<f64>().map(|value| value.clamp(0.0, 1.0)) else {
                         let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
@@ -888,7 +888,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    let Ok(amt) = amt.parse::<f64>() else {
+                    let Ok(amt) = amt.parse::<f64>().map(|value| value.max(0.0)) else {
                         let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
@@ -913,7 +913,7 @@ impl Settings {
                         return Task::none();
                     }
 
-                    let Ok(amt) = amt.parse::<f64>() else {
+                    let Ok(amt) = amt.parse::<f64>().map(|value| value.max(0.0)) else {
                         let msg = Message::error(format!("Invalid input: {amt}"), true);
                         return Task::done(msg);
                     };
