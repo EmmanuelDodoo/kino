@@ -1024,10 +1024,14 @@ impl App {
             Message::PlayItem(item) => self.play_items(std::iter::once(item), true),
             Message::PlayItems(items) => self.play_items(items.into_iter(), false),
             Message::PlayCollectionItems { id, items } => {
-                let items = match self.db.get_collection_items(id) {
+                let items = match self
+                    .db
+                    .get_collection_items(id)
+                    .context("Error playing collection Items")
+                {
                     Ok(items) => items,
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         return Task::done(msg);
                     }
                 }
@@ -1210,17 +1214,20 @@ impl App {
                         }
                     }
                     FetchId::Shows => {
-                        let thumbnails =
-                            match self.db.get_shows(limit, offset, filter, sort, show_map) {
-                                Ok(shows) => {
-                                    tracing::debug!("Fetched {} Shows", shows.len());
-                                    shows
-                                }
-                                Err(error) => {
-                                    let msg = Message::error(error, true);
-                                    return Task::done(msg);
-                                }
-                            };
+                        let thumbnails = match self
+                            .db
+                            .get_shows(limit, offset, filter, sort, show_map)
+                            .context("Failed to fetch shows")
+                        {
+                            Ok(shows) => {
+                                tracing::debug!("Fetched {} Shows", shows.len());
+                                shows
+                            }
+                            Err(error) => {
+                                let msg = Message::anyhow(error);
+                                return Task::done(msg);
+                            }
+                        };
 
                         let mut shows = Vec::with_capacity(thumbnails.len());
                         let mut tasks = Vec::with_capacity(thumbnails.len());
@@ -1236,17 +1243,20 @@ impl App {
                         Task::batch([home_tasks, samples])
                     }
                     FetchId::Movies => {
-                        let thumbnails =
-                            match self.db.get_movies(limit, offset, filter, sort, movie_map) {
-                                Ok(movies) => {
-                                    tracing::debug!("Fetched {} Movies", movies.len());
-                                    movies
-                                }
-                                Err(error) => {
-                                    let msg = Message::error(error, true);
-                                    return Task::done(msg);
-                                }
-                            };
+                        let thumbnails = match self
+                            .db
+                            .get_movies(limit, offset, filter, sort, movie_map)
+                            .context("Failed to fetch movies")
+                        {
+                            Ok(movies) => {
+                                tracing::debug!("Fetched {} Movies", movies.len());
+                                movies
+                            }
+                            Err(error) => {
+                                let msg = Message::anyhow(error);
+                                return Task::done(msg);
+                            }
+                        };
 
                         let mut movies = Vec::with_capacity(thumbnails.len());
                         let mut tasks = Vec::with_capacity(thumbnails.len());
@@ -1262,29 +1272,35 @@ impl App {
                         Task::batch([home_tasks, samples])
                     }
                     FetchId::Recents => {
-                        let thumbnails_movies =
-                            match self.db.get_movies(limit, offset, filter, sort, movie_map) {
-                                Ok(movies) => {
-                                    tracing::debug!("Fetched {} Recent Movies", movies.len());
-                                    movies
-                                }
-                                Err(error) => {
-                                    let msg = Message::error(error, true);
-                                    return Task::done(msg);
-                                }
-                            };
+                        let thumbnails_movies = match self
+                            .db
+                            .get_movies(limit, offset, filter, sort, movie_map)
+                            .context("Failed to fetch recent movies")
+                        {
+                            Ok(movies) => {
+                                tracing::debug!("Fetched {} Recent Movies", movies.len());
+                                movies
+                            }
+                            Err(error) => {
+                                let msg = Message::anyhow(error);
+                                return Task::done(msg);
+                            }
+                        };
 
-                        let thumbnails_shows =
-                            match self.db.get_shows(limit, offset, filter, sort, show_map) {
-                                Ok(shows) => {
-                                    tracing::debug!("Fetched {} Recent Shows", shows.len());
-                                    shows
-                                }
-                                Err(error) => {
-                                    let msg = Message::error(error, true);
-                                    return Task::done(msg);
-                                }
-                            };
+                        let thumbnails_shows = match self
+                            .db
+                            .get_shows(limit, offset, filter, sort, show_map)
+                            .context("Failed to fetch recent shows")
+                        {
+                            Ok(shows) => {
+                                tracing::debug!("Fetched {} Recent Shows", shows.len());
+                                shows
+                            }
+                            Err(error) => {
+                                let msg = Message::anyhow(error);
+                                return Task::done(msg);
+                            }
+                        };
                         let mut shows = Vec::with_capacity(thumbnails_shows.len());
                         let mut movies = Vec::with_capacity(thumbnails_movies.len());
                         let mut tasks =
@@ -1306,27 +1322,34 @@ impl App {
                         Task::batch([home_tasks, samples])
                     }
                     FetchId::Show(id) => {
-                        let (show, show_task) = match self.db.get_show(id, show_map) {
+                        let (show, show_task) = match self
+                            .db
+                            .get_show(id, show_map)
+                            .context("Failed to fetch show")
+                        {
                             Ok(show) => {
                                 tracing::debug!("Fetched Show {}", show.0.item.name());
                                 show
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
 
+                        let name = show.item.name().to_owned();
+
                         let thumbnail_seasons = match self
                             .db
                             .get_show_seasons(id, limit, offset, filter, sort, season_map)
+                            .with_context(|| format!("Failed to fetch show: {name} seasons"))
                         {
                             Ok(seasons) => {
                                 tracing::debug!("Fetched {} show Seasons", seasons.len());
                                 seasons
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
@@ -1347,31 +1370,32 @@ impl App {
                         Task::batch([home_task, samples])
                     }
                     FetchId::Season(id) => {
-                        let (season, season_task) = match self.db.get_season(id, season_map) {
+                        let (season, season_task) = match self
+                            .db
+                            .get_season(id, season_map)
+                            .context("Failed to fetch season")
+                        {
                             Ok(season) => {
                                 tracing::debug!("Fetched season {}", season.0.item.name());
                                 season
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
 
-                        let thumbnail_episodes = match self.db.get_season_episodes(
-                            id,
-                            limit,
-                            offset,
-                            filter,
-                            sort,
-                            episode_map,
-                        ) {
+                        let thumbnail_episodes = match self
+                            .db
+                            .get_season_episodes(id, limit, offset, filter, sort, episode_map)
+                            .context("Failed to fetch season episodes")
+                        {
                             Ok(episodes) => {
                                 tracing::debug!("Fetched {} season episodes", episodes.len());
                                 episodes
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
@@ -1391,13 +1415,17 @@ impl App {
                         Task::batch([home_task, samples])
                     }
                     FetchId::Episode(id) => {
-                        let (episode, sample) = match self.db.get_episode(id, episode_map) {
+                        let (episode, sample) = match self
+                            .db
+                            .get_episode(id, episode_map)
+                            .context("Failed to fetch episode")
+                        {
                             Ok(episode) => {
                                 tracing::debug!("Fetched Episode {}", episode.0.item.name());
                                 episode
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
@@ -1408,13 +1436,17 @@ impl App {
                         ])
                     }
                     FetchId::Movie(id) => {
-                        let (movie, task) = match self.db.get_movie(id, movie_map) {
+                        let (movie, task) = match self
+                            .db
+                            .get_movie(id, movie_map)
+                            .context("Failed to fetch movie")
+                        {
                             Ok(movie) => {
                                 tracing::debug!("Fetched Movie {}", movie.0.item.name());
                                 movie
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
@@ -1426,13 +1458,14 @@ impl App {
                         let collections = match self
                             .db
                             .get_collections(collection::Sort::default(), Collection::from_row)
+                            .context("Failed to fetch collections")
                         {
                             Ok(collections) => {
                                 tracing::debug!("Fetched {} Collections", collections.len());
                                 collections
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
@@ -1440,67 +1473,81 @@ impl App {
                         self.home.fetched_collections(collections)
                     }
                     FetchId::Collection(id) => {
-                        let collection = match self.db.get_collection(id, Collection::from_row) {
+                        let collection = match self
+                            .db
+                            .get_collection(id, Collection::from_row)
+                            .context("Failed to fetch collection")
+                        {
                             Ok(collection) => {
                                 tracing::debug!("Fetched Collection {}", collection.name);
                                 collection
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
 
-                        let itriggers =
-                            match self.db.get_collection_inserts(id, InsertTrigger::from_row) {
-                                Ok(triggers) => {
-                                    tracing::debug!(
-                                        "Fetched {} collection insert triggers",
-                                        triggers.len()
-                                    );
-                                    triggers
-                                }
-                                Err(error) => {
-                                    return Message::error(error, true).tasked();
-                                }
-                            };
+                        let itriggers = match self
+                            .db
+                            .get_collection_inserts(id, InsertTrigger::from_row)
+                            .context("Failed to fetch collection rules")
+                        {
+                            Ok(triggers) => {
+                                tracing::debug!(
+                                    "Fetched {} collection insert triggers",
+                                    triggers.len()
+                                );
+                                triggers
+                            }
+                            Err(error) => {
+                                return Message::anyhow(error).tasked();
+                            }
+                        };
 
-                        let dtriggers =
-                            match self.db.get_collection_deletes(id, DeleteTrigger::from_row) {
-                                Ok(triggers) => {
-                                    tracing::debug!(
-                                        "Fetched {} collection delete triggers",
-                                        triggers.len()
-                                    );
-                                    triggers
-                                }
-                                Err(error) => {
-                                    return Message::error(error, true).tasked();
-                                }
-                            };
+                        let dtriggers = match self
+                            .db
+                            .get_collection_deletes(id, DeleteTrigger::from_row)
+                            .context("Failed to fetch collection rules")
+                        {
+                            Ok(triggers) => {
+                                tracing::debug!(
+                                    "Fetched {} collection delete triggers",
+                                    triggers.len()
+                                );
+                                triggers
+                            }
+                            Err(error) => {
+                                return Message::anyhow(error).tasked();
+                            }
+                        };
 
                         let (
                             thumbnail_movies,
                             thumbnail_shows,
                             thumbnail_seasons,
                             thumbnail_episodes,
-                        ) = match self.db.get_collection_members(
-                            id,
-                            limit,
-                            offset,
-                            filter,
-                            sort,
-                            movie_map,
-                            show_map,
-                            season_map,
-                            episode_map,
-                        ) {
+                        ) = match self
+                            .db
+                            .get_collection_members(
+                                id,
+                                limit,
+                                offset,
+                                filter,
+                                sort,
+                                movie_map,
+                                show_map,
+                                season_map,
+                                episode_map,
+                            )
+                            .context("Failed to fetch collection members")
+                        {
                             Ok(items) => {
                                 tracing::debug!("Fetched Collection items");
                                 items
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
@@ -1544,13 +1591,17 @@ impl App {
                         Task::batch([home_task, samples])
                     }
                     FetchId::Wishlist => {
-                        let wishlist = match self.db.get_wishlist(Wish::from_row) {
+                        let wishlist = match self
+                            .db
+                            .get_wishlist(Wish::from_row)
+                            .context("Failed to fetch wishlist")
+                        {
                             Ok(wish) => {
                                 tracing::debug!("Fetched {} Wish items", wish.len());
                                 wish
                             }
                             Err(error) => {
-                                let msg = Message::error(error, true);
+                                let msg = Message::anyhow(error);
                                 return Task::done(msg);
                             }
                         };
@@ -1575,20 +1626,24 @@ impl App {
                     return Task::none();
                 }
 
-                let comments = match self.db.get_video_comments(
-                    id,
-                    None,
-                    None,
-                    filter::comments::Filter::default(),
-                    sort::comments::Sort::default(),
-                    |comment| Comment::load(comment, None),
-                ) {
+                let comments = match self
+                    .db
+                    .get_video_comments(
+                        id,
+                        None,
+                        None,
+                        filter::comments::Filter::default(),
+                        sort::comments::Sort::default(),
+                        |comment| Comment::load(comment, None),
+                    )
+                    .context("Failed to fetch video comments")
+                {
                     Ok(comments) => {
                         tracing::debug!("Fetched {} comments for {id}", comments.len());
                         comments
                     }
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         return Task::done(msg);
                     }
                 };
@@ -1804,18 +1859,22 @@ impl App {
                 Task::none()
             }
             Message::LoadSearch(search, filter) => {
-                let items = match self.db.search(
-                    search.clone(),
-                    filter,
-                    self.config.search_limit(),
-                    shared::SearchView::new,
-                ) {
+                let items = match self
+                    .db
+                    .search(
+                        search.clone(),
+                        filter,
+                        self.config.search_limit(),
+                        shared::SearchView::new,
+                    )
+                    .context("Failed to fetch search results")
+                {
                     Ok(items) => {
                         tracing::debug!("Fetched Search {search} items");
                         items
                     }
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         return Task::done(msg);
                     }
                 };
@@ -1823,13 +1882,17 @@ impl App {
                 self.home.loaded_search(items)
             }
             Message::FetchMembershipIds(item) => {
-                let memberships = match self.db.get_item_membership_ids(item) {
+                let memberships = match self
+                    .db
+                    .get_item_membership_ids(item)
+                    .context("Failed to fetch media collection memberships")
+                {
                     Ok(memberships) => {
                         tracing::debug!("Fetched Item {item:?} memberships ids");
                         memberships
                     }
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         return Task::done(msg);
                     }
                 };
@@ -1841,39 +1904,44 @@ impl App {
                 }
             }
             Message::FetchMemberships(item) => {
-                let memberships =
-                    match self
-                        .db
-                        .get_item_membership_ids(item)
-                        .and_then(|collections| {
-                            self.db.get_memberships(
-                                collections,
-                                None,
-                                None,
-                                collection::Sort::default(),
-                                SimpleCollection::from_row,
-                            )
-                        }) {
-                        Ok(memberships) => {
-                            tracing::debug!("Fetched Item {item:?} memberships ids");
-                            memberships
-                        }
-                        Err(error) => {
-                            let msg = Message::error(error, true);
-                            return Task::done(msg);
-                        }
-                    };
+                let memberships = match self
+                    .db
+                    .get_item_membership_ids(item)
+                    .and_then(|collections| {
+                        self.db.get_memberships(
+                            collections,
+                            None,
+                            None,
+                            collection::Sort::default(),
+                            SimpleCollection::from_row,
+                        )
+                    })
+                    .context("Failed to fetch collections")
+                {
+                    Ok(memberships) => {
+                        tracing::debug!("Fetched Item {item:?} memberships ids");
+                        memberships
+                    }
+                    Err(error) => {
+                        let msg = Message::anyhow(error);
+                        return Task::done(msg);
+                    }
+                };
 
                 self.home.fetched_memberships(memberships)
             }
             Message::FetchVideoInfo(video) => {
-                let info = match self.db.get_video_info(video) {
+                let info = match self
+                    .db
+                    .get_video_info(video)
+                    .context("Failed to get video info")
+                {
                     Ok(info) => {
                         tracing::debug!("Fetched {} video info for Video {video}", info.len());
                         info
                     }
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         return Task::done(msg);
                     }
                 };
@@ -1881,13 +1949,17 @@ impl App {
                 self.home.fetched_video_info(info)
             }
             Message::FetchAudio(video) => {
-                let audio = match self.db.get_video_audios(video) {
+                let audio = match self
+                    .db
+                    .get_video_audios(video)
+                    .context("Failed to fetch video audio data")
+                {
                     Ok(audio) => {
                         tracing::debug!("Fetched {} audio for Video {video}", audio.len());
                         audio
                     }
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         return Task::done(msg);
                     }
                 };
@@ -1895,13 +1967,17 @@ impl App {
                 self.home.fetched_audio(audio)
             }
             Message::FetchSubtitles(video) => {
-                let subtitles = match self.db.get_video_subtitles(video) {
+                let subtitles = match self
+                    .db
+                    .get_video_subtitles(video)
+                    .context("Failed to fetch video subtitle data")
+                {
                     Ok(subtitles) => {
                         tracing::debug!("Fetched {} subtitles for Video {video}", subtitles.len());
                         subtitles
                     }
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         return Task::done(msg);
                     }
                 };
@@ -1930,21 +2006,26 @@ impl App {
                             format!("Failed to retrieve episode paths on id {id}, season {season}")
                         })
                     }
-                };
+                }
+                .context("Failed to fetch media paths");
 
                 match paths {
                     Ok((paths, dir)) => self.home.fetched_paths(dir, paths),
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         Task::done(msg)
                     }
                 }
             }
             Message::ToggleMembership { item, collections } => {
-                let msg = match self.db.toggle_membership(item, collections) {
+                let msg = match self
+                    .db
+                    .toggle_membership(item, collections)
+                    .context("Failed to toggle collection memberships")
+                {
                     Ok(true) => Message::success("Collections Updated!"),
                     Ok(false) => Message::None,
-                    Err(error) => Message::error(error, true),
+                    Err(error) => Message::anyhow(error),
                 };
 
                 let refresh = self.home.content_refresh();
@@ -1955,19 +2036,27 @@ impl App {
                 let now = models::datetime_to_sql(&now);
 
                 match id {
-                    VideoId::Movie(id) => match self.db.last_watched_movie(id, now) {
+                    VideoId::Movie(id) => match self
+                        .db
+                        .last_watched_movie(id, now)
+                        .context("Failed to update last watched ")
+                    {
                         Ok(_) => {
                             tracing::debug!("Updated {id:?} last watched");
                             Task::none()
                         }
-                        Err(error) => Task::done(Message::error(error, true)),
+                        Err(error) => Task::done(Message::anyhow(error)),
                     },
-                    VideoId::Episode(id) => match self.db.last_watched_episode(id, now) {
+                    VideoId::Episode(id) => match self
+                        .db
+                        .last_watched_episode(id, now)
+                        .context("Failed to update last watched ")
+                    {
                         Ok(_) => {
                             tracing::debug!("Updated {id:?} last watched");
                             Task::none()
                         }
-                        Err(error) => Task::done(Message::error(error, true)),
+                        Err(error) => Task::done(Message::anyhow(error)),
                     },
                 }
             }
@@ -1978,30 +2067,34 @@ impl App {
                         .with_ctx_log(|| format!("Video Stats saving subtitle {} ", sub.id));
                 }
 
-                match self.db.update_video_stats(
-                    item.id,
-                    item.watch_count,
-                    item.progress,
-                    item.duration,
-                    item.subtitle_id,
-                    item.audio_id,
-                ) {
+                match self
+                    .db
+                    .update_video_stats(
+                        item.id,
+                        item.watch_count,
+                        item.progress,
+                        item.duration,
+                        item.subtitle_id,
+                        item.audio_id,
+                    )
+                    .context("Failed to update video stats")
+                {
                     Ok(_) => {
                         tracing::debug!("Updated {:?} statistics", item.id);
                     }
-                    Err(error) => return Task::done(Message::error(error, true)),
+                    Err(error) => return Task::done(Message::anyhow(error)),
                 }
 
                 Task::none()
             }
             Message::Random => {
-                let random = match self.db.get_random() {
+                let random = match self.db.get_random().context("Failed to fetch random media") {
                     Ok(random) => {
                         tracing::debug!("Fetched random media {random:?}");
                         random
                     }
                     Err(error) => {
-                        let msg = Message::error(error, true);
+                        let msg = Message::anyhow(error);
                         return Task::done(msg);
                     }
                 };
@@ -2049,10 +2142,14 @@ impl App {
                     }
                 }
 
-                let dir = match self.db.toggle_directories(dirs) {
+                let dir = match self
+                    .db
+                    .toggle_directories(dirs)
+                    .context("Failed to toggle directories")
+                {
                     Ok(true) => Message::success("Directories Updated!").tasked(),
                     Ok(false) => Message::None.tasked(),
-                    Err(error) => Message::error(error, true).tasked(),
+                    Err(error) => Message::anyhow(error).tasked(),
                 };
 
                 let home_task = if !scans.is_empty() {
@@ -2111,10 +2208,14 @@ impl App {
                 Task::none()
             }
             Message::Scan => {
-                let dirs = match self.db.get_directories() {
+                let dirs = match self
+                    .db
+                    .get_directories()
+                    .context("Failed to fetch directories for scanning")
+                {
                     Ok(dirs) => dirs,
                     Err(error) => {
-                        return Task::done(Message::error(error, true));
+                        return Task::done(Message::anyhow(error));
                     }
                 };
 
@@ -2143,13 +2244,17 @@ impl App {
                 let last_scan = Local::now();
                 let last_scan = models::datetime_to_sql(&last_scan);
 
-                let _todo = match self.db.last_scans(scanned, last_scan) {
+                let _todo = match self
+                    .db
+                    .last_scans(scanned, last_scan)
+                    .context("Failed to update directories last scanned")
+                {
                     Ok(rows) => {
                         tracing::debug!("Directories last scanned updated {rows} rows");
                         rows
                     }
                     Err(error) => {
-                        return Task::done(Message::error(error, true));
+                        return Task::done(Message::anyhow(error));
                     }
                 };
 
@@ -2315,16 +2420,24 @@ impl App {
 
                 Task::batch([succ, fails, Message::Refresh(now, true).tasked()])
             }
-            Message::RemoveCollection(id) => match self.db.remove_collection(id) {
+            Message::RemoveCollection(id) => match self
+                .db
+                .remove_collection(id)
+                .context("Failed to remove collection")
+            {
                 Ok(rows) if rows > 0 => Message::success("Collection Deleted").tasked(),
                 Ok(_) => Task::none(),
-                Err(error) => Message::error(error, true).tasked(),
+                Err(error) => Message::anyhow(error).tasked(),
             },
             Message::RemoveCollectionItems { collection, items } => {
-                match self.db.remove_collection_items(collection, items) {
+                match self
+                    .db
+                    .remove_collection_items(collection, items)
+                    .with_context(|| format!("Failed to remove collection {items}"))
+                {
                     Ok(rows) if rows > 0 => Message::success("Collection Items removed").tasked(),
                     Ok(_) => Task::none(),
-                    Err(error) => Message::error(error, true).tasked(),
+                    Err(error) => Message::anyhow(error).tasked(),
                 }
             }
             Message::PlaylistSave(playlist) => {
@@ -2344,12 +2457,16 @@ impl App {
                     }
                 };
 
-                match self.db.insert_collection_items(new.id, playlist.origins) {
+                match self
+                    .db
+                    .insert_collection_items(new.id, playlist.origins)
+                    .context("Failed to insert collection items")
+                {
                     Ok(rows) => {
                         tracing::debug!("Inserted {rows} playlist collection items");
                         Message::success("Saved Playlist").tasked()
                     }
-                    Err(error) => Message::error(error, true).tasked(),
+                    Err(error) => Message::anyhow(error).tasked(),
                 }
             }
             Message::GeneratedPoster { id, img } => {

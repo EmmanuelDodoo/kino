@@ -1093,7 +1093,10 @@ fn insert_movie(
 
     let duration = runtime * 60;
     let overview = overview.as_deref().unwrap_or("<empty synopsis>");
-    let release_date = release_date.as_deref().unwrap_or("1970-01-01");
+    let release_date = release_date
+        .as_deref()
+        .filter(|release| release.contains('-'))
+        .unwrap_or("1970-01-01");
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
@@ -1124,7 +1127,10 @@ fn insert_wish(
 
     let mut statement = db.prepare_cached(sql)?;
 
-    let release = release.unwrap_or("1970-01-01".to_owned());
+    let release = release
+        .as_deref()
+        .filter(|release| release.contains('-'))
+        .unwrap_or("1970-01-01");
     let synopsis = synopsis.unwrap_or("<empty synopsis>".to_owned());
     let rating = (rating / 10.0) * 5.0;
 
@@ -1210,7 +1216,10 @@ fn insert_show(
         &ToSqlOutput::Owned(Value::Null)
     };
     let overview = overview.as_deref().unwrap_or("<empty synopsis>");
-    let first_air_date = first_air_date.as_deref().unwrap_or("1970-01-01");
+    let first_air_date = first_air_date
+        .as_deref()
+        .filter(|release| release.contains('-'))
+        .unwrap_or("1970-01-01");
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
@@ -1251,7 +1260,10 @@ fn insert_season(
     };
 
     let overview = overview.as_deref().unwrap_or("<empty synopsis>");
-    let air_date = air_date.as_deref().unwrap_or("1970-01-01");
+    let air_date = air_date
+        .as_deref()
+        .filter(|release| release.contains('-'))
+        .unwrap_or("1970-01-01");
 
     statement.execute(&[
         (":id", &ToSqlOutput::from(id)),
@@ -1292,7 +1304,10 @@ fn insert_episode(
         &ToSqlOutput::Owned(Value::Null)
     };
     let overview = overview.as_deref().unwrap_or("<empty synopsis>");
-    let air_date = air_date.as_deref().unwrap_or("1970-01-01");
+    let air_date = air_date
+        .as_deref()
+        .filter(|release| release.contains('-'))
+        .unwrap_or("1970-01-01");
 
     let duration = runtime.unwrap_or_default() * 60;
 
