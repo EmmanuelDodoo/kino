@@ -49,7 +49,7 @@ Contributions and testing from macOS users are always welcome.
 
 ### Prerequisites
 
-Kino uses **GStreamer 1.26.6** for media playback. You'll need to install both the runtime files to build this project. The official instructions for that can be found here [https://gstreamer.freedesktop.org/download/]()
+Kino uses **GStreamer 1.26.6** for media playback. You'll need to install both the runtime files to build this project. The official instructions for that can be found here [https://gstreamer.freedesktop.org/download/](https://gstreamer.freedesktop.org/download/)
 
 Kino can then be built like so:
 

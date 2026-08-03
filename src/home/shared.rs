@@ -1582,10 +1582,10 @@ pub fn page_header<'a, Message: 'a + Clone>(
         header,
         container(actions)
             .align_x(Horizontal::Right)
-            .width(Length::Fill)
+            .width(Length::Fit)
     )
     .align_y(Vertical::Center)
-    .spacing(4)
+    .spacing(16)
     .into()
 }
 
@@ -1613,7 +1613,7 @@ pub fn page_title<'a, Message: 'a>(
     status: models::media::Status,
 ) -> Element<'a, Message> {
     let title = sized_bold(title, H3)
-        .width(Length::FillPortion(2))
+        .width(Length::FillPortion(10))
         .height(32);
 
     let status = if matches!(status, models::media::Status::Archived) {

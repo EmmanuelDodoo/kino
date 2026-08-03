@@ -5442,7 +5442,7 @@ impl Home {
             }
         };
 
-        let title = container(marquee(title).size(H4).font(bold_font()))
+        let title = container(sized_bold(title, H4).ellipsis(text::Ellipsis::End))
             .center_x(Length::FillPortion(7))
             .center_y(40);
 
