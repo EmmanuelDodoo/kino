@@ -6,6 +6,7 @@ use iced::{
 };
 
 const SLATE: Color = Color::from_rgb8(144, 161, 185);
+#[allow(dead_code)]
 const SLATE2: Color = Color::from_rgb8(202, 213, 226);
 
 pub mod container {

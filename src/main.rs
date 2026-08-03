@@ -1,54 +1,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![allow(dead_code, unused_imports)]
-use iced::{
-    advanced::{self, layout, mouse, overlay, widget::tree, Widget},
-    alignment::{Horizontal, Vertical},
-    animation::{self, Animation, Easing},
-    application::BootFn,
-    border::{self, Border, Radius},
-    color, font, keyboard, padding,
-    time::{every, milliseconds, Duration, Instant},
-    widget::{
-        self, bottom, bottom_center, button, center, center_x, center_y, column, combo_box,
-        container, float, grid, markdown, mouse_area, operation, pick_list, rich_text, row,
-        scrollable, sensor, slider, space, span, stack, text, text_editor, text_input,
-        tooltip as tp, vertical_slider, Space,
-    },
-    window, Color, ContentFit, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation,
-    Shadow, Size, Subscription, Task, Vector,
-};
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
-use std::io;
-use std::path::{Path, PathBuf};
-use tokio::sync::mpsc;
+use iced::{Size, Task, application::BootFn, window};
 
 mod app;
 mod config;
 mod home;
 mod player;
+mod playground;
 mod settings;
 pub mod theme;
 pub mod utils;
 
 use app::App;
 use config::Config;
+#[allow(unused_imports)]
+use playground::Playground;
 use registry::db;
-use registry::filter;
-use registry::filter::*;
-use registry::models::{
-    collection, Directory, ItemId, Media, MediaType, Movie, SearchItem, Show, VideoId,
-};
-use registry::sort;
-use registry::sort::*;
-use std::sync::LazyLock;
 pub use theme::Theme;
 use utils::icons;
-use utils::icons::*;
-use utils::typo;
 use utils::typo::*;
-use utils::{cancel_btn, empty, save_btn, tooltip};
-use widgets::{font_selection, modal, pagination};
 
 pub type Element<'a, Message> = iced::Element<'a, Message, Theme, iced::Renderer>;
 
@@ -145,132 +114,5 @@ impl BootFn<App, app::Message> for BootMode {
                 App::boot(config, db, errors)
             }
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-    Family(font::Family),
-    Fonts(Result<Vec<font::Family>, font::Error>),
-    Page(pagination::Page),
-    Temp(bool),
-    Theme(Theme),
-    None,
-}
-
-struct Playground {
-    now: Instant,
-    selected: Option<font::Family>,
-    state: font_selection::State,
-    current: usize,
-    temp: bool,
-    theme: Option<Theme>,
-}
-
-impl Playground {
-    fn boot() -> (Self, Task<Message>) {
-        let now = Instant::now();
-        let task = font::list().map(Message::Fonts);
-
-        let new = Self {
-            now,
-            selected: Some(font::Family::Name("Copperplate Gothic Bold")),
-            state: font_selection::State::new(vec![]),
-            current: 15,
-            temp: false,
-            theme: None,
-        };
-
-        (new, task)
-    }
-
-    fn update(&mut self, message: Message, now: Instant) -> Task<Message> {
-        self.now = now;
-
-        match message {
-            Message::None => {
-                println!("Received None");
-            }
-            Message::Fonts(Ok(fams)) => {
-                self.state = font_selection::State::new(fams);
-            }
-            Message::Fonts(Err(error)) => {
-                println!("{error:?}");
-            }
-            Message::Family(family) => {
-                self.selected = Some(family);
-            }
-            Message::Theme(theme) => {
-                self.theme = Some(theme);
-            }
-            Message::Page(page) => {
-                dbg!(page);
-                match page {
-                    pagination::Page::Number(page) => self.current = page,
-                    pagination::Page::Ellipsis { left, right } => {
-                        self.current = left + (right - left) / 2;
-                    }
-                }
-            }
-            Message::Temp(temp) => {
-                self.temp = temp;
-            }
-        }
-
-        Task::none()
-    }
-
-    fn view(&self) -> Element<'_, Message> {
-        let themes = pick_list(self.theme.as_ref(), Theme::DEFAULTS, Theme::to_string)
-            .placeholder("Select theme")
-            .on_select(Message::Theme)
-            .padding([5, 10])
-            .font(self.selected.unwrap_or_default());
-
-        let families =
-            font_selection(&self.state, "Select font", self.selected, Message::Family).width(500);
-
-        let pages = {
-            let a = pagination(1, self.current, 1250)
-                .on_select(Message::Page)
-                .font(self.selected.unwrap_or_default().into());
-            let b = pagination(1, self.current, 1250)
-                .on_select(Message::Page)
-                .font(self.selected.unwrap_or_default().into())
-                .buttoned();
-
-            let pages = column!(a, b).spacing(16);
-
-            container(pages).width(Length::Fit.max(750))
-        };
-
-        let toggles = {
-            let a = utils::toggler(self.temp).on_toggle(Message::Temp);
-            let b = widget::checkbox(self.temp).on_toggle(Message::Temp);
-
-            row!(a, b).spacing(16)
-        };
-
-        let throbbers = {
-            let a = widgets::throbber::linear();
-            let b = widgets::throbber::circular();
-
-            row!(a, b).spacing(16)
-        };
-
-        let content = column!(families, themes, pages, toggles, throbbers)
-            .spacing(40)
-            .align_x(Horizontal::Center);
-        let content = center(content);
-
-        content.into()
-    }
-
-    fn subscription(&self) -> Subscription<Message> {
-        Subscription::none()
-    }
-
-    fn theme(&self) -> Option<Theme> {
-        self.theme.clone()
     }
 }

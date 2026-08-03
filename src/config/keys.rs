@@ -775,17 +775,17 @@ where
         self.keys.get(key)
     }
 
-    fn get_action(&self, action: A) -> Option<&Vec<KeyPress>> {
-        self.actions.get(&action)
-    }
+    // fn get_action(&self, action: A) -> Option<&Vec<KeyPress>> {
+    //     self.actions.get(&action)
+    // }
 
     fn iter_action(&self) -> Iter<'_, A, Vec<KeyPress>> {
         self.actions.iter()
     }
 
-    fn iter_keys(&self) -> Iter<'_, KeyPress, A> {
-        self.keys.iter()
-    }
+    // fn iter_keys(&self) -> Iter<'_, KeyPress, A> {
+    //     self.keys.iter()
+    // }
 
     fn insert(&mut self, key: KeyPress, action: A) {
         if let Some(previous) = self.keys.insert(key.clone(), action)
@@ -988,7 +988,7 @@ pub struct KeyStore {
 }
 
 impl KeyStore {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             home: KeyStoreInner::new(),
             player: KeyStoreInner::new(),

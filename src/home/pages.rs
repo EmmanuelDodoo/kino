@@ -133,31 +133,12 @@ impl Page {
         PageKind::Movies
     }
 
-    pub fn is_home(&self) -> bool {
-        matches!(self, Self::Home)
-    }
-
-    pub fn is_shows(&self) -> bool {
-        matches!(self, Self::Shows(_))
-    }
-
-    pub fn is_movies(&self) -> bool {
-        matches!(self, Self::Movies(_))
-    }
-
     pub fn is_collections(&self) -> bool {
         matches!(self, Self::Collections(_))
     }
 
     pub fn is_wishlist(&self) -> bool {
         matches!(self, Self::Wishlist(_))
-    }
-
-    pub fn is_collection(&self, id: &CollectionId) -> bool {
-        match self {
-            Self::Collection { id: own, .. } => own == id,
-            _ => false,
-        }
     }
 
     pub fn movies_update(&mut self, message: MoviesMessage) -> Option<HomeMessage> {
