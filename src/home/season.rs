@@ -205,7 +205,7 @@ impl SeasonPage {
                 format!(
                     "{:02} Episode{}",
                     episodes,
-                    if episodes > 1 { "s" } else { "" }
+                    if episodes != 1 { "s" } else { "" }
                 ),
             );
 
@@ -462,7 +462,7 @@ impl SeasonItem {
             format!(
                 "{} episode{}",
                 episodes,
-                if episodes > 1 { "s" } else { "" }
+                if episodes != 1 { "s" } else { "" }
             ),
             H8,
         )
@@ -515,7 +515,7 @@ impl SeasonItem {
         let episodes = format!(
             "{} episode{}",
             episodes,
-            if episodes > 1 { "s" } else { "" }
+            if episodes != 1 { "s" } else { "" }
         );
         let unique = h7(episodes);
 

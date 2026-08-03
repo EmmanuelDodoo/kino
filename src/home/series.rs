@@ -205,7 +205,7 @@ impl ShowPage {
                 format!(
                     "{:02} Season{}",
                     seasons,
-                    if seasons > 1 { "s" } else { "" }
+                    if seasons != 1 { "s" } else { "" }
                 ),
             );
 
@@ -443,7 +443,7 @@ impl ShowItem {
         let sample = self.sample_text;
         let seasons = self.item.seasons;
         let seasons = sized_medium(
-            format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" }),
+            format!("{} season{}", seasons, if seasons != 1 { "s" } else { "" }),
             H8,
         )
         .style(move |theme: &Theme| {
@@ -492,7 +492,7 @@ impl ShowItem {
         on_play: impl Fn(ShowId) -> Message + 'a,
     ) -> Element<'a, Message> {
         let seasons = self.item.seasons;
-        let seasons = format!("{} season{}", seasons, if seasons > 1 { "s" } else { "" });
+        let seasons = format!("{} season{}", seasons, if seasons != 1 { "s" } else { "" });
         let unique = h7(seasons);
 
         let icon_inter = self.icon.interpolate(0.0, 1.0, now);

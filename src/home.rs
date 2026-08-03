@@ -4715,13 +4715,35 @@ impl Home {
         content.into()
     }
 
+    fn empty_recents<'a>(&self) -> Element<'a, HomeMessage> {
+        let comment = sized_medium("Nothing yet", P);
+
+        let directive = sized_regular("Add a media directory to get started", H7);
+
+        let action = button(sized_medium("Add Media", H7))
+            .style(theme::button::weak_primary)
+            .on_press(HomeMessage::Settings);
+
+        let content = column!(comment, directive, action)
+            .spacing(16)
+            .align_x(Horizontal::Center);
+
+        center(content).into()
+    }
+
     fn recents<'a>(
         &self,
         now: Instant,
         movies: &'a [MovieItem],
         shows: &'a [ShowItem],
     ) -> Element<'a, HomeMessage> {
-        let movies = {
+        if movies.is_empty() && shows.is_empty() {
+            return self.empty_recents();
+        }
+
+        let movies: Option<Element<'_, HomeMessage>> = if movies.is_empty() {
+            None
+        } else {
             let label = h6("Recent Movies");
 
             let movies = movies.iter();
@@ -4775,10 +4797,14 @@ impl Home {
                 }
             };
 
-            column!(label, movies).spacing(10.0)
+            let content = column!(label, movies).spacing(10.0);
+
+            Some(content.into())
         };
 
-        let shows = {
+        let shows: Option<Element<'_, HomeMessage>> = if shows.is_empty() {
+            None
+        } else {
             let label = h6("Recent Shows");
 
             let shows = shows.iter();
@@ -4832,7 +4858,9 @@ impl Home {
                 }
             };
 
-            column!(label, shows).spacing(10.0)
+            let content = column!(label, shows).spacing(10.0);
+
+            Some(content.into())
         };
 
         let content = if matches!(self.layout, Layout::Grid) {
