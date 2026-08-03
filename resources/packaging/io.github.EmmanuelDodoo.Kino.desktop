@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Kino
+Comment=Video Media manager and player
+Categories=AudioVideo
+Terminal=false
+Exec=kino
+Icon=io.github.EmmanuelDodoo.Kino

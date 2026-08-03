@@ -3,6 +3,25 @@ name = "kino"
 version.workspace = true
 edition.workspace = true
 
+[package.metadata.deb]
+maintainer = "Emmanuel Dodoo <bluee.hip@gmail.com>"
+extended-description = "Video Media manager and player"
+section = "Video"
+depends = [
+  "$auto",
+  "libopenh264-8",
+  "libsoundtouch1",
+  "gstreamer1.0-libav",
+  "gstreamer1.0-plugins-base",
+  "gstreamer1.0-plugins-good",
+  "gstreamer1.0-plugins-bad",
+  "gstreamer1.0-pipewire",
+]
+assets = [
+  { source = "resources/packaging/io.github.EmmanuelDodoo.Kino.desktop", dest = "/usr/share/applications/io.github.EmmanuelDodoo.Kino.desktop", mode = "664" },
+  { source = "resources/packaging/io.github.EmmanuelDodoo.Kino.png", dest = "/usr/share/icons/hicolor/256x256/apps/io.github.EmmanuelDodoo.Kino.png", mode = "664" }
+]
+
 [workspace]
 members = ["core/", "devutils/", "registry/", "widgets/"]
 
@@ -72,6 +91,7 @@ tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url.workspace = true
+velopack = "1.2"
 widgets.workspace = true
 
 [profile.dev]

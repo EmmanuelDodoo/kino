@@ -1,0 +1,258 @@
+app-id: io.github.EmanuelDodoo.Kino
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: kino
+finish-args:
+  - --socket=wayland
+  - --socket=x11
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --share=ipc
+  - --share=network
+  - --device=all
+  - --filesystem=xdg-config
+  - --talk-name=org.freedesktop.portal.*
+  - --talk-name=org.freedesktop.ScreenSaver
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin 
+build-commands:
+  - install -Dm644 resources/packaging/io.github.EmmanuelDodoo.Kino.png /app/share/icons/hicolor/256x256/apps/io.github.EmmanuelDodoo.Kino.png
+  - install -Dm644 resources/packaging/io.github.EmmanuelDodoo.Kino.desktop /app/share/applications/io.github.EmmanuelDodoo.Kino.desktop
+
+modules:
+
+  - name: soundtouch
+    buildsystem: autotools
+    sources:
+      - type: git
+        url: https://codeberg.org/soundtouch/soundtouch
+        tag: "2.3.3"
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+
+  - name: openh264
+    buildsystem: meson
+    sources:
+      - type: git
+        url: https://github.com/cisco/openh264
+        tag: "v2.6.0"
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+    config-opts:
+      - -Dtests=disabled
+
+  - name: gstreamer
+    buildsystem: meson
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/gstreamer/gstreamer.git
+        tag: "1.26.6"
+    build-options:
+      env:
+        PKG_CONFIG_PATH: /app/lib/pkgconfig
+    config-opts:
+      - -Dauto_features=disabled
+      - -Dpython=disabled
+      - -Dges=disabled
+      - -Drtsp_server=disabled
+      - -Dsharp=disabled
+      - -Dgst-examples=disabled
+      - -Dtests=disabled
+      - -Dexamples=disabled
+      - -Ddoc=disabled
+      - -Dgtk_doc=disabled
+      - -Dbase=enabled
+      - -Dgst-plugins-base:playback=enabled
+      - -Dgst-plugins-base:app=enabled
+      - -Dgst-plugins-base:videoconvertscale=enabled
+      - -Dgst-plugins-base:typefind=enabled
+      - -Dgst-plugins-base:subparse=enabled
+      - -Dgst-plugins-base:opus=enabled
+      - -Dgst-plugins-base:vorbis=enabled
+      - -Dgood=enabled
+      - -Dgst-plugins-good:autodetect=enabled
+      - -Dgst-plugins-good:isomp4=enabled
+      - -Dgst-plugins-good:matroska=enabled
+      - -Dgst-plugins-good:flac=enabled
+      - -Dgst-plugins-good:videofilter=enabled
+      - -Dgst-plugins-good:pulse=enabled
+      - -Dgst-plugins-good:audioparsers=enabled
+      - -Dbad=enabled
+      - -Dgst-plugins-bad:soundtouch=enabled
+      - -Dgst-plugins-bad:openh264=enabled
+      - -Dugly=disabled
+      - -Dgpl=enabled
+      - -Dlibav=enabled
+
+  - name: gst-plugins-rs
+    buildsystem: meson
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git
+        tag: "0.14.2"
+      - resources/packaging/flatpak/cargo-sources-gst-plugins-rs.yml
+    build-options:
+      env: 
+        CARGO_HOME: /run/build/gst-plugins-rs/cargo
+        CARGO_NET_OFFLINE: 'true' 
+    config-opts: 
+      - -Ddav1d=enabled
+      - -Danalytics=disabled
+      - -Daudiofx=disabled
+      - -Dclaxon=disabled
+      - -Dlewton=disabled
+      - -Dspotify=disabled
+      - -Dfile=disabled
+      - -Doriginalbuffer=disabled
+      - -Dthreadshare=disabled
+      - -Dinter=disabled
+      - -Dstreamgrouper=disabled
+      - -Dmp4=disabled
+      - -Dfmp4=disabled
+      - -Daws=disabled
+      - -Dmpegtslive=disabled
+      - -Dhlsmultivariantsink=disabled
+      - -Dhlssink3=disabled
+      - -Dndi=disabled
+      - -Donvif=disabled
+      - -Draptorq=disabled
+      - -Dreqwest=disabled
+      - -Drtsp=disabled
+      - -Drtp=disabled
+      - -Dwebrtchttp=disabled
+      - -Dwebrtc=disabled
+      - -Dtextahead=disabled
+      - -Djson=disabled
+      - -Dregex=disabled
+      - -Dtextwrap=disabled
+      - -Dtracers=disabled
+      - -Duriplaylistbin=disabled
+      - -Dcdg=disabled
+      - -Dclosedcaption=disabled
+      - -Delevenlabs=disabled
+      - -Dffv1=disabled
+      - -Dflavors=disabled
+      - -Dgif=disabled
+      - -Dhsv=disabled
+      - -Dpng=disabled
+      - -Drav1e=disabled
+      - -Dvideofx=disabled
+      - -Dgopbuffer=disabled
+      - -Dquinn=disabled
+      - -Dspeechmatics=disabled
+      - -Dvvdec=disabled
+      - -Dwebp=disabled
+      - -Dskia=disabled
+      - -Dsodium=disabled
+      - -Dcsound=disabled
+      - -Dgtk4=disabled
+      - -Dfallbackswitch=disabled
+      - -Dlivesync=disabled
+      - -Dtogglerecord=disabled
+
+  - name: pipewire 
+    buildsystem: meson 
+    sources:
+      - type: git 
+        url: https://gitlab.freedesktop.org/pipewire/pipewire.git 
+        tag: "1.4.8" 
+    config-opts:
+      - -Dgstreamer=enabled
+      - -Daudioconvert=enabled
+      - -Dvideoconvert=enabled
+      - -Dflatpak=enabled
+      - -Ddocs=disabled
+      - -Dman=disabled
+      - -Dexamples=disabled
+      - -Dtests=disabled
+      - -Dinstalled_tests=disabled
+      - -Dgstreamer-device-provider=disabled
+      - -Dlogind=disabled
+      - -Dsystemd-system-service=disabled
+      - -Dsystemd-user-service=disabled
+      - -Dselinux=disabled
+      - -Dpipewire-alsa=disabled
+      - -Dpipewire-jack=disabled
+      - -Dpipewire-v4l2=disabled
+      - -Dspa-plugins=enabled
+      - -Dalsa=disabled
+      - -Daudiomixer=disabled
+      - -Dbluez5=disabled
+      - -Dbluez5-backend-hsp-native=disabled
+      - -Dbluez5-backend-hfp-native=disabled
+      - -Dbluez5-backend-native-mm=disabled
+      - -Dbluez5-backend-ofono=disabled
+      - -Dbluez5-backend-hsphfpd=disabled
+      - -Dbluez5-codec-aptx=disabled
+      - -Dbluez5-codec-ldac=disabled
+      - -Dbluez5-codec-aac=disabled
+      - -Dbluez5-codec-lc3plus=disabled
+      - -Dbluez5-codec-opus=disabled
+      - -Dbluez5-codec-lc3=disabled
+      - -Dbluez5-codec-g722=disabled
+      - -Dcontrol=disabled
+      - -Daudiotestsrc=disabled
+      - -Dffmpeg=disabled
+      - -Djack=disabled
+      - -Dsupport=disabled
+      - -Devl=disabled
+      - -Dtest=disabled
+      - -Dv4l2=disabled
+      - -Ddbus=disabled
+      - -Dlibcamera=disabled
+      - -Dvideotestsrc=disabled
+      - -Dvolume=disabled
+      - -Dvulkan=disabled
+      - -Dpw-cat=disabled
+      - -Dpw-cat-ffmpeg=disabled
+      - -Dudev=disabled
+      - -Dsdl2=disabled
+      - -Dsndfile=disabled
+      - -Dlibmysofa=disabled
+      - -Dlibpulse=disabled
+      - -Droc=disabled
+      - -Davahi=disabled
+      - -Decho-cancel-webrtc=disabled
+      - -Dlibusb=disabled
+      - -Dsession-managers=disabled
+      - -Draop=disabled
+      - -Dlv2=disabled
+      - -Dx11=disabled
+      - -Dx11-xfixes=disabled
+      - -Dlibcanberra=disabled
+      - -Dlegacy-rtkit=false
+      - -Davb=disabled
+      - -Dreadline=disabled
+      - -Dgsettings=disabled
+      - -Dcompress-offload=disabled
+      - -Dpam-defaults-install=false
+      - -Drlimits-install=false
+      - -Dopus=disabled
+      - -Dlibffado=disabled
+      - -Dgsettings-pulse-schema=disabled
+      - -Dsnap=disabled
+      - -Debur128=disabled
+
+  - name: kino
+    buildsystem: simple
+    build-options:
+        env:
+          CARGO_HOME: /run/build/kino/cargo
+          CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo build --release
+      - install -Dm755 target/release/kino /app/bin/kino
+    sources:
+      - type: dir
+        path: ../../..
+        exclude:
+          - target
+          - .git
+          - .github
+          - resources
+      - cargo-sources.yml

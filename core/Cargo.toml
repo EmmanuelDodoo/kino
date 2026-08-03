@@ -5,8 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+anyhow = "1.0.102"
 glib.workspace = true
 gstreamer.workspace = true
 rusqlite.workspace = true
 tracing.workspace = true
-anyhow = "1.0.102"

@@ -35,19 +35,24 @@ Take a look at [the documentation](/resources/docs/README.md) for more.
 
 ## Installation
 
-Note that Kino relies on Gstreamer for video playback. You can install gstreamer by following the instructions [here](https://github.com/sdroege/gstreamer-rs?tab=readme-ov-file#installation)
+Kino currently provides pre-built packages for the Windows and Linux (via deb and flatpak).
+The latest releases can be found on the [project's Github Releases page.](https://github.com/EmmanuelDodoo/kino/releases)
 
-### From Package
+### macOS
 
-Pre-built packages for can be found on the [releases](https://github.com/EmmanuelDodoo/kino/releases) page
+Pre-built macOS packages are not currently provided.
 
-### With Cargo
+While Kino is designed to be cross-platform, I do not currently have access to macOS hardware for testing or validating packaged releases. Rather than distributing binaries that cannot be properly tested, macOS users are encouraged to build Kino from source.
 
-```
-cargo install --git https://github.com/EmmanuelDodoo/kino.git
-```
+Contributions and testing from macOS users are always welcome.
 
-### From Souce
+## Building from Source
+
+### Prerequisites
+
+Kino uses **GStreamer 1.26.6** for media playback. You'll need to install both the runtime files to build this project. The official instructions for that can be found here [https://gstreamer.freedesktop.org/download/]()
+
+Kino can then be built like so:
 
 ```
 git clone https://github.com/EmmanuelDodoo/kino.git

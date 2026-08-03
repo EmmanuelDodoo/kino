@@ -1,22 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(dead_code, unused_imports)]
 use iced::{
-    Color, ContentFit, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation, Shadow,
-    Size, Subscription, Task, Vector,
-    advanced::{self, Widget, layout, mouse, overlay, widget::tree},
+    advanced::{self, layout, mouse, overlay, widget::tree, Widget},
     alignment::{Horizontal, Vertical},
     animation::{self, Animation, Easing},
     application::BootFn,
     border::{self, Border, Radius},
     color, font, keyboard, padding,
-    time::{Duration, Instant, every, milliseconds},
+    time::{every, milliseconds, Duration, Instant},
     widget::{
-        self, Space, bottom, bottom_center, button, center, center_x, center_y, column, combo_box,
+        self, bottom, bottom_center, button, center, center_x, center_y, column, combo_box,
         container, float, grid, markdown, mouse_area, operation, pick_list, rich_text, row,
         scrollable, sensor, slider, space, span, stack, text, text_editor, text_input,
-        tooltip as tp, vertical_slider,
+        tooltip as tp, vertical_slider, Space,
     },
-    window,
+    window, Color, ContentFit, Event, Font, Length, Padding, Point, Radians, Rectangle, Rotation,
+    Shadow, Size, Subscription, Task, Vector,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -38,7 +37,7 @@ use registry::db;
 use registry::filter;
 use registry::filter::*;
 use registry::models::{
-    Directory, ItemId, Media, MediaType, Movie, SearchItem, Show, VideoId, collection,
+    collection, Directory, ItemId, Media, MediaType, Movie, SearchItem, Show, VideoId,
 };
 use registry::sort;
 use registry::sort::*;
@@ -58,6 +57,9 @@ pub type Element<'a, Message> = iced::Element<'a, Message, Theme, iced::Renderer
 fn main() -> iced::Result {
     use std::env;
     use tracing::{Level, span};
+    use velopack::VelopackApp;
+
+    VelopackApp::build().run();
 
     let span = span!(Level::DEBUG, "Kino");
     let _guard = span.enter();
