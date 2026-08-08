@@ -3004,6 +3004,7 @@ impl App {
             self.config.video.clone(),
             playlist,
             self.available_fonts.clone(),
+            self.config.general.preferred_subtitle_codec.clone(),
         );
         self.player = Some(player);
         self.screen = Screen::Player;

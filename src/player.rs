@@ -513,6 +513,8 @@ pub struct Manager {
 
     indicator: Option<Indicator>,
 
+    preferred_sub: Option<String>,
+
     maximised: bool,
     is_fullscreen: bool,
     state: State,
@@ -532,9 +534,10 @@ impl Manager {
         settings: VideoSettings,
         playlist: Playlist,
         fonts: Vec<iced::font::Family>,
+        preferred_sub: Option<String>,
     ) -> (Self, Task<ManagerMessage>) {
         let load_video = match playlist.current().cloned() {
-            Some(item) => load_video(item, |video| ManagerMessage::Video {
+            Some(item) => load_video(item, preferred_sub.clone(), |video| ManagerMessage::Video {
                 is_next: false,
                 video,
             }),
@@ -547,7 +550,10 @@ impl Manager {
 
         let tasks = Task::batch([size, load_video]);
 
-        (Self::new(window, settings, playlist, fonts), tasks)
+        (
+            Self::new(window, settings, playlist, fonts, preferred_sub),
+            tasks,
+        )
     }
 
     fn new(
@@ -555,6 +561,7 @@ impl Manager {
         settings: VideoSettings,
         playlist: Playlist,
         fonts: Vec<iced::font::Family>,
+        preferred_sub: Option<String>,
     ) -> Self {
         let state = if !playlist.is_empty() {
             State::Loading
@@ -572,6 +579,7 @@ impl Manager {
             maximised: false,
             is_fullscreen: false,
             state,
+            preferred_sub,
             next: AutoState::Idle,
             modal: ModalState::none(),
             panel: None,
@@ -804,9 +812,11 @@ impl Manager {
                             .next_peek()
                             .cloned()
                             .map(|item| {
-                                load_video(item, |video| ManagerMessage::Video {
-                                    is_next: true,
-                                    video,
+                                load_video(item, self.preferred_sub.clone(), |video| {
+                                    ManagerMessage::Video {
+                                        is_next: true,
+                                        video,
+                                    }
                                 })
                             })
                             .unwrap_or_default();
@@ -981,9 +991,11 @@ impl Manager {
                         Some(item) => {
                             let stats = self.stats();
 
-                            let load = load_video(item, |video| ManagerMessage::Video {
-                                is_next: false,
-                                video,
+                            let load = load_video(item, self.preferred_sub.clone(), |video| {
+                                ManagerMessage::Video {
+                                    is_next: false,
+                                    video,
+                                }
                             })
                             .map(Message::Player);
 
@@ -2557,9 +2569,11 @@ impl Manager {
             AutoState::Idle => {
                 self.state = State::Loading;
 
-                let load = load_video(next.clone(), |video| ManagerMessage::Video {
-                    is_next: false,
-                    video,
+                let load = load_video(next.clone(), self.preferred_sub.clone(), |video| {
+                    ManagerMessage::Video {
+                        is_next: false,
+                        video,
+                    }
                 })
                 .map(Message::Player);
 
@@ -2618,9 +2632,11 @@ impl Manager {
         self.state = State::Loading;
         self.next = AutoState::Idle;
 
-        let load = load_video(previous.clone(), |video| ManagerMessage::Video {
-            is_next: false,
-            video,
+        let load = load_video(previous.clone(), self.preferred_sub.clone(), |video| {
+            ManagerMessage::Video {
+                is_next: false,
+                video,
+            }
         })
         .map(Message::Player);
 
@@ -3094,6 +3110,7 @@ impl Manager {
 
 fn load_video<Message: 'static + MaybeSend>(
     mut item: models::Video,
+    preferred_sub: Option<String>,
     f: impl FnOnce(Arc<error::Result<Player>>) -> Message + 'static + MaybeSend,
 ) -> Task<Message> {
     let id = item.id;
@@ -3120,6 +3137,7 @@ fn load_video<Message: 'static + MaybeSend>(
 
             let duration = video.duration().as_secs_f64();
             let embedded = video.available_subtitles();
+            let mut backup_sub = None;
 
             for em in &embedded {
                 let exists = item.subtitles.iter().any(|sub| {
@@ -3133,49 +3151,65 @@ fn load_video<Message: 'static + MaybeSend>(
                 }
 
                 let new = Subtitle::new_embedded(item.id, &em.title, &em.language_code);
+
+                if let Some(codec) = preferred_sub.as_deref()
+                    && codec == em.language_code
+                {
+                    backup_sub = Some((em, new.id));
+                }
+
                 item.subtitles.push(new);
             }
 
-            if let Some(saved_sub) = item
+            let saved_sub = item
                 .subtitle_id
-                .and_then(|id| item.subtitles.iter().find(|sub| sub.id == id))
-            {
-                match &saved_sub.kind {
-                    models::SubtitleKind::Embedded => {
-                        if let Some(em) = embedded.iter().find(|em| {
-                            em.title == saved_sub.title && em.language_code == saved_sub.lang
-                        }) {
-                            video.set_text(em.clone());
-                        }
-                    }
-                    models::SubtitleKind::Loaded { path, .. } => {
-                        let path: &std::path::Path = path.as_ref();
-                        let path = path
-                            .canonicalize()
-                            .with_context(|| {
-                                format!("Loading saved subtitle path at {}", path.display())
-                            })
-                            .and_then(|path| {
-                                url::Url::from_file_path(&path).map_err(|_| {
-                                    anyhow!(
-                                        "Cannot create url from subtitle path at {}",
-                                        path.display()
-                                    )
-                                })
-                            })
-                            .log_err();
+                .and_then(|id| item.subtitles.iter().find(|sub| sub.id == id));
 
-                        if let Some(url) = path.as_ref() {
-                            video
-                                .set_subtitle_url(url)
-                                .ctx_log("Setting video subtitle url");
+            match saved_sub {
+                Some(saved_sub) => {
+                    match &saved_sub.kind {
+                        models::SubtitleKind::Embedded => {
+                            if let Some(em) = embedded.iter().find(|em| {
+                                em.title == saved_sub.title && em.language_code == saved_sub.lang
+                            }) {
+                                video.set_text(em.clone());
+                            }
+                        }
+                        models::SubtitleKind::Loaded { path, .. } => {
+                            let path: &std::path::Path = path.as_ref();
+                            let path = path
+                                .canonicalize()
+                                .with_context(|| {
+                                    format!("Loading saved subtitle path at {}", path.display())
+                                })
+                                .and_then(|path| {
+                                    url::Url::from_file_path(&path).map_err(|_| {
+                                        anyhow!(
+                                            "Cannot create url from subtitle path at {}",
+                                            path.display()
+                                        )
+                                    })
+                                })
+                                .log_err();
+
+                            if let Some(url) = path.as_ref() {
+                                video
+                                    .set_subtitle_url(url)
+                                    .ctx_log("Setting video subtitle url");
+                            }
                         }
                     }
+
+                    let offset = (1_000_000_000 as f32 * saved_sub.offset) as i64;
+
+                    video.set_text_offset(offset);
+                }
+                None if let Some((backup, id)) = backup_sub => {
+                    video.set_text(backup.clone());
+                    item.subtitle_id = Some(id);
                 }
 
-                let offset = (1_000_000_000 as f32 * saved_sub.offset) as i64;
-
-                video.set_text_offset(offset);
+                _ => {}
             }
 
             if let Some(saved_audio) = item
