@@ -3368,7 +3368,11 @@ fn draw_playlist<'a>(
         };
 
         let name = if current {
-            marquee(&item.name).font(medium_font())
+            marquee(&item.name)
+                .font(medium_font())
+                .duration(5.0)
+                .alternate()
+                .toggle(true)
         } else {
             marquee(&item.name)
         }

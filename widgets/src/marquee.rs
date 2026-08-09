@@ -204,6 +204,21 @@ where
         self.style(move |_theme| Style { color })
     }
 
+    /// Sets the behavior of the marquee to [`Behavior::Slide`].
+    pub fn slide(self) -> Self {
+        self.behavior(Behavior::Slide)
+    }
+
+    /// Sets the behavior of the marquee to [`Behavior::Alternate`].
+    pub fn alternate(self) -> Self {
+        self.behavior(Behavior::Alternate)
+    }
+
+    /// Sets the behavior of the marquee to [`Behavior::Scroll`].
+    pub fn scroll(self) -> Self {
+        self.behavior(Behavior::Scroll)
+    }
+
     /// Sets the style class of the [`Text`].
     #[must_use]
     pub fn class(mut self, class: impl Into<Theme::Class<'a>>) -> Self {
