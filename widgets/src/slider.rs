@@ -681,7 +681,7 @@ where
                 shaping: text::Shaping::Basic,
                 wrapping: text::Wrapping::None,
                 ellipsis: text::Ellipsis::None,
-                hint_factor: renderer.scale_factor(),
+                hint_factor: renderer.hint_factor(),
             },
             layout.bounds().center() + iced::Vector::new(0.0, 1.5),
             iced::Color::from_rgb8(210, 210, 210),

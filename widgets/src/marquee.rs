@@ -366,7 +366,7 @@ where
             shaping: self.format.shaping,
             wrapping: self.format.wrapping,
             ellipsis: text::Ellipsis::None,
-            hint_factor: renderer.scale_factor(),
+            hint_factor: renderer.hint_factor(),
         });
 
         let paragraph_size = state.paragraph.min_bounds();

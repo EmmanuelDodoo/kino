@@ -3698,7 +3698,7 @@ fn draw_general<'a>(
         let label = label_maker("Volume amount: ");
 
         let amt = format!("{:.02}", settings.volume_change_amt);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .width(input_width)
             .size(size)
             .font(regular_font())
@@ -3715,7 +3715,7 @@ fn draw_general<'a>(
         let label = label_maker("Speed amount: ");
 
         let amt = format!("{:.02}", settings.speed_change_amt);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .width(input_width)
             .size(size)
             .font(regular_font())
@@ -3732,7 +3732,7 @@ fn draw_general<'a>(
         let label = label_maker("Seek amount: ");
 
         let amt = format!("{:.02}", settings.seek_change_amt);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .width(input_width)
             .size(size)
             .font(regular_font())
@@ -3751,7 +3751,7 @@ fn draw_general<'a>(
         let label = label_maker("Seek Shift amount: ");
 
         let amt = format!("{:.02}", settings.seek_shift_change_amt);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .width(input_width)
             .size(size)
             .font(regular_font())
@@ -3770,7 +3770,7 @@ fn draw_general<'a>(
         let label = label_maker("Comment span(seconds) ");
 
         let amt = settings.comment_span.to_string();
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .font(regular_font())
             .width(input_width)
             .size(size)
@@ -4010,7 +4010,7 @@ fn draw_subs<'a>(
 
             let actions = input_actions(SubtitleConfig::OffsetIncr, SubtitleConfig::OffsetDecr);
 
-            let input = text_input("", &offset)
+            let input = text_input("", offset)
                 .width(input_width)
                 .size(size)
                 .font(regular_font())
@@ -4039,7 +4039,7 @@ fn draw_subs<'a>(
 
             let actions = input_actions(SubtitleConfig::SubSizeIncr, SubtitleConfig::SubSizeDecr);
 
-            let input = text_input("", &amt)
+            let input = text_input("", amt)
                 .width(input_width)
                 .size(size)
                 .font(regular_font())

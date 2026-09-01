@@ -2056,7 +2056,7 @@ fn draw_subtitles<'a>(
 
         let amt = format!("{}", subtitles.size);
 
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .font(regular_font())
@@ -2107,7 +2107,7 @@ fn draw_subtitles<'a>(
         let input = text_input("", subtitle_dummy)
             .width(256)
             .size(TEXT_SIZE)
-            .font(regular_font())
+            .font(state.selected.unwrap_or_default().into())
             .align_x(Horizontal::Right)
             .padding(INPUT_PADDING)
             .on_input(SubtitleMessage::Dummy);
@@ -2173,7 +2173,7 @@ fn draw_general<'a>(
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
         let interval = refresh_interval.as_secs().to_string();
-        let input = text_input("Interval in seconds", &interval)
+        let input = text_input("Interval in seconds", interval)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .font(regular_font())
@@ -2199,7 +2199,7 @@ fn draw_general<'a>(
         let recents = recents_limit
             .map(|limit| limit.to_string())
             .unwrap_or_default();
-        let input = text_input("", &recents)
+        let input = text_input("", recents)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .font(regular_font())
@@ -2225,7 +2225,7 @@ fn draw_general<'a>(
         let searches = search_limit
             .map(|limit| limit.to_string())
             .unwrap_or_default();
-        let input = text_input("", &searches)
+        let input = text_input("", searches)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .font(regular_font())
@@ -2316,8 +2316,8 @@ fn draw_media<'a>(
     scan_discoverer: bool,
     restore_deleted: bool,
     movie_depth: u8,
-    preferred_sub: &Option<String>,
-    preferred_audio: &Option<String>,
+    preferred_sub: &'a Option<String>,
+    preferred_audio: &'a Option<String>,
 ) -> Element<'a, MediaMessage> {
     let dirs = {
         let top = {
@@ -2498,7 +2498,7 @@ fn draw_media<'a>(
         let icon = help("How deep scans for videos in movie directories should be.");
 
         let depth = movie_depth.to_string();
-        let input = text_input("Depth", &depth)
+        let input = text_input("Depth", depth)
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
             .font(regular_font())
@@ -2576,7 +2576,7 @@ fn draw_media<'a>(
 }
 
 fn draw_metadata<'a>(
-    auth_token: &str,
+    auth_token: &'a str,
     default_source: SourceSet,
     fetching_interval: &Duration,
     tmdb_rating: bool,
@@ -2588,7 +2588,7 @@ fn draw_metadata<'a>(
         );
 
         let interval = fetching_interval.as_secs().to_string();
-        let input = text_input("Interval in seconds", &interval)
+        let input = text_input("Interval in seconds", interval)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
@@ -2703,7 +2703,7 @@ fn draw_playback<'a>(
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
         let amt = format!("{:.02}", volume_change_amt);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
@@ -2743,7 +2743,7 @@ fn draw_playback<'a>(
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
         let amt = format!("{:.02}", speed_change_amt);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
@@ -2797,7 +2797,7 @@ fn draw_playback<'a>(
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
         let amt = format!("{:.02}", completion_point);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
@@ -2824,7 +2824,7 @@ fn draw_playback<'a>(
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
         let amt = format!("{:.02}", completion_watch_time);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
@@ -2876,7 +2876,7 @@ fn draw_seeking<'a>(
         let label = label_maker("Thumbnail Interval(seconds) ");
 
         let interval = thumbnail_interval.to_string();
-        let input = text_input("", &interval)
+        let input = text_input("", interval)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
@@ -2903,7 +2903,7 @@ fn draw_seeking<'a>(
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
         let amt = format!("{:.02}", seek_change_amt);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
@@ -2926,7 +2926,7 @@ fn draw_seeking<'a>(
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
         let amt = format!("{:.02}", seek_shift_change_amt);
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)
@@ -2950,7 +2950,7 @@ fn draw_seeking<'a>(
         let label = row!(label, icon).spacing(2).align_y(Vertical::Center);
 
         let amt = format!("{comment_span}");
-        let input = text_input("", &amt)
+        let input = text_input("", amt)
             .font(regular_font())
             .width(INPUT_WIDTH)
             .size(TEXT_SIZE)

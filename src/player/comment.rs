@@ -223,12 +223,12 @@ impl Comment {
                     .wrapping(text::Wrapping::WordOrGlyph)
                     .key_binding(move |press| {
                         use iced::keyboard::{Key, key::Named};
-                        use text_editor::{Binding, Status};
-
-                        let is_focused = matches!(press.status, Status::Focused { .. });
+                        use text_editor::Binding;
 
                         match press.key {
-                            Key::Named(Named::Enter) if press.modifiers.command() && is_focused => {
+                            Key::Named(Named::Enter)
+                                if press.modifiers.command() && press.is_focused =>
+                            {
                                 Some(Binding::Custom(Message::save(id, timestamp)))
                             }
                             _ => Binding::from_key_press(press),

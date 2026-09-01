@@ -780,7 +780,6 @@ pub mod text_input {
                 width: 1.0,
                 color: schema.accent.base.color,
             },
-            icon: schema.background.weak.text,
             placeholder: schema.neutral.weak.color,
             value: schema.background.base.text,
             selection: schema.primary.weak.color.scale_alpha(0.5),

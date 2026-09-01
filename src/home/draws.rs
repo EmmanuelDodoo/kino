@@ -197,32 +197,22 @@ pub fn draw_search<'a, F: Fn(ItemId) -> HomeMessage + Clone>(
     });
 
     let input = {
-        let filter: Element<'_, HomeMessage> = match state.filter {
-            Some(filter) => {
-                let content = row!(medium(filter.to_str()), icon(CANCEL))
-                    .align_y(Vertical::Center)
-                    .spacing(4.0);
+        let filter: Option<Element<'_, HomeMessage>> = state.filter.map(|filter| {
+            let content = row!(medium(filter.to_str()), icon(CANCEL))
+                .align_y(Vertical::Center)
+                .spacing(4.0);
 
-                button(content)
-                    .on_press(HomeMessage::SearchMessage(SearchMessage::ClearFilter))
-                    .style(theme::button::text_primary)
-                    .into()
-            }
-            None => empty(),
-        };
+            button(content)
+                .on_press(HomeMessage::SearchMessage(SearchMessage::ClearFilter))
+                .style(theme::button::text_primary)
+                .into()
+        });
 
         let size = H6;
-        let icon = text_input::Icon {
-            font: icons::FONT,
-            code_point: icons::SEARCH,
-            side: text_input::Side::Right,
-            size: Some(size.into()),
-            spacing: 5.0,
-        };
+
         let input = text_input("Search Media", &state.search)
             .id(state.text_input.clone())
             .size(size)
-            .icon(icon)
             .font(regular_font())
             .on_input(|search| HomeMessage::SearchMessage(SearchMessage::Search(search)))
             .on_submit(HomeMessage::SearchMessage(SearchMessage::Load));
@@ -586,14 +576,18 @@ pub fn draw_insert_trigger<'a>(
         let size = text_size / RATIO;
         let pick_padding = [2, 5];
 
-        let input = |value: &str| -> text_input::TextInput<'_, LogicMessage, Theme> {
+        fn input<'a>(
+            value: impl text::IntoFragment<'a>,
+            size: f32,
+            padding: impl Into<Padding>,
+        ) -> text_input::TextInput<'a, LogicMessage, Theme> {
             text_input("", value)
                 .align_x(Horizontal::Right)
                 .size(size)
                 .font(regular_font())
-                .padding(input_padding)
+                .padding(padding)
                 .width(160)
-        };
+        }
 
         let name = {
             let label = sized_medium("Name contains", size).width(width);
@@ -604,7 +598,7 @@ pub fn draw_insert_trigger<'a>(
                 .as_ref()
                 .map(|(not, name)| (*not, name.as_str()))
                 .unwrap_or((false, ""));
-            let input = input(name).on_input(LogicMessage::Name);
+            let input = input(name, size, input_padding).on_input(LogicMessage::Name);
 
             let not = checkbox(not)
                 .label("NOT")
@@ -626,7 +620,7 @@ pub fn draw_insert_trigger<'a>(
                 .as_ref()
                 .map(|(not, synopsis)| (*not, synopsis.as_str()))
                 .unwrap_or((false, ""));
-            let input = input(synopsis).on_input(LogicMessage::Synopsis);
+            let input = input(synopsis, size, input_padding).on_input(LogicMessage::Synopsis);
 
             let not = checkbox(not)
                 .label("NOT")
@@ -648,7 +642,7 @@ pub fn draw_insert_trigger<'a>(
                 .as_ref()
                 .map(|(not, tags)| (*not, tags.as_str()))
                 .unwrap_or((false, ""));
-            let input = input(tags).on_input(LogicMessage::Tags);
+            let input = input(tags, size, input_padding).on_input(LogicMessage::Tags);
 
             let not = checkbox(not)
                 .label("NOT")
@@ -670,7 +664,7 @@ pub fn draw_insert_trigger<'a>(
                 .as_ref()
                 .map(|(not, dir)| (*not, dir.as_str()))
                 .unwrap_or((false, ""));
-            let input = input(dir).on_input(LogicMessage::Dir);
+            let input = input(dir, size, input_padding).on_input(LogicMessage::Dir);
 
             let not = checkbox(not)
                 .label("NOT")
@@ -701,7 +695,7 @@ pub fn draw_insert_trigger<'a>(
                 .font(regular_font())
                 .text_size(text_size);
 
-            let input = input(last).on_input(LogicMessage::Last);
+            let input = input(last, size, input_padding).on_input(LogicMessage::Last);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -727,7 +721,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let duration = duration.to_string();
-            let input = input(&duration).on_input(LogicMessage::Duration);
+            let input = input(duration, size, input_padding).on_input(LogicMessage::Duration);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -753,7 +747,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let progress = format!("{progress:.2}");
-            let input = input(&progress).on_input(LogicMessage::Progress);
+            let input = input(progress, size, input_padding).on_input(LogicMessage::Progress);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -779,7 +773,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let count = count.to_string();
-            let input = input(&count).on_input(LogicMessage::Watch);
+            let input = input(count, size, input_padding).on_input(LogicMessage::Watch);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -804,7 +798,7 @@ pub fn draw_insert_trigger<'a>(
                 .font(regular_font())
                 .text_size(text_size);
 
-            let input = input(release).on_input(LogicMessage::Release);
+            let input = input(release, size, input_padding).on_input(LogicMessage::Release);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -830,7 +824,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let rating = format!("{rating:.2}");
-            let input = input(&rating).on_input(LogicMessage::Rating);
+            let input = input(rating, size, input_padding).on_input(LogicMessage::Rating);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -856,7 +850,7 @@ pub fn draw_insert_trigger<'a>(
                 .text_size(text_size);
 
             let count = count.to_string();
-            let input = input(&count).on_input(LogicMessage::Comment);
+            let input = input(count, size, input_padding).on_input(LogicMessage::Comment);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -998,14 +992,18 @@ pub fn draw_delete_trigger<'a>(
         let size = text_size / RATIO;
         let pick_padding = [2, 5];
 
-        let input = |value: &str| -> text_input::TextInput<'_, LogicMessage, Theme> {
+        fn input<'a>(
+            value: impl text::IntoFragment<'a>,
+            size: f32,
+            padding: impl Into<Padding>,
+        ) -> text_input::TextInput<'a, LogicMessage, Theme> {
             text_input("", value)
                 .size(size)
                 .font(regular_font())
-                .padding(input_padding)
+                .padding(padding)
                 .align_x(Horizontal::Right)
                 .width(160)
-        };
+        }
 
         let name = {
             let label = sized_medium("Name contains", size).width(width);
@@ -1016,7 +1014,7 @@ pub fn draw_delete_trigger<'a>(
                 .as_ref()
                 .map(|(not, name)| (*not, name.as_str()))
                 .unwrap_or((false, ""));
-            let input = input(name).on_input(LogicMessage::Name);
+            let input = input(name, size, input_padding).on_input(LogicMessage::Name);
 
             let not = checkbox(not)
                 .label("NOT")
@@ -1038,7 +1036,7 @@ pub fn draw_delete_trigger<'a>(
                 .as_ref()
                 .map(|(not, synopsis)| (*not, synopsis.as_str()))
                 .unwrap_or((false, ""));
-            let input = input(synopsis).on_input(LogicMessage::Synopsis);
+            let input = input(synopsis, size, input_padding).on_input(LogicMessage::Synopsis);
 
             let not = checkbox(not)
                 .label("NOT")
@@ -1060,7 +1058,7 @@ pub fn draw_delete_trigger<'a>(
                 .as_ref()
                 .map(|(not, tags)| (*not, tags.as_str()))
                 .unwrap_or((false, ""));
-            let input = input(tags).on_input(LogicMessage::Tags);
+            let input = input(tags, size, input_padding).on_input(LogicMessage::Tags);
 
             let not = checkbox(not)
                 .label("NOT")
@@ -1082,7 +1080,7 @@ pub fn draw_delete_trigger<'a>(
                 .as_ref()
                 .map(|(not, dir)| (*not, dir.as_str()))
                 .unwrap_or((false, ""));
-            let input = input(dir).on_input(LogicMessage::Dir);
+            let input = input(dir, size, input_padding).on_input(LogicMessage::Dir);
 
             let not = checkbox(not)
                 .label("NOT")
@@ -1113,7 +1111,7 @@ pub fn draw_delete_trigger<'a>(
                 .font(regular_font())
                 .text_size(text_size);
 
-            let input = input(last).on_input(LogicMessage::Last);
+            let input = input(last, size, input_padding).on_input(LogicMessage::Last);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1139,7 +1137,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let duration = duration.to_string();
-            let input = input(&duration).on_input(LogicMessage::Duration);
+            let input = input(duration, size, input_padding).on_input(LogicMessage::Duration);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1165,7 +1163,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let progress = format!("{progress:.2}");
-            let input = input(&progress).on_input(LogicMessage::Progress);
+            let input = input(progress, size, input_padding).on_input(LogicMessage::Progress);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1191,7 +1189,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let count = count.to_string();
-            let input = input(&count).on_input(LogicMessage::Watch);
+            let input = input(count, size, input_padding).on_input(LogicMessage::Watch);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1216,7 +1214,7 @@ pub fn draw_delete_trigger<'a>(
                 .font(regular_font())
                 .text_size(text_size);
 
-            let input = input(release).on_input(LogicMessage::Release);
+            let input = input(release, size, input_padding).on_input(LogicMessage::Release);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1242,7 +1240,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let rating = format!("{rating:.2}");
-            let input = input(&rating).on_input(LogicMessage::Rating);
+            let input = input(rating, size, input_padding).on_input(LogicMessage::Rating);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1268,7 +1266,7 @@ pub fn draw_delete_trigger<'a>(
                 .text_size(text_size);
 
             let count = count.to_string();
-            let input = input(&count).on_input(LogicMessage::Comment);
+            let input = input(count, size, input_padding).on_input(LogicMessage::Comment);
 
             row!(label, space::horizontal(), comp, input)
                 .spacing(6.0)
@@ -1391,8 +1389,8 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
         column!(label, input).spacing(3)
     };
 
-    let extra = match state.kind {
-        WishKindSelection::Show | WishKindSelection::Movie => empty(),
+    let extra: Option<Element<'_, HomeMessage>> = match state.kind {
+        WishKindSelection::Show | WishKindSelection::Movie => None,
         WishKindSelection::Season => {
             let label = medium("Season number:");
             let input_style = theme::text_input::required(state.invalid_season());
@@ -1407,10 +1405,12 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
                 .style(input_style)
                 .width(40.0);
 
-            row!(label, input)
-                .spacing(12.0)
-                .align_y(Vertical::Center)
-                .into()
+            Some(
+                row!(label, input)
+                    .spacing(12.0)
+                    .align_y(Vertical::Center)
+                    .into(),
+            )
         }
         WishKindSelection::Episode => {
             let padding = [4, 6];
@@ -1449,10 +1449,12 @@ pub fn draw_wishlist<'a>(state: &'a WishNewState) -> Element<'a, HomeMessage> {
                 row!(label, input).spacing(12.0).align_y(Vertical::Center)
             };
 
-            row!(season, episode)
-                .spacing(40)
-                .align_y(Vertical::Center)
-                .into()
+            Some(
+                row!(season, episode)
+                    .spacing(40)
+                    .align_y(Vertical::Center)
+                    .into(),
+            )
         }
     };
 
@@ -2084,11 +2086,12 @@ where
     .align_y(Vertical::Center);
 
     let delete = table::column(empty(), |sub: &Subtitle| match &sub.kind {
-        registry::models::SubtitleKind::Embedded => empty(),
-        registry::models::SubtitleKind::Loaded { .. } => icons::text_button(icons::CANCEL)
-            .padding(0)
-            .on_press(on_delete(sub.id))
-            .into(),
+        registry::models::SubtitleKind::Embedded => None,
+        registry::models::SubtitleKind::Loaded { .. } => Some(Element::from(
+            icons::text_button(icons::CANCEL)
+                .padding(0)
+                .on_press(on_delete(sub.id)),
+        )),
     })
     .align_y(Vertical::Center);
 
@@ -2109,8 +2112,8 @@ fn media_label<'a>(label: impl text::IntoFragment<'a>) -> text::Text<'a, Theme> 
 }
 
 fn media_name<'a, Message: 'a + Clone>(
-    placeholder: &str,
-    value: &str,
+    placeholder: &'a str,
+    value: &'a str,
     on_input: impl Fn(String) -> Message + 'a,
 ) -> Element<'a, Message> {
     let label = media_label("Name");

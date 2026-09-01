@@ -5,7 +5,7 @@ use std::fmt::Display;
 use iced::{
     Element, Length, Point, Rectangle, Renderer, Size, Vector,
     advanced::{
-        Layout, Shell, layout, overlay, renderer,
+        Layout, Shell, layout, overlay, renderer, shell,
         widget::{self, Operation, Tree},
     },
     alignment::{Alignment, Vertical},
@@ -424,7 +424,7 @@ impl<Message, Theme> overlay::Overlay<Message, Theme, Renderer>
             .zip(layout.children())
             .zip(self.instants.iter_mut())
         {
-            let mut local_messages = vec![];
+            let mut local_messages = shell::Bus::new();
             let mut local_shell = shell.local(&mut local_messages);
 
             child.as_widget_mut().update(

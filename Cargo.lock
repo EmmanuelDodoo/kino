@@ -881,7 +881,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 [[package]]
 name = "cryoglyph"
 version = "0.1.0"
-source = "git+https://github.com/iced-rs/cryoglyph.git?rev=53ba3e879539d19ed8162942126a977ec896cc3b#53ba3e879539d19ed8162942126a977ec896cc3b"
+source = "git+https://github.com/iced-rs/cryoglyph.git?rev=f4e7e4eb84dc1d2f335a98c67d8694640d53a433#f4e7e4eb84dc1d2f335a98c67d8694640d53a433"
 dependencies = [
  "cosmic-text",
  "etagere",
@@ -2201,7 +2201,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -2218,7 +2218,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "bitflags 2.13.1",
  "bytes",
@@ -2230,13 +2230,14 @@ dependencies = [
  "rustc-hash 2.1.3",
  "smol_str 0.2.2",
  "thiserror 2.0.18",
+ "unicode-segmentation",
  "web-time",
 ]
 
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -2246,7 +2247,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "futures",
  "iced_core",
@@ -2260,7 +2261,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "bitflags 2.13.1",
  "bytemuck",
@@ -2275,13 +2276,12 @@ dependencies = [
  "raw-window-handle",
  "rustc-hash 2.1.3",
  "thiserror 2.0.18",
- "unicode-segmentation",
 ]
 
 [[package]]
 name = "iced_highlighter"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "iced_core",
  "two-face",
@@ -2290,7 +2290,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -2299,7 +2299,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -2311,7 +2311,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "bytes",
  "iced_core",
@@ -2322,7 +2322,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -2338,7 +2338,7 @@ dependencies = [
 [[package]]
 name = "iced_video_player"
 version = "0.6.0"
-source = "git+https://github.com/EmmanuelDodoo/iced_video_player#39ecec46627dc84c951ce531509a4a106cc66a4f"
+source = "git+https://github.com/EmmanuelDodoo/iced_video_player#0ead37e0638835feedda532591e50941649ec045"
 dependencies = [
  "glib",
  "gstreamer",
@@ -2356,7 +2356,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "bitflags 2.13.1",
  "bytemuck",
@@ -2375,7 +2375,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "iced_highlighter",
  "iced_renderer",
@@ -2391,7 +2391,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=56b706f#56b706fcd35aa881baede77a696bbb842773fdc6"
+source = "git+https://github.com/iced-rs/iced?rev=8d1955d#8d1955dc10927b845fe00b9da41e44bccdc7ed71"
 dependencies = [
  "arboard",
  "iced_debug",

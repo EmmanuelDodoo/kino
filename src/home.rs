@@ -2595,7 +2595,9 @@ impl Home {
 
                                     state.search = filter.to_str().to_owned();
 
-                                    operation::focus(state.text_input.clone())
+                                    operation::focus(state.text_input.clone()).chain(
+                                        operation::move_cursor_to_end(state.text_input.clone()),
+                                    )
                                 }
                                 _ => {
                                     state.search = search;
@@ -2608,7 +2610,10 @@ impl Home {
                     SearchMessage::ClearFilter => {
                         state.filter = None;
 
-                        self.load()
+                        let focus = operation::focus(state.text_input.clone())
+                            .chain(operation::move_cursor_to_end(state.text_input.clone()));
+
+                        Task::batch([self.load(), focus])
                     }
                     SearchMessage::Load => self.load(),
                     SearchMessage::Searching => {
@@ -4980,7 +4985,7 @@ impl Home {
                 .comments
                 .map(|comments| comments.number.to_string())
                 .unwrap_or_default();
-            let input = text_input("", &content)
+            let input = text_input("", content)
                 .width(44.0)
                 .align_x(Horizontal::Right)
                 .size(size)
@@ -5007,7 +5012,7 @@ impl Home {
                 .release
                 .map(|release| release.year.to_string())
                 .unwrap_or_default();
-            let input = text_input("", &content)
+            let input = text_input("", content)
                 .width(48.0)
                 .align_x(Horizontal::Right)
                 .font(input_font)
@@ -5036,7 +5041,7 @@ impl Home {
                 .duration
                 .map(|duration| format!("{}", duration.secs / 3600))
                 .unwrap_or_default();
-            let hours = text_input("", &hours)
+            let hours = text_input("", hours)
                 .width(32.0)
                 .size(size)
                 .align_x(Horizontal::Right)
@@ -5049,7 +5054,7 @@ impl Home {
                 .duration
                 .map(|duration| format!("{}", (duration.secs % 3600) / 60))
                 .unwrap_or_default();
-            let minutes = text_input("", &minutes)
+            let minutes = text_input("", minutes)
                 .width(32.0)
                 .align_x(Horizontal::Right)
                 .size(size)

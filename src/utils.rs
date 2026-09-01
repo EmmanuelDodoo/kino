@@ -318,7 +318,7 @@ impl FontState {
             .iter()
             .find(|family| family.to_string() == *default)
             .copied();
-        let state = widgets::font_selection::State::with_selection(fonts, selected);
+        let state = widgets::font_selection::State::new(fonts);
 
         Self { state, selected }
     }

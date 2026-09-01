@@ -1,7 +1,7 @@
 use iced::{
     Background, Border, Color, Element, Event, Length, Padding, Pixels, Rectangle, Size,
     advanced::{
-        self, layout, text,
+        self, layout, shell, text,
         widget::{Widget, tree},
     },
     alignment::Alignment,
@@ -606,7 +606,7 @@ impl<P: text::Paragraph> PageState<P> {
                 shaping: text::Shaping::default(),
                 wrapping: text::Wrapping::None,
                 ellipsis: text::Ellipsis::None,
-                hint_factor: renderer.scale_factor(),
+                hint_factor: renderer.hint_factor(),
             }
         }
         let text = match page {
@@ -631,7 +631,7 @@ impl<P: text::Paragraph> PageState<P> {
                         shaping: ellipsis.shaping.unwrap_or(text::Shaping::Advanced),
                         wrapping: text::Wrapping::None,
                         ellipsis: text::Ellipsis::None,
-                        hint_factor: renderer.scale_factor(),
+                        hint_factor: renderer.hint_factor(),
                     }
                 }
                 None => {
@@ -691,7 +691,7 @@ impl<P: text::Paragraph> State<P> {
                 shaping: text::Shaping::default(),
                 wrapping: text::Wrapping::None,
                 ellipsis: text::Ellipsis::None,
-                hint_factor: renderer.scale_factor(),
+                hint_factor: renderer.hint_factor(),
             }
         }
 
@@ -708,7 +708,7 @@ impl<P: text::Paragraph> State<P> {
                 shaping: ellipsis.shaping.unwrap_or(text::Shaping::Advanced),
                 wrapping: text::Wrapping::None,
                 ellipsis: text::Ellipsis::None,
-                hint_factor: renderer.scale_factor(),
+                hint_factor: renderer.hint_factor(),
             },
             None => text(renderer, ELLIPSIS, font, size),
         };
@@ -1020,7 +1020,7 @@ pub mod buttoned {
             viewport: &Rectangle,
         ) {
             let mut children = layout.children();
-            let mut local_messages = Vec::new();
+            let mut local_messages = shell::Bus::new();
             let mut local_shell = shell.local(&mut local_messages);
 
             let pages_layout = children
